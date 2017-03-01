@@ -1,0 +1,72 @@
+#!/bin/bash
+
+
+autoscan
+
+if test ! -f "./ltmain.sh"
+then
+	ln -sv /usr/share/libtool/build-aux/ltmain.sh ./
+fi
+
+if test -f "./configure.ac"
+then
+	rm ./configure.ac
+fi
+
+autoscan
+
+mv configure.scan configure.ac
+
+sed -i 's/FULL-PACKAGE-NAME/libself-reliance/' configure.ac
+sed -i 's/VERSION/0.01/' configure.ac
+sed -i 's/BUG-REPORT-ADDRESS/storyfrom1982@gmail.com/' configure.ac
+sed -i '/^AC_CONFIG_SRCDIR/d' configure.ac
+sed -i '/^AC_CONFIG_HEADERS/i\AC_CONFIG_SRCDIR(\[src\])' configure.ac
+sed -i '/AC_PROG_CC/a\AC_PROG_LIBTOOL' configure.ac
+
+if ! grep -x "stdbool.h" configure.ac
+then
+	sed -i '/AC_CHECK_HEADERS/a\AC_CHECK_HEADER(\[stdbool.h\])' configure.ac
+fi
+
+sed -i '/AC_CONFIG_FILES/i\LT_INIT(\[disable-shared\])' configure.ac
+sed -i '/LT_INIT/a\AM_INIT_AUTOMAKE()' configure.ac
+sed -i '/AM_INIT_AUTOMAKE/a\AM_PROG_CC_C_O' configure.ac
+sed -i '/AM_INIT_AUTOMAKE/{x;p;x;}' configure.ac
+sed -i '/LT_INIT/G' configure.ac
+
+
+if test ! -f "./README"
+then
+        touch ./README
+fi
+
+if test ! -f "./NEWS"
+then
+        touch ./NEWS
+fi
+
+if test ! -f "./AUTHORS"
+then
+        touch ./AUTHORS
+fi
+
+if test ! -f "./COPYING"
+then
+        touch ./COPYING
+fi
+
+if test ! -f "./INSTALL"
+then
+        touch ./INSTALL
+fi
+
+if test ! -f "./ChangeLog"
+then
+        touch ./ChangeLog
+fi
+
+aclocal
+autoheader
+automake --gnu --add-missing --copy
+autoconf
