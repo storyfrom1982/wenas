@@ -52,7 +52,7 @@
         uint32_t size; \
         uint32_t pushable; \
         uint32_t popable; \
-        void (*clean)(void*); \
+        void (*clean)(x*); \
         x head; \
         x end; \
     }
