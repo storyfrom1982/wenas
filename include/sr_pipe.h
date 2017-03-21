@@ -27,19 +27,24 @@
 
 
 #include <stdint.h>
+#include "sr_atom.h"
 
 
 typedef struct SR_Pipe SR_Pipe;
 
 extern int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe);
 extern void sr_pipe_release(SR_Pipe **pp_pipe);
+extern void sr_pipe_stop(SR_Pipe *pipe);
+extern bool sr_pipe_is_stopped(SR_Pipe *pipe);
+extern void sr_pipe_restart(SR_Pipe *pipe);
+
 extern void sr_pipe_clean(SR_Pipe *pipe);
 
-extern unsigned int sr_pipe_read(SR_Pipe *pipe, uint8_t *data, unsigned int size);
-extern unsigned int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size);
+extern int sr_pipe_read(SR_Pipe *pipe, uint8_t *data, unsigned int size);
+extern int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size);
 
-extern unsigned int sr_pipe_writable(SR_Pipe *pipe);
-extern unsigned int sr_pipe_readable(SR_Pipe *pipe);
+extern int sr_pipe_writable(SR_Pipe *pipe);
+extern int sr_pipe_readable(SR_Pipe *pipe);
 
 
 #endif /* INCLUDE_SR_PIPE_H_ */

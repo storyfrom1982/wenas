@@ -284,4 +284,18 @@
 #define sr_queue_popable(q) (q)->popable
 
 
+#define sr_queue_get_next(q, x, n) \
+	if ((q) != NULL && (x) != NULL) \
+		if ((x)->next == &((q)->end))(n) = NULL; \
+		else (n) = (x)->next; \
+	else (n) = NULL;
+
+
+#define sr_queue_get_prev(q, x, p) \
+	if ((q) != NULL && (x) != NULL) \
+		if ((x)->prev == &((q)->head))(p) = NULL; \
+		else (p) = (x)->prev; \
+	else (p) = NULL;
+
+
 #endif /* INCLUDE_SR_QUEUE_H_ */

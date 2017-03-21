@@ -35,6 +35,7 @@
 
 
 struct SR_Pipe {
+	bool stopped;
 	uint8_t *buffer;
 	unsigned int size;
 	unsigned int writer;
@@ -104,7 +105,33 @@ void sr_pipe_release(SR_Pipe **pp_pipe)
 }
 
 
-unsigned int sr_pipe_writable(SR_Pipe *pipe)
+void sr_pipe_stop(SR_Pipe *pipe)
+{
+	if (pipe != NULL){
+		SETTRUE(pipe->stopped);
+	}
+}
+
+
+bool sr_pipe_is_stopped(SR_Pipe *pipe)
+{
+    if (pipe != NULL){
+        return pipe->stopped;
+    }
+    return true;
+}
+
+
+void sr_pipe_restart(SR_Pipe *pipe)
+{
+    if (pipe != NULL){
+        pipe->writer = pipe->reader = 0;
+        SETFALSE(pipe->stopped);
+    }
+}
+
+
+int sr_pipe_writable(SR_Pipe *pipe)
 {
 	if (pipe){
 		return pipe->size - pipe->writer + pipe->reader;
@@ -113,7 +140,7 @@ unsigned int sr_pipe_writable(SR_Pipe *pipe)
 }
 
 
-unsigned int sr_pipe_readable(SR_Pipe *pipe)
+int sr_pipe_readable(SR_Pipe *pipe)
 {
 	if (pipe){
 		return pipe->writer - pipe->reader;
@@ -130,11 +157,16 @@ void sr_pipe_clean(SR_Pipe *pipe)
 }
 
 
-unsigned int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
+int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
 {
 	if (pipe == NULL || data == NULL || size == 0){
 		loge(ERRPARAM);
-		return 0;
+		return ERRPARAM;
+	}
+
+	if (ISTRUE(pipe->stopped)){
+		loge(ERRCANCEL);
+		return ERRCANCEL;
 	}
 
 	unsigned int writable = pipe->size - pipe->writer + pipe->reader;
@@ -159,17 +191,21 @@ unsigned int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
 }
 
 
-unsigned int sr_pipe_read(SR_Pipe *pipe, uint8_t *buffer, unsigned int size)
+int sr_pipe_read(SR_Pipe *pipe, uint8_t *buffer, unsigned int size)
 {
 	if (pipe == NULL || buffer == NULL || size == 0){
 		loge(ERRPARAM);
-		return 0;
+		return ERRPARAM;
 	}
 
 	unsigned int readable = pipe->writer - pipe->reader;
 	unsigned int remain = pipe->size - ( pipe->reader & ( pipe->size - 1 ) );
 
 	if ( readable == 0 ){
+		if (ISTRUE(pipe->stopped)){
+			loge(ERRCANCEL);
+			return ERRCANCEL;
+		}
 		return 0;
 	}
 
