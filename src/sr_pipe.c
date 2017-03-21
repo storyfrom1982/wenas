@@ -86,6 +86,7 @@ int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe)
 		return ERRMEMORY;
 	}
 
+    pipe->stopped = false;
 	pipe->writer = pipe->reader = 0;
 
 	*pp_pipe = pipe;
@@ -201,6 +202,7 @@ int sr_pipe_read(SR_Pipe *pipe, uint8_t *buffer, unsigned int size)
 	unsigned int readable = pipe->writer - pipe->reader;
 	unsigned int remain = pipe->size - ( pipe->reader & ( pipe->size - 1 ) );
 
+	logd("readable ==== %u stopped = %d\n", readable, pipe->stopped);
 	if ( readable == 0 ){
 		if (ISTRUE(pipe->stopped)){
 			loge(ERRCANCEL);

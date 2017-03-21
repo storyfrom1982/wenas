@@ -26,7 +26,7 @@
 #define INCLUDE_SR_PIPE_H_
 
 
-#include <stdint.h>
+
 #include "sr_atom.h"
 
 
