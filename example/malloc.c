@@ -16,21 +16,21 @@
 
 
 
-typedef struct Packet{
+typedef struct PacketNode{
 	int id;
 	size_t size;
 	uint8_t *data;
-	SR_QUEUE_ENABLE(Packet);
-}Packet;
+	SR_QUEUE_ENABLE(PacketNode);
+}PacketNode;
 
-SR_QUEUE_DEFINE(Packet);
+SR_QUEUE_DEFINE(PacketNode);
 
 
 typedef struct Task{
 	int id;
 	pthread_t producer;
 	pthread_t consumers;
-	SR_QUEUE_DECLARE(Packet) *queue;
+	SR_QUEUE_DECLARE(PacketNode) *queue;
 }Task;
 
 
@@ -48,11 +48,11 @@ static void* producer(void *p)
 		return NULL;
 	}
 
-	Packet *pkt = NULL;
+	PacketNode *pkt = NULL;
 	Task *task = (Task*)p;
 
 	for(int i = 0; i < 100000; ++i){
-		pkt = (Packet*)malloc(sizeof(Packet));
+		pkt = (PacketNode*)malloc(sizeof(PacketNode));
 		if (pkt == NULL){
 			loge(ERRMEMORY);
 			exit(0);
@@ -100,7 +100,7 @@ static void* consumers(void *p)
 {
 	int result = 0;
 
-	Packet *pkt = NULL;
+	PacketNode *pkt = NULL;
 	Task *task = (Task*)p;
 
 	while(true){
@@ -138,7 +138,7 @@ void* malloc_test(int producer_count, int consumers_count)
 
 	int64_t start_time = sr_timing_start();
 
-	SR_QUEUE_DECLARE(Packet) queue;
+	SR_QUEUE_DECLARE(PacketNode) queue;
 	Task plist[p_number];
 	Task clist[c_number];
 

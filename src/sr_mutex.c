@@ -125,36 +125,36 @@ inline void sr_mutex_broadcast(SR_Mutex *mutex)
 	}
 }
 
-int sr_mutex_timedwait(SR_Mutex *mutex, uint32_t millisecond)
-{
-	int result = 0;
-
-	struct timeval delta;
-	struct timespec abstime;
-
-	gettimeofday(&delta, NULL);
-
-	abstime.tv_sec = delta.tv_sec + (millisecond / 1000);
-	abstime.tv_nsec = (delta.tv_usec + (millisecond % 1000) * 1000) * 1000;
-
-	if (abstime.tv_nsec > 1000000000) {
-		abstime.tv_sec += 1;
-		abstime.tv_nsec -= 1000000000;
-	}
-
-	TRYAGAIN:
-	result = pthread_cond_timedwait(mutex->cond, mutex->mutex, &abstime);
-	switch (result) {
-		case EINTR:
-			goto TRYAGAIN;
-		case ETIMEDOUT:
-			result = ERRTIMEOUT;
-			break;
-		case 0:
-			break;
-		default:
-			result = ERRSYSCALL;
-	}
-
-	return result;
-}
+//int sr_mutex_timedwait(SR_Mutex *mutex, uint32_t millisecond)
+//{
+//	int result = 0;
+//
+//	struct timeval delta;
+//	struct timespec abstime;
+//
+//	gettimeofday(&delta, NULL);
+//
+//	abstime.tv_sec = delta.tv_sec + (millisecond / 1000);
+//	abstime.tv_nsec = (delta.tv_usec + (millisecond % 1000) * 1000) * 1000;
+//
+//	if (abstime.tv_nsec > 1000000000) {
+//		abstime.tv_sec += 1;
+//		abstime.tv_nsec -= 1000000000;
+//	}
+//
+//	TRYAGAIN:
+//	result = pthread_cond_timedwait(mutex->cond, mutex->mutex, &abstime);
+//	switch (result) {
+//		case EINTR:
+//			goto TRYAGAIN;
+//		case ETIMEDOUT:
+//			result = ERRTIMEOUT;
+//			break;
+//		case 0:
+//			break;
+//		default:
+//			result = ERRSYSCALL;
+//	}
+//
+//	return result;
+//}

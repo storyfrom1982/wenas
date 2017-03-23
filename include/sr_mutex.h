@@ -39,7 +39,7 @@ extern void sr_mutex_unlock(SR_Mutex *mutex);
 extern void sr_mutex_wait(SR_Mutex *mutex);
 extern void sr_mutex_signal(SR_Mutex *mutex);
 extern void sr_mutex_broadcast(SR_Mutex *mutex);
-extern int sr_mutex_timedwait(SR_Mutex *mutex, uint32_t millisecond);
+//extern int sr_mutex_timedwait(SR_Mutex *mutex, uint32_t millisecond);
 
 
 #endif /* INCLUDE_SR_MUTEX_H_ */

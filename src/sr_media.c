@@ -552,7 +552,7 @@ void sr_synchronous_clock_reboot(SR_SynchronousClock *sync_clock)
 int64_t sr_synchronous_clock_get_duration(SR_SynchronousClock *sync_clock)
 {
 	if (sync_clock){
-		return sync_clock->duration;
+		return sync_clock->audio_duration;
 	}
 	return 0;
 }
