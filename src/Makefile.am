@@ -5,7 +5,7 @@ libsr_la_SOURCES= \
         sr_time.c \
         sr_pipe.c \
         sr_mutex.c \
-        sr_memory.c \
+        sr_malloc.c \
 		sr_media.c \
 		sr_media_file.c
 
@@ -17,6 +17,8 @@ libsr_la_LIBADD= \
         -lpthread
 
 libsr_la_CFLAGS= \
+		-g \
         -std=gnu99
 
-libsr_la_LDFLAGS=
+libsr_la_LDFLAGS= \
+		-rdynamic

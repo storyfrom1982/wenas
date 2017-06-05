@@ -11,7 +11,7 @@
 #include <sr_time.h>
 #include <sr_pipe.h>
 #include <sr_atom.h>
-#include <sr_memory.h>
+#include <sr_malloc.h>
 
 #include <pthread.h>
 
@@ -22,12 +22,12 @@ void* pipe_write_thread(void *p)
 	int result = 0;
 	int size = 32;
 	char *buf = NULL;
-	SR_Pipe *pipe = (SR_Pipe *)p;
+	Sr_pipe *pipe = (Sr_pipe *)p;
 
 	for (int i = 0; i < 100000; ++i){
 		buf = (char*)malloc(size);
 		if (buf == NULL){
-			loge(ERRMEMORY);
+			loge(ERRMALLOC);
 		}
 		memset(buf, i % 0xFF, size);
 		for(result = 0; result < size; ){
@@ -46,13 +46,13 @@ void* pipe_read_thread(void *p)
 	int result = 0;
 	int size = 32;
 	char *buf = NULL;
-	SR_Pipe *pipe = (SR_Pipe *)p;
+	Sr_pipe *pipe = (Sr_pipe *)p;
 
 
 	while (ISTRUE(running)){
 		buf = (char*)malloc(size);
 		if (buf == NULL){
-			loge(ERRMEMORY);
+			loge(ERRMALLOC);
 		}
 		for (result = 0; result < size;){
 			result += sr_pipe_read(pipe, buf + result, size - result);
@@ -70,11 +70,9 @@ int pipe_test()
 	int result = 0;
 	pthread_t write_tid = 0;
 	pthread_t read_tid = 0;
-	SR_Pipe *pipe = NULL;
+	Sr_pipe *pipe = NULL;
 
-	sr_memory_default_init();
-
-	int64_t start_time = sr_timing_start();
+	int64_t start_time = sr_starting_time();
 
 	result = sr_pipe_create(10240, &pipe);
 
@@ -97,11 +95,9 @@ int pipe_test()
 
 	sr_pipe_release(&pipe);
 
-	logd("once time %ld\n", sr_timing_complete(start_time));
+	logd("once time %ld\n", sr_calculate_time(start_time));
 
-	sr_memory_debug(sr_log_info);
-
-	sr_memory_release();
+	sr_malloc_debug(sr_log_info);
 
 	return 0;
 }
@@ -109,17 +105,21 @@ int pipe_test()
 
 int main(int argc, char *argv[])
 {
+	sr_malloc_initialize(1024 * 1024 * 8, 2);
+
 	char *tmp = NULL;
 	int result = 0;
 
-	int64_t start_time = sr_timing_start();
+	int64_t start_time = sr_starting_time();
 
 	for (int i = 0; i < 10; ++i){
 		pipe_test();
 		logd("pipe test ============================= %d\n", i);
 	}
 
-	logd("used time %ld\n", sr_timing_complete(start_time));
+	logd("used time %ld\n", sr_calculate_time(start_time));
+
+	sr_malloc_release();
 
 	return 0;
 }

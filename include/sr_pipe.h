@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,21 +30,21 @@
 #include "sr_atom.h"
 
 
-typedef struct SR_Pipe SR_Pipe;
+typedef struct Sr_pipe Sr_pipe;
 
-extern int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe);
-extern void sr_pipe_release(SR_Pipe **pp_pipe);
-extern void sr_pipe_stop(SR_Pipe *pipe);
-extern bool sr_pipe_is_stopped(SR_Pipe *pipe);
-extern void sr_pipe_restart(SR_Pipe *pipe);
+extern int sr_pipe_create(unsigned int size, Sr_pipe **pp_pipe);
+extern void sr_pipe_release(Sr_pipe **pp_pipe);
+extern void sr_pipe_stop(Sr_pipe *pipe);
+extern bool sr_pipe_is_stopped(Sr_pipe *pipe);
+extern void sr_pipe_restart(Sr_pipe *pipe);
 
-extern void sr_pipe_clean(SR_Pipe *pipe);
+extern void sr_pipe_clean(Sr_pipe *pipe);
 
-extern int sr_pipe_read(SR_Pipe *pipe, uint8_t *data, unsigned int size);
-extern int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size);
+extern int sr_pipe_read(Sr_pipe *pipe, uint8_t *data, unsigned int size);
+extern int sr_pipe_write(Sr_pipe *pipe, uint8_t *data, unsigned int size);
 
-extern int sr_pipe_writable(SR_Pipe *pipe);
-extern int sr_pipe_readable(SR_Pipe *pipe);
+extern int sr_pipe_writable(Sr_pipe *pipe);
+extern int sr_pipe_readable(Sr_pipe *pipe);
 
 
 #endif /* INCLUDE_SR_PIPE_H_ */

@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,11 +31,11 @@
 #define	ERRNONE				(0)
 #define	ERRUNKONWN			(-1)
 #define	ERRSYSCALL			(-10000)
-#define	ERRMEMORY			(-10001)
+#define	ERRMALLOC			(-10001)
 #define	ERRPARAM			(-10002)
 #define	ERRTIMEOUT			(-10003)
 #define	ERRTRYAGAIN			(-10004)
-#define	ERRCANCEL			(-10005)
+#define	ERREOF				(-10005)
 
 
 #endif /* INCLUDE_SR_ERROR_H_ */

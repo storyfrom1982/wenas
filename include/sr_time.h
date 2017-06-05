@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,8 @@
 
 #include <stdint.h>
 
-extern int64_t sr_timing_start();
-extern int64_t sr_timing_complete(int64_t start_microsecond);
+extern int64_t sr_starting_time();
+extern int64_t sr_calculate_time(int64_t start_microsecond);
 
 
 #endif /* INCLUDE_SR_TIME_H_ */

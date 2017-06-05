@@ -17,15 +17,15 @@
 #include "sr_time.h"
 #include "sr_pipe.h"
 #include "sr_mutex.h"
-#include "sr_memory.h"
+#include "sr_malloc.h"
 #include "sr_queue.h"
 
-static SR_MediaFrame* make_video_head()
+static Sr_media_frame* make_video_head()
 {
-	SR_VideoFormat vf_in, *vf_out;
-	SR_MediaFrame *frame = NULL;
+	Sr_video_config vf_in, *vf_out;
+	Sr_media_frame *frame = NULL;
 
-	vf_in.codec_type = SR_MEDIA_CODEC_EXTEND_AVC;
+	vf_in.codec = SR_MEDIA_CODEC_EXTEND_AVC;
 	vf_in.bit_rate = 1024 * 1024 * 1024;
 	vf_in.pixel_type = SR_VIDEO_PIXEL_YUV;
 	vf_in.width = 960;
@@ -37,18 +37,18 @@ static SR_MediaFrame* make_video_head()
 	vf_in.extend_data_size = 10;
 	memset(vf_in.extend_data, 'v', 10);
 
-	frame = sr_video_format_to_media_frame(&vf_in);
+	frame = sr_video_config_to_media_frame(&vf_in);
 
 	return frame;
 }
 
 
-static SR_MediaFrame* make_audio_head()
+static Sr_media_frame* make_audio_head()
 {
-	SR_AudioFormat af_in, *af_out;
-	SR_MediaFrame *frame = NULL;
+	Sr_audio_config af_in, *af_out;
+	Sr_media_frame *frame = NULL;
 
-	af_in.codec_type = SR_MEDIA_CODEC_EXTEND_AAC;
+	af_in.codec = SR_MEDIA_CODEC_EXTEND_AAC;
 	af_in.sample_type = SR_AUDIO_SAMPLE_S16;
 	af_in.bit_rate = 1024 * 1024 * 128;
 	af_in.channels = 2;
@@ -60,16 +60,16 @@ static SR_MediaFrame* make_audio_head()
 	af_in.extend_data_size = 10;
 	memset(af_in.extend_data, 'a', 10);
 
-	frame = sr_audio_format_to_media_frame(&af_in);
+	frame = sr_audio_config_to_media_frame(&af_in);
 
 	return frame;
 }
 
 
 
-static SR_MediaFrame* make_frame(int media_type, int64_t timestamp)
+static Sr_media_frame* make_frame(int media_type, int64_t timestamp)
 {
-	SR_MediaFrame *frame = NULL;
+	Sr_media_frame *frame = NULL;
 
 	sr_media_frame_create(&frame);
 	frame->media_type = media_type;
@@ -94,12 +94,12 @@ static SR_MediaFrame* make_frame(int media_type, int64_t timestamp)
 
 static bool running = false;
 
-static void receive_writer_event(SR_Event_Callback *cb, SR_Event event)
+static void receive_writer_event(Sr_event_callback *cb, Sr_event event)
 {
 	logd("receive writer event %d\n", event.type);
 }
 
-static void receive_reader_event(SR_Event_Callback *cb, SR_Event event)
+static void receive_reader_event(Sr_event_callback *cb, Sr_event event)
 {
 	if (event.type == SR_EVENT_RUNNING){
 		SETTRUE(running);
@@ -109,12 +109,12 @@ static void receive_reader_event(SR_Event_Callback *cb, SR_Event event)
 	logd("receive reader event %d\n", event.type);
 }
 
-static SR_Event_Callback mec = {0};
+static Sr_event_callback mec = {0};
 
 
 static int frame_count = 0;
 
-static void renderer_audio(SR_SynchronousManager_Callback *callback, SR_MediaFrame *frame)
+static void renderer_audio(Sr_synchronous_manager_callback *callback, Sr_media_frame *frame)
 {
 	int count = frame_count;
 	if (frame->data_type == SR_FRAME_DATA_TYPE_MEDIA_DATA){
@@ -134,7 +134,7 @@ static void renderer_audio(SR_SynchronousManager_Callback *callback, SR_MediaFra
 				frame->data_size,
 				frame->frame_data);
 	}else{
-		SR_AudioFormat *af_out = sr_media_frame_to_audio_format(frame);
+		Sr_audio_config *af_out = sr_media_frame_to_audio_config(frame);
 		logd("================================================%d\n"
 				"frame frame type %d\n"
 				"frame data type %d\n"
@@ -155,7 +155,7 @@ static void renderer_audio(SR_SynchronousManager_Callback *callback, SR_MediaFra
 				frame->media_type,
 				frame->data_type,
 				frame->frame_flag,
-				af_out->codec_type,
+				af_out->codec,
 				af_out->bit_rate,
 				af_out->channels,
 				af_out->sample_rate,
@@ -171,7 +171,7 @@ static void renderer_audio(SR_SynchronousManager_Callback *callback, SR_MediaFra
 	SR_ATOM_ADD(frame_count, 1);
 }
 
-static void renderer_video(SR_SynchronousManager_Callback *callback, SR_MediaFrame *frame)
+static void renderer_video(Sr_synchronous_manager_callback *callback, Sr_media_frame *frame)
 {
 	int count = frame_count;
 	if (frame->data_type == SR_FRAME_DATA_TYPE_MEDIA_DATA){
@@ -191,7 +191,7 @@ static void renderer_video(SR_SynchronousManager_Callback *callback, SR_MediaFra
 				frame->data_size,
 				frame->frame_data);
 	}else{
-		SR_VideoFormat *vf_out = sr_media_frame_to_video_format(frame);
+		Sr_video_config *vf_out = sr_media_frame_to_video_config(frame);
 		logd("================================================%d\n"
 				"frame frame type %d\n"
 				"frame data type %d\n"
@@ -212,7 +212,7 @@ static void renderer_video(SR_SynchronousManager_Callback *callback, SR_MediaFra
 				frame->media_type,
 				frame->data_type,
 				frame->frame_flag,
-				vf_out->codec_type,
+				vf_out->codec,
 				vf_out->bit_rate,
 				vf_out->width,
 				vf_out->height,
@@ -228,20 +228,20 @@ static void renderer_video(SR_SynchronousManager_Callback *callback, SR_MediaFra
 	SR_ATOM_ADD(frame_count, 1);
 }
 
-static SR_SynchronousManager_Callback manager_callback = {0};
+static Sr_synchronous_manager_callback manager_callback = {0};
 
 
 int main(int argc, char *argv[])
 {
 	int result = 0;
 
-	SR_MediaFrame *frame = NULL;
+	Sr_media_frame *frame = NULL;
 
-	SR_MediaTransmission *tm = NULL;
-	SR_EventListener *el = NULL;
-	SR_SynchronousManager *manager = NULL;
+	Sr_media_transmission *tm = NULL;
+	Sr_event_listener *el = NULL;
+	Sr_synchronous_manager *manager = NULL;
 
-	result = sr_memory_default_init();
+	result = sr_malloc_initialize(1024 * 1024 * 8, 2);
 	if (result != 0){
 		exit(0);
 	}
@@ -361,16 +361,16 @@ int main(int argc, char *argv[])
 	}
 
 	tm->flush(tm);
-	sr_file_protocol_release(&tm);
-	sr_synchronous_manager_release(&manager);
-	sr_event_listener_release(&el);
+//	sr_file_protocol_release(&tm);
+//	sr_synchronous_manager_release(&manager);
+//	sr_event_listener_release(&el);
 
 
 	logd("frame count ================== %d\n", frame_count);
 
-	sr_memory_debug(sr_log_info);
+	sr_malloc_debug(sr_log_info);
 
-	sr_memory_release();
+//	sr_memory_release();
 
 	return 0;
 }

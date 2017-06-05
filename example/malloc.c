@@ -12,25 +12,28 @@
 #include <sr_log.h>
 #include <sr_time.h>
 #include <sr_queue.h>
-#include <sr_memory.h>
+#include <sr_malloc.h>
 
 
+pthread_key_t key;
+void *ppp = &key;
 
-typedef struct PacketNode{
+
+typedef struct Packet_node{
 	int id;
 	size_t size;
 	uint8_t *data;
-	SR_QUEUE_ENABLE(PacketNode);
-}PacketNode;
+	SR_QUEUE_ENABLE(Packet_node);
+}Packet_node;
 
-SR_QUEUE_DEFINE(PacketNode);
+SR_QUEUE_DEFINE(Packet_node);
 
 
 typedef struct Task{
 	int id;
 	pthread_t producer;
 	pthread_t consumers;
-	SR_QUEUE_DECLARE(PacketNode) *queue;
+	SR_QUEUE_DECLARE(Packet_node) *queue;
 }Task;
 
 
@@ -39,22 +42,26 @@ static uint64_t malloc_count = 0;
 
 static void* producer(void *p)
 {
+	if (pthread_setspecific(key, ppp) != 0){
+		return NULL;
+	}
+
 	int result = 0;
 
 	void *add = malloc(1024 * 1024 * 4);
 	if (add == NULL){
-		loge(ERRMEMORY);
+		loge(ERRMALLOC);
 		exit(0);
 		return NULL;
 	}
 
-	PacketNode *pkt = NULL;
+	Packet_node *pkt = NULL;
 	Task *task = (Task*)p;
 
 	for(int i = 0; i < 100000; ++i){
-		pkt = (PacketNode*)malloc(sizeof(PacketNode));
+		pkt = (Packet_node*)malloc(sizeof(Packet_node));
 		if (pkt == NULL){
-			loge(ERRMEMORY);
+			loge(ERRMALLOC);
 			exit(0);
 			break;
 		}
@@ -66,17 +73,19 @@ static void* producer(void *p)
 		}
 		pkt->data = (uint8_t*)malloc(pkt->size);
 //		pkt->data = (uint8_t*)calloc(1, pkt->size);
+//		pkt->data = (uint8_t*)sr_memory_calloc(1, pkt->size, NULL);
+
 		if (pkt->data == NULL){
-			loge(ERRMEMORY);
+			loge(ERRMALLOC);
 			exit(0);
 			break;
 		}
 		SR_ATOM_ADD(malloc_count, 1);
 		snprintf(pkt->data, pkt->size, "producer id = %d malloc size = %lu", task->id, pkt->size);
-//		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1);
+//		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1024);
 
 		do {
-			sr_queue_push_to_end(task->queue, pkt, result);
+			sr_queue_push_back(task->queue, pkt, result);
 			if (result == ERRTRYAGAIN){
 				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 			}
@@ -98,15 +107,19 @@ static void* producer(void *p)
 
 static void* consumers(void *p)
 {
+	if (pthread_setspecific(key, ppp) != 0){
+		return NULL;
+	}
+
 	int result = 0;
 
-	PacketNode *pkt = NULL;
+	Packet_node *pkt = NULL;
 	Task *task = (Task*)p;
 
 	while(true){
 
 		do {
-			sr_queue_pop_first(task->queue, pkt, result);
+			sr_queue_pop_front(task->queue, pkt, result);
 			if (result == ERRTRYAGAIN){
 				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 			}
@@ -134,15 +147,23 @@ void* malloc_test(int producer_count, int consumers_count)
 	int c_number = consumers_count;
 	int p_number = producer_count;
 
-	sr_memory_default_init();
+	if (pthread_key_create(&(key), NULL) != 0){
+		return -1;
+	}
 
-	int64_t start_time = sr_timing_start();
+	if (pthread_setspecific(key, ppp) != 0){
+		return -1;
+	}
 
-	SR_QUEUE_DECLARE(PacketNode) queue;
+//	sr_memory_default_init();
+
+	int64_t start_time = sr_starting_time();
+
+	SR_QUEUE_DECLARE(Packet_node) queue;
 	Task plist[p_number];
 	Task clist[c_number];
 
-	sr_queue_init(&(queue), size);
+	sr_queue_initialize(&(queue), size);
 
 	for (i = 0; i < c_number; ++i){
 		clist[i].id = i;
@@ -167,11 +188,11 @@ void* malloc_test(int producer_count, int consumers_count)
 	}
 
 
-	logd("used time %ld\n", sr_timing_complete(start_time));
+	logd("used time %ld\n", sr_calculate_time(start_time));
 
-	sr_memory_debug(sr_log_info);
+//	sr_memory_debug(sr_log_info);
 
-	sr_memory_release();
+//	sr_memory_release();
 
 	return NULL;
 }
@@ -179,17 +200,23 @@ void* malloc_test(int producer_count, int consumers_count)
 
 int main(int argc, char *argv[])
 {
+	sr_malloc_initialize(1024 * 1024 * 8, 2);
+
 	char *tmp = NULL;
 	int result = 0;
 
-	int64_t start_time = sr_timing_start();
+	int64_t start_time = sr_starting_time();
 
 	for (int i = 0; i < 10; ++i){
 		malloc_test(20, 20);
 		logi("malloc test ============================= %d\n", i);
 	}
 
-	logw("used time %lu %ld\n", malloc_count, sr_timing_complete(start_time));
+	sr_malloc_debug(sr_log_info);
+
+	sr_malloc_release();
+
+	logw("used time %lu %ld\n", malloc_count, sr_calculate_time(start_time));
 
 	return 0;
 }

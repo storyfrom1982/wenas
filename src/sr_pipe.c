@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,12 @@
 #include "sr_log.h"
 #include "sr_error.h"
 #include "sr_atom.h"
-#include "sr_memory.h"
+#include "sr_malloc.h"
 
 
 
 
-struct SR_Pipe {
+struct Sr_pipe {
 	bool stopped;
 	uint8_t *buffer;
 	unsigned int size;
@@ -59,19 +59,19 @@ static inline int fls( int x )
 }
 
 
-int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe)
+int sr_pipe_create(unsigned int size, Sr_pipe **pp_pipe)
 {
 	int result = 0;
-	SR_Pipe *pipe = NULL;
+	Sr_pipe *pipe = NULL;
 
 	if ( pp_pipe == NULL || size == 0 ){
 		loge(ERRPARAM);
 		return ERRPARAM;
 	}
 
-	if ((pipe = (SR_Pipe *)malloc(sizeof(SR_Pipe))) == NULL){
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+	if ((pipe = (Sr_pipe *)calloc(1, sizeof(Sr_pipe))) == NULL){
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	if ( ( size != 0 && ( size & ( size - 1 ) ) == 0 ) ){
@@ -82,8 +82,8 @@ int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe)
 
 	if ((pipe->buffer = ( uint8_t * )malloc( pipe->size )) == NULL){
 		sr_pipe_release(&pipe);
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
     pipe->stopped = false;
@@ -95,10 +95,10 @@ int sr_pipe_create(unsigned int size, SR_Pipe **pp_pipe)
 }
 
 
-void sr_pipe_release(SR_Pipe **pp_pipe)
+void sr_pipe_release(Sr_pipe **pp_pipe)
 {
 	if (pp_pipe && *pp_pipe){
-		SR_Pipe *pipe = *pp_pipe;
+		Sr_pipe *pipe = *pp_pipe;
 		*pp_pipe = NULL;
 		free(pipe->buffer);
 		free(pipe);
@@ -106,7 +106,7 @@ void sr_pipe_release(SR_Pipe **pp_pipe)
 }
 
 
-void sr_pipe_stop(SR_Pipe *pipe)
+void sr_pipe_stop(Sr_pipe *pipe)
 {
 	if (pipe != NULL){
 		SETTRUE(pipe->stopped);
@@ -114,7 +114,7 @@ void sr_pipe_stop(SR_Pipe *pipe)
 }
 
 
-bool sr_pipe_is_stopped(SR_Pipe *pipe)
+bool sr_pipe_is_stopped(Sr_pipe *pipe)
 {
     if (pipe != NULL){
         return pipe->stopped;
@@ -123,7 +123,7 @@ bool sr_pipe_is_stopped(SR_Pipe *pipe)
 }
 
 
-void sr_pipe_restart(SR_Pipe *pipe)
+void sr_pipe_restart(Sr_pipe *pipe)
 {
     if (pipe != NULL){
         pipe->writer = pipe->reader = 0;
@@ -132,7 +132,7 @@ void sr_pipe_restart(SR_Pipe *pipe)
 }
 
 
-int sr_pipe_writable(SR_Pipe *pipe)
+int sr_pipe_writable(Sr_pipe *pipe)
 {
 	if (pipe){
 		return pipe->size - pipe->writer + pipe->reader;
@@ -141,7 +141,7 @@ int sr_pipe_writable(SR_Pipe *pipe)
 }
 
 
-int sr_pipe_readable(SR_Pipe *pipe)
+int sr_pipe_readable(Sr_pipe *pipe)
 {
 	if (pipe){
 		return pipe->writer - pipe->reader;
@@ -150,7 +150,7 @@ int sr_pipe_readable(SR_Pipe *pipe)
 }
 
 
-void sr_pipe_clean(SR_Pipe *pipe)
+void sr_pipe_clean(Sr_pipe *pipe)
 {
 	if (pipe){
 		pipe->writer = pipe->reader = 0;
@@ -158,7 +158,7 @@ void sr_pipe_clean(SR_Pipe *pipe)
 }
 
 
-int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
+int sr_pipe_write(Sr_pipe *pipe, uint8_t *data, unsigned int size)
 {
 	if (pipe == NULL || data == NULL || size == 0){
 		loge(ERRPARAM);
@@ -166,8 +166,8 @@ int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
 	}
 
 	if (ISTRUE(pipe->stopped)){
-		loge(ERRCANCEL);
-		return ERRCANCEL;
+		loge(ERREOF);
+		return ERREOF;
 	}
 
 	unsigned int writable = pipe->size - pipe->writer + pipe->reader;
@@ -192,7 +192,7 @@ int sr_pipe_write(SR_Pipe *pipe, uint8_t *data, unsigned int size)
 }
 
 
-int sr_pipe_read(SR_Pipe *pipe, uint8_t *buffer, unsigned int size)
+int sr_pipe_read(Sr_pipe *pipe, uint8_t *buffer, unsigned int size)
 {
 	if (pipe == NULL || buffer == NULL || size == 0){
 		loge(ERRPARAM);
@@ -204,8 +204,8 @@ int sr_pipe_read(SR_Pipe *pipe, uint8_t *buffer, unsigned int size)
 
 	if ( readable == 0 ){
 		if (ISTRUE(pipe->stopped)){
-			loge(ERRCANCEL);
-			return ERRCANCEL;
+			loge(ERREOF);
+			return ERREOF;
 		}
 		return 0;
 	}

@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,27 +29,27 @@
 
 #include "sr_log.h"
 #include "sr_error.h"
-#include "sr_memory.h"
+#include "sr_malloc.h"
 
 
-struct SR_Mutex{
+struct Sr_mutex{
 	pthread_cond_t cond[1];
 	pthread_mutex_t mutex[1];
 };
 
 
-int sr_mutex_create(SR_Mutex **pp_mutex)
+int sr_mutex_create(Sr_mutex **pp_mutex)
 {
-	SR_Mutex *mutex = NULL;
+	Sr_mutex *mutex = NULL;
 
 	if (pp_mutex == NULL){
 		loge(ERRPARAM);
 		return ERRPARAM;
 	}
 
-	if ((mutex = malloc(sizeof(SR_Mutex))) == NULL){
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+	if ((mutex = malloc(sizeof(Sr_mutex))) == NULL){
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	if (pthread_cond_init(mutex->cond, NULL) != 0){
@@ -69,10 +69,10 @@ int sr_mutex_create(SR_Mutex **pp_mutex)
 	return 0;
 }
 
-void sr_mutex_release(SR_Mutex **pp_mutex)
+void sr_mutex_release(Sr_mutex **pp_mutex)
 {
 	if (pp_mutex && *pp_mutex){
-		SR_Mutex *mutex = *pp_mutex;
+		Sr_mutex *mutex = *pp_mutex;
 		*pp_mutex = NULL;
 		pthread_cond_destroy(mutex->cond);
 		pthread_mutex_destroy(mutex->mutex);
@@ -80,7 +80,7 @@ void sr_mutex_release(SR_Mutex **pp_mutex)
 	}
 }
 
-inline void sr_mutex_lock(SR_Mutex *mutex)
+inline void sr_mutex_lock(Sr_mutex *mutex)
 {
 	if (mutex){
 		if (pthread_mutex_lock(mutex->mutex) != 0){
@@ -89,7 +89,7 @@ inline void sr_mutex_lock(SR_Mutex *mutex)
 	}
 }
 
-inline void sr_mutex_unlock(SR_Mutex *mutex)
+inline void sr_mutex_unlock(Sr_mutex *mutex)
 {
 	if (mutex){
 		if (pthread_mutex_unlock(mutex->mutex) != 0){
@@ -98,7 +98,7 @@ inline void sr_mutex_unlock(SR_Mutex *mutex)
 	}
 }
 
-inline void sr_mutex_wait(SR_Mutex *mutex)
+inline void sr_mutex_wait(Sr_mutex *mutex)
 {
 	if (mutex){
 		if (pthread_cond_wait(mutex->cond, mutex->mutex) != 0){
@@ -107,7 +107,7 @@ inline void sr_mutex_wait(SR_Mutex *mutex)
 	}
 }
 
-inline void sr_mutex_signal(SR_Mutex *mutex)
+inline void sr_mutex_signal(Sr_mutex *mutex)
 {
 	if (mutex){
 		if (pthread_cond_signal(mutex->cond) != 0){
@@ -116,7 +116,7 @@ inline void sr_mutex_signal(SR_Mutex *mutex)
 	}
 }
 
-inline void sr_mutex_broadcast(SR_Mutex *mutex)
+inline void sr_mutex_broadcast(Sr_mutex *mutex)
 {
 	if (mutex){
 		if (pthread_cond_broadcast(mutex->cond) != 0){

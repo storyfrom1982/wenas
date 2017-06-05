@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,9 +41,9 @@
 	( strrchr( FILEPATH, '/' ) ? strrchr( FILEPATH, '/' ) + 1 : FILEPATH )
 
 
-typedef struct SR_Log_Callback{
+typedef struct Sr_log_callback{
 	void (*log_callback) (int level, const char *tag, const char *log);
-}SR_Log_Callback;
+}Sr_log_callback;
 
 
 static void log_debug(int level, const char *tag, const char *log)
@@ -60,7 +60,7 @@ static void log_debug(int level, const char *tag, const char *log)
 }
 
 
-static SR_Log_Callback g_logger = {log_debug};
+static Sr_log_callback g_logger = {log_debug};
 
 
 static char* time_to_string(char *buffer, size_t length)
@@ -112,7 +112,7 @@ void sr_log_error(const char *file, const char *function, int line, int errorcod
 	snprintf(log_line, LOG_LINE_SIZE, "%s %s(%d) ERROR(%d) %s\n",
 			time_to_string(log_time, LOG_TIME_SIZE),
 			function, line, errorcode, strerror(errno));
-	if (errorcode == ERRCANCEL){
+	if (errorcode == ERREOF){
 		g_logger.log_callback(SR_LOG_DEBUG, PATHCLEAR(file), log_line);
 	}else{
 		g_logger.log_callback(SR_LOG_ERROR, PATHCLEAR(file), log_line);

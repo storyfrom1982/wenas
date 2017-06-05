@@ -1,11 +1,11 @@
 /*
- * sr_memory.c
+ * sr_malloc.c
  *
  * Author: storyfrom1982@gmail.com
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
  */
 
 
-#include "sr_memory.h"
+#include "sr_malloc.h"
 
 
 #include <stdio.h>
@@ -32,13 +32,16 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
+#include <errno.h>
+#include <malloc.h>
 
-#define ERROR_MSG_SIZE			256
 
 #ifndef ___MEMORY_DEBUG___
 # define DEBUG_MSG_SIZE			0
 #else
-# define DEBUG_MSG_SIZE			256
+# include <execinfo.h>
+# define STACK_SIZE				8
+# define DEBUG_MSG_SIZE			( STACK_SIZE * sizeof(void*) )
 #endif
 
 #define	MAX_POOL_NUMBER			1024
@@ -114,19 +117,19 @@ typedef struct Pointer {
 
 #define	mergeable(p)			( ! ( ( p )->flag & INUSE ) )
 
-#define	new_pointer(p, s)		( (Pointer *)( (char *)( p ) + ( s ) ) )
-
 #define	prev_pointer(p)			( (Pointer *)( (char *)( p ) - ( p )->flag ) )
 #define	next_pointer(p)			( (Pointer *)( (char *)( p ) + ( p )->size ) )
+#define	assign_pointer(p, s)		( (Pointer *)( (char *)( p ) + ( s ) ) )
 
 
-typedef struct PointerQueue{
+typedef struct Pointer_queue{
 	bool lock;
 	Pointer *head;
-}PointerQueue;
+	size_t memory_size;
+}Pointer_queue;
 
 
-typedef struct MemoryPage{
+typedef struct Sr_memory_page{
 
 	bool lock;
 
@@ -154,33 +157,44 @@ typedef struct MemoryPage{
 	/**
 	 * 为快速释放指针设计的回收池
 	 */
-	PointerQueue recycle_bin[RECYCLE_BIN_NUMBER];
+	Pointer_queue recycle_bin[RECYCLE_BIN_NUMBER];
 
-}MemoryPage;
+}Sr_memory_page;
 
 
-typedef struct MemoryPool{
+typedef struct Sr_memory_pool{
 	bool lock;
 	size_t id;
 	size_t page_number;
 	void *aligned_address;
-	MemoryPage page[MAX_PAGE_NUMBER + 1];
-}MemoryPool;
+	pthread_t tid;
+	Sr_memory_page page[MAX_PAGE_NUMBER + 1];
+}Sr_memory_pool;
 
 
-typedef struct MemoryManager{
+typedef struct Sr_memory_manager{
+
 	bool lock;
-	pthread_key_t key;
 	size_t page_size;
 	size_t pool_number;
 	size_t thread_number;
 	size_t preloading_page;
 	size_t page_aligned_mask;
-	MemoryPool pool[MAX_POOL_NUMBER + 1];
-}MemoryManager;
+
+	pthread_key_t key;
+	Sr_memory_pool pool[MAX_POOL_NUMBER + 1];
+
+	void (*volatile free_hook) (void *ptr, const void *caller);
+	void* (*volatile malloc_hook) (size_t size, const void *caller);
+	void* (*volatile realloc_hook) (void *ptr, size_t size, const void *caller);
+	void* (*volatile memalign_hook) (size_t alignment, size_t size, const void *caller);
+
+	int pipe_fd[2];
+
+}Sr_memory_manager;
 
 
-static MemoryManager memory_manager = {0}, *mm = &memory_manager;
+static Sr_memory_manager memory_manager = {0}, *mm = &memory_manager;
 
 
 #define	ISTRUE(x)		__sync_bool_compare_and_swap(&(x), true, true)
@@ -191,35 +205,17 @@ static MemoryManager memory_manager = {0}, *mm = &memory_manager;
 #define ATOM_SUB(x, y)		__sync_sub_and_fetch(&(x), (y))
 #define ATOM_ADD(x, y)		__sync_add_and_fetch(&(x), (y))
 
+#define ATOM_LOCK(x)		while(!SETTRUE(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
 #define ATOM_TRYLOCK(x)		SETTRUE(x)
 #define ATOM_UNLOCK(x)		SETFALSE(x)
 
 
 
-#ifdef ___MEMORY_MANAGER___
-
-
-static bool memory_enough()
-{
-#ifndef ___IOS_7___
-//#include <sys/sysinfo.h>
-//	struct sysinfo sys_info;
-//	if (sysinfo(&sys_info) != 0){
-//		return true;
-//	}
-//	if (sys_info.freeram > (sys_info.totalram >> 8) || sys_info.freeram > (1024 << 20)){
-//		return true;
-//	}else{
-//		return false;
-//	}
-#endif
-	return true;
-}
-
-
-static int new_page(MemoryPool *pool, MemoryPage *page, size_t page_size)
+static int assign_page(Sr_memory_pool *pool, Sr_memory_page *page, size_t page_size)
 {
 	page->size = (page_size + mm->page_aligned_mask) & (~mm->page_aligned_mask);
+
+	pool->aligned_address = NULL;
 
 	do{
 		page->start_address = mmap(pool->aligned_address,
@@ -243,7 +239,7 @@ static int new_page(MemoryPool *pool, MemoryPage *page, size_t page_size)
 
 	page->pointer = next_pointer(page->head);
 	page->pointer->flag = ((pool->id << 11) | (page->id << 1) | INUSE);
-	page->pointer->size = page->size - (FREE_POINTER_SIZE * 2);
+	page->pointer->size = page->size - (FREE_POINTER_SIZE << 1);
 
 	page->end = next_pointer(page->pointer);
 	page->end->flag = page->pointer->size;
@@ -260,7 +256,15 @@ static int new_page(MemoryPool *pool, MemoryPage *page, size_t page_size)
 }
 
 
-inline static void release_pointer(Pointer *pointer, MemoryPage *page)
+static void free_page(Sr_memory_page *page, Sr_memory_pool *pool)
+{
+	//TODO 是否从最顶端的分页开始释放
+	////当然最好能够回收空闲的内存，但是需要在线程退出时回收内存，需要封装线程来配合
+	////这里现在什么也不做，不必担心什么，当前进程的内存池的容量会保持在峰值时的大小，不回收空闲的内存也没有关系
+}
+
+
+inline static void free_pointer(Pointer *pointer, Sr_memory_page *page, Sr_memory_pool *pool)
 {
 
 	if (next_pointer(pointer) == page->pointer){
@@ -329,17 +333,26 @@ inline static void release_pointer(Pointer *pointer, MemoryPage *page)
 			pointer->prev->next = pointer;
 		}
 	}
+
+	if (page->pointer->size
+			+ page->recycle_bin[0].memory_size
+			+ page->recycle_bin[1].memory_size
+			== mm->page_size
+			- FREE_POINTER_SIZE
+			- FREE_POINTER_SIZE){
+		free_page(page, pool);
+	}
 }
 
 
-static void flush_page(MemoryPage *page)
+static void flush_page(Sr_memory_page *page, Sr_memory_pool *pool)
 {
 	Pointer *pointer = NULL;
 	for (size_t i = 0; i < RECYCLE_BIN_NUMBER; ++i){
 		while(page->recycle_bin[i].head){
 			pointer = page->recycle_bin[i].head;
 			page->recycle_bin[i].head = page->recycle_bin[i].head->next;
-			release_pointer(pointer, page);
+			free_pointer(pointer, page, pool);
 		}
 	}
 }
@@ -350,24 +363,70 @@ static void flush_cache()
 	for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
 		for (size_t page_id = 0; page_id < mm->pool[pool_id].page_number; ++page_id){
 			if (mm->pool[pool_id].page[page_id].start_address != NULL){
-				flush_page(&(mm->pool[pool_id].page[page_id]));
+				flush_page(&(mm->pool[pool_id].page[page_id]), &(mm->pool[pool_id]));
 			}
 		}
 	}
 }
 
 
-#ifdef ___MEMORY_DEBUG___
-void* sr_memory_malloc(size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___MEMORY_DEBUG___
-void* sr_memory_malloc(size_t size)
-#endif //___MEMORY_DEBUG___
+void sr_free(void *address, const void *caller)
+{
+	size_t page_id = 0;
+	size_t pool_id = 0;
+	Pointer *pointer = NULL;
+	Sr_memory_page *page = NULL;
+	Sr_memory_pool *pool = NULL;
+
+	if (address){
+
+		pointer = address2pointer(address);
+		pool_id = ((next_pointer(pointer)->flag >> 11) & 0x3FF);
+		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
+			return;
+		}
+		pool = &(mm->pool[pool_id]);
+
+		page_id = ((next_pointer(pointer)->flag >> 1) & 0x3FF);
+		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
+			return;
+		}
+		page = &(pool->page[page_id]);
+
+		if (ATOM_TRYLOCK(page->lock)){
+			free_pointer(pointer, page, pool);
+			ATOM_UNLOCK(page->lock);
+		}else{
+			for (size_t i = 0; ; i = ++i % RECYCLE_BIN_NUMBER){
+				if (ATOM_TRYLOCK(page->recycle_bin[i].lock)){
+					pointer->next = page->recycle_bin[i].head;
+					page->recycle_bin[i].head = pointer;
+					page->recycle_bin[i].memory_size += pointer->size;
+					if (ATOM_TRYLOCK(page->lock)){
+						while(page->recycle_bin[i].head){
+							pointer = page->recycle_bin[i].head;
+							page->recycle_bin[i].head = page->recycle_bin[i].head->next;
+							page->recycle_bin[i].memory_size -= pointer->size;
+							free_pointer(pointer, page, pool);
+						}
+						ATOM_UNLOCK(page->lock);
+					}
+					ATOM_UNLOCK(page->recycle_bin[i].lock);
+					break;
+				}
+			}
+		}
+	}
+}
+
+
+void* sr_malloc(size_t size, const void *caller)
 {
 	size_t reserved_size = 0;
 	Pointer *pointer = NULL;
 
 	//获取当前线程的内存池
-	MemoryPool *pool = (MemoryPool *)pthread_getspecific(mm->key);
+	Sr_memory_pool *pool = (Sr_memory_pool *)pthread_getspecific(mm->key);
 
 	if (pool == NULL){
 
@@ -399,9 +458,10 @@ void* sr_memory_malloc(size_t size)
 
 		}else{
 
+			pool->tid = pthread_self();
 			for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
 				pool->page[page_id].id = page_id;
-				if (new_page(pool, &(pool->page[page_id]), mm->page_size) != 0){
+				if (assign_page(pool, &(pool->page[page_id]), mm->page_size) != 0){
 					ATOM_UNLOCK(pool->lock);
 					return NULL;
 				}
@@ -424,13 +484,11 @@ void* sr_memory_malloc(size_t size)
 	reserved_size = size + FREE_POINTER_SIZE;
 
 
-	for(size_t i = 0; i < pool->page_number; ++i)
-	{
+	for(size_t i = 0; i < pool->page_number; ++i){
 
 		if (!ATOM_TRYLOCK(pool->page[i].lock)){
 			continue;
 		}
-
 
 		if (reserved_size > pool->page[i].pointer->size){
 
@@ -457,7 +515,7 @@ void* sr_memory_malloc(size_t size)
 		}
 
 		//分配一个新的指针
-		pointer = new_pointer(pool->page[i].pointer, size);
+		pointer = assign_pointer(pool->page[i].pointer, size);
 		pointer->flag = ((pool->id << 11) | (i << 1) | INUSE);
 		pointer->size = pool->page[i].pointer->size - size;
 		next_pointer(pointer)->flag = pointer->size;
@@ -469,98 +527,78 @@ void* sr_memory_malloc(size_t size)
 		ATOM_UNLOCK(pool->page[i].lock);
 
 #ifdef ___MEMORY_DEBUG___
-		int len = snprintf(pointer->debug_msg, DEBUG_MSG_SIZE - 1, "%s[%s(%d)]", file_name, function_name, line_number);
-		pointer->debug_msg[len] = '\0';
+		backtrace ((void**)(&pointer->debug_msg), STACK_SIZE);
 #endif
-
-//		memset(pointer2address(pointer), 0, pointer->size - WORK_POINTER_SIZE);
 
 		return pointer2address(pointer);
 	}
 
 
-	if (memory_enough()){
+	//创建一个分页
+	Sr_memory_page *page = NULL;
 
-		//创建一个分页
-		MemoryPage *page = NULL;
-
-		while(pool->page_number < MAX_PAGE_NUMBER){
-			size_t page_id = pool->page_number;
-			if (ATOM_TRYLOCK(pool->page[page_id].lock)){
-				if (pool->page[page_id].id == 0){
-					pool->page[page_id].id = page_id;
-					page = &(pool->page[page_id]);
-					break;
-				}
-				ATOM_UNLOCK(pool->page[page_id].lock);
+	while(pool->page_number < MAX_PAGE_NUMBER){
+		size_t page_id = pool->page_number;
+		if (ATOM_TRYLOCK(pool->page[page_id].lock)){
+			if (pool->page[page_id].id == 0){
+				pool->page[page_id].id = page_id;
+				page = &(pool->page[page_id]);
+				break;
 			}
+			ATOM_UNLOCK(pool->page[page_id].lock);
 		}
+	}
 
-		if (pool->page_number >= MAX_PAGE_NUMBER){
-			ATOM_UNLOCK(page->lock);
-			return NULL;
-		}
+	if (pool->page_number >= MAX_PAGE_NUMBER){
+		ATOM_UNLOCK(page->lock);
+		return NULL;
+	}
 
-		if (size >= mm->page_size >> 2){
-			if (size >= mm->page_size){
-				if (new_page(pool, page, size << 1) != 0){
-					ATOM_UNLOCK(page->lock);
-					return NULL;
-				}
-			}else{
-				if (new_page(pool, page, mm->page_size << 1) != 0){
-					ATOM_UNLOCK(page->lock);
-					return NULL;
-				}
+	if (size >= mm->page_size >> 2){
+		if (size >= mm->page_size){
+			if (assign_page(pool, page, size << 1) != 0){
+				ATOM_UNLOCK(page->lock);
+				return NULL;
 			}
 		}else{
-			if (new_page(pool, page, mm->page_size) != 0){
+			if (assign_page(pool, page, mm->page_size << 1) != 0){
 				ATOM_UNLOCK(page->lock);
 				return NULL;
 			}
 		}
-
-		//分配一个新的指针
-		pointer = new_pointer(page->pointer, size);
-		pointer->flag = ((pool->id << 11) | (page->id << 1) | INUSE);
-		pointer->size = page->pointer->size - size;
-		next_pointer(pointer)->flag = pointer->size;
-		pointer->prev = page->pointer;
-		page->pointer = pointer;
-		pointer = page->pointer->prev;
-		pointer->size = size;
-
-		ATOM_ADD(pool->page_number, 1);
-		ATOM_UNLOCK(page->lock);
-
-#ifdef ___MEMORY_DEBUG___
-		int len = snprintf(pointer->debug_msg, DEBUG_MSG_SIZE - 1, "%s[%s(%d)]", file_name, function_name, line_number);
-		pointer->debug_msg[len] = '\0';
-#endif
-
-//		memset(pointer2address(pointer), 0, pointer->size - WORK_POINTER_SIZE);
-
-		return pointer2address(pointer);
-
+	}else{
+		if (assign_page(pool, page, mm->page_size) != 0){
+			ATOM_UNLOCK(page->lock);
+			return NULL;
+		}
 	}
 
-	return NULL;
+	//分配一个新的指针
+	pointer = assign_pointer(page->pointer, size);
+	pointer->flag = ((pool->id << 11) | (page->id << 1) | INUSE);
+	pointer->size = page->pointer->size - size;
+	next_pointer(pointer)->flag = pointer->size;
+	pointer->prev = page->pointer;
+	page->pointer = pointer;
+	pointer = page->pointer->prev;
+	pointer->size = size;
+
+	ATOM_ADD(pool->page_number, 1);
+	ATOM_UNLOCK(page->lock);
+
+#ifdef ___MEMORY_DEBUG___
+	backtrace ((void**)(&pointer->debug_msg), STACK_SIZE);
+#endif
+
+	return pointer2address(pointer);
 }
 
 
-#ifdef ___MEMORY_DEBUG___
-void* sr_memory_calloc(size_t number, size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___MEMORY_DEBUG___
-void* sr_memory_calloc(size_t number, size_t size)
-#endif //___MEMORY_DEBUG___
+void* sr_calloc(size_t number, size_t size, const void *caller)
 {
 	size *= number;
 
-#ifdef ___MEMORY_DEBUG___
-	void *pointer = sr_memory_malloc(size, file_name, function_name, line_number);
-#else //___MEMORY_DEBUG___
-	void *pointer = sr_memory_malloc(size);
-#endif //___MEMORY_DEBUG___
+	void *pointer = sr_malloc(size, caller);
 
 	if (pointer != NULL){
     	memset(pointer, 0, size);
@@ -571,22 +609,15 @@ void* sr_memory_calloc(size_t number, size_t size)
 }
 
 
-#ifdef ___MEMORY_DEBUG___
-void* sr_memory_realloc(void *address, size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___MEMORY_DEBUG___
-void* sr_memory_realloc(void *address, size_t size)
-#endif //___MEMORY_DEBUG___
+
+void* sr_realloc(void *address, size_t size, const void *caller)
 {
 	void *new_address = NULL;
 	Pointer *old_pointer = address2pointer(address);
 
 	if (size > 0){
 
-#ifdef ___MEMORY_DEBUG___
-		new_address = sr_memory_malloc(size, file_name, function_name, line_number);
-#else //___MEMORY_DEBUG___
-		new_address = sr_memory_malloc(size);
-#endif //___MEMORY_DEBUG___
+		new_address = sr_malloc(size, caller);
 
 		if (new_address != NULL){
 
@@ -598,14 +629,14 @@ void* sr_memory_realloc(void *address, size_t size)
 				}
 			}
 
-			free(address);
+			sr_free(address, NULL);
 			return new_address;
 		}
 
 	}else{
 
 		if (address != NULL){
-			free(address);
+			sr_free(address, NULL);
 		}
 	}
 
@@ -613,51 +644,43 @@ void* sr_memory_realloc(void *address, size_t size)
 }
 
 
-void sr_memory_free(void *address)
+void* sr_aligned_alloc(size_t alignment, size_t size, const void *caller)
 {
-	size_t page_id = 0;
-	size_t pool_id = 0;
-	Pointer *pointer = NULL;
-	MemoryPage *page = NULL;
-	MemoryPool *pool = NULL;
+	void *address = NULL, *aligned_address = NULL;
+	Pointer *pointer = NULL, *aligned_pointer = NULL;
 
-	if (address){
-
-		pointer = address2pointer(address);
-		pool_id = ((next_pointer(pointer)->flag >> 11) & 0x3FF);
-		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			return;
-		}
-		pool = &(mm->pool[pool_id]);
-
-		page_id = ((next_pointer(pointer)->flag >> 1) & 0x3FF);
-		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			return;
-		}
-		page = &(pool->page[page_id]);
-
-		if (ATOM_TRYLOCK(page->lock)){
-			release_pointer(pointer, page);
-			ATOM_UNLOCK(page->lock);
-		}else{
-			for (size_t i = 0; ; i = ++i % RECYCLE_BIN_NUMBER){
-				if (ATOM_TRYLOCK(page->recycle_bin[i].lock)){
-					pointer->next = page->recycle_bin[i].head;
-					page->recycle_bin[i].head = pointer;
-					if (ATOM_TRYLOCK(page->lock)){
-						while(page->recycle_bin[i].head){
-							pointer = page->recycle_bin[i].head;
-							page->recycle_bin[i].head = page->recycle_bin[i].head->next;
-							release_pointer(pointer, page);
-						}
-						ATOM_UNLOCK(page->lock);
-					}
-					ATOM_UNLOCK(page->recycle_bin[i].lock);
-					break;
-				}
-			}
-		}
+	if (size == 0 || alignment == 0
+			|| (alignment & (sizeof (void *) - 1)) != 0
+			|| (alignment & (alignment - 1)) != 0){
+		errno = EINVAL;
+		return NULL;
 	}
+
+	address = sr_malloc(size + alignment + FREE_POINTER_SIZE, caller);
+	if (address != NULL){
+		if (((size_t)( address ) & ~(alignment - 1)) == ((size_t)( address ))){
+			return address;
+		}
+		aligned_address = (void*)(((size_t)(address) + alignment + FREE_POINTER_SIZE) & ~(alignment - 1));
+		aligned_pointer = address2pointer(aligned_address);
+		pointer = address2pointer(address);
+		size_t free_size = (size_t)aligned_pointer - (size_t)pointer;
+
+		aligned_pointer->size = pointer->size - free_size;
+		aligned_pointer->flag = next_pointer(pointer)->flag;
+		pointer->size = free_size;
+
+#ifdef ___MEMORY_DEBUG___
+		memcpy(aligned_pointer->debug_msg, pointer->debug_msg, DEBUG_MSG_SIZE);
+#endif
+
+		sr_free(address, caller);
+		return aligned_address;
+	}
+
+	errno = ENOMEM;
+
+	return NULL;
 }
 
 
@@ -676,23 +699,8 @@ char* sr_string_duplicate(const char *s)
 }
 
 
-#endif //___MEMORY_MANAGER___
-
-
-int sr_memory_default_init()
+int sr_malloc_initialize(size_t page_size, size_t preloading_page)
 {
-#ifdef ___MEMORY_MANAGER___
-	return sr_memory_init(1024 * 1024 * 100, 2);
-//	return memory_initialize(0, 0);
-#endif
-	return -1;
-}
-
-
-int sr_memory_init(size_t page_size, size_t preloading_page)
-{
-#ifdef ___MEMORY_MANAGER___
-
 	if (ATOM_TRYLOCK(mm->lock)){
 
 		size_t pool_id = mm->pool_number;
@@ -717,10 +725,14 @@ int sr_memory_init(size_t page_size, size_t preloading_page)
 
 		mm->pool[pool_id].id = pool_id;
 
+		if (pipe(mm->pipe_fd) < 0){
+			return -1;
+		}
+
 		for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
 			mm->pool[pool_id].page[page_id].id = page_id;
 			mm->pool[pool_id].page_number ++;
-			if (new_page(&(mm->pool[pool_id]), &(mm->pool[pool_id].page[page_id]), mm->page_size) != 0){
+			if (assign_page(&(mm->pool[pool_id]), &(mm->pool[pool_id].page[page_id]), mm->page_size) != 0){
 				return -1;
 			}
 		}
@@ -729,40 +741,56 @@ int sr_memory_init(size_t page_size, size_t preloading_page)
 			ATOM_UNLOCK(mm->lock);
 			return -1;
 		}
+
+#ifdef ___MEMORY_DEBUG___
+		//第一次调用会导致递归调用__malloc_hock
+		//所以在注册回调函数之前调用一次
+		void *buf[STACK_SIZE];
+		backtrace (buf, STACK_SIZE);
+#endif
+
+		mm->malloc_hook = __malloc_hook;
+		mm->realloc_hook = __realloc_hook;
+		mm->memalign_hook = __memalign_hook;
+		mm->free_hook = __free_hook;
+		__malloc_hook = sr_malloc;
+		__realloc_hook = sr_realloc;
+		__memalign_hook = sr_aligned_alloc;
+		__free_hook = sr_free;
 	}
 
 	return 0;
-
-#endif
-
-	return -1;
 }
 
 
-void sr_memory_release()
+void sr_malloc_release()
 {
-#ifdef ___MEMORY_MANAGER___
 	if (ATOM_UNLOCK(mm->lock)){
 		for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-			MemoryPool *pool = &(mm->pool[pool_id]);
+			Sr_memory_pool *pool = &(mm->pool[pool_id]);
 			for (int page_id = 0; page_id < pool->page_number; ++page_id){
 				if ( pool->page[page_id].start_address != NULL){
 					munmap(pool->page[page_id].start_address, pool->page[page_id].size);
 				}
 			}
 		}
+		close(mm->pipe_fd[1]);
+		close(mm->pipe_fd[0]);
 		pthread_key_delete(mm->key);
-		memset(mm, 0, sizeof(MemoryManager));
+
+		__malloc_hook = mm->malloc_hook;
+		__realloc_hook = mm->realloc_hook;
+		__memalign_hook = mm->memalign_hook;
+		__free_hook = mm->free_hook;
+
+		memset(mm, 0, sizeof(Sr_memory_manager));
 	}
-#endif
 }
 
 
-void sr_memory_debug(void (*log_debug)(const char *format, ...))
+void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 {
-#if defined(___MEMORY_MANAGER___)
-
-	MemoryPool *pool = NULL;
+	Sr_memory_pool *pool = NULL;
 	Pointer *pointer = NULL;
 
 	if (log_debug == NULL){
@@ -780,14 +808,19 @@ void sr_memory_debug(void (*log_debug)(const char *format, ...))
 				&& pool->page[page_id].pointer->size
 				!= pool->page[page_id].size - FREE_POINTER_SIZE * 2){
 
-				log_debug("pool[%lu] page[%lu] Memory leak %lu byte\n", pool->id, page_id,
-						pool->page[page_id].size - (pool->page[page_id].pointer->size + 2 * FREE_POINTER_SIZE));
-
 				pointer = (next_pointer(pool->page[page_id].head));
 				while(pointer != pool->page[page_id].end){
 #ifdef ___MEMORY_DEBUG___
 					if (!mergeable(next_pointer(pointer))){
-						log_debug("pool[%lu] page[%lu] Location[%s]\n", pool->id, page_id, pointer->debug_msg);
+						ssize_t size = 0;
+						char debug_message[4096] = {0};
+						backtrace_symbols_fd((void *const *)(&pointer->debug_msg[0]), STACK_SIZE, mm->pipe_fd[1]);
+						do{
+							size = read(mm->pipe_fd[0], debug_message, 4096 - 1);
+							if (strstr(debug_message, "pthread_create") == NULL){
+								log_debug("[!!! Locate Memory Leaks !!!]\n" "%s\n", debug_message);
+							}
+						}while (size == 4096 - 1);
 					}
 #endif
 					pointer = next_pointer(pointer);
@@ -795,5 +828,4 @@ void sr_memory_debug(void (*log_debug)(const char *format, ...))
 			}
 		}
 	}
-#endif
 }

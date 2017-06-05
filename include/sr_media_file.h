@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,16 +30,16 @@
 
 
 extern int sr_file_protocol_create_writer(const char *path,
-		SR_EventListener *listener,
-		SR_MediaTransmission **pp_writer);
+		Sr_event_listener *listener,
+		Sr_media_transmission **pp_writer);
 
 extern int sr_file_protocol_create_reader(const char *path,
-		SR_EventListener *listener,
-		SR_MediaTransmission **pp_reader);
+		Sr_event_listener *listener,
+		Sr_media_transmission **pp_reader);
 
-extern void sr_file_protocol_release(SR_MediaTransmission **pp_transmission);
+extern void sr_file_protocol_release(Sr_media_transmission **pp_transmission);
 
-extern void sr_file_protocol_stop(SR_MediaTransmission *transmission);
+extern void sr_file_protocol_stop(Sr_media_transmission *transmission);
 
 
 #endif /* INCLUDE_SR_MEDIA_FILE_H_ */

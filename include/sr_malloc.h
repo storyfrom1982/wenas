@@ -1,5 +1,5 @@
 /*
- * sr_mutex.h
+ * sr_malloc.h
  *
  * Author: storyfrom1982@gmail.com
  *
@@ -22,24 +22,21 @@
  *
  */
 
-#ifndef INCLUDE_SR_MUTEX_H_
-#define INCLUDE_SR_MUTEX_H_
+#ifndef INCLUDE_SR_MEMORY_H_
+#define INCLUDE_SR_MEMORY_H_
 
 
-#include <pthread.h>
-
-typedef struct Sr_mutex Sr_mutex;
-
-extern int sr_mutex_create(Sr_mutex **pp_mutex);
-extern void sr_mutex_release(Sr_mutex **pp_mutex);
-
-extern void sr_mutex_lock(Sr_mutex *mutex);
-extern void sr_mutex_unlock(Sr_mutex *mutex);
-
-extern void sr_mutex_wait(Sr_mutex *mutex);
-extern void sr_mutex_signal(Sr_mutex *mutex);
-extern void sr_mutex_broadcast(Sr_mutex *mutex);
-//extern int sr_mutex_timedwait(SR_Mutex *mutex, uint32_t millisecond);
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
 
-#endif /* INCLUDE_SR_MUTEX_H_ */
+//#define ___MEMORY_DEBUG___
+
+
+extern int sr_malloc_initialize(size_t page_size, size_t preloading_page);
+extern void sr_malloc_release();
+extern void sr_malloc_debug(void (*log_debug)(const char *format, ...));
+
+
+#endif /* INCLUDE_SR_MEMORY_H_ */

@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,6 @@
 #include "sr_error.h"
 #include "sr_atom.h"
 
-#ifdef ___MEMORY_MANAGER___
-# include "sr_memory.h"
-#else
-# include <stdlib.h>
-#endif
-
 
 
 #define SR_QUEUE_ENABLE(x) \
@@ -45,7 +39,7 @@
 
 
 #define SR_QUEUE_DEFINE(x) \
-    struct x##_Queue \
+    struct x##_queue \
 	{ \
         bool lock; \
         bool stopped; \
@@ -58,10 +52,10 @@
     }
 
 
-#define SR_QUEUE_DECLARE(x)	struct x##_Queue
+#define SR_QUEUE_DECLARE(x)	struct x##_queue
 
 
-#define sr_queue_init(q, s) \
+#define sr_queue_initialize(q, s) \
     do { \
         (q)->lock = false; \
         (q)->stopped = false; \
@@ -76,7 +70,7 @@
     }while(0)
 
 
-#define sr_queue_push_to_head(q, x, result) \
+#define sr_queue_push_front(q, x, result) \
 	do { \
 		if ((x) == NULL){ \
 			result = ERRPARAM; \
@@ -88,7 +82,7 @@
 		} \
 		if (ISTRUE((q)->stopped)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERRCANCEL; \
+			result = ERREOF; \
 			break; \
 		} \
 		if ((q)->pushable == 0){ \
@@ -107,7 +101,7 @@
 	}while(0)
 
 
-#define sr_queue_push_to_end(q, x, result) \
+#define sr_queue_push_back(q, x, result) \
 	do { \
 		if (NULL == (x)){ \
 			result = ERRPARAM; \
@@ -119,7 +113,7 @@
 		} \
 		if (ISTRUE((q)->stopped)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERRCANCEL; \
+			result = ERREOF; \
 			break; \
 		} \
 		if ((q)->pushable == 0){ \
@@ -138,7 +132,7 @@
 	}while(0)
 
 
-#define sr_queue_pop_first(q, x, result) \
+#define sr_queue_pop_front(q, x, result) \
 	do { \
 		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
 			result = ERRTRYAGAIN; \
@@ -147,7 +141,7 @@
 		if ((q)->popable == 0 || (q)->head.next == &((q)->end)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
 			if (ISTRUE((q)->stopped)){ \
-				result = ERRCANCEL; \
+				result = ERREOF; \
 				break; \
 			} \
 			result = ERRTRYAGAIN; \
@@ -163,7 +157,7 @@
 	}while(0)
 
 
-#define sr_queue_pop_last(q, x, result) \
+#define sr_queue_pop_back(q, x, result) \
 	do { \
 		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
 			result = ERRTRYAGAIN; \
@@ -172,7 +166,7 @@
 		if ((q)->popable == 0 || (q)->end.prev == &((q)->head)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
 			if (ISTRUE((q)->stopped)){ \
-				result = ERRCANCEL; \
+				result = ERREOF; \
 				break; \
 			} \
 			result = ERRTRYAGAIN; \
@@ -188,7 +182,7 @@
 	}while(0)
 
 
-#define sr_queue_get_first(q, x, result) \
+#define sr_queue_get_front(q, x, result) \
 	do { \
 		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
 			result = ERRTRYAGAIN; \
@@ -197,7 +191,7 @@
 		if ((q)->popable == 0 || (q)->head.next == &((q)->end)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
 			if (ISTRUE((q)->stopped)){ \
-				result = ERRCANCEL; \
+				result = ERREOF; \
 				break; \
 			} \
 			result = ERRTRYAGAIN; \
@@ -209,7 +203,7 @@
 	}while(0)
 
 
-#define sr_queue_get_end(q, x, result) \
+#define sr_queue_get_back(q, x, result) \
 	do { \
 		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
 			result = ERRTRYAGAIN; \
@@ -218,7 +212,7 @@
 		if ((q)->popable == 0 || (q)->end.prev == &((q)->head)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
 			if (ISTRUE((q)->stopped)){ \
-				result = ERRCANCEL; \
+				result = ERREOF; \
 				break; \
 			} \
 			result = ERRTRYAGAIN; \
@@ -238,7 +232,7 @@
 		SR_ATOM_LOCK((q)->lock); \
 		if (ISTRUE((q)->stopped)){ \
 			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERRCANCEL; \
+			result = ERREOF; \
 			break; \
 		} \
 		(x)->prev->next = (x)->next; \
@@ -284,18 +278,10 @@
 #define sr_queue_popable(q) (q)->popable
 
 
-#define sr_queue_get_next(q, x, n) \
-	if ((q) != NULL && (x) != NULL) \
-		if ((x)->next == &((q)->end))(n) = NULL; \
-		else (n) = (x)->next; \
-	else (n) = NULL;
+#define sr_queue_front_iterator(q)	&((q)->head)
 
 
-#define sr_queue_get_prev(q, x, p) \
-	if ((q) != NULL && (x) != NULL) \
-		if ((x)->prev == &((q)->head))(p) = NULL; \
-		else (p) = (x)->prev; \
-	else (p) = NULL;
+#define sr_queue_back_iterator(q)	&((q)->end)
 
 
 #endif /* INCLUDE_SR_QUEUE_H_ */

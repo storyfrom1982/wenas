@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@
 #include "sr_time.h"
 #include "sr_pipe.h"
 #include "sr_mutex.h"
-#include "sr_memory.h"
+#include "sr_malloc.h"
 #include "sr_queue.h"
 
 
@@ -51,12 +51,12 @@ typedef struct sr_media_transmission_protocol_t{
 	bool running;
 	pthread_t tid;
 
-	SR_MediaTransmission transmission;
-	SR_EventListener *listener;
+	Sr_media_transmission transmission;
+	Sr_event_listener *listener;
 
-	SR_QUEUE_DECLARE(SR_MediaFrame) sender_queue;
-	SR_QUEUE_DECLARE(SR_MediaFrame) receiver_audio_queue;
-	SR_QUEUE_DECLARE(SR_MediaFrame) receiver_video_queue;
+	SR_QUEUE_DECLARE(Sr_media_frame) sender_queue;
+	SR_QUEUE_DECLARE(Sr_media_frame) receiver_audio_queue;
+	SR_QUEUE_DECLARE(Sr_media_frame) receiver_video_queue;
 
 }sr_file_protocol_t;
 
@@ -67,7 +67,7 @@ typedef struct sr_media_transmission_protocol_t{
 ///////////////////////////////////////
 
 
-static void sr___file_protocol___writer_flush(SR_MediaTransmission *transmission)
+static void sr___file_protocol___writer_flush(Sr_media_transmission *transmission)
 {
 	if (transmission && transmission->protocol){
 		while(ISTRUE(transmission->protocol->running)
@@ -79,14 +79,14 @@ static void sr___file_protocol___writer_flush(SR_MediaTransmission *transmission
 
 
 static int sr___file_protocol___writer_disable_read(
-		SR_MediaTransmission *transmission,
-		SR_MediaFrame **pp_frame, int type)
+		Sr_media_transmission *transmission,
+		Sr_media_frame **pp_frame, int type)
 {
-	return ERRCANCEL;
+	return ERREOF;
 }
 
 
-static int sr___file_protocol___write_frame(SR_MediaTransmission *sender, SR_MediaFrame *frame)
+static int sr___file_protocol___write_frame(Sr_media_transmission *sender, Sr_media_frame *frame)
 {
 	int result = 0;
 
@@ -96,10 +96,10 @@ static int sr___file_protocol___write_frame(SR_MediaTransmission *sender, SR_Med
 	}
 
 	if (ISFALSE(sender->protocol->running)){
-		return ERRCANCEL;
+		return ERREOF;
 	}
 
-	sr_queue_push_to_end(&sender->protocol->sender_queue, frame, result);
+	sr_queue_push_back(&sender->protocol->sender_queue, frame, result);
 
 	return result;
 }
@@ -113,13 +113,13 @@ static void* write_loop(void *p)
 	int64_t audio_begin_time = 0;
 	int64_t video_begin_time = 0;
 	bool running = false;
-	SR_MediaFrame *frame = NULL;
+	Sr_media_frame *frame = NULL;
 	sr_file_protocol_t *fp = (sr_file_protocol_t *)p;
 
 
 	while(ISTRUE(fp->running)){
 
-		sr_queue_pop_first(&(fp->sender_queue), frame, result);
+		sr_queue_pop_front(&(fp->sender_queue), frame, result);
 
 		if (result != 0){
 			if (result == ERRTRYAGAIN){
@@ -174,10 +174,10 @@ static void* write_loop(void *p)
 
 
 	if (ISFALSE(fp->running)){
-		result = ERRCANCEL;
+		result = ERREOF;
 	}
 
-	SR_Event event = {.type = SR_EVENT_TERMINATION, .i32 = result};
+	Sr_event event = {.type = SR_EVENT_TERMINATION, .i32 = result};
 	sr_event_listener_push_event(fp->listener, event);
 
 
@@ -190,7 +190,7 @@ static void* write_loop(void *p)
 ///////////////////////////////////////
 
 
-static void sr___file_protocol___reader_flush(SR_MediaTransmission *transmission)
+static void sr___file_protocol___reader_flush(Sr_media_transmission *transmission)
 {
 	if (transmission){
 		while(ISTRUE(transmission->protocol->running) &&
@@ -203,17 +203,17 @@ static void sr___file_protocol___reader_flush(SR_MediaTransmission *transmission
 
 
 static int sr___file_protocol___reader_disable_write(
-		SR_MediaTransmission *transmission,
-		SR_MediaFrame *frame)
+		Sr_media_transmission *transmission,
+		Sr_media_frame *frame)
 {
-	return ERRCANCEL;
+	return ERREOF;
 }
 
 
-static int sr___file_protocol___read_frame(SR_MediaTransmission *receiver, SR_MediaFrame **pp_frame, int type)
+static int sr___file_protocol___read_frame(Sr_media_transmission *receiver, Sr_media_frame **pp_frame, int type)
 {
 	int result = 0;
-	SR_MediaFrame *frame = NULL;
+	Sr_media_frame *frame = NULL;
 
 	if (receiver == NULL || receiver->protocol == NULL || pp_frame == NULL){
 		loge(ERRPARAM);
@@ -223,9 +223,9 @@ static int sr___file_protocol___read_frame(SR_MediaTransmission *receiver, SR_Me
 	if (ISTRUE(receiver->protocol->running)){
 
 		if (type == SR_FRAME_MEDIA_TYPE_AUDIO){
-			sr_queue_pop_first(&(receiver->protocol->receiver_audio_queue), frame, result);
+			sr_queue_pop_front(&(receiver->protocol->receiver_audio_queue), frame, result);
 		}else if (type == SR_FRAME_MEDIA_TYPE_VIDEO){
-			sr_queue_pop_first(&(receiver->protocol->receiver_video_queue), frame, result);
+			sr_queue_pop_front(&(receiver->protocol->receiver_video_queue), frame, result);
 		}else{
 			result = ERRPARAM;
 		}
@@ -235,7 +235,7 @@ static int sr___file_protocol___read_frame(SR_MediaTransmission *receiver, SR_Me
 		}
 
 	}else{
-		result = ERRCANCEL;
+		result = ERREOF;
 	}
 
 	return result;
@@ -246,7 +246,7 @@ static void* read_loop(void *p)
 {
 	int result = 0;
 	bool running = false;
-	SR_MediaFrame *frame = NULL;
+	Sr_media_frame *frame = NULL;
 	sr_file_protocol_t *fp = (sr_file_protocol_t *)p;
 
 	uint8_t type = 0;
@@ -314,7 +314,7 @@ static void* read_loop(void *p)
 		if (frame->media_type == SR_FRAME_MEDIA_TYPE_AUDIO){
 			logw("read audio == %u\n", frame->data_size);
 			do {
-				sr_queue_push_to_end(&(fp->receiver_audio_queue), frame, result);
+				sr_queue_push_back(&(fp->receiver_audio_queue), frame, result);
 				if (result == ERRTRYAGAIN){
 					if (ISFALSE(fp->running)){
 						break;
@@ -326,7 +326,7 @@ static void* read_loop(void *p)
 		}else if (frame->media_type == SR_FRAME_MEDIA_TYPE_VIDEO){
 			logw("read video == %u\n", frame->data_size);
 			do {
-				sr_queue_push_to_end(&(fp->receiver_video_queue), frame, result);
+				sr_queue_push_back(&(fp->receiver_video_queue), frame, result);
 				if (result == ERRTRYAGAIN){
 					if (ISFALSE(fp->running)){
 						break;
@@ -363,7 +363,7 @@ static void* read_loop(void *p)
 		nanosleep((const struct timespec[]){{0, 1000L}}, NULL);
 	}
 
-	SR_Event event = {.type = SR_EVENT_TERMINATION, .i32 = result};
+	Sr_event event = {.type = SR_EVENT_TERMINATION, .i32 = result};
 	sr_event_listener_push_event(fp->listener, event);
 
 
@@ -394,8 +394,8 @@ static void file_protocol_release(sr_file_protocol_t *fp)
 
 
 int sr_file_protocol_create_writer(const char *path,
-		SR_EventListener *listener,
-		SR_MediaTransmission **pp_transmission)
+		Sr_event_listener *listener,
+		Sr_media_transmission **pp_transmission)
 {
 	int result = 0;
 	uint32_t queue_size = 1024;
@@ -409,8 +409,8 @@ int sr_file_protocol_create_writer(const char *path,
 	logd("create file %s\n", path);
 
 	if ((fp = (sr_file_protocol_t *)calloc(1, sizeof(sr_file_protocol_t))) == NULL){
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	fp->listener = listener;
@@ -419,8 +419,8 @@ int sr_file_protocol_create_writer(const char *path,
 
 	if ((fp->path = strdup(path)) == NULL){
 		file_protocol_release(fp);
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	if ((fp->fd = open(fp->path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0){
@@ -429,7 +429,7 @@ int sr_file_protocol_create_writer(const char *path,
 		return ERRSYSCALL;
 	}
 
-	sr_queue_init(&(fp->sender_queue), queue_size);
+	sr_queue_initialize(&(fp->sender_queue), queue_size);
 
 	fp->running = true;
 
@@ -453,8 +453,8 @@ int sr_file_protocol_create_writer(const char *path,
 
 
 int sr_file_protocol_create_reader(const char *path,
-		SR_EventListener *listener,
-		SR_MediaTransmission **pp_transmission)
+		Sr_event_listener *listener,
+		Sr_media_transmission **pp_transmission)
 {
 	int result = 0;
 	int queue_size = 1024;
@@ -468,8 +468,8 @@ int sr_file_protocol_create_reader(const char *path,
 	logd("open file %s\n", path);
 
 	if ((fp = (sr_file_protocol_t *)calloc(1, sizeof(sr_file_protocol_t))) == NULL){
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	fp->listener = listener;
@@ -478,8 +478,8 @@ int sr_file_protocol_create_reader(const char *path,
 
 	if ((fp->path = strdup(path)) == NULL){
 		file_protocol_release(fp);
-		loge(ERRMEMORY);
-		return ERRMEMORY;
+		loge(ERRMALLOC);
+		return ERRMALLOC;
 	}
 
 	if ((fp->fd = open(fp->path, O_RDONLY, 0644)) < 0){
@@ -488,8 +488,8 @@ int sr_file_protocol_create_reader(const char *path,
 		return ERRSYSCALL;
 	}
 
-	sr_queue_init(&(fp->receiver_audio_queue), queue_size);
-	sr_queue_init(&(fp->receiver_video_queue), queue_size);
+	sr_queue_initialize(&(fp->receiver_audio_queue), queue_size);
+	sr_queue_initialize(&(fp->receiver_video_queue), queue_size);
 
 	fp->running = true;
 
@@ -512,11 +512,11 @@ int sr_file_protocol_create_reader(const char *path,
 }
 
 
-void sr_file_protocol_release(SR_MediaTransmission **pp_transmission)
+void sr_file_protocol_release(Sr_media_transmission **pp_transmission)
 {
 	logd("enter\n");
 	if (pp_transmission && *pp_transmission){
-		SR_MediaTransmission *transmission = *pp_transmission;
+		Sr_media_transmission *transmission = *pp_transmission;
 		*pp_transmission = NULL;
 		file_protocol_release(transmission->protocol);
 	}
@@ -524,7 +524,7 @@ void sr_file_protocol_release(SR_MediaTransmission **pp_transmission)
 }
 
 
-void sr_file_protocol_stop(SR_MediaTransmission *transmission)
+void sr_file_protocol_stop(Sr_media_transmission *transmission)
 {
 	if (transmission && transmission->protocol){
 		SETFALSE(transmission->protocol->running);

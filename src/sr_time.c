@@ -5,7 +5,7 @@
  *
  * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
  *
- * This file is part of self-reliance.
+ * This file is part of sr_malloc.
  *
  * self-reliance is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 #include "sr_error.h"
 
 
-int64_t sr_timing_start()
+int64_t sr_starting_time()
 {
 	struct timeval tv = {0};
 	if (gettimeofday(&tv, NULL) != 0){
@@ -43,7 +43,7 @@ int64_t sr_timing_start()
 }
 
 
-int64_t sr_timing_complete(int64_t start_microsecond)
+int64_t sr_calculate_time(int64_t start_microsecond)
 {
 	struct timeval tv = {0};
 	if (gettimeofday(&tv, NULL) != 0){
