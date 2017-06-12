@@ -31,17 +31,13 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <sys/mman.h>
-
 #include <errno.h>
-#include <malloc.h>
 
 
 #ifndef ___MEMORY_DEBUG___
 # define DEBUG_MSG_SIZE			0
 #else
-# include <execinfo.h>
-# define STACK_SIZE				8
-# define DEBUG_MSG_SIZE			( STACK_SIZE * sizeof(void*) )
+# define DEBUG_MSG_SIZE			256
 #endif
 
 #define	MAX_POOL_NUMBER			1024
@@ -183,13 +179,6 @@ typedef struct Sr_memory_manager{
 
 	pthread_key_t key;
 	Sr_memory_pool pool[MAX_POOL_NUMBER + 1];
-
-	void (*volatile free_hook) (void *ptr, const void *caller);
-	void* (*volatile malloc_hook) (size_t size, const void *caller);
-	void* (*volatile realloc_hook) (void *ptr, size_t size, const void *caller);
-	void* (*volatile memalign_hook) (size_t alignment, size_t size, const void *caller);
-
-	int pipe_fd[2];
 
 }Sr_memory_manager;
 
@@ -370,7 +359,7 @@ static void flush_cache()
 }
 
 
-void sr_free(void *address, const void *caller)
+void sr_free(void *address)
 {
 	size_t page_id = 0;
 	size_t pool_id = 0;
@@ -420,7 +409,11 @@ void sr_free(void *address, const void *caller)
 }
 
 
-void* sr_malloc(size_t size, const void *caller)
+#ifdef ___MEMORY_DEBUG___
+void* sr_malloc(size_t size, const char *file_name, const char *function_name, int line_number)
+#else //___MEMORY_DEBUG___
+void* sr_malloc(size_t size)
+#endif //___MEMORY_DEBUG___
 {
 	size_t reserved_size = 0;
 	Pointer *pointer = NULL;
@@ -527,7 +520,8 @@ void* sr_malloc(size_t size, const void *caller)
 		ATOM_UNLOCK(pool->page[i].lock);
 
 #ifdef ___MEMORY_DEBUG___
-		backtrace ((void**)(&pointer->debug_msg), STACK_SIZE);
+		int len = snprintf(pointer->debug_msg, DEBUG_MSG_SIZE - 1, "%s[%s(%d)]", file_name, function_name, line_number);
+		pointer->debug_msg[len] = '\0';
 #endif
 
 		return pointer2address(pointer);
@@ -587,18 +581,27 @@ void* sr_malloc(size_t size, const void *caller)
 	ATOM_UNLOCK(page->lock);
 
 #ifdef ___MEMORY_DEBUG___
-	backtrace ((void**)(&pointer->debug_msg), STACK_SIZE);
+	int len = snprintf(pointer->debug_msg, DEBUG_MSG_SIZE - 1, "%s[%s(%d)]", file_name, function_name, line_number);
+	pointer->debug_msg[len] = '\0';
 #endif
 
 	return pointer2address(pointer);
 }
 
 
-void* sr_calloc(size_t number, size_t size, const void *caller)
+#ifdef ___MEMORY_DEBUG___
+void* sr_calloc(size_t number, size_t size, const char *file_name, const char *function_name, int line_number)
+#else //___MEMORY_DEBUG___
+void* sr_calloc(size_t number, size_t size)
+#endif //___MEMORY_DEBUG___
 {
 	size *= number;
 
-	void *pointer = sr_malloc(size, caller);
+#ifdef ___MEMORY_DEBUG___
+	void *pointer = sr_malloc(size, file_name, function_name, line_number);
+#else //___MEMORY_DEBUG___
+	void *pointer = sr_malloc(size);
+#endif //___MEMORY_DEBUG___
 
 	if (pointer != NULL){
     	memset(pointer, 0, size);
@@ -610,14 +613,22 @@ void* sr_calloc(size_t number, size_t size, const void *caller)
 
 
 
-void* sr_realloc(void *address, size_t size, const void *caller)
+#ifdef ___MEMORY_DEBUG___
+void* sr_realloc(void *address, size_t size, const char *file_name, const char *function_name, int line_number)
+#else //___MEMORY_DEBUG___
+void* sr_realloc(void *address, size_t size)
+#endif //___MEMORY_DEBUG___
 {
 	void *new_address = NULL;
 	Pointer *old_pointer = address2pointer(address);
 
 	if (size > 0){
 
-		new_address = sr_malloc(size, caller);
+#ifdef ___MEMORY_DEBUG___
+		new_address = sr_malloc(size, file_name, function_name, line_number);
+#else //___MEMORY_DEBUG___
+		new_address = sr_malloc(size);
+#endif //___MEMORY_DEBUG___
 
 		if (new_address != NULL){
 
@@ -629,14 +640,14 @@ void* sr_realloc(void *address, size_t size, const void *caller)
 				}
 			}
 
-			sr_free(address, NULL);
+			sr_free(address);
 			return new_address;
 		}
 
 	}else{
 
 		if (address != NULL){
-			sr_free(address, NULL);
+			sr_free(address);
 		}
 	}
 
@@ -644,7 +655,11 @@ void* sr_realloc(void *address, size_t size, const void *caller)
 }
 
 
-void* sr_aligned_alloc(size_t alignment, size_t size, const void *caller)
+#ifdef ___MEMORY_DEBUG___
+void* sr_aligned_alloc(size_t alignment, size_t size, const char *file_name, const char *function_name, int line_number)
+#else //___MEMORY_DEBUG___
+void* sr_aligned_alloc(size_t alignment, size_t size)
+#endif //___MEMORY_DEBUG___
 {
 	void *address = NULL, *aligned_address = NULL;
 	Pointer *pointer = NULL, *aligned_pointer = NULL;
@@ -656,7 +671,14 @@ void* sr_aligned_alloc(size_t alignment, size_t size, const void *caller)
 		return NULL;
 	}
 
-	address = sr_malloc(size + alignment + FREE_POINTER_SIZE, caller);
+
+#ifdef ___MEMORY_DEBUG___
+	address = sr_malloc(size + alignment + FREE_POINTER_SIZE, file_name, function_name, line_number);
+#else //___MEMORY_DEBUG___
+	address = sr_malloc(size + alignment + FREE_POINTER_SIZE);
+#endif //___MEMORY_DEBUG___
+
+
 	if (address != NULL){
 		if (((size_t)( address ) & ~(alignment - 1)) == ((size_t)( address ))){
 			return address;
@@ -674,7 +696,7 @@ void* sr_aligned_alloc(size_t alignment, size_t size, const void *caller)
 		memcpy(aligned_pointer->debug_msg, pointer->debug_msg, DEBUG_MSG_SIZE);
 #endif
 
-		sr_free(address, caller);
+		sr_free(address);
 		return aligned_address;
 	}
 
@@ -684,22 +706,33 @@ void* sr_aligned_alloc(size_t alignment, size_t size, const void *caller)
 }
 
 
-char* sr_string_duplicate(const char *s)
+#ifdef ___MEMORY_DEBUG___
+char* sr_strdup(const char *s, const char *file_name, const char *function_name, int line_number)
+#else //___MEMORY_DEBUG___
+char* sr_strdup(const char *s)
+#endif //___MEMORY_DEBUG___
 {
 	char *result = NULL;
 	if (s){
 		size_t len = strlen(s);
-		if ((result = (char *)malloc(len + 1)) == NULL){
-			return NULL;
+
+#ifdef ___MEMORY_DEBUG___
+		result = (char *)sr_malloc(len + 1, file_name, function_name, line_number);
+#else //___MEMORY_DEBUG___
+		result = (char *)sr_malloc(len + 1);
+#endif //___MEMORY_DEBUG___
+
+		if (result != NULL){
+		    memcpy(result, s, len);
+		    result[len] = '\0';
 		}
-	    memcpy(result, s, len);
-	    result[len] = '\0';
 	}
+
 	return result;
 }
 
 
-int sr_malloc_initialize(size_t page_size, size_t preloading_page)
+int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 {
 	if (ATOM_TRYLOCK(mm->lock)){
 
@@ -710,8 +743,8 @@ int sr_malloc_initialize(size_t page_size, size_t preloading_page)
 			page_size = 1024 << 11;
 		}
 
-		if (preloading_page < 1){
-			preloading_page = 2;
+		if (preloaded_page < 1){
+			preloaded_page = 2;
 		}
 
 		if (pthread_key_create(&(mm->key), NULL) != 0){
@@ -720,14 +753,10 @@ int sr_malloc_initialize(size_t page_size, size_t preloading_page)
 		}
 
 		mm->page_size = page_size;
-		mm->preloading_page = preloading_page < MAX_PAGE_NUMBER ? preloading_page : MAX_PAGE_NUMBER;
+		mm->preloading_page = preloaded_page < MAX_PAGE_NUMBER ? preloaded_page : MAX_PAGE_NUMBER;
 		mm->page_aligned_mask = (size_t) sysconf(_SC_PAGESIZE) - 1;
 
 		mm->pool[pool_id].id = pool_id;
-
-		if (pipe(mm->pipe_fd) < 0){
-			return -1;
-		}
 
 		for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
 			mm->pool[pool_id].page[page_id].id = page_id;
@@ -741,22 +770,6 @@ int sr_malloc_initialize(size_t page_size, size_t preloading_page)
 			ATOM_UNLOCK(mm->lock);
 			return -1;
 		}
-
-#ifdef ___MEMORY_DEBUG___
-		//第一次调用会导致递归调用__malloc_hock
-		//所以在注册回调函数之前调用一次
-		void *buf[STACK_SIZE];
-		backtrace (buf, STACK_SIZE);
-#endif
-
-		mm->malloc_hook = __malloc_hook;
-		mm->realloc_hook = __realloc_hook;
-		mm->memalign_hook = __memalign_hook;
-		mm->free_hook = __free_hook;
-		__malloc_hook = sr_malloc;
-		__realloc_hook = sr_realloc;
-		__memalign_hook = sr_aligned_alloc;
-		__free_hook = sr_free;
 	}
 
 	return 0;
@@ -774,14 +787,8 @@ void sr_malloc_release()
 				}
 			}
 		}
-		close(mm->pipe_fd[1]);
-		close(mm->pipe_fd[0]);
-		pthread_key_delete(mm->key);
 
-		__malloc_hook = mm->malloc_hook;
-		__realloc_hook = mm->realloc_hook;
-		__memalign_hook = mm->memalign_hook;
-		__free_hook = mm->free_hook;
+		pthread_key_delete(mm->key);
 
 		memset(mm, 0, sizeof(Sr_memory_manager));
 	}
@@ -807,20 +814,12 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 			if (pool->page[page_id].start_address
 				&& pool->page[page_id].pointer->size
 				!= pool->page[page_id].size - FREE_POINTER_SIZE * 2){
-
+				log_debug("[!!! Found a memory leak !!!]\n");
 				pointer = (next_pointer(pool->page[page_id].head));
 				while(pointer != pool->page[page_id].end){
 #ifdef ___MEMORY_DEBUG___
 					if (!mergeable(next_pointer(pointer))){
-						ssize_t size = 0;
-						char debug_message[4096] = {0};
-						backtrace_symbols_fd((void *const *)(&pointer->debug_msg[0]), STACK_SIZE, mm->pipe_fd[1]);
-						do{
-							size = read(mm->pipe_fd[0], debug_message, 4096 - 1);
-							if (strstr(debug_message, "pthread_create") == NULL){
-								log_debug("[!!! Locate Memory Leaks !!!]\n" "%s\n", debug_message);
-							}
-						}while (size == 4096 - 1);
+						log_debug("[!!! Locate Memory Leaks !!! ===> %s]\n", pointer->debug_msg);
 					}
 #endif
 					pointer = next_pointer(pointer);

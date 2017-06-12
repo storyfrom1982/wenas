@@ -297,7 +297,7 @@ libsr_include_HEADERS = \
 	sr_atom.h \
 	sr_byte.h \
 	sr_error.h \
-	sr_memory.h \
+	sr_malloc.h \
 	sr_mutex.h \
 	sr_pipe.h \
 	sr_queue.h \

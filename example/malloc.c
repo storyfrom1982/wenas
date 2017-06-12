@@ -148,11 +148,11 @@ void* malloc_test(int producer_count, int consumers_count)
 	int p_number = producer_count;
 
 	if (pthread_key_create(&(key), NULL) != 0){
-		return -1;
+		return NULL;
 	}
 
 	if (pthread_setspecific(key, ppp) != 0){
-		return -1;
+		return NULL;
 	}
 
 //	sr_memory_default_init();

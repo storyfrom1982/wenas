@@ -89,7 +89,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = queue$(EXEEXT) pipe$(EXEEXT) malloc$(EXEEXT) \
-	memory_leak$(EXEEXT) media$(EXEEXT)
+	memory_leak$(EXEEXT) media$(EXEEXT) aligned_malloc$(EXEEXT)
 subdir = example
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.ac
@@ -102,13 +102,20 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_malloc_OBJECTS = malloc-malloc.$(OBJEXT)
-malloc_OBJECTS = $(am_malloc_OBJECTS)
-malloc_DEPENDENCIES = $(top_srcdir)/src/libsr.la
+am_aligned_malloc_OBJECTS = aligned_malloc-aligned_malloc.$(OBJEXT)
+aligned_malloc_OBJECTS = $(am_aligned_malloc_OBJECTS)
+aligned_malloc_DEPENDENCIES = $(top_srcdir)/src/libsr.la
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+aligned_malloc_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(aligned_malloc_CFLAGS) $(CFLAGS) $(aligned_malloc_LDFLAGS) \
+	$(LDFLAGS) -o $@
+am_malloc_OBJECTS = malloc-malloc.$(OBJEXT)
+malloc_OBJECTS = $(am_malloc_OBJECTS)
+malloc_DEPENDENCIES = $(top_srcdir)/src/libsr.la
 malloc_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(malloc_CFLAGS) $(CFLAGS) \
 	$(malloc_LDFLAGS) $(LDFLAGS) -o $@
@@ -170,10 +177,11 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(malloc_SOURCES) $(media_SOURCES) $(memory_leak_SOURCES) \
-	$(pipe_SOURCES) $(queue_SOURCES)
-DIST_SOURCES = $(malloc_SOURCES) $(media_SOURCES) \
+SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) $(media_SOURCES) \
 	$(memory_leak_SOURCES) $(pipe_SOURCES) $(queue_SOURCES)
+DIST_SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) \
+	$(media_SOURCES) $(memory_leak_SOURCES) $(pipe_SOURCES) \
+	$(queue_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -323,24 +331,28 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 queue_SOURCES = queue.c
 queue_LDADD = $(top_srcdir)/src/libsr.la
-queue_CFLAGS = -I$(top_srcdir)/include -std=gnu99
-queue_LDFLAGS = 
+queue_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+queue_LDFLAGS = -rdynamic
 pipe_SOURCES = pipe.c
 pipe_LDADD = $(top_srcdir)/src/libsr.la
-pipe_CFLAGS = -I$(top_srcdir)/include -std=gnu99
-pipe_LDFLAGS = 
+pipe_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+pipe_LDFLAGS = -rdynamic
 malloc_SOURCES = malloc.c
 malloc_LDADD = $(top_srcdir)/src/libsr.la
-malloc_CFLAGS = -I$(top_srcdir)/include -std=gnu99
-malloc_LDFLAGS = 
+malloc_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+malloc_LDFLAGS = -rdynamic
+aligned_malloc_SOURCES = aligned_malloc.c
+aligned_malloc_LDADD = $(top_srcdir)/src/libsr.la
+aligned_malloc_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+aligned_malloc_LDFLAGS = -rdynamic
 memory_leak_SOURCES = memory_leak.c
 memory_leak_LDADD = $(top_srcdir)/src/libsr.la
-memory_leak_CFLAGS = -I$(top_srcdir)/include -std=gnu99
-memory_leak_LDFLAGS = 
+memory_leak_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+memory_leak_LDFLAGS = -rdynamic
 media_SOURCES = media.c
 media_LDADD = $(top_srcdir)/src/libsr.la
-media_CFLAGS = -I$(top_srcdir)/include -std=gnu99
-media_LDFLAGS = 
+media_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+media_LDFLAGS = -rdynamic
 all: all-am
 
 .SUFFIXES:
@@ -424,6 +436,10 @@ clean-binPROGRAMS:
 	echo " rm -f" $$list; \
 	rm -f $$list
 
+aligned_malloc$(EXEEXT): $(aligned_malloc_OBJECTS) $(aligned_malloc_DEPENDENCIES) $(EXTRA_aligned_malloc_DEPENDENCIES) 
+	@rm -f aligned_malloc$(EXEEXT)
+	$(AM_V_CCLD)$(aligned_malloc_LINK) $(aligned_malloc_OBJECTS) $(aligned_malloc_LDADD) $(LIBS)
+
 malloc$(EXEEXT): $(malloc_OBJECTS) $(malloc_DEPENDENCIES) $(EXTRA_malloc_DEPENDENCIES) 
 	@rm -f malloc$(EXEEXT)
 	$(AM_V_CCLD)$(malloc_LINK) $(malloc_OBJECTS) $(malloc_LDADD) $(LIBS)
@@ -450,6 +466,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aligned_malloc-aligned_malloc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/malloc-malloc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/media-media.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memory_leak-memory_leak.Po@am__quote@
@@ -476,6 +493,20 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+
+aligned_malloc-aligned_malloc.o: aligned_malloc.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aligned_malloc_CFLAGS) $(CFLAGS) -MT aligned_malloc-aligned_malloc.o -MD -MP -MF $(DEPDIR)/aligned_malloc-aligned_malloc.Tpo -c -o aligned_malloc-aligned_malloc.o `test -f 'aligned_malloc.c' || echo '$(srcdir)/'`aligned_malloc.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aligned_malloc-aligned_malloc.Tpo $(DEPDIR)/aligned_malloc-aligned_malloc.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='aligned_malloc.c' object='aligned_malloc-aligned_malloc.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aligned_malloc_CFLAGS) $(CFLAGS) -c -o aligned_malloc-aligned_malloc.o `test -f 'aligned_malloc.c' || echo '$(srcdir)/'`aligned_malloc.c
+
+aligned_malloc-aligned_malloc.obj: aligned_malloc.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aligned_malloc_CFLAGS) $(CFLAGS) -MT aligned_malloc-aligned_malloc.obj -MD -MP -MF $(DEPDIR)/aligned_malloc-aligned_malloc.Tpo -c -o aligned_malloc-aligned_malloc.obj `if test -f 'aligned_malloc.c'; then $(CYGPATH_W) 'aligned_malloc.c'; else $(CYGPATH_W) '$(srcdir)/aligned_malloc.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aligned_malloc-aligned_malloc.Tpo $(DEPDIR)/aligned_malloc-aligned_malloc.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='aligned_malloc.c' object='aligned_malloc-aligned_malloc.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aligned_malloc_CFLAGS) $(CFLAGS) -c -o aligned_malloc-aligned_malloc.obj `if test -f 'aligned_malloc.c'; then $(CYGPATH_W) 'aligned_malloc.c'; else $(CYGPATH_W) '$(srcdir)/aligned_malloc.c'; fi`
 
 malloc-malloc.o: malloc.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(malloc_CFLAGS) $(CFLAGS) -MT malloc-malloc.o -MD -MP -MF $(DEPDIR)/malloc-malloc.Tpo -c -o malloc-malloc.o `test -f 'malloc.c' || echo '$(srcdir)/'`malloc.c
