@@ -34,7 +34,7 @@ typedef struct Sr_queue {
     void (*clean)(Sr_node*);
     Sr_node head;
     Sr_node end;
-}Sr_queue;
+};
 
 
 Sr_queue* sr_queue_create(int max_node_number)
