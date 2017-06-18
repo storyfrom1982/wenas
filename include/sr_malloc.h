@@ -32,6 +32,7 @@
 
 
 //#define ___MEMORY_DEBUG___
+//#undef ___MEMORY_DEBUG___
 
 
 extern int sr_malloc_initialize(size_t page_size, size_t preloaded_page);

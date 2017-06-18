@@ -10,6 +10,8 @@
 #include <pthread.h>
 
 #include <sr_log.h>
+#include <sr_error.h>
+#include <sr_atom.h>
 #include <sr_time.h>
 #include <sr_queue.h>
 #include <sr_malloc.h>
@@ -17,20 +19,19 @@
 
 
 typedef struct Packet_node{
+	Sr_node *prev;
+	Sr_node *next;
 	int id;
 	size_t size;
 	uint8_t *data;
-	SR_QUEUE_ENABLE(Packet_node);
 }Packet_node;
-
-SR_QUEUE_DEFINE(Packet_node);
 
 
 typedef struct Task{
 	int id;
 	pthread_t producer;
 	pthread_t consumers;
-	SR_QUEUE_DECLARE(Packet_node) *queue;
+	Sr_queue *queue;
 }Task;
 
 
@@ -78,12 +79,9 @@ static void* producer(void *p)
 //		snprintf(pkt->data, pkt->size, "producer id = %d malloc size = %lu", task->id, pkt->size);
 //		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1);
 
-		do {
-			sr_queue_push_back(task->queue, pkt, result);
-			if (result == ERRTRYAGAIN){
-				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
-			}
-		}while(result == ERRTRYAGAIN);
+		while((result = sr_queue_push_back(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
+			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
+		}
 
 		if (result != 0){
 			free(pkt->data);
@@ -110,12 +108,9 @@ static void* consumers(void *p)
 
 	while(true){
 
-		do {
-			sr_queue_pop_front(task->queue, pkt, result);
-			if (result == ERRTRYAGAIN){
-				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
-			}
-		}while(result == ERRTRYAGAIN);
+		while((result = sr_queue_pop_front(task->queue, &pkt)) == QUEUE_RESULT_TRYAGAIN) {
+			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
+		}
 
 		if (result == 0){
 //			logd("%s\n", pkt->data);
@@ -145,21 +140,18 @@ void* malloc_test(int producer_count, int consumers_count)
 
 	int64_t start_time = sr_starting_time();
 
-	SR_QUEUE_DECLARE(Packet_node) queue;
 	Task plist[p_number];
 	Task clist[c_number];
 
-	sr_queue_initialize(&(queue), size);
-
 	for (i = 0; i < c_number; ++i){
 		clist[i].id = i;
-		clist[i].queue = &queue;
+		clist[i].queue = sr_queue_create(size);
 		pthread_create(&(clist[i].consumers), NULL, consumers, &(clist[i]));
 	}
 
 	for (i = 0; i < p_number; ++i){
 		plist[i].id = i;
-		plist[i].queue = &queue;
+		plist[i].queue = clist[i].queue;
 		pthread_create(&(plist[i].producer), NULL, producer, &(plist[i]));
 	}
 

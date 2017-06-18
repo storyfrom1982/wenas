@@ -26,22 +26,18 @@
 #define INCLUDE_SR_PIPE_H_
 
 
-
-#include "sr_atom.h"
-
-
 typedef struct Sr_pipe Sr_pipe;
 
 extern int sr_pipe_create(unsigned int size, Sr_pipe **pp_pipe);
 extern void sr_pipe_release(Sr_pipe **pp_pipe);
 extern void sr_pipe_stop(Sr_pipe *pipe);
-extern bool sr_pipe_is_stopped(Sr_pipe *pipe);
+extern int sr_pipe_is_stopped(Sr_pipe *pipe);
 extern void sr_pipe_restart(Sr_pipe *pipe);
 
 extern void sr_pipe_clean(Sr_pipe *pipe);
 
-extern int sr_pipe_read(Sr_pipe *pipe, uint8_t *data, unsigned int size);
-extern int sr_pipe_write(Sr_pipe *pipe, uint8_t *data, unsigned int size);
+extern int sr_pipe_read(Sr_pipe *pipe, char *data, unsigned int size);
+extern int sr_pipe_write(Sr_pipe *pipe, char *data, unsigned int size);
 
 extern int sr_pipe_writable(Sr_pipe *pipe);
 extern int sr_pipe_readable(Sr_pipe *pipe);

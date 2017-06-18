@@ -27,8 +27,7 @@
 
 
 #include "sr_log.h"
-#include "sr_error.h"
-#include "sr_atom.h"
+#include "sr_common.h"
 #include "sr_malloc.h"
 
 
@@ -114,7 +113,7 @@ void sr_pipe_stop(Sr_pipe *pipe)
 }
 
 
-bool sr_pipe_is_stopped(Sr_pipe *pipe)
+int sr_pipe_is_stopped(Sr_pipe *pipe)
 {
     if (pipe != NULL){
         return pipe->stopped;
@@ -158,7 +157,7 @@ void sr_pipe_clean(Sr_pipe *pipe)
 }
 
 
-int sr_pipe_write(Sr_pipe *pipe, uint8_t *data, unsigned int size)
+int sr_pipe_write(Sr_pipe *pipe, char *data, unsigned int size)
 {
 	if (pipe == NULL || data == NULL || size == 0){
 		loge(ERRPARAM);
@@ -192,7 +191,7 @@ int sr_pipe_write(Sr_pipe *pipe, uint8_t *data, unsigned int size)
 }
 
 
-int sr_pipe_read(Sr_pipe *pipe, uint8_t *buffer, unsigned int size)
+int sr_pipe_read(Sr_pipe *pipe, char *buffer, unsigned int size)
 {
 	if (pipe == NULL || buffer == NULL || size == 0){
 		loge(ERRPARAM);

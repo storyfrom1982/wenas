@@ -30,7 +30,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#include "sr_error.h"
+#include "sr_common.h"
 
 
 #define LOG_TIME_SIZE			32

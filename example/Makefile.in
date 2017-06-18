@@ -88,8 +88,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = queue$(EXEEXT) pipe$(EXEEXT) malloc$(EXEEXT) \
-	memory_leak$(EXEEXT) media$(EXEEXT) aligned_malloc$(EXEEXT)
+bin_PROGRAMS = pipe$(EXEEXT) malloc$(EXEEXT) memory_leak$(EXEEXT) \
+	aligned_malloc$(EXEEXT)
 subdir = example
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.ac
@@ -119,12 +119,6 @@ malloc_DEPENDENCIES = $(top_srcdir)/src/libsr.la
 malloc_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(malloc_CFLAGS) $(CFLAGS) \
 	$(malloc_LDFLAGS) $(LDFLAGS) -o $@
-am_media_OBJECTS = media-media.$(OBJEXT)
-media_OBJECTS = $(am_media_OBJECTS)
-media_DEPENDENCIES = $(top_srcdir)/src/libsr.la
-media_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(media_CFLAGS) $(CFLAGS) \
-	$(media_LDFLAGS) $(LDFLAGS) -o $@
 am_memory_leak_OBJECTS = memory_leak-memory_leak.$(OBJEXT)
 memory_leak_OBJECTS = $(am_memory_leak_OBJECTS)
 memory_leak_DEPENDENCIES = $(top_srcdir)/src/libsr.la
@@ -137,12 +131,6 @@ pipe_DEPENDENCIES = $(top_srcdir)/src/libsr.la
 pipe_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(pipe_CFLAGS) $(CFLAGS) \
 	$(pipe_LDFLAGS) $(LDFLAGS) -o $@
-am_queue_OBJECTS = queue-queue.$(OBJEXT)
-queue_OBJECTS = $(am_queue_OBJECTS)
-queue_DEPENDENCIES = $(top_srcdir)/src/libsr.la
-queue_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(queue_CFLAGS) $(CFLAGS) \
-	$(queue_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -177,11 +165,10 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) $(media_SOURCES) \
-	$(memory_leak_SOURCES) $(pipe_SOURCES) $(queue_SOURCES)
+SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) \
+	$(memory_leak_SOURCES) $(pipe_SOURCES)
 DIST_SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) \
-	$(media_SOURCES) $(memory_leak_SOURCES) $(pipe_SOURCES) \
-	$(queue_SOURCES)
+	$(memory_leak_SOURCES) $(pipe_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -329,10 +316,6 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-queue_SOURCES = queue.c
-queue_LDADD = $(top_srcdir)/src/libsr.la
-queue_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
-queue_LDFLAGS = -rdynamic
 pipe_SOURCES = pipe.c
 pipe_LDADD = $(top_srcdir)/src/libsr.la
 pipe_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
@@ -349,10 +332,6 @@ memory_leak_SOURCES = memory_leak.c
 memory_leak_LDADD = $(top_srcdir)/src/libsr.la
 memory_leak_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
 memory_leak_LDFLAGS = -rdynamic
-media_SOURCES = media.c
-media_LDADD = $(top_srcdir)/src/libsr.la
-media_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
-media_LDFLAGS = -rdynamic
 all: all-am
 
 .SUFFIXES:
@@ -444,10 +423,6 @@ malloc$(EXEEXT): $(malloc_OBJECTS) $(malloc_DEPENDENCIES) $(EXTRA_malloc_DEPENDE
 	@rm -f malloc$(EXEEXT)
 	$(AM_V_CCLD)$(malloc_LINK) $(malloc_OBJECTS) $(malloc_LDADD) $(LIBS)
 
-media$(EXEEXT): $(media_OBJECTS) $(media_DEPENDENCIES) $(EXTRA_media_DEPENDENCIES) 
-	@rm -f media$(EXEEXT)
-	$(AM_V_CCLD)$(media_LINK) $(media_OBJECTS) $(media_LDADD) $(LIBS)
-
 memory_leak$(EXEEXT): $(memory_leak_OBJECTS) $(memory_leak_DEPENDENCIES) $(EXTRA_memory_leak_DEPENDENCIES) 
 	@rm -f memory_leak$(EXEEXT)
 	$(AM_V_CCLD)$(memory_leak_LINK) $(memory_leak_OBJECTS) $(memory_leak_LDADD) $(LIBS)
@@ -455,10 +430,6 @@ memory_leak$(EXEEXT): $(memory_leak_OBJECTS) $(memory_leak_DEPENDENCIES) $(EXTRA
 pipe$(EXEEXT): $(pipe_OBJECTS) $(pipe_DEPENDENCIES) $(EXTRA_pipe_DEPENDENCIES) 
 	@rm -f pipe$(EXEEXT)
 	$(AM_V_CCLD)$(pipe_LINK) $(pipe_OBJECTS) $(pipe_LDADD) $(LIBS)
-
-queue$(EXEEXT): $(queue_OBJECTS) $(queue_DEPENDENCIES) $(EXTRA_queue_DEPENDENCIES) 
-	@rm -f queue$(EXEEXT)
-	$(AM_V_CCLD)$(queue_LINK) $(queue_OBJECTS) $(queue_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -468,10 +439,8 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aligned_malloc-aligned_malloc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/malloc-malloc.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/media-media.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memory_leak-memory_leak.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pipe-pipe.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/queue-queue.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -522,20 +491,6 @@ malloc-malloc.obj: malloc.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(malloc_CFLAGS) $(CFLAGS) -c -o malloc-malloc.obj `if test -f 'malloc.c'; then $(CYGPATH_W) 'malloc.c'; else $(CYGPATH_W) '$(srcdir)/malloc.c'; fi`
 
-media-media.o: media.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(media_CFLAGS) $(CFLAGS) -MT media-media.o -MD -MP -MF $(DEPDIR)/media-media.Tpo -c -o media-media.o `test -f 'media.c' || echo '$(srcdir)/'`media.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/media-media.Tpo $(DEPDIR)/media-media.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='media.c' object='media-media.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(media_CFLAGS) $(CFLAGS) -c -o media-media.o `test -f 'media.c' || echo '$(srcdir)/'`media.c
-
-media-media.obj: media.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(media_CFLAGS) $(CFLAGS) -MT media-media.obj -MD -MP -MF $(DEPDIR)/media-media.Tpo -c -o media-media.obj `if test -f 'media.c'; then $(CYGPATH_W) 'media.c'; else $(CYGPATH_W) '$(srcdir)/media.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/media-media.Tpo $(DEPDIR)/media-media.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='media.c' object='media-media.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(media_CFLAGS) $(CFLAGS) -c -o media-media.obj `if test -f 'media.c'; then $(CYGPATH_W) 'media.c'; else $(CYGPATH_W) '$(srcdir)/media.c'; fi`
-
 memory_leak-memory_leak.o: memory_leak.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memory_leak_CFLAGS) $(CFLAGS) -MT memory_leak-memory_leak.o -MD -MP -MF $(DEPDIR)/memory_leak-memory_leak.Tpo -c -o memory_leak-memory_leak.o `test -f 'memory_leak.c' || echo '$(srcdir)/'`memory_leak.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/memory_leak-memory_leak.Tpo $(DEPDIR)/memory_leak-memory_leak.Po
@@ -563,20 +518,6 @@ pipe-pipe.obj: pipe.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='pipe.c' object='pipe-pipe.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pipe_CFLAGS) $(CFLAGS) -c -o pipe-pipe.obj `if test -f 'pipe.c'; then $(CYGPATH_W) 'pipe.c'; else $(CYGPATH_W) '$(srcdir)/pipe.c'; fi`
-
-queue-queue.o: queue.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(queue_CFLAGS) $(CFLAGS) -MT queue-queue.o -MD -MP -MF $(DEPDIR)/queue-queue.Tpo -c -o queue-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/queue-queue.Tpo $(DEPDIR)/queue-queue.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='queue.c' object='queue-queue.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(queue_CFLAGS) $(CFLAGS) -c -o queue-queue.o `test -f 'queue.c' || echo '$(srcdir)/'`queue.c
-
-queue-queue.obj: queue.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(queue_CFLAGS) $(CFLAGS) -MT queue-queue.obj -MD -MP -MF $(DEPDIR)/queue-queue.Tpo -c -o queue-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/queue-queue.Tpo $(DEPDIR)/queue-queue.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='queue.c' object='queue-queue.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(queue_CFLAGS) $(CFLAGS) -c -o queue-queue.obj `if test -f 'queue.c'; then $(CYGPATH_W) 'queue.c'; else $(CYGPATH_W) '$(srcdir)/queue.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

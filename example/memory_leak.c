@@ -7,8 +7,11 @@
 
 #include <stdio.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include <sr_log.h>
+#include <sr_atom.h>
+#include <sr_error.h>
 #include <sr_time.h>
 #include <sr_queue.h>
 #include <sr_malloc.h>
@@ -16,19 +19,18 @@
 
 
 typedef struct PacketNode{
+	Sr_node *prev;
+	Sr_node *next;
 	int id;
 	size_t size;
 	uint8_t *data;
-	SR_QUEUE_ENABLE(PacketNode);
 }PacketNode;
-
-SR_QUEUE_DEFINE(PacketNode);
 
 typedef struct Task{
 	int id;
 	pthread_t producer;
 	pthread_t consumers;
-	SR_QUEUE_DECLARE(PacketNode) q, *queue;
+	Sr_queue *queue;
 }Task;
 
 
@@ -73,12 +75,9 @@ static void* producer(void *p)
 		snprintf(pkt->data, pkt->size, "producer id = %d malloc size = %lu", task->id, pkt->size);
 //		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1);
 
-		do {
-			sr_queue_push_back(task->queue, pkt, result);
-			if (result == ERRTRYAGAIN){
-				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
-			}
-		}while(result == ERRTRYAGAIN);
+		while((result = sr_queue_push_back(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
+			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
+		}
 
 		if (result != 0){
 			loge(result);
@@ -105,15 +104,12 @@ static void* consumers(void *p)
 
 	while(true){
 
-		do {
-			sr_queue_get_front(task->queue, pkt, result);
-			if (result == ERRTRYAGAIN){
-				nanosleep((const struct timespec[]){{0, 100L}}, NULL);
-			}
-		}while(result == ERRTRYAGAIN);
+		while((result = sr_queue_get_front(task->queue, &pkt)) == QUEUE_RESULT_TRYAGAIN) {
+			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
+		}
 
 		if (result == 0){
-			sr_queue_remove(task->queue, pkt, result);
+			result = sr_queue_remove(task->queue, pkt);
 			if (result != 0){
 				loge(result);
 			}
@@ -133,9 +129,9 @@ static void* consumers(void *p)
 }
 
 
-static void clean(PacketNode *p){
+static void clean(Sr_node *p){
 	if (p != NULL){
-		PacketNode *pkt = p;
+		PacketNode *pkt = (PacketNode*)p;
 		free(pkt->data);
 		free(pkt);
 	}
@@ -158,14 +154,13 @@ void* malloc_test(int producer_count, int consumers_count)
 
 	for (i = 0; i < c_number; ++i){
 		clist[i].id = i;
-		clist[i].queue = &(clist[i].q);
-		sr_queue_initialize(clist[i].queue, size);
+		clist[i].queue = sr_queue_create(size);
 		pthread_create(&(clist[i].consumers), NULL, consumers, &(clist[i]));
 	}
 
 	for (i = 0; i < p_number; ++i){
 		plist[i].id = i;
-		plist[i].queue = &(clist[i].q);
+		plist[i].queue = clist[i].queue;
 		pthread_create(&(plist[i].producer), NULL, producer, &(plist[i]));
 	}
 
@@ -177,7 +172,7 @@ void* malloc_test(int producer_count, int consumers_count)
 
 	for (i = 0; i < c_number; ++i){
 		pthread_join(clist[i].consumers, NULL);
-		clist[i].queue->clean = clean;
+		sr_queue_set_clean_callback(clist[i].queue, clean);
 		sr_queue_clean(clist[i].queue);
 	}
 

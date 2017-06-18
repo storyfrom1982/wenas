@@ -128,9 +128,9 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(libdir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libsr_la_DEPENDENCIES =
-am_libsr_la_OBJECTS = libsr_la-sr_log.lo libsr_la-sr_time.lo \
-	libsr_la-sr_pipe.lo libsr_la-sr_mutex.lo libsr_la-sr_malloc.lo \
-	libsr_la-sr_media.lo libsr_la-sr_media_file.lo
+am_libsr_la_OBJECTS = libsr_la-sr_log.lo libsr_la-sr_common.lo \
+	libsr_la-sr_pipe.lo libsr_la-sr_queue.lo libsr_la-sr_mutex.lo \
+	libsr_la-sr_malloc.lo libsr_la-sr_message.lo
 libsr_la_OBJECTS = $(am_libsr_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -325,12 +325,12 @@ top_srcdir = @top_srcdir@
 lib_LTLIBRARIES = libsr.la
 libsr_la_SOURCES = \
         sr_log.c \
-        sr_time.c \
+        sr_common.c \
         sr_pipe.c \
+        sr_queue.c \
         sr_mutex.c \
         sr_malloc.c \
-		sr_media.c \
-		sr_media_file.c
+		sr_message.c
 
 libsr_la_CPPFLAGS = \
         -I$(top_srcdir)/include
@@ -423,13 +423,13 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_log.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_malloc.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_media.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_media_file.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_message.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_mutex.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_pipe.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_time.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libsr_la-sr_queue.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -459,12 +459,12 @@ libsr_la-sr_log.lo: sr_log.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_log.lo `test -f 'sr_log.c' || echo '$(srcdir)/'`sr_log.c
 
-libsr_la-sr_time.lo: sr_time.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_time.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_time.Tpo -c -o libsr_la-sr_time.lo `test -f 'sr_time.c' || echo '$(srcdir)/'`sr_time.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_time.Tpo $(DEPDIR)/libsr_la-sr_time.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_time.c' object='libsr_la-sr_time.lo' libtool=yes @AMDEPBACKSLASH@
+libsr_la-sr_common.lo: sr_common.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_common.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_common.Tpo -c -o libsr_la-sr_common.lo `test -f 'sr_common.c' || echo '$(srcdir)/'`sr_common.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_common.Tpo $(DEPDIR)/libsr_la-sr_common.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_common.c' object='libsr_la-sr_common.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_time.lo `test -f 'sr_time.c' || echo '$(srcdir)/'`sr_time.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_common.lo `test -f 'sr_common.c' || echo '$(srcdir)/'`sr_common.c
 
 libsr_la-sr_pipe.lo: sr_pipe.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_pipe.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_pipe.Tpo -c -o libsr_la-sr_pipe.lo `test -f 'sr_pipe.c' || echo '$(srcdir)/'`sr_pipe.c
@@ -472,6 +472,13 @@ libsr_la-sr_pipe.lo: sr_pipe.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_pipe.c' object='libsr_la-sr_pipe.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_pipe.lo `test -f 'sr_pipe.c' || echo '$(srcdir)/'`sr_pipe.c
+
+libsr_la-sr_queue.lo: sr_queue.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_queue.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_queue.Tpo -c -o libsr_la-sr_queue.lo `test -f 'sr_queue.c' || echo '$(srcdir)/'`sr_queue.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_queue.Tpo $(DEPDIR)/libsr_la-sr_queue.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_queue.c' object='libsr_la-sr_queue.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_queue.lo `test -f 'sr_queue.c' || echo '$(srcdir)/'`sr_queue.c
 
 libsr_la-sr_mutex.lo: sr_mutex.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_mutex.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_mutex.Tpo -c -o libsr_la-sr_mutex.lo `test -f 'sr_mutex.c' || echo '$(srcdir)/'`sr_mutex.c
@@ -487,19 +494,12 @@ libsr_la-sr_malloc.lo: sr_malloc.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_malloc.lo `test -f 'sr_malloc.c' || echo '$(srcdir)/'`sr_malloc.c
 
-libsr_la-sr_media.lo: sr_media.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_media.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_media.Tpo -c -o libsr_la-sr_media.lo `test -f 'sr_media.c' || echo '$(srcdir)/'`sr_media.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_media.Tpo $(DEPDIR)/libsr_la-sr_media.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_media.c' object='libsr_la-sr_media.lo' libtool=yes @AMDEPBACKSLASH@
+libsr_la-sr_message.lo: sr_message.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_message.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_message.Tpo -c -o libsr_la-sr_message.lo `test -f 'sr_message.c' || echo '$(srcdir)/'`sr_message.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_message.Tpo $(DEPDIR)/libsr_la-sr_message.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_message.c' object='libsr_la-sr_message.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_media.lo `test -f 'sr_media.c' || echo '$(srcdir)/'`sr_media.c
-
-libsr_la-sr_media_file.lo: sr_media_file.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -MT libsr_la-sr_media_file.lo -MD -MP -MF $(DEPDIR)/libsr_la-sr_media_file.Tpo -c -o libsr_la-sr_media_file.lo `test -f 'sr_media_file.c' || echo '$(srcdir)/'`sr_media_file.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libsr_la-sr_media_file.Tpo $(DEPDIR)/libsr_la-sr_media_file.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sr_media_file.c' object='libsr_la-sr_media_file.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_media_file.lo `test -f 'sr_media_file.c' || echo '$(srcdir)/'`sr_media_file.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libsr_la_CPPFLAGS) $(CPPFLAGS) $(libsr_la_CFLAGS) $(CFLAGS) -c -o libsr_la-sr_message.lo `test -f 'sr_message.c' || echo '$(srcdir)/'`sr_message.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

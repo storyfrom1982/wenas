@@ -1,287 +1,56 @@
-/*
- * sr_queue.h
- *
- * Author: storyfrom1982@gmail.com
- *
- * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
- *
- * This file is part of sr_malloc.
- *
- * self-reliance is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * self-reliance is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+//
+// Created by kly on 17-6-15.
+//
 
-#ifndef INCLUDE_SR_QUEUE_H_
-#define INCLUDE_SR_QUEUE_H_
+#ifndef __SR_QUEUE_H__
+#define __SR_QUEUE_H__
 
 
-#include "sr_error.h"
-#include "sr_atom.h"
+enum {
+    QUEUE_RESULT_EOF = -3,
+    QUEUE_RESULT_TRYAGAIN = -2,
+    QUEUE_RESULT_INVALIED_PARAMATE = -1,
+	QUEUE_RESULT_OK = 0
+};
+
+
+typedef struct Sr_node{
+    struct Sr_node *prev;
+    struct Sr_node *next;
+}Sr_node;
+
+
+typedef struct Sr_queue Sr_queue;
+
+
+Sr_queue* sr_queue_create(int max_node_number);
+void sr_queue_release(Sr_queue **pp_queue);
+
+void sr_queue_set_clean_callback(Sr_queue *queue, void (*cb)(Sr_node*));
+
+void sr_queue_lock(Sr_queue *queue);
+void sr_queue_unlock(Sr_queue *queue);
+
+int sr_queue_push_front(Sr_queue *queue, Sr_node *node);
+int sr_queue_push_back(Sr_queue *queue, Sr_node *node);
+
+int sr_queue_pop_front(Sr_queue *queue, Sr_node **pp_node);
+int sr_queue_pop_back(Sr_queue *queue, Sr_node **pp_node);
+
+int sr_queue_remove(Sr_queue *queue, Sr_node *node);
+
+int sr_queue_get_front(Sr_queue *queue, Sr_node **pp_node);
+int sr_queue_get_back(Sr_queue *queue, Sr_node **pp_node);
+
+Sr_node* sr_queue_front_iterator(Sr_queue *queue);
+Sr_node* sr_queue_back_iterator(Sr_queue *queue);
+
+int sr_queue_pushable(Sr_queue *queue);
+int sr_queue_popable(Sr_queue *queue);
+
+void sr_queue_clean(Sr_queue *queue);
+void sr_queue_stop(Sr_queue *queue);
 
 
 
-#define SR_QUEUE_ENABLE(x) \
-    struct { \
-        struct x *prev; \
-        struct x *next; \
-    }
-
-
-#define SR_QUEUE_DEFINE(x) \
-    struct x##_queue \
-	{ \
-        bool lock; \
-        bool stopped; \
-        uint32_t size; \
-        uint32_t pushable; \
-        uint32_t popable; \
-        void (*clean)(x*); \
-        x head; \
-        x end; \
-    }
-
-
-#define SR_QUEUE_DECLARE(x)	struct x##_queue
-
-
-#define sr_queue_initialize(q, s) \
-    do { \
-        (q)->lock = false; \
-        (q)->stopped = false; \
-        (q)->size = (s); \
-        (q)->pushable = (s); \
-        (q)->popable = 0; \
-        (q)->head.prev = NULL; \
-        (q)->head.next = &((q)->end); \
-        (q)->end.next = NULL; \
-        (q)->end.prev = &((q)->head); \
-        (q)->clean = NULL; \
-    }while(0)
-
-
-#define sr_queue_push_front(q, x, result) \
-	do { \
-		if ((x) == NULL){ \
-			result = ERRPARAM; \
-			break; \
-		} \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if (ISTRUE((q)->stopped)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERREOF; \
-			break; \
-		} \
-		if ((q)->pushable == 0){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x)->next = (q)->head.next; \
-		(x)->next->prev = (x); \
-		(x)->prev = &((q)->head); \
-		(q)->head.next = (x); \
-		(q)->popable++; \
-		(q)->pushable--; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_push_back(q, x, result) \
-	do { \
-		if (NULL == (x)){ \
-			result = ERRPARAM; \
-			break; \
-		} \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if (ISTRUE((q)->stopped)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERREOF; \
-			break; \
-		} \
-		if ((q)->pushable == 0){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x)->prev = (q)->end.prev; \
-		(x)->prev->next = (x); \
-		(q)->end.prev = (x); \
-		(x)->next = &((q)->end); \
-		(q)->popable++; \
-		(q)->pushable--; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_pop_front(q, x, result) \
-	do { \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if ((q)->popable == 0 || (q)->head.next == &((q)->end)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			if (ISTRUE((q)->stopped)){ \
-				result = ERREOF; \
-				break; \
-			} \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x) = (q)->head.next; \
-		(q)->head.next = (x)->next; \
-		(x)->next->prev = &(q)->head; \
-		(q)->pushable++; \
-		(q)->popable--; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_pop_back(q, x, result) \
-	do { \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if ((q)->popable == 0 || (q)->end.prev == &((q)->head)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			if (ISTRUE((q)->stopped)){ \
-				result = ERREOF; \
-				break; \
-			} \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x) = (q)->end.prev; \
-		(q)->end.prev = (x)->prev; \
-		(x)->prev->next = &(q)->end; \
-		(q)->pushable++; \
-		(q)->popable--; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_get_front(q, x, result) \
-	do { \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if ((q)->popable == 0 || (q)->head.next == &((q)->end)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			if (ISTRUE((q)->stopped)){ \
-				result = ERREOF; \
-				break; \
-			} \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x) = (q)->head.next; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_get_back(q, x, result) \
-	do { \
-		if (!SR_ATOM_TRYLOCK((q)->lock)){ \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		if ((q)->popable == 0 || (q)->end.prev == &((q)->head)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			if (ISTRUE((q)->stopped)){ \
-				result = ERREOF; \
-				break; \
-			} \
-			result = ERRTRYAGAIN; \
-			break; \
-		} \
-		(x) = (q)->end.prev; \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_remove(q, x, result) \
-	do { \
-		if ((q)->popable < 0 || NULL == (x) || NULL == (x)->prev || NULL == (x)->next){ \
-			result = ERRPARAM; \
-			break; \
-		} \
-		SR_ATOM_LOCK((q)->lock); \
-		if (ISTRUE((q)->stopped)){ \
-			SR_ATOM_UNLOCK((q)->lock); \
-			result = ERREOF; \
-			break; \
-		} \
-		(x)->prev->next = (x)->next; \
-		(x)->next->prev = (x)->prev; \
-		(q)->pushable++; \
-		(q)->popable--; \
-		SR_ATOM_UNLOCK((q)->lock); \
-		result = 0; \
-	}while(0)
-
-
-#define sr_queue_clean(q) \
-	do { \
-		SR_ATOM_LOCK((q)->lock); \
-		while ((q)->popable > 0 && (q)->head.next != &((q)->end)){ \
-			(q)->head.prev = (q)->head.next; \
-			(q)->head.next = (q)->head.next->next; \
-			if ((q)->clean) (q)->clean((q)->head.prev); \
-			else free((q)->head.prev); \
-			(q)->popable--; \
-		} \
-		(q)->head.prev = NULL; \
-		(q)->head.next = &((q)->end); \
-		(q)->end.next = NULL; \
-		(q)->end.prev = &((q)->head); \
-		(q)->pushable = (q)->size; \
-		(q)->popable = 0; \
-		SR_ATOM_UNLOCK((q)->lock); \
-	}while(0)
-
-
-#define sr_queue_stop(q) \
-	do { \
-		SR_ATOM_LOCK((q)->lock); \
-		SETTRUE((q)->stopped); \
-		SR_ATOM_UNLOCK((q)->lock); \
-	}while(0)
-
-
-#define sr_queue_pushable(q) (q)->pushable
-
-
-#define sr_queue_popable(q) (q)->popable
-
-
-#define sr_queue_front_iterator(q)	&((q)->head)
-
-
-#define sr_queue_back_iterator(q)	&((q)->end)
-
-
-#endif /* INCLUDE_SR_QUEUE_H_ */
+#endif //__SR_QUEUE_H__

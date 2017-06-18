@@ -2,12 +2,12 @@ lib_LTLIBRARIES=libsr.la
 
 libsr_la_SOURCES= \
         sr_log.c \
-        sr_time.c \
+        sr_common.c \
         sr_pipe.c \
+        sr_queue.c \
         sr_mutex.c \
         sr_malloc.c \
-		sr_media.c \
-		sr_media_file.c
+		sr_message.c
 
 
 libsr_la_CPPFLAGS= \

@@ -1,10 +1,4 @@
-bin_PROGRAMS = queue pipe malloc memory_leak media aligned_malloc
-
-
-queue_SOURCES=queue.c
-queue_LDADD=$(top_srcdir)/src/libsr.la
-queue_CFLAGS=-I$(top_srcdir)/include -std=gnu99 -g
-queue_LDFLAGS=-rdynamic
+bin_PROGRAMS = pipe malloc memory_leak aligned_malloc
 
 
 pipe_SOURCES=pipe.c
@@ -29,9 +23,3 @@ memory_leak_SOURCES=memory_leak.c
 memory_leak_LDADD=$(top_srcdir)/src/libsr.la
 memory_leak_CFLAGS=-I$(top_srcdir)/include -std=gnu99 -g
 memory_leak_LDFLAGS=-rdynamic
-
-
-media_SOURCES=media.c
-media_LDADD=$(top_srcdir)/src/libsr.la
-media_CFLAGS=-I$(top_srcdir)/include -std=gnu99 -g
-media_LDFLAGS=-rdynamic
