@@ -43,8 +43,8 @@ int sr_mutex_create(Sr_mutex **pp_mutex)
 	Sr_mutex *mutex = NULL;
 
 	if (pp_mutex == NULL){
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	if ((mutex = malloc(sizeof(Sr_mutex))) == NULL){

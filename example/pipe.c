@@ -7,10 +7,8 @@
 
 
 #include <sr_log.h>
-#include <sr_error.h>
-#include <sr_time.h>
+#include <sr_common.h>
 #include <sr_pipe.h>
-#include <sr_atom.h>
 #include <sr_malloc.h>
 
 #include <pthread.h>

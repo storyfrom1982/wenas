@@ -1,4 +1,4 @@
-bin_PROGRAMS = pipe malloc memory_leak aligned_malloc
+bin_PROGRAMS = pipe malloc memory_leak aligned_malloc message
 
 
 pipe_SOURCES=pipe.c
@@ -23,3 +23,9 @@ memory_leak_SOURCES=memory_leak.c
 memory_leak_LDADD=$(top_srcdir)/src/libsr.la
 memory_leak_CFLAGS=-I$(top_srcdir)/include -std=gnu99 -g
 memory_leak_LDFLAGS=-rdynamic
+
+
+message_SOURCES=message.c
+message_LDADD=$(top_srcdir)/src/libsr.la
+message_CFLAGS=-I$(top_srcdir)/include -std=gnu99 -g
+message_LDFLAGS=-rdynamic

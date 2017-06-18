@@ -25,7 +25,7 @@
 #define ATOM_UNLOCK(x)      SETFALSE(x)
 
 
-typedef struct Sr_queue {
+struct Sr_queue {
     bool lock;
     bool stopped;
     int size;

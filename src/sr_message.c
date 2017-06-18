@@ -8,6 +8,7 @@
 
 #include "sr_message.h"
 
+#include "sr_log.h"
 #include "sr_common.h"
 #include "sr_pipe.h"
 #include "sr_mutex.h"
@@ -33,12 +34,22 @@ static void *sr_message_listener_loop(void *p)
 	Sr_message_listener *listener = (Sr_message_listener *) p;
 
 	while (ISTRUE(listener->running)) {
-		msg.size = 0;
+		if (!sr_message_listener_arrivals(listener)){
+			sr_mutex_lock(listener->mutex);
+			sr_mutex_wait(listener->mutex);
+			sr_mutex_unlock(listener->mutex);
+			if (ISFALSE(listener->running)){
+				break;
+			}
+		}
 		if ((result = sr_message_listener_pop(listener, &msg)) < 0) {
 			loge(result);
 			break;
 		}
 		listener->cb->notify(listener->cb, msg);
+		if (msg.size > 0 && msg.data != NULL){
+			free(msg.data);
+		}
 	}
 
 	SETTRUE(listener->stopped);
@@ -56,8 +67,8 @@ int sr_message_listener_create(Sr_message_callback *cb, Sr_message_listener **pp
 	Sr_message_listener *listener = NULL;
 
 	if (pp_listener == NULL) {
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	if ((listener = (Sr_message_listener *) calloc(1, sizeof(Sr_message_listener))) == NULL) {
@@ -134,24 +145,29 @@ void sr_message_listener_release(Sr_message_listener **pp_listener)
 
 int sr_message_listener_push(Sr_message_listener *listener, Sr_message msg)
 {
-	if (listener == NULL) {
-		loge(ERRPARAM);
-		return ERRPARAM;
+	if (listener == NULL || msg.size > 32768) {
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	sr_mutex_lock(listener->mutex);
 
-	if (sr_pipe_writable(listener->pipe) < (listener->msg_size + msg.size)) {
-		sr_mutex_wait(listener->mutex);
+	for(int result = 0; result < listener->msg_size; ){
+		result += sr_pipe_write(listener->pipe, ((char*)&msg) + result, listener->msg_size - result);
 		if (ISFALSE(listener->running)){
 			sr_mutex_unlock(listener->mutex);
 			return ERREOF;
 		}
 	}
 
-	sr_pipe_write(listener->pipe, (uint8_t *) &msg, listener->msg_size);
 	if (msg.size > 0 && msg.data != NULL){
-		sr_pipe_write(listener->pipe, (uint8_t *) &(msg.data), msg.size);
+		for(int result = 0; result < msg.size; ){
+			result += sr_pipe_write(listener->pipe, ((char*)(msg.data)) + result, msg.size - result);
+			if (ISFALSE(listener->running)){
+				sr_mutex_unlock(listener->mutex);
+				return ERREOF;
+			}
+		}
 	}
 
 	sr_mutex_signal(listener->mutex);
@@ -165,57 +181,60 @@ int sr_message_listener_push_event(Sr_message_listener *listener, int event)
 	Sr_message msg = { .event = event, .i64 = 0, .size = 0, .data = NULL };
 
 	if (listener == NULL) {
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	sr_mutex_lock(listener->mutex);
-
-	if (sr_pipe_writable(listener->pipe) < (listener->msg_size)) {
-		sr_mutex_wait(listener->mutex);
+	for(int result = 0; result < listener->msg_size; ){
+		result += sr_pipe_write(listener->pipe, ((char*)&msg) + result, listener->msg_size - result);
 		if (ISFALSE(listener->running)){
 			sr_mutex_unlock(listener->mutex);
 			return ERREOF;
 		}
 	}
-
-	sr_pipe_write(listener->pipe, (uint8_t *) &msg, listener->msg_size);
-
 	sr_mutex_signal(listener->mutex);
 	sr_mutex_unlock(listener->mutex);
 
 	return 0;
 }
 
+bool sr_message_listener_arrivals(Sr_message_listener *listener)
+{
+	if (listener != NULL){
+		return sr_pipe_readable(listener->pipe) >= listener->msg_size;
+	}
+	return false;
+}
+
 int sr_message_listener_pop(Sr_message_listener *listener, Sr_message *msg)
 {
 	if (listener == NULL || msg == NULL) {
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
-	sr_mutex_lock(listener->mutex);
-
-	if (sr_pipe_readable(listener->pipe) < listener->msg_size) {
-		sr_mutex_wait(listener->mutex);
+	for (int result = 0; result < listener->msg_size;){
+		result += sr_pipe_read(listener->pipe, (char*)msg + result, listener->msg_size - result);
 		if (ISFALSE(listener->running)){
-			sr_mutex_unlock(listener->mutex);
 			return ERREOF;
 		}
 	}
 
-	sr_pipe_read(listener->pipe, (uint8_t *)msg, listener->msg_size);
 	if (msg->size > 0){
 		if ((msg->data = malloc(msg->size)) == NULL){
-			sr_mutex_unlock(listener->mutex);
 			loge(ERRMALLOC);
 			return ERRMALLOC;
 		}
-		sr_pipe_read(listener->pipe, (uint8_t *)(msg->data), msg->size);
+		for (int result = 0; result < msg->size;){
+			result += sr_pipe_read(listener->pipe, (char*)msg->data + result, msg->size - result);
+			if (ISFALSE(listener->running)){
+				free(msg->data);
+				msg->data = NULL;
+				return ERREOF;
+			}
+		}
 	}
-
-	sr_mutex_signal(listener->mutex);
-	sr_mutex_unlock(listener->mutex);
 
 	return 0;
 }

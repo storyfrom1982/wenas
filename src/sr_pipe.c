@@ -64,8 +64,8 @@ int sr_pipe_create(unsigned int size, Sr_pipe **pp_pipe)
 	Sr_pipe *pipe = NULL;
 
 	if ( pp_pipe == NULL || size == 0 ){
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	if ((pipe = (Sr_pipe *)calloc(1, sizeof(Sr_pipe))) == NULL){
@@ -160,8 +160,8 @@ void sr_pipe_clean(Sr_pipe *pipe)
 int sr_pipe_write(Sr_pipe *pipe, char *data, unsigned int size)
 {
 	if (pipe == NULL || data == NULL || size == 0){
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	if (ISTRUE(pipe->stopped)){
@@ -194,8 +194,8 @@ int sr_pipe_write(Sr_pipe *pipe, char *data, unsigned int size)
 int sr_pipe_read(Sr_pipe *pipe, char *buffer, unsigned int size)
 {
 	if (pipe == NULL || buffer == NULL || size == 0){
-		loge(ERRPARAM);
-		return ERRPARAM;
+		loge(ERRPARAMETER);
+		return ERRPARAMETER;
 	}
 
 	unsigned int readable = pipe->writer - pipe->reader;

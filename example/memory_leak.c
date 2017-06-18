@@ -10,9 +10,7 @@
 #include <stdbool.h>
 
 #include <sr_log.h>
-#include <sr_atom.h>
-#include <sr_error.h>
-#include <sr_time.h>
+#include <sr_common.h>
 #include <sr_queue.h>
 #include <sr_malloc.h>
 
@@ -75,7 +73,7 @@ static void* producer(void *p)
 		snprintf(pkt->data, pkt->size, "producer id = %d malloc size = %lu", task->id, pkt->size);
 //		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1);
 
-		while((result = sr_queue_push_back(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
+		while((result = srq_push_back(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
 			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 		}
 
@@ -104,12 +102,12 @@ static void* consumers(void *p)
 
 	while(true){
 
-		while((result = sr_queue_get_front(task->queue, &pkt)) == QUEUE_RESULT_TRYAGAIN) {
+		while((result = srq_get_front(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
 			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 		}
 
 		if (result == 0){
-			result = sr_queue_remove(task->queue, pkt);
+			result = srq_remove(task->queue, pkt);
 			if (result != 0){
 				loge(result);
 			}

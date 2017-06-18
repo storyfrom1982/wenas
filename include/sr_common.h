@@ -8,6 +8,7 @@
 #ifndef INCLUDE_SR_COMMON_H_
 #define INCLUDE_SR_COMMON_H_
 
+
 #include <time.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -18,7 +19,7 @@
 #define	ERRUNKONWN			(-1)
 #define	ERRSYSCALL			(-10000)
 #define	ERRMALLOC			(-10001)
-#define	ERRPARAM			(-10002)
+#define	ERRPARAMETER		(-10002)
 #define	ERRTIMEOUT			(-10003)
 #define	ERRTRYAGAIN			(-10004)
 #define	ERREOF				(-10005)
@@ -37,72 +38,66 @@
 #define SR_ATOM_UNLOCK(x)		SETFALSE(x)
 
 
+#define SR_POP_BIT8(p, i)	\
+	(i) = (*p++)
+
+#define SR_POP_BIT16(p, i)	\
+	(i)  = (*p++) << 8;		\
+	(i) |= (*p++)
+
+#define SR_POP_BIT24(p, i)	\
+	(i)  = (*p++) << 16;	\
+	(i) |= (*p++) << 8;		\
+	(i) |= (*p++)
+
+#define SR_POP_BIT32(p, i)	\
+	(i)  = (*p++) << 24;	\
+	(i) |= (*p++) << 16;	\
+	(i) |= (*p++) << 8;		\
+	(i) |= (*p++)
+
+#define SR_POP_BIT64(p, i)	\
+	(i)  = (*p++) << 56;	\
+	(i) |= (*p++) << 48;	\
+	(i) |= (*p++) << 40;	\
+	(i) |= (*p++) << 32;	\
+	(i) |= (*p++) << 24;	\
+	(i) |= (*p++) << 16;	\
+	(i) |= (*p++) << 8;		\
+	(i) |= (*p++)
+
+
+#define SR_PUSH_BIT8(p, i)		\
+	(*p++) = (char)(i)
+
+#define SR_PUSH_BIT16(p, i)		\
+	(*p++) = (char)((i) >> 8);	\
+	(*p++) = (char)(i)
+
+#define SR_PUSH_BIT24(p, i)		\
+	(*p++) = (char)((i) >> 16);	\
+	(*p++) = (char)((i) >> 8);	\
+	(*p++) = (char)(i)
+
+#define SR_PUSH_BIT32(p, i)		\
+	(*p++) = (char)((i) >> 24);	\
+	(*p++) = (char)((i) >> 16);	\
+	(*p++) = (char)((i) >> 8);	\
+	(*p++) = (char)(i)
+
+#define SR_PUSH_BIT64(p, i)		\
+	(*p++) = (char)((i) >> 56);	\
+	(*p++) = (char)((i) >> 48);	\
+	(*p++) = (char)((i) >> 40);	\
+	(*p++) = (char)((i) >> 32);	\
+	(*p++) = (char)((i) >> 24);	\
+	(*p++) = (char)((i) >> 16);	\
+	(*p++) = (char)((i) >> 8);	\
+	(*p++) = (char)(i)
+
+
 extern int64_t sr_starting_time();
 extern int64_t sr_calculate_time(int64_t start_microsecond);
 
-
-#define PUSHINT8(p, i) \
-	(*p++) = (int8_t)(i)
-
-#define POPINT8(p, i) \
-	(i) = (*p++)
-
-
-
-#define PUSHINT16(p, i)	\
-	(*p++) = (int16_t)(i) >> 8;	\
-	(*p++) = (int16_t)(i) & 0xFF
-
-#define POPINT16(p, i) \
-	(i) = (*p++) << 8; \
-	(i) |= (*p++)
-
-
-
-#define PUSHINT24(p, i)	\
-	(*p++) = ((int32_t)(i) >> 16) & 0xFF; \
-	(*p++) = ((int32_t)(i) >> 8) & 0xFF; \
-	(*p++) = (int32_t)(i) & 0xFF
-
-#define POPINT24(p, i) \
-	(i) = (*p++) << 16;	\
-	(i) |= (*p++) << 8; \
-	(i) |= (*p++)
-
-
-
-#define PUSHINT32(p, i)	\
-	(*p++) = (int32_t)(i) >> 24; \
-	(*p++) = ((int32_t)(i) >> 16) & 0xFF; \
-	(*p++) = ((int32_t)(i) >> 8) & 0xFF; \
-	(*p++) = (int32_t)(i) & 0xFF
-
-#define POPINT32(p, i) \
-	(i) = (*p++) << 24;	\
-	(i) |= (*p++) << 16; \
-	(i) |= (*p++) << 8;	\
-	(i) |= (*p++)
-
-
-
-#define PUSHINT64(p, i)	\
-	(*p++) = (int64_t)(i) >> 56; \
-	(*p++) = ((int64_t)(i) >> 48) & 0xFF; \
-	(*p++) = ((int64_t)(i) >> 40) & 0xFF; \
-	(*p++) = ((int64_t)(i) >> 32) & 0xFF; \
-	(*p++) = ((int64_t)(i) >> 24) & 0xFF; \
-	(*p++) = ((int64_t)(i) >> 16) & 0xFF; \
-	(*p++) = ((int64_t)(i) >> 8) & 0xFF; \
-	(*p++) = (int64_t)(i) & 0xFF
-
-#define POPINT64(p, i) \
-	(i) = (int64_t)(*p++) << 56; \
-	(i) |= (int64_t)(*p++) << 48; \
-	(i) |= (int64_t)(*p++) << 40; \
-	(i) |= (int64_t)(*p++) << 32; \
-	(i) |= (int64_t)(*p++) << 24; \
-	(i) |= (int64_t)(*p++) << 16; \
-	(i) |= (int64_t)(*p++) << 8; \
-	(i) |= (int64_t)(*p++)
 
 #endif /* INCLUDE_SR_COMMON_H_ */

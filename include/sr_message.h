@@ -8,7 +8,8 @@
 #ifndef INCLUDE_SR_MESSAGE_H_
 #define INCLUDE_SR_MESSAGE_H_
 
-#include "stdint.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 typedef struct Sr_message{
 	int event;
@@ -34,6 +35,7 @@ typedef struct Sr_message_listener Sr_message_listener;
 extern int sr_message_listener_create(Sr_message_callback *cb, Sr_message_listener **pp_listener);
 extern void sr_message_listener_release(Sr_message_listener **pp_listener);
 
+extern bool sr_message_listener_arrivals(Sr_message_listener *listener);
 extern int sr_message_listener_pop(Sr_message_listener *listener, Sr_message *msg);
 extern int sr_message_listener_push(Sr_message_listener *listener, Sr_message msg);
 extern int sr_message_listener_push_event(Sr_message_listener *listener, int event);

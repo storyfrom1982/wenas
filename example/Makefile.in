@@ -89,7 +89,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = pipe$(EXEEXT) malloc$(EXEEXT) memory_leak$(EXEEXT) \
-	aligned_malloc$(EXEEXT)
+	aligned_malloc$(EXEEXT) message$(EXEEXT)
 subdir = example
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.ac
@@ -125,6 +125,12 @@ memory_leak_DEPENDENCIES = $(top_srcdir)/src/libsr.la
 memory_leak_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(memory_leak_CFLAGS) \
 	$(CFLAGS) $(memory_leak_LDFLAGS) $(LDFLAGS) -o $@
+am_message_OBJECTS = message-message.$(OBJEXT)
+message_OBJECTS = $(am_message_OBJECTS)
+message_DEPENDENCIES = $(top_srcdir)/src/libsr.la
+message_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(message_CFLAGS) \
+	$(CFLAGS) $(message_LDFLAGS) $(LDFLAGS) -o $@
 am_pipe_OBJECTS = pipe-pipe.$(OBJEXT)
 pipe_OBJECTS = $(am_pipe_OBJECTS)
 pipe_DEPENDENCIES = $(top_srcdir)/src/libsr.la
@@ -166,9 +172,9 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) \
-	$(memory_leak_SOURCES) $(pipe_SOURCES)
+	$(memory_leak_SOURCES) $(message_SOURCES) $(pipe_SOURCES)
 DIST_SOURCES = $(aligned_malloc_SOURCES) $(malloc_SOURCES) \
-	$(memory_leak_SOURCES) $(pipe_SOURCES)
+	$(memory_leak_SOURCES) $(message_SOURCES) $(pipe_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -332,6 +338,10 @@ memory_leak_SOURCES = memory_leak.c
 memory_leak_LDADD = $(top_srcdir)/src/libsr.la
 memory_leak_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
 memory_leak_LDFLAGS = -rdynamic
+message_SOURCES = message.c
+message_LDADD = $(top_srcdir)/src/libsr.la
+message_CFLAGS = -I$(top_srcdir)/include -std=gnu99 -g
+message_LDFLAGS = -rdynamic
 all: all-am
 
 .SUFFIXES:
@@ -427,6 +437,10 @@ memory_leak$(EXEEXT): $(memory_leak_OBJECTS) $(memory_leak_DEPENDENCIES) $(EXTRA
 	@rm -f memory_leak$(EXEEXT)
 	$(AM_V_CCLD)$(memory_leak_LINK) $(memory_leak_OBJECTS) $(memory_leak_LDADD) $(LIBS)
 
+message$(EXEEXT): $(message_OBJECTS) $(message_DEPENDENCIES) $(EXTRA_message_DEPENDENCIES) 
+	@rm -f message$(EXEEXT)
+	$(AM_V_CCLD)$(message_LINK) $(message_OBJECTS) $(message_LDADD) $(LIBS)
+
 pipe$(EXEEXT): $(pipe_OBJECTS) $(pipe_DEPENDENCIES) $(EXTRA_pipe_DEPENDENCIES) 
 	@rm -f pipe$(EXEEXT)
 	$(AM_V_CCLD)$(pipe_LINK) $(pipe_OBJECTS) $(pipe_LDADD) $(LIBS)
@@ -440,6 +454,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aligned_malloc-aligned_malloc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/malloc-malloc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memory_leak-memory_leak.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/message-message.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pipe-pipe.Po@am__quote@
 
 .c.o:
@@ -504,6 +519,20 @@ memory_leak-memory_leak.obj: memory_leak.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='memory_leak.c' object='memory_leak-memory_leak.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(memory_leak_CFLAGS) $(CFLAGS) -c -o memory_leak-memory_leak.obj `if test -f 'memory_leak.c'; then $(CYGPATH_W) 'memory_leak.c'; else $(CYGPATH_W) '$(srcdir)/memory_leak.c'; fi`
+
+message-message.o: message.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(message_CFLAGS) $(CFLAGS) -MT message-message.o -MD -MP -MF $(DEPDIR)/message-message.Tpo -c -o message-message.o `test -f 'message.c' || echo '$(srcdir)/'`message.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/message-message.Tpo $(DEPDIR)/message-message.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='message.c' object='message-message.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(message_CFLAGS) $(CFLAGS) -c -o message-message.o `test -f 'message.c' || echo '$(srcdir)/'`message.c
+
+message-message.obj: message.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(message_CFLAGS) $(CFLAGS) -MT message-message.obj -MD -MP -MF $(DEPDIR)/message-message.Tpo -c -o message-message.obj `if test -f 'message.c'; then $(CYGPATH_W) 'message.c'; else $(CYGPATH_W) '$(srcdir)/message.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/message-message.Tpo $(DEPDIR)/message-message.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='message.c' object='message-message.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(message_CFLAGS) $(CFLAGS) -c -o message-message.obj `if test -f 'message.c'; then $(CYGPATH_W) 'message.c'; else $(CYGPATH_W) '$(srcdir)/message.c'; fi`
 
 pipe-pipe.o: pipe.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pipe_CFLAGS) $(CFLAGS) -MT pipe-pipe.o -MD -MP -MF $(DEPDIR)/pipe-pipe.Tpo -c -o pipe-pipe.o `test -f 'pipe.c' || echo '$(srcdir)/'`pipe.c
