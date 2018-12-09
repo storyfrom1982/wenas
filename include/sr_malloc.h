@@ -26,13 +26,13 @@
 #define INCLUDE_SR_MEMORY_H_
 
 
-#include <stdlib.h>
+#ifdef ___SR_MALLOC___
 #include <unistd.h>
 #include <string.h>
+#else
+#include <stdlib.h>
+#endif //___SR_MALLOC___
 
-
-//#define ___MEMORY_DEBUG___
-//#undef ___MEMORY_DEBUG___
 
 
 extern int sr_malloc_initialize(size_t page_size, size_t preloaded_page);
@@ -40,80 +40,83 @@ extern void sr_malloc_release();
 extern void sr_malloc_debug(void (*log_debug)(const char *format, ...));
 
 
-#ifdef ___MEMORY_DEBUG___
+
+#ifdef ___SR_MALLOC___
+
+#ifdef ___SR_MALLOC_DEBUG___
 extern void* sr_malloc(size_t size, const char *file_name, const char *function_name, int line_number);
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 extern void* sr_malloc(size_t size);
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 #undef malloc
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 # define malloc(s)	sr_malloc((s), __FILE__, __FUNCTION__, __LINE__)
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 # define malloc(s)	sr_malloc((s))
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 extern void* sr_calloc(size_t number, size_t size, const char *file_name, const char *function_name, int line_number);
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 extern void* sr_calloc(size_t number, size_t size);
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 #undef calloc
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 # define calloc(n, s)	sr_calloc((n), (s), __FILE__, __FUNCTION__, __LINE__)
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 # define calloc(n, s)	sr_calloc((n), (s))
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 extern void* sr_realloc(void *address, size_t size, const char *file_name, const char *function_name, int line_number);
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 extern void* sr_realloc(void *address, size_t size);
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 #undef realloc
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 # define realloc(a, s)	sr_realloc((a), (s), __FILE__, __FUNCTION__, __LINE__)
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 # define realloc(a, s)	sr_realloc((a), (s))
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 extern void* sr_aligned_alloc(size_t alignment, size_t size, const char *file_name, const char *function_name, int line_number);
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 extern void* sr_aligned_alloc(size_t alignment, size_t size);
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 #undef aligned_alloc
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 # define aligned_alloc(a, s)	sr_aligned_alloc((a), (s), __FILE__, __FUNCTION__, __LINE__)
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 # define aligned_alloc(a, s)	sr_aligned_alloc((a), (s))
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 
 //TODO more string function
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 extern char* sr_strdup(const char *s, const char *file_name, const char *function_name, int line_number);
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 extern char* sr_strdup(const char *s);
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 #undef strdup
 
-#ifdef ___MEMORY_DEBUG___
+#ifdef ___SR_MALLOC_DEBUG___
 # define strdup(s)	sr_strdup((s), __FILE__, __FUNCTION__, __LINE__)
-#else //___MEMORY_DEBUG___
+#else //___SR_MALLOC_DEBUG___
 # define strdup(s)	sr_strdup((s))
-#endif //___MEMORY_DEBUG___
+#endif //___SR_MALLOC_DEBUG___
 
 
 extern void sr_free(void *address);
@@ -125,6 +128,7 @@ extern void sr_free(void *address);
 		if ((a)) sr_free((a)); \
 	} while(0)
 
+#endif //___SR_MALLOC___
 
 
 #endif /* INCLUDE_SR_MEMORY_H_ */

@@ -6,34 +6,41 @@
  */
 
 
-#include <stdio.h>
-#include <pthread.h>
-
-#include <sr_log.h>
-#include <sr_common.h>
-#include <sr_queue.h>
+#include <sr_lib.h>
 #include <sr_malloc.h>
 
 
 
-typedef struct Packet_node{
-	Sr_node *prev;
-	Sr_node *next;
+typedef struct packet_node_t{
+	sr_node_t *prev;
+	sr_node_t *next;
 	int id;
 	size_t size;
 	uint8_t *data;
-}Packet_node;
+}packet_node_t;
 
 
-typedef struct Task{
+typedef struct task_t{
 	int id;
 	pthread_t producer;
 	pthread_t consumers;
-	Sr_queue *queue;
-}Task;
+	sr_queue_t *queue;
+}task_t;
 
 
 static uint64_t malloc_count = 0;
+static uint64_t free_count = 0;
+
+
+static void free_node(sr_node_t *p){
+	if (p != NULL){
+		packet_node_t *pkt = (packet_node_t*)p;
+//		logd("%s\n", pkt->data);
+		free(pkt->data);
+		free(pkt);
+		__sr_atom_add(free_count, 2);
+	}
+}
 
 
 static void* producer(void *p)
@@ -44,22 +51,22 @@ static void* producer(void *p)
 
 	void *add = aligned_alloc(aligned, 1024 * 1024 * 4);
 	if (add == NULL){
-		loge(ERRMALLOC);
+		loge("aligned_alloc failed\n");
 		exit(0);
 		return NULL;
 	}
 
-	Packet_node *pkt = NULL;
-	Task *task = (Task*)p;
+	packet_node_t *pkt = NULL;
+	task_t *task = (task_t*)p;
 
 	for(int i = 0; i < 100000; ++i){
-		pkt = (Packet_node*)malloc(sizeof(Packet_node));
+		pkt = (packet_node_t*)malloc(sizeof(packet_node_t));
 		if (pkt == NULL){
-			loge(ERRMALLOC);
+			loge("malloc failed\n");
 			exit(0);
 			break;
 		}
-		SR_ATOM_ADD(malloc_count, 1);
+		__sr_atom_add(malloc_count, 1);
 		pkt->id = task->id;
 		pkt->size = random() % 10240;
 		if (pkt->size < 128){
@@ -69,15 +76,15 @@ static void* producer(void *p)
 		pkt->data = (uint8_t*)aligned_alloc(aligned, pkt->size);
 //		pkt->data = (uint8_t*)calloc(1, pkt->size);
 		if (pkt->data == NULL){
-			loge(ERRMALLOC);
+			loge("aligned_alloc failed\n");
 			exit(0);
 			break;
 		}
-		SR_ATOM_ADD(malloc_count, 1);
+		__sr_atom_add(malloc_count, 1);
 //		snprintf(pkt->data, pkt->size, "producer id = %d malloc size = %lu", task->id, pkt->size);
 //		pkt->data = (uint8_t*)realloc(pkt->data, pkt->size + 1);
 
-		while((result = srq_push_back(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
+		while((result = __sr_queue_push_back(task->queue, pkt)) == QUEUE_RESULT_TRY_AGAIN) {
 			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 		}
 
@@ -88,9 +95,10 @@ static void* producer(void *p)
 	}
 
 
-	sr_queue_stop(task->queue);
+//	sr_queue_stop(task->queue);
+	sr_queue_finish(task->queue);
 
-//	free(add);
+	free(add);
 
 	pthread_exit(0);
 
@@ -101,12 +109,12 @@ static void* consumers(void *p)
 {
 	int result = 0;
 
-	Packet_node *pkt = NULL;
-	Task *task = (Task*)p;
+	packet_node_t *pkt = NULL;
+	task_t *task = (task_t*)p;
 
 	while(true){
 
-		while((result = srq_pop_front(task->queue, pkt)) == QUEUE_RESULT_TRYAGAIN) {
+		while((result = __sr_queue_pop_front(task->queue, pkt)) == QUEUE_RESULT_TRY_AGAIN) {
 			nanosleep((const struct timespec[]){{0, 100L}}, NULL);
 		}
 
@@ -136,14 +144,15 @@ void* malloc_test(int producer_count, int consumers_count)
 
 //	sr_memory_default_init();
 
-	int64_t start_time = sr_starting_time();
+	int64_t start_time, passed_time;
+	__sr_time_begin(start_time);
 
-	Task plist[p_number];
-	Task clist[c_number];
+	task_t plist[p_number];
+	task_t clist[c_number];
 
 	for (i = 0; i < c_number; ++i){
 		clist[i].id = i;
-		clist[i].queue = sr_queue_create(size);
+		clist[i].queue = sr_queue_create(size, free_node);
 		pthread_create(&(clist[i].consumers), NULL, consumers, &(clist[i]));
 	}
 
@@ -163,8 +172,8 @@ void* malloc_test(int producer_count, int consumers_count)
 		pthread_join(clist[i].consumers, NULL);
 	}
 
-
-	logd("used time %ld\n", sr_calculate_time(start_time));
+	__sr_time_passed(start_time, passed_time);
+	logd("used time %ld\n", passed_time);
 
 //	sr_memory_debug(sr_log_info);
 
@@ -184,20 +193,20 @@ int main(int argc, char *argv[])
 	char *tmp = NULL;
 	int result = 0;
 
-	int64_t start_time = sr_starting_time();
+	int64_t start_time = sr_time_begin();
 
 	for (int i = 0; i < 10; ++i){
 		malloc_test(2, 2);
-		logi("malloc test ============================= %d\n", i);
+		logd("malloc test ============================= %d\n", i);
 	}
 
-	sr_malloc_debug(sr_log_info);
+	sr_malloc_debug(sr_log_warn);
 
 	pthread_exit(0);
 
 	sr_malloc_release();
 
-	logw("used time %lu %ld\n", malloc_count, sr_calculate_time(start_time));
+	loge("used time %lu %ld\n", malloc_count, sr_time_passed(start_time));
 
 	return 0;
 }

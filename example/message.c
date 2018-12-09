@@ -6,23 +6,18 @@
  */
 
 
-#include <sr_message.h>
-
-#include <sr_log.h>
-#include <sr_common.h>
-#include <sr_pipe.h>
+#include <sr_lib.h>
 #include <sr_malloc.h>
 
 
-static void notify(Sr_message_callback *cb, Sr_message msg)
+static void notify(sr_messenger_callback_t *cb, sr_message_t msg)
 {
-	logd("message : %d  size %d\n", msg.event, msg.i32);
-	if (msg.size > 0){
-		char *data = malloc(msg.size + 1);
-		memcpy(data, msg.data, msg.size);
-		data[msg.size] = '\0';
-		logd("message size >>>> %d %s end\n", msg.size, data);
-//		free(msg.data);
+	logd("message : %d  size %lld\n", msg.type, msg.if64.int64);
+	if (msg.extra_size > 0){
+		char *data = malloc(msg.extra_size + 1);
+		memcpy(data, msg.extra, msg.extra_size);
+		data[msg.extra_size] = '\0';
+		logd("message size >>>> %d %s end\n", msg.extra_size, data);
 		free(data);
 	}
 }
@@ -35,36 +30,39 @@ int main(int argc, char *argv[])
 	char *tmp = NULL;
 	int result = 0;
 
-	int64_t start_time = sr_starting_time();
+	int64_t start_time = sr_time_begin();
 
-	Sr_message_listener *listener;
+	sr_messenger_t *messenger;
 
-	Sr_message_callback cb;
+	sr_messenger_callback_t cb;
 	cb.notify = notify;
-	sr_message_listener_create(&cb, &listener);
+	messenger = sr_messenger_create(&cb);
 
+	int log_size = 512;
 
 	for (int i = 0; i < 100; ++i){
-		int size = random() % 4096;
+		int size = random() % (log_size>>1);
 		if (size < 31){
 			size = 31;
 		}
-		Sr_message msg = {.event = i, .i32 = size, .size = size, .data = NULL};
+		sr_message_t msg = {.type = i, .if64.int64 = size, .extra_size = size, .extra = NULL};
 		char data[size];
-		msg.data = data;
-		memset(msg.data, i, msg.size);
-		sr_message_listener_push(listener, msg);
+		msg.extra = data;
+		memset(msg.extra, i, msg.extra_size);
+		sr_messenger_send(messenger, msg);
 	}
 
-	while (sr_message_listener_arrivals(listener)){
+	sr_messenger_finish(messenger);
+
+	while (sr_messenger_is_arrive(messenger)){
 		usleep(1000000);
 	}
 
-	sr_message_listener_release(&listener);
+	sr_messenger_release(&messenger);
 
-	logd("used time %ld\n", sr_calculate_time(start_time));
+	logd("used time %ld\n", sr_time_passed(start_time));
 
-	sr_malloc_debug(sr_log_info);
+	sr_malloc_debug(sr_log_warn);
 
 	sr_malloc_release();
 

@@ -6,57 +6,58 @@
  */
 
 
-#include <sr_log.h>
-#include <sr_common.h>
-#include <sr_pipe.h>
+#include <sr_lib.h>
 #include <sr_malloc.h>
-
-#include <pthread.h>
-
-static bool running = false;
 
 void* pipe_write_thread(void *p)
 {
-	int result = 0;
 	int size = 32;
 	char *buf = NULL;
-	Sr_pipe *pipe = (Sr_pipe *)p;
+	sr_pipe_t *pipe = (sr_pipe_t *)p;
 
 	for (int i = 0; i < 100000; ++i){
 		buf = (char*)malloc(size);
 		if (buf == NULL){
-			loge(ERRMALLOC);
+			loge("malloc failed\n");
 		}
 		memset(buf, i % 0xFF, size);
-		for(result = 0; result < size; ){
+		for(unsigned int result = 0; result < size; ){
 			result += sr_pipe_write(pipe, buf + result, size - result);
 		}
 		free(buf);
 	}
 
-	SETFALSE(running);
+	sr_pipe_finish(pipe);
 
 	return NULL;
 }
 
 void* pipe_read_thread(void *p)
 {
-	int result = 0;
+	unsigned int result = 0;
 	int size = 32;
 	char *buf = NULL;
-	Sr_pipe *pipe = (Sr_pipe *)p;
+	sr_pipe_t *pipe = (sr_pipe_t *)p;
 
-
-	while (ISTRUE(running)){
+	bool running = true;
+	while (running){
 		buf = (char*)malloc(size);
 		if (buf == NULL){
-			loge(ERRMALLOC);
+			loge("malloc failed\n");
 		}
 		for (result = 0; result < size;){
 			result += sr_pipe_read(pipe, buf + result, size - result);
+			if (result != size){
+				if (sr_pipe_is_stopped(pipe)){
+					running = false;
+					break;
+				}
+			}
 		}
-		buf[size - 1] = '\0';
-		logd("%d=%s\n", result, buf);
+		if (result > 0){
+			buf[result - 1] = '\0';
+			logd("%d=%s\n", result, buf);
+		}
 		free(buf);
 	}
 
@@ -68,18 +69,17 @@ int pipe_test()
 	int result = 0;
 	pthread_t write_tid = 0;
 	pthread_t read_tid = 0;
-	Sr_pipe *pipe = NULL;
+	sr_pipe_t *pipe = NULL;
 
-	int64_t start_time = sr_starting_time();
+	int64_t start_time = sr_time_begin();
 
-	result = sr_pipe_create(10240, &pipe);
+	pipe = sr_pipe_create(10240);
 
 	if (result != 0){
-		loge(result);
+		loge("sr_pipe_create failed\n");
 		return result;
 	}
 
-	running = true;
 	pthread_create(&read_tid, NULL, pipe_read_thread, pipe);
 	pthread_create(&write_tid, NULL, pipe_write_thread, pipe);
 
@@ -93,9 +93,9 @@ int pipe_test()
 
 	sr_pipe_release(&pipe);
 
-	logd("once time %ld\n", sr_calculate_time(start_time));
+	logd("once time %ld\n", sr_time_passed(start_time));
 
-	sr_malloc_debug(sr_log_info);
+	sr_malloc_debug(sr_log_warn);
 
 	return 0;
 }
@@ -108,14 +108,14 @@ int main(int argc, char *argv[])
 	char *tmp = NULL;
 	int result = 0;
 
-	int64_t start_time = sr_starting_time();
+	int64_t start_time = sr_time_begin();
 
 	for (int i = 0; i < 10; ++i){
 		pipe_test();
 		logd("pipe test ============================= %d\n", i);
 	}
 
-	logd("used time %ld\n", sr_calculate_time(start_time));
+	logd("used time %ld\n", sr_time_passed(start_time));
 
 	sr_malloc_release();
 
