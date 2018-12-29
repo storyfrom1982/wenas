@@ -10,7 +10,6 @@
 
 #include <time.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -337,6 +336,11 @@ extern bool sr_messenger_is_arrive(sr_messenger_t *messenger);
 extern int sr_messenger_receive(sr_messenger_t *messenger, sr_message_t *msg);
 extern int sr_messenger_send(sr_messenger_t *messenger, sr_message_t msg);
 extern int sr_messenger_notify(sr_messenger_t *messenger, int msg_type);
+
+
+///////////////////////////////////////////////////////////////
+////signal
+///////////////////////////////////////////////////////////////
 
 
 #endif /* SR_LIB_H_ */

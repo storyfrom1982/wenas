@@ -37,6 +37,21 @@
 #include <errno.h>
 
 
+#define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
+#define	__is_false(x)		__sync_bool_compare_and_swap(&(x), false, false)
+#define	__set_true(x)		__sync_bool_compare_and_swap(&(x), false, true)
+#define	__set_false(x)		__sync_bool_compare_and_swap(&(x), true, false)
+
+#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
+#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
+
+#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
+#define __atom_try_lock(x)		__set_true(x)
+#define __atom_unlock(x)		__set_false(x)
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
 #define	__max_pool_number			1024
 #define	__max_page_number			1024
@@ -45,6 +60,62 @@
 
 #define	__align_size				( sizeof(size_t) )
 #define	__align_mask				( __align_size - 1 )
+
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
+
+
+#ifdef ___SR_MALLOC_BACKTRACE___
+
+# define __debug_msg_size			(256 - (__align_size << 2))
+
+# ifdef __ANDROID__
+
+#include <unwind.h>
+#include <dlfcn.h>
+
+#define __backtrace_depth           3
+
+typedef struct BacktraceState
+{
+    void** current;
+    void** end;
+}BacktraceState;
+
+static _Unwind_Reason_Code unwindCallback(struct _Unwind_Context* context, void* arg)
+{
+    BacktraceState* state = (BacktraceState*)(arg);
+    uintptr_t pc = _Unwind_GetIP(context);
+#if __thumb__
+    // Reset the Thumb bit, if it is set.
+    const uintptr_t thumb_bit = 1;
+    pc &= ~thumb_bit;
+#endif
+    if (pc) {
+        if (state->current == state->end) {
+            return _URC_END_OF_STACK;
+        } else {
+            *state->current++ = (void*)(pc);
+        }
+    }
+    return _URC_NO_REASON;
+}
+
+# endif //__ANDROID__
+
+#else
+
+# define __debug_msg_size			0
+
+#endif //___SR_MALLOC_BACKTRACE___
+
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
+
 
 #define	__free_pointer_size			( __debug_msg_size + __align_size * 4 )
 #define	__work_pointer_size			( __debug_msg_size + __align_size * 2 )
@@ -57,11 +128,9 @@
 				( (req) + __work_pointer_size + __align_mask ) & ~__align_mask )
 
 
-#ifdef ___SR_MALLOC_DEBUG___
-# define __debug_msg_size			(256 - (__align_size << 2))
-#else
-# define __debug_msg_size			0
-#endif //___SR_MALLOC_DEBUG___
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
 
 typedef struct pointer_t {
@@ -90,7 +159,7 @@ typedef struct pointer_t {
 	 * 定位指针信息
 	 */
 
-#ifdef	___SR_MALLOC_DEBUG___
+#ifdef	___SR_MALLOC_BACKTRACE___
 	char debug_msg[__debug_msg_size];
 #endif
 
@@ -181,20 +250,6 @@ typedef struct sr_memory_manager_t{
 
 
 static sr_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
-
-
-#define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
-#define	__is_false(x)		__sync_bool_compare_and_swap(&(x), false, false)
-#define	__set_true(x)		__sync_bool_compare_and_swap(&(x), false, true)
-#define	__set_false(x)		__sync_bool_compare_and_swap(&(x), true, false)
-
-#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
-#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
-
-#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
-#define __atom_try_lock(x)		__set_true(x)
-#define __atom_unlock(x)		__set_false(x)
-
 
 
 static int assign_page(sr_memory_pool_t *pool, sr_memory_page_t *page, size_t page_size)
@@ -407,12 +462,11 @@ void sr_free(void *address)
 	}
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
-#ifdef ___SR_MALLOC_DEBUG___
-void* sr_malloc(size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___SR_MALLOC_DEBUG___
 void* sr_malloc(size_t size)
-#endif //___SR_MALLOC_DEBUG___
 {
 	size_t reserved_size = 0;
 	pointer_t *pointer = NULL;
@@ -518,9 +572,24 @@ void* sr_malloc(size_t size)
 
 		__atom_unlock(pool->page[i].lock);
 
-#ifdef ___SR_MALLOC_DEBUG___
-		int len = snprintf(pointer->debug_msg, __debug_msg_size - 1, "%s [ %s(%d) ]", file_name, function_name, line_number);
-		pointer->debug_msg[len] = '\0';
+#ifdef ___SR_MALLOC_BACKTRACE___
+# ifdef __ANDROID__
+        {
+            size_t n = 0, msg_size = __debug_msg_size - 1;
+            void* buffer[__backtrace_depth];
+            BacktraceState state = {buffer, buffer + __backtrace_depth};
+            _Unwind_Backtrace(unwindCallback, &state);
+            unsigned count = (state.current - buffer);
+            for (size_t idx = 0; idx < count; ++idx) {
+                const void* addr = buffer[idx];
+                Dl_info info= {0};
+                if (dladdr(addr, &info) && info.dli_sname) {
+                    n += snprintf(pointer->debug_msg + n, msg_size - n, "%s => ", info.dli_sname);
+                }
+            }
+            pointer->debug_msg[n] = '\0';
+        }
+# endif
 #endif
 
 		return __pointer2address(pointer);
@@ -579,28 +648,37 @@ void* sr_malloc(size_t size)
 	__atom_add(pool->page_number, 1);
 	__atom_unlock(page->lock);
 
-#ifdef ___SR_MALLOC_DEBUG___
-	int len = snprintf(pointer->debug_msg, __debug_msg_size - 1, "%s [%s(%d)]", file_name, function_name, line_number);
-	pointer->debug_msg[len] = '\0';
+#ifdef ___SR_MALLOC_BACKTRACE___
+# ifdef __ANDROID__
+    {
+        size_t n = 0, msg_size = __debug_msg_size - 1;
+        void* buffer[__backtrace_depth];
+        BacktraceState state = {buffer, buffer + __backtrace_depth};
+        _Unwind_Backtrace(unwindCallback, &state);
+        unsigned count = (state.current - buffer);
+        for (size_t idx = 0; idx < count; ++idx) {
+            const void* addr = buffer[idx];
+            Dl_info info= {0};
+            if (dladdr(addr, &info) && info.dli_sname) {
+                n += snprintf(pointer->debug_msg + n, msg_size - n, "%s => ", info.dli_sname);
+            }
+        }
+        pointer->debug_msg[n] = '\0';
+    }
+# endif
 #endif
 
 	return __pointer2address(pointer);
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
-#ifdef ___SR_MALLOC_DEBUG___
-void* sr_calloc(size_t number, size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___SR_MALLOC_DEBUG___
 void* sr_calloc(size_t number, size_t size)
-#endif //___SR_MALLOC_DEBUG___
 {
 	size *= number;
-
-#ifdef ___SR_MALLOC_DEBUG___
-	void *pointer = sr_malloc(size, file_name, function_name, line_number);
-#else //___SR_MALLOC_DEBUG___
 	void *pointer = sr_malloc(size);
-#endif //___SR_MALLOC_DEBUG___
 
 	if (pointer != NULL){
     	memset(pointer, 0, size);
@@ -610,24 +688,18 @@ void* sr_calloc(size_t number, size_t size)
 	return NULL;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
-
-#ifdef ___SR_MALLOC_DEBUG___
-void* sr_realloc(void *address, size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___SR_MALLOC_DEBUG___
 void* sr_realloc(void *address, size_t size)
-#endif //___SR_MALLOC_DEBUG___
 {
 	void *new_address = NULL;
 	pointer_t *old_pointer = __address2pointer(address);
 
 	if (size > 0){
 
-#ifdef ___SR_MALLOC_DEBUG___
-		new_address = sr_malloc(size, file_name, function_name, line_number);
-#else //___SR_MALLOC_DEBUG___
 		new_address = sr_malloc(size);
-#endif //___SR_MALLOC_DEBUG___
 
 		if (new_address != NULL){
 
@@ -653,12 +725,11 @@ void* sr_realloc(void *address, size_t size)
     return NULL;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
-#ifdef ___SR_MALLOC_DEBUG___
-void* sr_aligned_alloc(size_t alignment, size_t size, const char *file_name, const char *function_name, int line_number)
-#else //___SR_MALLOC_DEBUG___
 void* sr_aligned_alloc(size_t alignment, size_t size)
-#endif //___SR_MALLOC_DEBUG___
 {
 	void *address = NULL, *aligned_address = NULL;
 	pointer_t *pointer = NULL, *aligned_pointer = NULL;
@@ -670,13 +741,7 @@ void* sr_aligned_alloc(size_t alignment, size_t size)
 		return NULL;
 	}
 
-
-#ifdef ___SR_MALLOC_DEBUG___
-	address = sr_malloc(size + alignment + __free_pointer_size, file_name, function_name, line_number);
-#else //___SR_MALLOC_DEBUG___
 	address = sr_malloc(size + alignment + __free_pointer_size);
-#endif //___SR_MALLOC_DEBUG___
-
 
 	if (address != NULL){
 		if (((size_t)( address ) & ~(alignment - 1)) == ((size_t)( address ))){
@@ -691,7 +756,7 @@ void* sr_aligned_alloc(size_t alignment, size_t size)
 		aligned_pointer->flag = __next_pointer(pointer)->flag;
 		pointer->size = free_size;
 
-#ifdef ___SR_MALLOC_DEBUG___
+#ifdef ___SR_MALLOC_BACKTRACE___
 		memcpy(aligned_pointer->debug_msg, pointer->debug_msg, __debug_msg_size);
 #endif
 
@@ -704,22 +769,17 @@ void* sr_aligned_alloc(size_t alignment, size_t size)
 	return NULL;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
-#ifdef ___SR_MALLOC_DEBUG___
-char* sr_strdup(const char *s, const char *file_name, const char *function_name, int line_number)
-#else //___SR_MALLOC_DEBUG___
 char* sr_strdup(const char *s)
-#endif //___SR_MALLOC_DEBUG___
 {
 	char *result = NULL;
 	if (s){
 		size_t len = strlen(s);
 
-#ifdef ___SR_MALLOC_DEBUG___
-		result = (char *)sr_malloc(len + 1, file_name, function_name, line_number);
-#else //___SR_MALLOC_DEBUG___
 		result = (char *)sr_malloc(len + 1);
-#endif //___SR_MALLOC_DEBUG___
 
 		if (result != NULL){
 		    memcpy(result, s, len);
@@ -729,7 +789,12 @@ char* sr_strdup(const char *s)
 
 	return result;
 }
+
 #endif //___SR_MALLOC___
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
 int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 {
@@ -776,6 +841,9 @@ int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 	return 0;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
 void sr_malloc_release()
 {
@@ -797,6 +865,9 @@ void sr_malloc_release()
 #endif //___SR_MALLOC___
 }
 
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
 
 void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 {
@@ -822,9 +893,9 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 				log_debug("[!!! Found a memory leak !!!]\n");
 				pointer = (__next_pointer(pool->page[page_id].head));
 				while(pointer != pool->page[page_id].end){
-#ifdef ___SR_MALLOC_DEBUG___
+#ifdef ___SR_MALLOC_BACKTRACE___
 					if (!__mergeable(__next_pointer(pointer))){
-						log_debug("[!!! Locate Memory Leaks !!! ===> %s]\n", pointer->debug_msg);
+						log_debug("[Locate => %s]\n", pointer->debug_msg);
 					}
 #endif
 					pointer = __next_pointer(pointer);
@@ -834,3 +905,7 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 	}
 #endif //___SR_MALLOC___
 }
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
