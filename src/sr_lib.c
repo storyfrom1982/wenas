@@ -7,7 +7,6 @@
 
 
 #include "sr_lib.h"
-#include "sr_malloc.h"
 
 
 ///////////////////////////////////////////////////////////////
@@ -15,6 +14,9 @@
 ///////////////////////////////////////////////////////////////
 
 #include <stdarg.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sr_malloc.h>
 
 #define __log_date_size			32
 #define __log_text_size			512

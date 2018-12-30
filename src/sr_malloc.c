@@ -26,16 +26,13 @@
 #include "sr_malloc.h"
 
 
-#ifdef ___SR_MALLOC___
-
-
+#include <time.h>
 #include <stdio.h>
-#include <stdint.h>
+#include <unistd.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include <sys/mman.h>
+#include <string.h>
 #include <errno.h>
-
 
 #define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
 #define	__is_false(x)		__sync_bool_compare_and_swap(&(x), false, false)
@@ -53,7 +50,18 @@
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#define	__max_pool_number			1024
+#ifdef ___SR_MALLOC_PAGE_SIZE___
+# define __page_size                ___SR_MALLOC_PAGE_SIZE___
+#else
+# define __page_size                0xA00000
+#endif
+
+#ifdef ___SR_MALLOC_MAX_POOL___
+# define	__max_pool_number		___SR_MALLOC_MAX_POOL___
+#else
+# define	__max_pool_number		16
+#endif
+
 #define	__max_page_number			1024
 
 #define	__max_recycle_bin_number	3
@@ -76,7 +84,8 @@
 #include <unwind.h>
 #include <dlfcn.h>
 
-#define __backtrace_depth           3
+//TODO why can't get the c++ stack
+#define __backtrace_depth           1
 
 typedef struct BacktraceState
 {
@@ -237,13 +246,12 @@ typedef struct sr_memory_pool_t{
 typedef struct sr_memory_manager_t{
 
 	bool lock;
+	bool init;
+	size_t pool_index;
 	size_t page_size;
 	size_t pool_number;
-	size_t thread_number;
 	size_t preloading_page;
 	size_t page_aligned_mask;
-
-	pthread_key_t key;
 	sr_memory_pool_t pool[__max_pool_number + 1];
 
 }sr_memory_manager_t;
@@ -252,7 +260,7 @@ typedef struct sr_memory_manager_t{
 static sr_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
 
 
-static int assign_page(sr_memory_pool_t *pool, sr_memory_page_t *page, size_t page_size)
+static int malloc_page(sr_memory_pool_t *pool, sr_memory_page_t *page, size_t page_size)
 {
 	page->size = (page_size + mm->page_aligned_mask) & (~mm->page_aligned_mask);
 
@@ -294,6 +302,39 @@ static int assign_page(sr_memory_pool_t *pool, sr_memory_page_t *page, size_t pa
 	memset(&(page->recycle_bin), 0, sizeof(page->recycle_bin));
 
 	return 0;
+}
+
+
+static int malloc_pool()
+{
+    __atom_lock(mm->lock);
+
+    if (__is_true(mm->init)){
+        __atom_unlock(mm->lock);
+        return 0;
+    }
+
+    mm->page_size = __page_size;
+    mm->preloading_page = 2;
+    mm->page_aligned_mask = (size_t) sysconf(_SC_PAGESIZE) - 1;
+
+    for (mm->pool_number = 0; mm->pool_number < __max_pool_number; ++mm->pool_number){
+        mm->pool[mm->pool_number].id = mm->pool_number;
+        for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
+            mm->pool[mm->pool_number].page[page_id].id = page_id;
+            mm->pool[mm->pool_number].page_number ++;
+            if (malloc_page(&(mm->pool[mm->pool_number]),
+                            &(mm->pool[mm->pool_number].page[page_id]), mm->page_size) != 0){
+                __atom_unlock(mm->lock);
+                return -1;
+            }
+        }
+    }
+
+    __set_true(mm->init);
+    __atom_unlock(mm->lock);
+
+    return 0;
 }
 
 
@@ -471,6 +512,15 @@ void* sr_malloc(size_t size)
 	size_t reserved_size = 0;
 	pointer_t *pointer = NULL;
 
+	if (__is_false(mm->init)){
+        if (malloc_pool() != 0){
+            return NULL;
+        }
+	}
+
+    sr_memory_pool_t *pool = &mm->pool[(__atom_add(mm->pool_index, 1) & (__max_pool_number-1))];
+
+#if 0
 	//获取当前线程的内存池
 	sr_memory_pool_t *pool = (sr_memory_pool_t *)pthread_getspecific(mm->key);
 
@@ -522,7 +572,7 @@ void* sr_malloc(size_t size)
 			}
 		}
 	}
-
+#endif
 
 	size = request2allocation(size);
 
@@ -618,18 +668,18 @@ void* sr_malloc(size_t size)
 
 	if (size >= mm->page_size >> 2){
 		if (size >= mm->page_size){
-			if (assign_page(pool, page, size << 1) != 0){
+			if (malloc_page(pool, page, size << 1) != 0){
 				__atom_unlock(page->lock);
 				return NULL;
 			}
 		}else{
-			if (assign_page(pool, page, mm->page_size << 1) != 0){
+			if (malloc_page(pool, page, mm->page_size << 1) != 0){
 				__atom_unlock(page->lock);
 				return NULL;
 			}
 		}
 	}else{
-		if (assign_page(pool, page, mm->page_size) != 0){
+		if (malloc_page(pool, page, mm->page_size) != 0){
 			__atom_unlock(page->lock);
 			return NULL;
 		}
@@ -790,12 +840,11 @@ char* sr_strdup(const char *s)
 	return result;
 }
 
-#endif //___SR_MALLOC___
-
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
 
+#if 0
 int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 {
 #ifdef ___SR_MALLOC___
@@ -840,6 +889,7 @@ int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 
 	return 0;
 }
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 ////
@@ -847,22 +897,17 @@ int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 
 void sr_malloc_release()
 {
-#ifdef ___SR_MALLOC___
-	if (__atom_unlock(mm->lock)){
-		for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-			sr_memory_pool_t *pool = &(mm->pool[pool_id]);
-			for (int page_id = 0; page_id < pool->page_number; ++page_id){
-				if ( pool->page[page_id].start_address != NULL){
-					munmap(pool->page[page_id].start_address, pool->page[page_id].size);
-				}
-			}
-		}
-
-		pthread_key_delete(mm->key);
-
-		memset(mm, 0, sizeof(sr_memory_manager_t));
-	}
-#endif //___SR_MALLOC___
+    __atom_lock(mm->lock);
+    for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+        sr_memory_pool_t *pool = &(mm->pool[pool_id]);
+        for (int page_id = 0; page_id < pool->page_number; ++page_id){
+            if ( pool->page[page_id].start_address != NULL){
+                munmap(pool->page[page_id].start_address, pool->page[page_id].size);
+            }
+        }
+    }
+    memset(mm, 0, sizeof(sr_memory_manager_t));
+    __atom_unlock(mm->lock);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -871,8 +916,6 @@ void sr_malloc_release()
 
 void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 {
-#ifdef ___SR_MALLOC___
-
 	sr_memory_pool_t *pool = NULL;
 	pointer_t *pointer = NULL;
 
@@ -895,7 +938,7 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 				while(pointer != pool->page[page_id].end){
 #ifdef ___SR_MALLOC_BACKTRACE___
 					if (!__mergeable(__next_pointer(pointer))){
-						log_debug("[Locate => %s]\n", pointer->debug_msg);
+						log_debug("[Backtrace => %s]\n", pointer->debug_msg);
 					}
 #endif
 					pointer = __next_pointer(pointer);
@@ -903,9 +946,58 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 			}
 		}
 	}
-#endif //___SR_MALLOC___
 }
 
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
+
+void* sr_malloc_backtrace9(size_t size)
+{
+	return sr_malloc(size);
+}
+
+void* sr_malloc_backtrace8(size_t size)
+{
+	return sr_malloc_backtrace9(size);
+}
+
+void* sr_malloc_backtrace7(size_t size)
+{
+	return sr_malloc_backtrace8(size);
+}
+
+void* sr_malloc_backtrace6(size_t size)
+{
+	return sr_malloc_backtrace7(size);
+}
+
+void* sr_malloc_backtrace5(size_t size)
+{
+	return sr_malloc_backtrace6(size);
+}
+
+void* sr_malloc_backtrace4(size_t size)
+{
+	return sr_malloc_backtrace5(size);
+}
+
+void* sr_malloc_backtrace3(size_t size)
+{
+	return sr_malloc_backtrace4(size);
+}
+
+void* sr_malloc_backtrace2(size_t size)
+{
+	return sr_malloc_backtrace3(size);
+}
+
+void* sr_malloc_backtrace1(size_t size)
+{
+	return sr_malloc_backtrace2(size);
+}
+
+void* sr_malloc_backtrace(size_t size)
+{
+    return sr_malloc_backtrace1(size);
+}

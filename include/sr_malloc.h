@@ -25,19 +25,10 @@
 #ifndef INCLUDE_SR_MEMORY_H_
 #define INCLUDE_SR_MEMORY_H_
 
+#include <stdint.h>
 
-#ifdef ___SR_MALLOC___
-#include <unistd.h>
-#include <string.h>
-#else
-#include <stdlib.h>
-#endif //___SR_MALLOC___
-
-extern int sr_malloc_initialize(size_t page_size, size_t preloaded_page);
 extern void sr_malloc_release();
 extern void sr_malloc_debug(void (*log_debug)(const char *format, ...));
-
-#ifdef ___SR_MALLOC___
 
 extern void* sr_malloc(size_t size);
 #undef malloc
@@ -55,20 +46,12 @@ extern void* sr_aligned_alloc(size_t alignment, size_t size);
 #undef aligned_alloc
 #define aligned_alloc(a, s)	sr_aligned_alloc((a), (s))
 
-extern char* sr_strdup(const char *s);
-#undef strdup
-#define strdup(s)	sr_strdup((s))
-
 extern void sr_free(void *address);
-
 #undef free
 #define free(a) \
 	do { \
 		if ((a)) sr_free((a)); \
 	} while(0)
-
-
-#endif //___SR_MALLOC___
 
 
 #endif /* INCLUDE_SR_MEMORY_H_ */
