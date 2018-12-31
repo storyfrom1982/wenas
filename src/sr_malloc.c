@@ -50,14 +50,14 @@
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#ifdef ___SR_MALLOC_PAGE_SIZE___
-# define __page_size                ___SR_MALLOC_PAGE_SIZE___
+#ifdef SR_MALLOC_PAGE_SIZE
+# define __page_size                SR_MALLOC_PAGE_SIZE
 #else
 # define __page_size                0xA00000
 #endif
 
-#ifdef ___SR_MALLOC_MAX_POOL___
-# define	__max_pool_number		___SR_MALLOC_MAX_POOL___
+#ifdef SR_MALLOC_MAX_POOL
+# define	__max_pool_number		SR_MALLOC_MAX_POOL
 #else
 # define	__max_pool_number		16
 #endif
@@ -75,7 +75,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef ___SR_MALLOC_BACKTRACE___
+#ifdef SR_MALLOC_BACKTRACE
 
 # define __debug_msg_size			(256 - (__align_size << 2))
 
@@ -84,8 +84,8 @@
 #include <unwind.h>
 #include <dlfcn.h>
 
-//TODO why can't get the c++ stack
-#define __backtrace_depth           1
+//TODO why some of the stack backtrace with can't get
+#define __backtrace_depth           10
 
 typedef struct BacktraceState
 {
@@ -118,7 +118,7 @@ static _Unwind_Reason_Code unwindCallback(struct _Unwind_Context* context, void*
 
 # define __debug_msg_size			0
 
-#endif //___SR_MALLOC_BACKTRACE___
+#endif //SR_MALLOC_BACKTRACE
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -168,7 +168,7 @@ typedef struct pointer_t {
 	 * 定位指针信息
 	 */
 
-#ifdef	___SR_MALLOC_BACKTRACE___
+#ifdef	SR_MALLOC_BACKTRACE
 	char debug_msg[__debug_msg_size];
 #endif
 
@@ -622,7 +622,7 @@ void* sr_malloc(size_t size)
 
 		__atom_unlock(pool->page[i].lock);
 
-#ifdef ___SR_MALLOC_BACKTRACE___
+#ifdef SR_MALLOC_BACKTRACE
 # ifdef __ANDROID__
         {
             size_t n = 0, msg_size = __debug_msg_size - 1;
@@ -630,7 +630,7 @@ void* sr_malloc(size_t size)
             BacktraceState state = {buffer, buffer + __backtrace_depth};
             _Unwind_Backtrace(unwindCallback, &state);
             unsigned count = (state.current - buffer);
-            for (size_t idx = 0; idx < count; ++idx) {
+            for (size_t idx = 0; idx < count && n < msg_size; ++idx) {
                 const void* addr = buffer[idx];
                 Dl_info info= {0};
                 if (dladdr(addr, &info) && info.dli_sname) {
@@ -698,7 +698,7 @@ void* sr_malloc(size_t size)
 	__atom_add(pool->page_number, 1);
 	__atom_unlock(page->lock);
 
-#ifdef ___SR_MALLOC_BACKTRACE___
+#ifdef SR_MALLOC_BACKTRACE
 # ifdef __ANDROID__
     {
         size_t n = 0, msg_size = __debug_msg_size - 1;
@@ -706,7 +706,7 @@ void* sr_malloc(size_t size)
         BacktraceState state = {buffer, buffer + __backtrace_depth};
         _Unwind_Backtrace(unwindCallback, &state);
         unsigned count = (state.current - buffer);
-        for (size_t idx = 0; idx < count; ++idx) {
+        for (size_t idx = 0; idx < count && n < msg_size; ++idx) {
             const void* addr = buffer[idx];
             Dl_info info= {0};
             if (dladdr(addr, &info) && info.dli_sname) {
@@ -806,7 +806,7 @@ void* sr_aligned_alloc(size_t alignment, size_t size)
 		aligned_pointer->flag = __next_pointer(pointer)->flag;
 		pointer->size = free_size;
 
-#ifdef ___SR_MALLOC_BACKTRACE___
+#ifdef SR_MALLOC_BACKTRACE
 		memcpy(aligned_pointer->debug_msg, pointer->debug_msg, __debug_msg_size);
 #endif
 
@@ -936,7 +936,7 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 				log_debug("[!!! Found a memory leak !!!]\n");
 				pointer = (__next_pointer(pool->page[page_id].head));
 				while(pointer != pool->page[page_id].end){
-#ifdef ___SR_MALLOC_BACKTRACE___
+#ifdef SR_MALLOC_BACKTRACE
 					if (!__mergeable(__next_pointer(pointer))){
 						log_debug("[Backtrace => %s]\n", pointer->debug_msg);
 					}
@@ -951,53 +951,3 @@ void sr_malloc_debug(void (*log_debug)(const char *format, ...))
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
-
-void* sr_malloc_backtrace9(size_t size)
-{
-	return sr_malloc(size);
-}
-
-void* sr_malloc_backtrace8(size_t size)
-{
-	return sr_malloc_backtrace9(size);
-}
-
-void* sr_malloc_backtrace7(size_t size)
-{
-	return sr_malloc_backtrace8(size);
-}
-
-void* sr_malloc_backtrace6(size_t size)
-{
-	return sr_malloc_backtrace7(size);
-}
-
-void* sr_malloc_backtrace5(size_t size)
-{
-	return sr_malloc_backtrace6(size);
-}
-
-void* sr_malloc_backtrace4(size_t size)
-{
-	return sr_malloc_backtrace5(size);
-}
-
-void* sr_malloc_backtrace3(size_t size)
-{
-	return sr_malloc_backtrace4(size);
-}
-
-void* sr_malloc_backtrace2(size_t size)
-{
-	return sr_malloc_backtrace3(size);
-}
-
-void* sr_malloc_backtrace1(size_t size)
-{
-	return sr_malloc_backtrace2(size);
-}
-
-void* sr_malloc_backtrace(size_t size)
-{
-    return sr_malloc_backtrace1(size);
-}

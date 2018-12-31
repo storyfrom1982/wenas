@@ -5,8 +5,8 @@
  *      Author: yongge
  */
 
-#ifndef SR_LIB_H_
-#define SR_LIB_H_
+#ifndef SR_LIBRARY_H_
+#define SR_LIBRARY_H_
 
 #include <time.h>
 #include <stdio.h>
@@ -163,7 +163,7 @@ extern void sr_log_error(const char *path, const char *func, int line, const cha
  #undef logd
 #endif
 
-#ifdef __SR_LOG_DEBUG__
+#ifdef SR_LOG_DEBUG
 #define logd(__FORMAT__, ...) \
 	sr_log_debug(__FILE__, __FUNCTION__, __LINE__, __FORMAT__, ##__VA_ARGS__)
 #else
@@ -342,5 +342,6 @@ extern int sr_messenger_notify(sr_messenger_t *messenger, int msg_type);
 ////signal
 ///////////////////////////////////////////////////////////////
 
+extern void sr_setup_crash_backtrace(void (*log_callback)(const char *format, ...));
 
-#endif /* SR_LIB_H_ */
+#endif /* SR_LIBRARY_H_ */

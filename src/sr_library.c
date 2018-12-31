@@ -6,7 +6,8 @@
  */
 
 
-#include "sr_lib.h"
+#include "sr_library.h"
+#include "sr_malloc.h"
 
 
 ///////////////////////////////////////////////////////////////
@@ -16,7 +17,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sr_malloc.h>
 
 #define __log_date_size			32
 #define __log_text_size			512
@@ -35,13 +35,12 @@ static log_callback g_log_callback = log_print;
 
 
 
-static char* date2string(char *str, size_t len)
+static size_t date2string(char *str, size_t len)
 {
 	time_t current = {0};
 	time(&current);
 	struct tm *fmt = localtime(&current);
-	strftime(str, len, "%F:%H:%M:%S", fmt);
-	return str;
+	return strftime(str, len, "%F:%H:%M:%S", fmt);
 }
 
 
@@ -55,38 +54,46 @@ void sr_log_set_callback(void (*cb)(int level, const char *tag, const char *log)
 
 void sr_log_warn(const char *fmt, ...)
 {
-	char text[__log_text_size] = {0};
-	va_list args;
-	va_start (args, fmt);
-	vsnprintf(text, __log_text_size, fmt, args);
-	va_end (args);
-	g_log_callback(SR_LOG_LEVEL_WARN, "INFO", text);
+    time_t current = {0};
+    time(&current);
+    char text[__log_text_size] = {0};
+    size_t n = strftime(text, __log_text_size, "%F:%H:%M:%S ", localtime(&current));
+    va_list args;
+    va_start (args, fmt);
+    vsnprintf(text + n, __log_text_size - n, fmt, args);
+    va_end (args);
+    g_log_callback(SR_LOG_LEVEL_WARN, "WARNING", text);
 }
 
 
 void sr_log_debug(const char *path, const char *func, int line, const char *fmt, ...)
 {
-	char text[__log_text_size] = {0};
-	int i = snprintf(text, __log_text_size, "%s(%d): ", func, line);
-	va_list args;
-	va_start (args, fmt);
-	vsnprintf(text + i, __log_text_size - i, fmt, args);
-	va_end (args);
+    time_t current = {0};
+    time(&current);
+    char text[__log_text_size] = {0};
+    size_t n = strftime(text, __log_text_size, "%F:%H:%M:%S", localtime(&current));
+    n += snprintf(text + n, __log_text_size - n, " %s(%d): ", func, line);
+    va_list args;
+    va_start (args, fmt);
+    vsnprintf(text + n, __log_text_size - n, fmt, args);
+    va_end (args);
 	g_log_callback(SR_LOG_LEVEL_DEBUG, __path_clear(path), text);
 }
 
 
 void sr_log_error(const char *path, const char *func, int line, const char *fmt, ...)
 {
-	char text[__log_text_size] = {0};
-	char date[__log_date_size] = {0};
-	int i = snprintf(text, __log_text_size, "%s %s(%d){%s}: ",
-			date2string(date, __log_date_size), func, line, strerror(errno));
+    time_t current = {0};
+    time(&current);
+    char text[__log_text_size] = {0};
+    size_t n = strftime(text, __log_text_size, "%F:%H:%M:%S", localtime(&current));
+	n += snprintf(text + n, __log_text_size - n, " %s(%d){%s}: ", func, line, strerror(errno));
 	va_list args;
 	va_start (args, fmt);
-	vsnprintf(text + i, __log_text_size - i, fmt, args);
+	vsnprintf(text + n, __log_text_size - n, fmt, args);
 	va_end (args);
 	g_log_callback(SR_LOG_LEVEL_ERROR, __path_clear(path), text);
+	assert(0);
 }
 
 
@@ -98,7 +105,6 @@ static void log_print(int level, const char *tag, const char *log)
 		fprintf(stdout, "WARNING: [%s] %s", tag, log);
 	}else if (level == SR_LOG_LEVEL_ERROR){
 		fprintf(stderr, "ERROR: [%s] %s", tag, log);
-		assert(0);
 	}
 }
 
