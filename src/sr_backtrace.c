@@ -177,6 +177,10 @@ static void SetUpSigActionHandler() {
     action.sa_flags = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
 
     sigaction(SIGSEGV, &action, NULL);
+    sigaction(SIGABRT, &action, NULL);
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGILL, &action, NULL);
+    sigaction(SIGPIPE, &action, NULL);
 }
 
 
