@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "linear_data_block.h"
 
 int main(int argc, char *argv[]) 
 {
@@ -49,6 +50,14 @@ int main(int argc, char *argv[])
 	// 输出 	1d 	1c	1b 	1a
 	// 数字的低位在内存的低位，小映射到小为小端。
 	//
+
+	Lineardb block;
+	int32_t n, i = 0x1a1b1c1d;
+	
+	block = __int32_to_block(i);
+	n = __block_to_int32(&block);
+	
+	fprintf(stdout, "%x %x %x %x %x %x\n", i, n, block.byte[1], block.byte[2], block.byte[3], block.byte[4]);
 
 	return 0;
 }

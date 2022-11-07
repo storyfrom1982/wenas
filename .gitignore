@@ -76,3 +76,4 @@ cmake-build-debug/
 libuv-*.tar.*
 
 /src/env/dep
+.vscode/
