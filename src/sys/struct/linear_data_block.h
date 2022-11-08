@@ -42,11 +42,29 @@ typedef union number_64bit{
 
 #   define __number16_to_block(n)  (Lineardb){BLOCK_TYPE_NUMBER_16BIT, (char)((n) & 0xff), (char)((n) >> 8 & 0xff)}
 #   define __block_to_number16(b) \
-            (((b)->byte[0] & 0x80) ? (Number32)((b)->byte[2] | (b)->byte[1] << 8) : (Number32)((b)->byte[1] | (b)->byte[2] << 8))
+            (((b)->byte[0] & 0x80) ? (Number32)((int16_t)(b)->byte[2] | (int16_t)(b)->byte[1] << 8) : (Number32)((int16_t)(b)->byte[1] | (int16_t)(b)->byte[2] << 8))
 
-#   define __number32_to_block(n)  (Lineardb){BLOCK_TYPE_NUMBER_32BIT, (char)((n) & 0xff), (char)((n) >> 8 & 0xff), (char)(((n) >> 16) & 0xff), (char)(((n) >> 24) & 0xff)}
+#   define __number32_to_block(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_NUMBER_32BIT, \
+                (((char*)&(n))[0]), (((char*)&(n))[1]), (((char*)&(n))[2]), (((char*)&(n))[3]) \
+            }
+
 #   define __block_to_number32(b) \
-            (((b)->byte[0] & 0x80) ? (Number32)((b)->byte[4] | (b)->byte[3] << 8 | (b)->byte[2] << 16 | (b)->byte[1] << 24) : (Number32)((b)->byte[1] | (b)->byte[2] << 8 | (b)->byte[3] << 16 | (b)->byte[4] << 24))
+            (((((char*)(b))[0]) & 0x80) \
+                ? (Number32)( \
+                    ((int32_t)((char*)(b))[8]) \
+                    | ((int32_t)((char*)(b))[7] << 8) \
+                    | ((int32_t)((char*)(b))[6] << 16) \
+                    | ((int32_t)((char*)(b))[5] << 24) \
+                ) \
+                : (Number32)( \
+                    ((int32_t)((char*)(b))[1]) \
+                    | ((int32_t)((char*)(b))[2] << 8) \
+                    | ((int32_t)((char*)(b))[3] << 16) \
+                    | ((int32_t)((char*)(b))[4] << 24) \
+                ) \
+			)
 
 #   define __number64_to_block(n) \
             (Lineardb){ \

@@ -16,7 +16,9 @@ else()
     set(kzx_defines -D__LITTLE_ENDIAN__)
 endif()
 
-set(kzx_sources src/main.c)
+set(kzx_sources src/main.c
+    src/sys/struct/test.c
+)
 
 set(kzx_defines "")
 set(kzx_cflags "")
