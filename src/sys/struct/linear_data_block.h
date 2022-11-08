@@ -40,9 +40,23 @@ typedef union number_64bit{
 
 #ifdef __LITTLE_ENDIAN__
 
-#   define __number16_to_block(n)  (Lineardb){BLOCK_TYPE_NUMBER_16BIT, (char)((n) & 0xff), (char)((n) >> 8 & 0xff)}
+#   define __number16_to_block(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_NUMBER_16BIT, \
+                (((char*)&(n))[0]), (((char*)&(n))[1]) \
+            }
+
 #   define __block_to_number16(b) \
-            (((b)->byte[0] & 0x80) ? (Number32)((int16_t)(b)->byte[2] | (int16_t)(b)->byte[1] << 8) : (Number32)((int16_t)(b)->byte[1] | (int16_t)(b)->byte[2] << 8))
+            (((((char*)(b))[0]) & 0x80) \
+                ? (Number32)( \
+                    ((int16_t)((char*)(b))[2]) \
+                    | ((int16_t)((char*)(b))[1] << 8) \
+                ) \
+                : (Number32)( \
+                    ((int16_t)((char*)(b))[1]) \
+                    | ((int16_t)((char*)(b))[2] << 8) \
+                ) \
+			)
 
 #   define __number32_to_block(n) \
             (Lineardb){ \
@@ -50,13 +64,29 @@ typedef union number_64bit{
                 (((char*)&(n))[0]), (((char*)&(n))[1]), (((char*)&(n))[2]), (((char*)&(n))[3]) \
             }
 
+#   define __block_to_float32(b, f) \
+            do { \
+                if ((((char*)(b))[0]) & 0x80) { \
+                    ((char*)&(f))[0] = ((char*)(b))[4]; \
+                    ((char*)&(f))[1] = ((char*)(b))[3]; \
+                    ((char*)&(f))[2] = ((char*)(b))[2]; \
+                    ((char*)&(f))[3] = ((char*)(b))[1]; \
+                } else { \
+                    ((char*)&(f))[0] = ((char*)(b))[1]; \
+                    ((char*)&(f))[1] = ((char*)(b))[2]; \
+                    ((char*)&(f))[2] = ((char*)(b))[3]; \
+                    ((char*)&(f))[3] = ((char*)(b))[4]; \
+                } \
+            } while(0)
+
+
 #   define __block_to_number32(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number32)( \
-                    ((int32_t)((char*)(b))[8]) \
-                    | ((int32_t)((char*)(b))[7] << 8) \
-                    | ((int32_t)((char*)(b))[6] << 16) \
-                    | ((int32_t)((char*)(b))[5] << 24) \
+                    ((int32_t)((char*)(b))[4]) \
+                    | ((int32_t)((char*)(b))[3] << 8) \
+                    | ((int32_t)((char*)(b))[2] << 16) \
+                    | ((int32_t)((char*)(b))[1] << 24) \
                 ) \
                 : (Number32)( \
                     ((int32_t)((char*)(b))[1]) \
@@ -99,14 +129,45 @@ typedef union number_64bit{
 
 #else //__BIG_ENDIAN__
 
-#   define __number16_to_block(n)  (Lineardb){BLOCK_TYPE_NUMBER_16BIT | BLOCK_BYTES_ORDER_BIG_ENDIAN, (char)((n) & 0xff), (char)((n) >> 8 & 0xff)}
-#   define __block_to_number16(b) \
-            (((b)->byte[0] & 0x80) ? (Number32)((b)->byte[1] | (b)->byte[2] << 8) : (Number32)((b)->byte[2] | (b)->byte[1] << 8))
+#   define __number16_to_block(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_NUMBER_16BIT | BLOCK_BYTES_ORDER_BIG_ENDIAN, \
+                (((char*)&(n))[0]), (((char*)&(n))[1]) \
+            }
 
-#   define __number32_to_block(n)  (Lineardb){BLOCK_TYPE_NUMBER_32BIT | BLOCK_BYTES_ORDER_BIG_ENDIAN, \
-            (char)((n) & 0xff), (char)((n) >> 8 & 0xff), (char)(((n) >> 16) & 0xff), (char)(((n) >> 24) & 0xff)}
+#   define __block_to_number16(b) \
+            (((((char*)(b))[0]) & 0x80) \
+                ? (Number32)( \
+                    ((int16_t)((char*)(b))[1]) \
+                    | ((int16_t)((char*)(b))[2] << 8) \
+                ) \
+                : (Number32)( \
+                    ((int16_t)((char*)(b))[2]) \
+                    | ((int16_t)((char*)(b))[1] << 8) \
+                ) \
+			)
+
+#   define __number32_to_block(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_NUMBER_32BIT | BLOCK_BYTES_ORDER_BIG_ENDIAN, \
+                (((char*)&(n))[0]), (((char*)&(n))[1]), (((char*)&(n))[2]), (((char*)&(n))[3]) \
+            }
+
 #   define __block_to_number32(b) \
-            (((b)->byte[0] & 0x80) ? (Number64)((b)->byte[1] | (b)->byte[2] << 8 | (b)->byte[3] << 16 | (b)->byte[4] << 24) : (Number64)((b)->byte[4] | (b)->byte[3] << 8 | (b)->byte[2] << 16 | (b)->byte[1] << 24))
+            (((((char*)(b))[0]) & 0x80) \
+                ? (Number32)( \
+                    ((int32_t)((char*)(b))[1]) \
+                    | ((int32_t)((char*)(b))[2] << 8) \
+                    | ((int32_t)((char*)(b))[3] << 16) \
+                    | ((int32_t)((char*)(b))[4] << 24) \
+                ) \
+                : (Number32)( \
+                    ((int32_t)((char*)(b))[4]) \
+                    | ((int32_t)((char*)(b))[3] << 8) \
+                    | ((int32_t)((char*)(b))[2] << 16) \
+                    | ((int32_t)((char*)(b))[1] << 24) \
+                ) \
+			)
 
 #   define __number64_to_block(n) \
             (Lineardb){ \
@@ -139,15 +200,15 @@ typedef union number_64bit{
                 ) \
 			)
 
-#endif
+#endif //__LITTLE_ENDIAN__
 
 
-#define __block_size(b)     \
-            ((b)->byte[0] & (~0x80)) > 8 ? (((b)->byte[0] & (~0x80)) == BLOCK_TYPE_STRING_8BIT) \
-			: (((b)->byte[0] & (~0x80)) == BLOCK_TYPE_STRING_8BIT) ? ((b)->byte[1] + 1) \
-            : (((b)->byte[0] & (~0x80)) == BLOCK_TYPE_STRING_16BIT) ? ((__block_to_number16(b)).u + 1) \
-            : (((b)->byte[0] & (~0x80)) == BLOCK_TYPE_STRING_32BIT) ? ((__block_to_number32(b)).u + 1) \
-            : ((b)->byte[0] + 1)
+#define __block_size(b) \
+            (((char*)(b))[0] & (~0x80)) > 8 \
+            ? ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_8BIT) ? (((char*)(b))[1] + 2) \
+            : ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_16BIT) ? ((__block_to_number16(b)).u + 3) \
+            : ((__block_to_number32(b)).u + 5) \
+            : (((char*)(b))[0] + 1)
 
 
 #endif
