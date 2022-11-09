@@ -82,12 +82,32 @@ int test_lineardb()
 
 	float fn32, fi32 = 1234.5678f;
 	block = __number32_to_block(fi32);
-	__block_to_float32(b, fn32);
+	fn32 = __block_to_float32(b);
 
 	size =	__block_size(b);
 
-	fprintf(stdout, "size ===== %u\n", size);
+	if (fn32 == fi32){
+		fprintf(stdout, "size ===== %u\n", size);
+	}
 	fprintf(stdout, "%f %f %x %x %x %x\n", fi32, fn32, b->byte[1], b->byte[2], b->byte[3], b->byte[4]);
+
+	double fn64, fi64 = 7654321.1234567f;
+	block = __number64_to_block(fi64);
+	fn64 = __block_to_float64(b);
+
+	size =	__block_size(b);
+
+	if (fn64 == fi64){
+		fprintf(stdout, "size ===== %u\n", size);
+	}
+	fprintf(stdout, "%.5llf %.5llf %x %x %x %x %x %x %x %x\n", fi64, fn64, b->byte[1], b->byte[2], b->byte[3], b->byte[4], b->byte[5], b->byte[6], b->byte[7], b->byte[8]);
+
+	b = string2block("Hello World");
+
+	size =	__block_size(b);
+	fprintf(stdout, "size ===== %u\n", size);
+	fprintf(stdout, "byte ===== %s\n", __block_byte(b));
+	fprintf(stdout, "byte ===== %s\n", __block_byte(b));
 
 	return 0;
 }
