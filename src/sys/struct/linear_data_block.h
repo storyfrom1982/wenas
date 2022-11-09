@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 enum {
+    BLOCK_TYPE_OBJECT = 0x00,
     BLOCK_TYPE_NUMBER_8BIT = 0x01,
     BLOCK_TYPE_NUMBER_16BIT = 0x02,
     BLOCK_TYPE_NUMBER_32BIT = 0x04,
@@ -309,6 +310,8 @@ static inline Lineardb* string2block(const char *s)
             ? ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_8BIT) ? (((char*)(b))[1] + 2) \
             : ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_16BIT) ? ((__block_to_number16(b)).u + 3) \
             : ((__block_to_number32(b)).u + 5) \
+            : (((char*)(b))[0] & (~0x80)) == 0 \
+            ? ((__block_to_number32(b)).u + 5) \
             : (((char*)(b))[0] + 1)
 
 #define __block_byte(b) \
@@ -316,6 +319,8 @@ static inline Lineardb* string2block(const char *s)
             ? ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_8BIT) ? &(((char*)(b))[2]) \
             : ((((char*)(b))[0] & (~0x80)) == BLOCK_TYPE_STRING_16BIT) ? &(((char*)(b))[3]) \
             : &(((char*)(b))[5]) \
+            : (((char*)(b))[0] & (~0x80)) == 0 \
+            ? &(((char*)(b))[5]) \
             : &(((char*)(b))[1])
 
 
