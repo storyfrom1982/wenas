@@ -8,29 +8,30 @@ int test_linearkv()
 	Linearkv *lkv = linearkv_create(1024 * 1024);
 	Lineardb *key, *v, value, *b = &value;
 	char buf[1024] = {0};
+	char value_buf[1024] = {0};
 	int32_t n;
+	Number32 n32;
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(buf, 1024, "hello world %d", i);
-		key = bytes2block(buf, n);
-		n = (int32_t)rand();
-		// fprintf(stdout, "%d n= %d\n", i, n);
-		value = __number32_to_block(n);
-		// fprintf(stdout, "%d b= %d\n", i, __block_to_number32(b).i);
-		linearkv_append(lkv, key, &value);
-		free(key);
+		n = snprintf(value_buf, 1024, "hello world %d", rand());
+		// n = rand();
+		// fprintf(stdout, "key = %s value = %s\n", buf, value_buf);
+		linearkv_append_string(lkv, buf, value_buf);
+		// linearkv_append_int32(lkv, buf, n);
 	}
 
 	for (int k = 0; k < 100; ++k){
 		n = snprintf(buf, 1024, "hello world %d", k);
-		key = bytes2block(buf, n);
+		key = string2block(buf);
+		// fprintf(stdout, "key... = %s\n", buf);
 		v = linearkv_find(lkv, key);
+		// v = linearkv_find_string(lkv, buf);
 		free(key);
 		if (v){
-			fprintf(stdout, "key %s -> value %d\n", __block_byte(key), __block_to_number32(v).i);
+			fprintf(stdout, "key %s -> value %s\n", __block_byte(key), __block_byte(v));
+			// fprintf(stdout, "key %s -> value %d\n", __block_byte(key), __block_to_number32(v).i);
 		}
 	}
-
-	fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0"));
 
 	return 0;
 }

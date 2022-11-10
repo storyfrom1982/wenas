@@ -265,9 +265,8 @@ static inline float __block_to_float64(Lineardb *b)
 #include <string.h>
 #include <stdlib.h>
 
-static inline Lineardb* bytes2block(const char *b, uint32_t s)
+static inline Lineardb* bytes2block(Lineardb *db, const char *b, uint32_t s)
 {
-    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + s);
     if (s < 0x100){
         db->byte[0] = BLOCK_TYPE_STRING_8BIT;
 #ifdef __BIG_ENDIAN__
@@ -304,7 +303,9 @@ static inline Lineardb* string2block(const char *s)
 {
     // fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0")); 
     // output strlen(1) = 1
-    return bytes2block(s, strlen(s) + 1);
+    size_t l = strlen(s) + 1;
+    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l);
+    return bytes2block(db, s, l);
 }
 
 #define __block_size(b) \
