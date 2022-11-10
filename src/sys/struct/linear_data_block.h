@@ -45,12 +45,12 @@ typedef union number_64bit{
 #   define __block_to_number16(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number32)( \
-                    ((int16_t)((char*)(b))[2]) \
-                    | ((int16_t)((char*)(b))[1] << 8) \
+                    ((int16_t)((char*)(b))[2] & 0xff) \
+                    | ((int16_t)((char*)(b))[1] << 8 & 0xff00) \
                 ) \
                 : (Number32)( \
-                    ((int16_t)((char*)(b))[1]) \
-                    | ((int16_t)((char*)(b))[2] << 8) \
+                    ((int16_t)((char*)(b))[1] & 0xff) \
+                    | ((int16_t)((char*)(b))[2] << 8 & 0xff00) \
                 ) \
 			)
 
@@ -63,16 +63,16 @@ typedef union number_64bit{
 #   define __block_to_number32(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number32)( \
-                    ((int32_t)((char*)(b))[4]) \
-                    | ((int32_t)((char*)(b))[3] << 8) \
-                    | ((int32_t)((char*)(b))[2] << 16) \
-                    | ((int32_t)((char*)(b))[1] << 24) \
+                    ((int32_t)((char*)(b))[4] & 0xff) \
+                    | ((int32_t)((char*)(b))[3] << 8 & 0xff00) \
+                    | ((int32_t)((char*)(b))[2] << 16 & 0xff0000) \
+                    | ((int32_t)((char*)(b))[1] << 24 & 0xff000000) \
                 ) \
                 : (Number32)( \
-                    ((int32_t)((char*)(b))[1]) \
-                    | ((int32_t)((char*)(b))[2] << 8) \
-                    | ((int32_t)((char*)(b))[3] << 16) \
-                    | ((int32_t)((char*)(b))[4] << 24) \
+                    ((int32_t)((char*)(b))[1] & 0xff) \
+                    | ((int32_t)((char*)(b))[2] << 8 & 0xff00) \
+                    | ((int32_t)((char*)(b))[3] << 16 & 0xff0000) \
+                    | ((int32_t)((char*)(b))[4] << 24 & 0xff000000) \
                 ) \
 			)
 
@@ -86,24 +86,24 @@ typedef union number_64bit{
 #   define __block_to_number64(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number64)( \
-                    ((int64_t)((char*)(b))[8]) \
-                    | ((int64_t)((char*)(b))[7] << 8) \
-                    | ((int64_t)((char*)(b))[6] << 16) \
-                    | ((int64_t)((char*)(b))[5] << 24) \
-                    | ((int64_t)((char*)(b))[4] << 32) \
-                    | ((int64_t)((char*)(b))[3] << 40) \
-                    | ((int64_t)((char*)(b))[2] << 48) \
-                    | ((int64_t)((char*)(b))[1] << 56) \
+                    ((int64_t)((char*)(b))[8] & 0xff) \
+                    | ((int64_t)((char*)(b))[7] << 8 & 0xff00) \
+                    | ((int64_t)((char*)(b))[6] << 16 & 0xff0000) \
+                    | ((int64_t)((char*)(b))[5] << 24 & 0xff000000) \
+                    | ((int64_t)((char*)(b))[4] << 32 & 0xff00000000) \
+                    | ((int64_t)((char*)(b))[3] << 40 & 0xff0000000000) \
+                    | ((int64_t)((char*)(b))[2] << 48 & 0xff000000000000) \
+                    | ((int64_t)((char*)(b))[1] << 56 & 0xff00000000000000) \
                 ) \
                 : (Number64)( \
-                    ((int64_t)((char*)(b))[1]) \
-                    | ((int64_t)((char*)(b))[2] << 8) \
-                    | ((int64_t)((char*)(b))[3] << 16) \
-                    | ((int64_t)((char*)(b))[4] << 24) \
-                    | ((int64_t)((char*)(b))[5] << 32) \
-                    | ((int64_t)((char*)(b))[6] << 40) \
-                    | ((int64_t)((char*)(b))[7] << 48) \
-                    | ((int64_t)((char*)(b))[8] << 56) \
+                    ((int64_t)((char*)(b))[1] & 0xff) \
+                    | ((int64_t)((char*)(b))[2] << 8 & 0xff00) \
+                    | ((int64_t)((char*)(b))[3] << 16 & 0xff0000) \
+                    | ((int64_t)((char*)(b))[4] << 24 & 0xff000000) \
+                    | ((int64_t)((char*)(b))[5] << 32 & 0xff00000000) \
+                    | ((int64_t)((char*)(b))[6] << 40 & 0xff0000000000) \
+                    | ((int64_t)((char*)(b))[7] << 48 & 0xff000000000000) \
+                    | ((int64_t)((char*)(b))[8] << 56 & 0xff00000000000000) \
                 ) \
 			)
 
@@ -118,12 +118,12 @@ typedef union number_64bit{
 #   define __block_to_number16(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number32)( \
-                    ((int16_t)((char*)(b))[1]) \
-                    | ((int16_t)((char*)(b))[2] << 8) \
+                    ((int16_t)((char*)(b))[1] & 0xff) \
+                    | ((int16_t)((char*)(b))[2] << 8 & 0xff00) \
                 ) \
                 : (Number32)( \
-                    ((int16_t)((char*)(b))[2]) \
-                    | ((int16_t)((char*)(b))[1] << 8) \
+                    ((int16_t)((char*)(b))[2] & 0xff) \
+                    | ((int16_t)((char*)(b))[1] << 8 & 0xff00) \
                 ) \
 			)
 
@@ -136,16 +136,16 @@ typedef union number_64bit{
 #   define __block_to_number32(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number32)( \
-                    ((int32_t)((char*)(b))[1]) \
-                    | ((int32_t)((char*)(b))[2] << 8) \
-                    | ((int32_t)((char*)(b))[3] << 16) \
-                    | ((int32_t)((char*)(b))[4] << 24) \
+                    ((int32_t)((char*)(b))[1] & 0xff) \
+                    | ((int32_t)((char*)(b))[2] << 8 & 0xff00) \
+                    | ((int32_t)((char*)(b))[3] << 16 & 0xff0000) \
+                    | ((int32_t)((char*)(b))[4] << 24 & 0xff000000) \
                 ) \
                 : (Number32)( \
-                    ((int32_t)((char*)(b))[4]) \
-                    | ((int32_t)((char*)(b))[3] << 8) \
-                    | ((int32_t)((char*)(b))[2] << 16) \
-                    | ((int32_t)((char*)(b))[1] << 24) \
+                    ((int32_t)((char*)(b))[4] & 0xff) \
+                    | ((int32_t)((char*)(b))[3] << 8 & 0xff00) \
+                    | ((int32_t)((char*)(b))[2] << 16 & 0xff0000) \
+                    | ((int32_t)((char*)(b))[1] << 24 & 0xff000000) \
                 ) \
 			)
 
@@ -159,24 +159,24 @@ typedef union number_64bit{
 #   define __block_to_number64(b) \
             (((((char*)(b))[0]) & 0x80) \
                 ? (Number64)( \
-                    ((int64_t)((char*)(b))[1]) \
-                    | ((int64_t)((char*)(b))[2] << 8) \
-                    | ((int64_t)((char*)(b))[3] << 16) \
-                    | ((int64_t)((char*)(b))[4] << 24) \
-                    | ((int64_t)((char*)(b))[5] << 32) \
-                    | ((int64_t)((char*)(b))[6] << 40) \
-                    | ((int64_t)((char*)(b))[7] << 48) \
-                    | ((int64_t)((char*)(b))[8] << 56) \
+                    ((int64_t)((char*)(b))[1] & 0xff) \
+                    | ((int64_t)((char*)(b))[2] << 8 & 0xff00) \
+                    | ((int64_t)((char*)(b))[3] << 16 & 0xff0000) \
+                    | ((int64_t)((char*)(b))[4] << 24 & 0xff000000) \
+                    | ((int64_t)((char*)(b))[5] << 32 & 0xff00000000) \
+                    | ((int64_t)((char*)(b))[6] << 40 & 0xff0000000000) \
+                    | ((int64_t)((char*)(b))[7] << 48 & 0xff000000000000) \
+                    | ((int64_t)((char*)(b))[8] << 56 & 0xff00000000000000) \
                 ) \
                 : (Number64)( \
-                    ((int64_t)((char*)(b))[8]) \
-                    | ((int64_t)((char*)(b))[7] << 8) \
-                    | ((int64_t)((char*)(b))[6] << 16) \
-                    | ((int64_t)((char*)(b))[5] << 24) \
-                    | ((int64_t)((char*)(b))[4] << 32) \
-                    | ((int64_t)((char*)(b))[3] << 40) \
-                    | ((int64_t)((char*)(b))[2] << 48) \
-                    | ((int64_t)((char*)(b))[1] << 56) \
+                    ((int64_t)((char*)(b))[8] & 0xff) \
+                    | ((int64_t)((char*)(b))[7] << 8 & 0xff00) \
+                    | ((int64_t)((char*)(b))[6] << 16 & 0xff0000) \
+                    | ((int64_t)((char*)(b))[5] << 24 & 0xff000000) \
+                    | ((int64_t)((char*)(b))[4] << 32 & 0xff00000000) \
+                    | ((int64_t)((char*)(b))[3] << 40 & 0xff0000000000) \
+                    | ((int64_t)((char*)(b))[2] << 48 & 0xff000000000000) \
+                    | ((int64_t)((char*)(b))[1] << 56 & 0xff00000000000000) \
                 ) \
 			)
 
@@ -302,7 +302,9 @@ static inline Lineardb* bytes2block(const char *b, uint32_t s)
 
 static inline Lineardb* string2block(const char *s)
 {
-    return bytes2block(s, strlen(s));
+    // fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0")); 
+    // output strlen(1) = 1
+    return bytes2block(s, strlen(s) + 1);
 }
 
 #define __block_size(b) \
@@ -322,6 +324,8 @@ static inline Lineardb* string2block(const char *s)
             : (((char*)(b))[0] & (~0x80)) == 0 \
             ? &(((char*)(b))[5]) \
             : &(((char*)(b))[1])
+
+#define __block_head_size(b)    ((__block_byte(b)) - (char*)(b))
 
 
 

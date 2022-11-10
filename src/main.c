@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 extern int test_lineardb();
+extern int test_linearkv();
 
 int main(int argc, char *argv[]) 
 {
@@ -11,7 +12,8 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "__BIG_ENDIAN__\n");
 #endif
 
-	test_lineardb();
+	// test_lineardb();
+	test_linearkv();
 
 	return 0;
 }

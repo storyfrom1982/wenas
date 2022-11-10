@@ -1,6 +1,39 @@
 #include "linear_data_block.h"
+#include "linear_key_value.h"
 
 #include <stdio.h>
+
+int test_linearkv()
+{
+	Linearkv *lkv = linearkv_create(1024 * 1024);
+	Lineardb *key, *v, value, *b = &value;
+	char buf[1024] = {0};
+	int32_t n;
+	for (int i = 0; i < 100; ++i){
+		n = snprintf(buf, 1024, "hello world %d", i);
+		key = bytes2block(buf, n);
+		n = (int32_t)rand();
+		// fprintf(stdout, "%d n= %d\n", i, n);
+		value = __number32_to_block(n);
+		// fprintf(stdout, "%d b= %d\n", i, __block_to_number32(b).i);
+		linearkv_append(lkv, key, &value);
+		free(key);
+	}
+
+	for (int k = 0; k < 100; ++k){
+		n = snprintf(buf, 1024, "hello world %d", k);
+		key = bytes2block(buf, n);
+		v = linearkv_find(lkv, key);
+		free(key);
+		if (v){
+			fprintf(stdout, "key %s -> value %d\n", __block_byte(key), __block_to_number32(v).i);
+		}
+	}
+
+	fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0"));
+
+	return 0;
+}
 
 int test_lineardb()
 {
@@ -70,15 +103,23 @@ int test_lineardb()
 	fprintf(stdout, "size ===== %u\n", size);
 	fprintf(stdout, "%x %x %x %x %x %x\n", i32, n32, b->byte[1], b->byte[2], b->byte[3], b->byte[4]);
 
-	int64_t n64, n = 0x1a1b1c1d1a1b1c1d;
-	block = __number64_to_block(n);
+	int64_t n64, i64 = 0x1a1b1c1d1a1b1c1d;
+	block = __number64_to_block(i64);
 	n64 = __block_to_number64(b).i;
 
 	size =	__block_size(b);
 
 	fprintf(stdout, "size ===== %u\n", size);
-	fprintf(stdout, "%lx %lx %x %x %x %x %x %x %x %x\n", n, n64, b->byte[1], b->byte[2], b->byte[3], b->byte[4], b->byte[5], b->byte[6], b->byte[7], b->byte[8]);
+	fprintf(stdout, "%lx %lx %x %x %x %x %x %x %x %x\n", i64, n64, b->byte[1], b->byte[2], b->byte[3], b->byte[4], b->byte[5], b->byte[6], b->byte[7], b->byte[8]);
 
+	i64 = 123456789;
+	block = __number64_to_block(i64);
+	n64 = __block_to_number64(b).i;
+
+	size =	__block_size(b);
+
+	fprintf(stdout, "size ===== %u\n", size);
+	fprintf(stdout, "%ld %ld %x %x %x %x %x %x %x %x\n", i64, n64, b->byte[1], b->byte[2], b->byte[3], b->byte[4], b->byte[5], b->byte[6], b->byte[7], b->byte[8]);
 
 	float fn32, fi32 = 1234.5678f;
 	block = __number32_to_block(fi32);
