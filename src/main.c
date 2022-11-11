@@ -1,7 +1,8 @@
 #include <stdio.h>
 
-extern int test_lineardb();
-extern int test_linearkv();
+// extern int test_lineardb();
+// extern int test_linearkv();
+extern void lineardb_test();
 
 int main(int argc, char *argv[]) 
 {
@@ -13,7 +14,8 @@ int main(int argc, char *argv[])
 #endif
 
 	// test_lineardb();
-	test_linearkv();
+	// test_linearkv();
+	lineardb_test();
 
 	return 0;
 }
