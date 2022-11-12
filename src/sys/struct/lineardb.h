@@ -4,18 +4,17 @@
 
 #include <stdint.h>
 
-#define BLOCK_HEAD_MASK     0x03
+#define BLOCK_HEAD_MASK     0x0f
 
 enum {
-    BLOCK_TYPE_8BIT = 0x00,
-    BLOCK_TYPE_16BIT = 0x01,
-    BLOCK_TYPE_32BIT = 0x02,
-    BLOCK_TYPE_64BIT = 0x03,
-    BLOCK_TYPE_BIGENDIAN = 0x08,
-    BLOCK_TYPE_UINT = 0x10,
+    BLOCK_TYPE_8BIT = 0x01,
+    BLOCK_TYPE_16BIT = 0x02,
+    BLOCK_TYPE_32BIT = 0x04,
+    BLOCK_TYPE_64BIT = 0x08,
+    BLOCK_TYPE_BIGENDIAN = 0x10,
     BLOCK_TYPE_FLOAT = 0x20,
     BLOCK_TYPE_ARRAY = 0x40,
-    BLOCK_TYPE_OBJECT = 0x80,
+    BLOCK_TYPE_OBJECT = 0x80
 };
 
 #define BLOCK_HEAD      16
@@ -191,13 +190,13 @@ static inline Lineardb* string2block(const char *s)
     return bytes2block(db, s, l);
 }
 
-#define __sizeof_head(b)   (1 + (1 << (((b)->byte[0]) & BLOCK_HEAD_MASK)))
+#define __sizeof_head(b)   (1 + (((b)->byte[0]) & BLOCK_HEAD_MASK))
 
 #define __sizeof_block(b) \
         ( __sizeof_head(b) + \
         ( (((b)->byte[0]) & BLOCK_TYPE_OBJECT) \
-        ? (((b)->byte[0] & BLOCK_TYPE_32BIT)) ? (__b2n32(b)) \
-        : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : ((b)->byte[1]) \
+        ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? ((b)->byte[1]) \
+        : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
         : 0 ))
 
 #define __byteof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
