@@ -3,46 +3,82 @@
 
 static void test_byte_order()
 {
-    uint16_t little16=0x1a1b, big16=0x1b1a;
-    uint32_t little32=0x1a1b1c1d, big32=0x1d1c1b1a, *pnumber;
-    uint32_t little_number;
-    char byte[4];
+    //  大端字节序
+    //  地址增长方向  →
+    //	0x0A	0x0B	0x0C	0x0D
+    //  示例中，最高位字节是0x0A 存储在最低的内存地址处。下一个字节0x0B存在后面的地址处。正类似于十六进制字节从左到右的阅读顺序。
 
-    pnumber = (uint32_t*)byte;
-    byte[0] = little32 & 0xff;
-    byte[1] = little32 >> 8 & 0xff;
-    byte[2] = little32 >> 16 & 0xff;
-    byte[3] = little32 >> 24 & 0xff;
-    // byte[3] = little32 & 0xff;
-    // byte[2] = little32 >> 8 & 0xff;
-    // byte[1] = little32 >> 16 & 0xff;
-    // byte[0] = little32 >> 24 & 0xff;
-    little_number = byte[3] << 24 | byte[2] << 16 | byte[1] << 8 | byte[0];
-    fprintf(stdout, "little32 byte[0]= %x %x %x  %x %x %x %x\n", little32, *pnumber, little_number, byte[0], byte[1], byte[2], byte[3]);
+    //  小端字节序
+    //  地址增长方向  →
+    //  0x0D	0x0C	0x0B	0x0A
+    //  最低位字节是0x0D 存储在最低的内存地址处。后面字节依次存在后面的地址处。
 
-    *pnumber = big32;
-    // fprintf(stdout, "big32 byte[0]= %x      %x %x %x %x\n", big32, byte[0], byte[1], byte[2], byte[3]);
+    uint32_t little_number=0x1a1b1c1d, big_number, swap_number;
+    char byte[4], swap_byte[4];
 
-    little32 = little16;
-    byte[0] = little32 & 0xff;
-    byte[1] = little32 >> 8 & 0xff;
-    byte[2] = little32 >> 16 & 0xff;
-    byte[3] = little32 >> 24 & 0xff;
-    // *pnumber &= 0x0000ffff;
-    fprintf(stdout, "little16 byte[0]= %x %x        %x %x %x %x\n", little16, *pnumber, byte[0], byte[1], byte[2], byte[3]);
+    byte[0] = little_number & 0xff;
+    byte[1] = little_number >> 8 & 0xff;
+    byte[2] = little_number >> 16 & 0xff;
+    byte[3] = little_number >> 24 & 0xff;
+    swap_number = byte[3] << 24 | byte[2] << 16 | byte[1] << 8 | byte[0];
+    fprintf(stdout, "bit shift: little to little => little number= %x swap number= %x byte= %x %x %x %x\n",
+        little_number, swap_number, byte[0], byte[1], byte[2], byte[3]);
 
-    // big32 = big16;
-    // *pnumber = big32;
-    // fprintf(stdout, "big16 byte[0]= %x      %x %x %x %x\n", big16, byte[0], byte[1], byte[2], byte[3]);
+    fprintf(stdout, "==================================\n");
+    
+    swap_byte[0] = ((char*)&little_number)[0];
+    swap_byte[1] = ((char*)&little_number)[1];
+    swap_byte[2] = ((char*)&little_number)[2];
+    swap_byte[3] = ((char*)&little_number)[3];
+    swap_number = swap_byte[3] << 24 | swap_byte[2] << 16 | swap_byte[1] << 8 | swap_byte[0];
+    fprintf(stdout, "swap byte: little to little => little number= %x swap number= %x byte= %x %x %x %x\n",
+        little_number, swap_number, swap_byte[0],  swap_byte[1], swap_byte[2], swap_byte[3]);
 
-    *pnumber &= 0x0000ffff;
-    fprintf(stdout, "big16 byte[0]= %x %x           %x %x %x %x\n", big16, *pnumber, byte[0], byte[1], byte[2], byte[3]);
+    fprintf(stdout, "==================================\n");
 
+    // little to big => swap byte
+    swap_byte[0] = byte[3];
+    swap_byte[1] = byte[2];
+    swap_byte[2] = byte[1];
+    swap_byte[3] = byte[0];
 
-    // Lineardb *ldb = (Lineardb *)malloc(BLOCK_HEAD + 0x1a1b);
-    // char *bytes = (char*)malloc(0x1a1b);
-    // bytes2block(ldb, bytes, 0x1a1b);
-    // fprintf(stdout, "block size = %x\n",  __sizeof_block(ldb));
+    // 小端的byte[3]存储的是0x1a //大端的byte[3]存储的是0x1d，
+    // 所以同样左移24位，小端的高位地址存储的是数字高位，大端的高位地址存储的是数字的低位
+    big_number = swap_byte[3] << 24 | swap_byte[2] << 16 | swap_byte[1] << 8 | swap_byte[0];
+    fprintf(stdout, "swap byte: little to big => little number=%x byte[]= %x %x %x %x\n", little_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
+    fprintf(stdout, "swap byte: little to big => little number=%x big number=%x\n", little_number, big_number);
+
+    fprintf(stdout, "==================================\n");
+
+    // little to big => bit shift
+    swap_byte[0] = little_number >> 24 & 0xff;
+    swap_byte[1] = little_number >> 16 & 0xff;
+    swap_byte[2] = little_number >> 8 & 0xff;
+    swap_byte[3] = little_number & 0xff;
+    big_number = swap_byte[3] << 24 | swap_byte[2] << 16 | swap_byte[1] << 8 | swap_byte[0];
+    fprintf(stdout, "bit shift: little to big => little number= %x byte[]= %x %x %x %x\n", little_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
+    fprintf(stdout, "swap byte: little to big => little number=%x big number=%x\n", little_number, big_number);
+
+    fprintf(stdout, "==================================\n");
+
+    // big to byte => swap_byte
+    swap_byte[0] = ((char*)&big_number)[0];
+    swap_byte[1] = ((char*)&big_number)[1];
+    swap_byte[2] = ((char*)&big_number)[2];
+    swap_byte[3] = ((char*)&big_number)[3];
+    fprintf(stdout, "bit shift: big to byte => big number= %x byte[]= %x %x %x %x\n", big_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
+    little_number = swap_byte[0] << 24 | swap_byte[1] << 16 | swap_byte[2] << 8 | swap_byte[3];
+    fprintf(stdout, "bit shift: big to little => little number=%x big number=%x\n", little_number, big_number);
+
+    fprintf(stdout, "==================================\n");
+
+    swap_byte[0] = big_number & 0xff;
+    swap_byte[1] = big_number >> 8 & 0xff;
+    swap_byte[2] = big_number >> 16 & 0xff;
+    swap_byte[3] = big_number >> 24 & 0xff;
+    fprintf(stdout, "bit shift: big to byte => big number= %x byte[]= %x %x %x %x\n", big_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
+    little_number = swap_byte[0] << 24 | swap_byte[1] << 16 | swap_byte[2] << 8 | swap_byte[3];
+    fprintf(stdout, "bit shift: big to little => big number=%x little number=%x\n", big_number, little_number);
 }
 
 static void number16_to_ldb()
@@ -129,7 +165,7 @@ static void string_to_ldb()
 
 void lineardb_test()
 {
-    // test_byte_order();
+    test_byte_order();
     number16_to_ldb();
     number32_to_ldb();
     number64_to_ldb();

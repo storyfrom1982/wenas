@@ -24,6 +24,14 @@ typedef struct linear_data_block {
 }Lineardb;
 
 #ifdef __LITTLE_ENDIAN__
+
+#   define __n2b8(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_8BIT, \
+                (((char*)&(n))[0]) \
+            }
+#   define __b2n8(b)    ((b)->byte[1])
+
 #   define __n2b16(n) \
             (Lineardb){ \
                 BLOCK_TYPE_16BIT, \
@@ -85,8 +93,8 @@ typedef struct linear_data_block {
             }
 #   define __b2n16(b) \
             (((b)->byte[0] & BLOCK_TYPE_BIGENDIAN) \
-                ? ((b)->byte[1] << 8 | (b)->byte[2]) \
-                : ((b)->byte[2] << 8 | (b)->byte[1]) \
+                ? ((b)->byte[2] << 8 | (b)->byte[1]) \
+                : ((b)->byte[1] << 8 | (b)->byte[2]) \
 			)       
 
 #   define __n2b32(n) \
@@ -98,8 +106,8 @@ typedef struct linear_data_block {
 
 #   define __b2n32(b) \
             ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
-                ? ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
-                : ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
+                ? ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
+                : ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
 			)
 
 #   define __n2b64(n) \
@@ -195,7 +203,7 @@ static inline Lineardb* string2block(const char *s)
 #define __sizeof_block(b) \
         ( __sizeof_head(b) + \
         ( (((b)->byte[0]) & BLOCK_TYPE_OBJECT) \
-        ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? ((b)->byte[1]) \
+        ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? __b2n8(b) \
         : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
         : 0 ))
 
