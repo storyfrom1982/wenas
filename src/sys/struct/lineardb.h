@@ -23,14 +23,14 @@ typedef struct linear_data_block {
     unsigned char byte[BLOCK_HEAD];
 }Lineardb;
 
-#ifdef __LITTLE_ENDIAN__
+#define __n2b8(n) \
+        (Lineardb){ \
+            BLOCK_TYPE_8BIT, \
+            (((char*)&(n))[0]) \
+        }
+#define __b2n8(b)    ((b)->byte[1])
 
-#   define __n2b8(n) \
-            (Lineardb){ \
-                BLOCK_TYPE_8BIT, \
-                (((char*)&(n))[0]) \
-            }
-#   define __b2n8(b)    ((b)->byte[1])
+#ifdef __LITTLE_ENDIAN__
 
 #   define __n2b16(n) \
             (Lineardb){ \
@@ -140,6 +140,84 @@ typedef struct linear_data_block {
 			)
 
 #endif //__LITTLE_ENDIAN__
+
+static inline float __b2f32(Lineardb *b)
+{
+    float f;
+#ifdef __LITTLE_ENDIAN__
+    if ((((char*)(b))[0]) & 0x80) {
+        ((char*)&(f))[0] = ((char*)(b))[4];
+        ((char*)&(f))[1] = ((char*)(b))[3];
+        ((char*)&(f))[2] = ((char*)(b))[2];
+        ((char*)&(f))[3] = ((char*)(b))[1];
+    } else {
+        ((char*)&(f))[0] = ((char*)(b))[1];
+        ((char*)&(f))[1] = ((char*)(b))[2];
+        ((char*)&(f))[2] = ((char*)(b))[3];
+        ((char*)&(f))[3] = ((char*)(b))[4];
+    }
+#else    
+    if ((((char*)(b))[0]) & 0x80) {
+        ((char*)&(f))[0] = ((char*)(b))[1];
+        ((char*)&(f))[1] = ((char*)(b))[2];
+        ((char*)&(f))[2] = ((char*)(b))[3];
+        ((char*)&(f))[3] = ((char*)(b))[4];
+    } else {
+        ((char*)&(f))[0] = ((char*)(b))[4];
+        ((char*)&(f))[1] = ((char*)(b))[3];
+        ((char*)&(f))[2] = ((char*)(b))[2];
+        ((char*)&(f))[3] = ((char*)(b))[1];
+    }
+#endif
+    return f;
+}
+
+static inline float __b2f64(Lineardb *b)
+{
+    double f;
+#ifdef __LITTLE_ENDIAN__
+    if ((((char*)(b))[0]) & 0x80) {
+        ((char*)&(f))[0] = ((char*)(b))[8];
+        ((char*)&(f))[1] = ((char*)(b))[7];
+        ((char*)&(f))[2] = ((char*)(b))[6];
+        ((char*)&(f))[3] = ((char*)(b))[5];
+        ((char*)&(f))[4] = ((char*)(b))[4];
+        ((char*)&(f))[5] = ((char*)(b))[3];
+        ((char*)&(f))[6] = ((char*)(b))[2];
+        ((char*)&(f))[7] = ((char*)(b))[1];
+    } else {
+        ((char*)&(f))[0] = ((char*)(b))[1];
+        ((char*)&(f))[1] = ((char*)(b))[2];
+        ((char*)&(f))[2] = ((char*)(b))[3];
+        ((char*)&(f))[3] = ((char*)(b))[4];
+        ((char*)&(f))[4] = ((char*)(b))[5];
+        ((char*)&(f))[5] = ((char*)(b))[6];
+        ((char*)&(f))[6] = ((char*)(b))[7];
+        ((char*)&(f))[7] = ((char*)(b))[8];
+    }
+#else    
+    if ((((char*)(b))[0]) & 0x80) {
+        ((char*)&(f))[0] = ((char*)(b))[1];
+        ((char*)&(f))[1] = ((char*)(b))[2];
+        ((char*)&(f))[2] = ((char*)(b))[3];
+        ((char*)&(f))[3] = ((char*)(b))[4];
+        ((char*)&(f))[4] = ((char*)(b))[5];
+        ((char*)&(f))[5] = ((char*)(b))[6];
+        ((char*)&(f))[6] = ((char*)(b))[7];
+        ((char*)&(f))[7] = ((char*)(b))[8];
+    } else {
+        ((char*)&(f))[0] = ((char*)(b))[8];
+        ((char*)&(f))[1] = ((char*)(b))[7];
+        ((char*)&(f))[2] = ((char*)(b))[6];
+        ((char*)&(f))[3] = ((char*)(b))[5];
+        ((char*)&(f))[4] = ((char*)(b))[4];
+        ((char*)&(f))[5] = ((char*)(b))[3];
+        ((char*)&(f))[6] = ((char*)(b))[2];
+        ((char*)&(f))[7] = ((char*)(b))[1];
+    }
+#endif
+    return f;
+}
 
 
 #include <stdio.h>

@@ -163,6 +163,20 @@ static void string_to_ldb()
 }
 
 
+static void float_to_ldb()
+{
+    float f32 = 12345.12345f, fn32;
+    Lineardb ldb = __n2b32(f32);
+    fn32 = __b2f32(&ldb);
+    fprintf(stdout, "float=%f ldb=%f\n", f32, fn32);
+
+    double f64 = 123456.123456f, fn64;
+    ldb = __n2b64(f64);
+    fn64 = __b2f64(&ldb);
+    fprintf(stdout, "double=%lf ldb=%lf\n", f64, fn64);
+}
+
+
 void lineardb_test()
 {
     test_byte_order();
@@ -170,4 +184,5 @@ void lineardb_test()
     number32_to_ldb();
     number64_to_ldb();
     string_to_ldb();
+    float_to_ldb();
 }
