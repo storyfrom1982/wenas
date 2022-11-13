@@ -25,7 +25,7 @@ void linearkv_test()
 	}
 
 	n = snprintf(key_buf, 1024, "1%d", 2);
-    fprintf(stdout, "strlen=%lu n=%lu\n", strlen(key_buf), n);
+    fprintf(stdout, "strlen=%lu n=%u\n", strlen(key_buf), n);
     memcpy(value_buf, key_buf, n);
     value_buf[n] = '\0';
     fprintf(stdout, "memcpy=%s\n", value_buf);

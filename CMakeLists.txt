@@ -24,7 +24,9 @@ set(kzx_sources src/main.c
 )
 
 set(kzx_defines "")
-set(kzx_cflags "")
+# set(kzx_cflags "")
+# set(kzx_cflags "-Wno-format")
+set(kzx_cflags "-Wformat")
 
 add_executable(kang ${kzx_sources})
 target_compile_definitions(kang PRIVATE ${kzx_defines})
