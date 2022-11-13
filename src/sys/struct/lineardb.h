@@ -352,4 +352,16 @@ static inline Lineardb* lineardb_load_string(const char *s)
 #define __byteof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
 
 
+static inline void lineardb_release(Lineardb **pp_ldb)
+{
+    if (pp_ldb && *pp_ldb){
+        Lineardb *ldb = *pp_ldb;
+        *pp_ldb = NULL;
+        if (ldb->byte[0] & BLOCK_TYPE_OBJECT){
+            free(ldb);
+        }
+    }
+}
+
+
 #endif //__LINEARDB_H__
