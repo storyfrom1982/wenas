@@ -73,4 +73,40 @@ static inline Lineardb* linearkv_find(Linearkv *lkv, char *key)
     return NULL;
 }
 
+static inline Lineardb* linearkv_find_from(Linearkv *lkv, Lineardb *from, char *key)
+{
+    uint32_t find_pos = ((from->byte) - (lkv->head->byte) + __sizeof_block(from));
+    // fprintf(stdout, "find pos = %u head pos = %u\n", find_pos, lkv->pos);
+    while (find_pos < lkv->pos) {
+        lkv->key = (LinearKey *)(lkv->head->byte + find_pos);
+        find_pos += (lkv->key->byte[0] + 2);
+        lkv->value = (Lineardb *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+        if (strlen(key) == lkv->key->byte[0]
+            && memcmp(&lkv->key->byte[1], key, lkv->key->byte[0]) == 0){
+            return lkv->value;
+        }
+        find_pos += __sizeof_block(lkv->value);
+    }
+
+    // fprintf(stdout, "find from head =======================>>>>>>>>>>>>>>>>\n");
+    // int i = 0;
+
+    find_pos = 0;
+    do {
+        lkv->key = (LinearKey *)(lkv->head->byte + find_pos);
+        find_pos += (lkv->key->byte[0] + 2);
+        lkv->value = (Lineardb *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+        find_pos += __sizeof_block(lkv->value);
+        // fprintf(stdout, "find count=%d\n", i++);
+        if (strlen(key) == lkv->key->byte[0]
+            && memcmp(&lkv->key->byte[1], key, lkv->key->byte[0]) == 0){
+            return lkv->value;
+        }
+    } while (lkv->value != from);
+    
+
+    return NULL;
+}
+
+
 #endif //__LINEAR_KV__
