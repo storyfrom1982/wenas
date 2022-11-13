@@ -23,14 +23,14 @@ typedef struct linear_data_block {
     unsigned char byte[BLOCK_HEAD];
 }Lineardb;
 
-#define __n2b8(n) \
-        (Lineardb){ \
-            BLOCK_TYPE_8BIT, \
-            (((char*)&(n))[0]) \
-        }
-#define __b2n8(b)    ((b)->byte[1])
-
 #ifdef __LITTLE_ENDIAN__
+
+#define __n2b8(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_8BIT, \
+                (((char*)&(n))[0]) \
+            }
+#define __b2n8(b)    ((b)->byte[1])
 
 #   define __n2b16(n) \
             (Lineardb){ \
@@ -85,6 +85,13 @@ typedef struct linear_data_block {
                 | (b)->byte[1]) \
 			)
 #else //__BIG_ENDIAN__
+
+#define __n2b8(n) \
+            (Lineardb){ \
+                BLOCK_TYPE_8BIT | BLOCK_TYPE_BIGENDIAN, \
+                (((char*)&(n))[0]) \
+            }
+#define __b2n8(b)    ((b)->byte[1])
 
 #   define __n2b16(n) \
             (Lineardb){ \
@@ -224,37 +231,35 @@ static inline float __b2f64(Lineardb *b)
 #include <string.h>
 #include <stdlib.h>
 
-static inline Lineardb* bytes2block(Lineardb *db, const char *b, uint32_t s)
+static inline Lineardb* lineardb_bind_bytes(Lineardb *db, const char *b, uint32_t s)
 {
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
-    db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT;
+        db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT;
 #else
-    db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+        db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
 #endif
         // db->byte[1] = s & 0xff;
         db->byte[1] = ((char*)&s)[0];
         memcpy(&db->byte[2], b, s);
-        db->byte[2 + s] = '\0';
 
     }else if (s < 0x10000){
 #ifdef __LITTLE_ENDIAN__
-    db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT;
+        db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT;
 #else
-    db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+        db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
 #endif        
         // db->byte[1] = s & 0xff;
         // db->byte[2] = s >> 8 & 0xff;
         db->byte[1] = ((char*)&s)[0];
         db->byte[2] = ((char*)&s)[1];
         memcpy(&db->byte[3], b, s);
-        db->byte[3 + s] = '\0';
 
     }else {
 #ifdef __LITTLE_ENDIAN__
-    db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT;
+        db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT;
 #else
-    db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+        db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
 #endif            
         // *(uint32_t*)&db->byte[1] = s;
         db->byte[1] = ((char*)&s)[0];
@@ -262,19 +267,28 @@ static inline Lineardb* bytes2block(Lineardb *db, const char *b, uint32_t s)
         db->byte[3] = ((char*)&s)[2];
         db->byte[4] = ((char*)&s)[3];
         memcpy(&db->byte[5], b, s);
-        db->byte[5 + s] = '\0';
     }
     return db;
 }
 
-static inline Lineardb* string2block(const char *s)
+static inline Lineardb* lineardb_bind_string(Lineardb *db, char *s)
 {
-    // fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0")); 
-    // output strlen(1) = 1
-    size_t l = strlen(s) + 1;
-    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l);
-    return bytes2block(db, s, l);
+    size_t l = strlen(s);
+    lineardb_bind_bytes(db, s, l + 1);
+    db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
 }
+
+static inline Lineardb* lineardb_load_string(const char *s)
+{
+    // fprintf(stdout, "strlen=%lu\n", strlen("1\0\0")); 
+    // output strlen=1
+    size_t l = strlen(s);
+    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l + 1);
+    lineardb_bind_bytes(db, s, l + 1);
+    db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
+    return db;
+}
+
 
 #define __sizeof_head(b)   (1 + (((b)->byte[0]) & BLOCK_HEAD_MASK))
 

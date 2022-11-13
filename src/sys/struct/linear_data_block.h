@@ -265,7 +265,7 @@ static inline float __block_to_float64(Lineardb *b)
 #include <string.h>
 #include <stdlib.h>
 
-static inline Lineardb* bytes2block(Lineardb *db, const char *b, uint32_t s)
+static inline Lineardb* lineardb_bind_bytes(Lineardb *db, const char *b, uint32_t s)
 {
     if (s < 0x100){
         db->byte[0] = BLOCK_TYPE_STRING_8BIT;
@@ -299,13 +299,13 @@ static inline Lineardb* bytes2block(Lineardb *db, const char *b, uint32_t s)
     return db;
 }
 
-static inline Lineardb* string2block(const char *s)
+static inline Lineardb* lineardb_load_string(const char *s)
 {
     // fprintf(stdout, "strlen(1) = %lu\n", strlen("1\0\0")); 
     // output strlen(1) = 1
     size_t l = strlen(s) + 1;
     Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l);
-    return bytes2block(db, s, l);
+    return lineardb_bind_bytes(db, s, l);
 }
 
 #define __block_size(b) \

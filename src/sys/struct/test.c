@@ -22,7 +22,7 @@ int test_linearkv()
 
 	for (int k = 0; k < 100; ++k){
 		n = snprintf(buf, 1024, "hello world %d", k);
-		key = string2block(buf);
+		key = lineardb_load_string(buf);
 		// fprintf(stdout, "key... = %s\n", buf);
 		v = linearkv_find(lkv, key);
 		// v = linearkv_find_string(lkv, buf);
@@ -144,7 +144,7 @@ int test_lineardb()
 	}
 	fprintf(stdout, "%.5llf %.5llf %x %x %x %x %x %x %x %x\n", fi64, fn64, b->byte[1], b->byte[2], b->byte[3], b->byte[4], b->byte[5], b->byte[6], b->byte[7], b->byte[8]);
 
-	b = string2block("Hello World");
+	b = lineardb_load_string("Hello World");
 
 	size =	__block_size(b);
 	fprintf(stdout, "size ===== %u\n", size);

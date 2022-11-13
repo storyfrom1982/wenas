@@ -4,16 +4,16 @@
 #include "linear_data_block.h"
 
 typedef struct linear_key_value {
-    uint32_t capacity, pos;
-    Lineardb *db, *key, *value;
+    uint32_t size, pos;
+    Lineardb *head, *end, *key, *value;
 }Linearkv;
 
 
 static inline void linearkv_initialization(Linearkv *lkv, char *buf, uint32_t capacity)
 {
     lkv->pos = 0;
-    lkv->capacity = capacity;
-    lkv->key = lkv->db = (Lineardb*)buf;
+    lkv->size = capacity;
+    lkv->key = lkv->head = (Lineardb*)buf;
     lkv->value = NULL;
 }
 
@@ -30,37 +30,37 @@ static inline void linearkv_release(Linearkv **pp_lkv)
     if (pp_lkv && *pp_lkv){
         Linearkv *lkv = *pp_lkv;
         *pp_lkv = NULL;
-        free(lkv->db);
+        free(lkv->head);
         free(lkv);
     }
 }
 
 static inline void linearkv_append_string(Linearkv *lkv, char *key, char *value)
 {
-    lkv->key = (Lineardb *)(lkv->db->byte + lkv->pos);
-    bytes2block(lkv->key, key, strlen(key) + 1);
+    lkv->key = (Lineardb *)(lkv->head->byte + lkv->pos);
+    lineardb_bind_bytes(lkv->key, key, strlen(key) + 1);
     lkv->pos += __block_size(lkv->key);
-    lkv->value = (Lineardb *)(lkv->db->byte + lkv->pos);
-    bytes2block(lkv->value, value, strlen(value) + 1);
+    lkv->value = (Lineardb *)(lkv->head->byte + lkv->pos);
+    lineardb_bind_bytes(lkv->value, value, strlen(value) + 1);
     lkv->pos += __block_size(lkv->value);
 }
 
 static inline void linearkv_append_int32(Linearkv *lkv, char *key, int32_t n)
 {
-    lkv->key = (Lineardb *)(lkv->db->byte + lkv->pos);
-    bytes2block(lkv->key, key, strlen(key) + 1);
+    lkv->key = (Lineardb *)(lkv->head->byte + lkv->pos);
+    lineardb_bind_bytes(lkv->key, key, strlen(key) + 1);
     lkv->pos += __block_size(lkv->key);
-    lkv->value = (Lineardb *)(lkv->db->byte + lkv->pos);
+    lkv->value = (Lineardb *)(lkv->head->byte + lkv->pos);
     *lkv->value = __number32_to_block(n);
     lkv->pos += __block_size(lkv->value);
 }
 
 static inline void linearkv_append_uint32(Linearkv *lkv, char *key, uint32_t n)
 {
-    lkv->key = (Lineardb *)(lkv->db->byte + lkv->pos);
-    bytes2block(lkv->key, key, strlen(key) + 1);
+    lkv->key = (Lineardb *)(lkv->head->byte + lkv->pos);
+    lineardb_bind_bytes(lkv->key, key, strlen(key) + 1);
     lkv->pos += __block_size(lkv->key);
-    lkv->value = (Lineardb *)(lkv->db->byte + lkv->pos);
+    lkv->value = (Lineardb *)(lkv->head->byte + lkv->pos);
     *lkv->value = __number32_to_block(n);
     lkv->pos += __block_size(lkv->value);
 }
@@ -68,9 +68,9 @@ static inline void linearkv_append_uint32(Linearkv *lkv, char *key, uint32_t n)
 static inline void linearkv_append(Linearkv *lkv, Lineardb *key, Lineardb *value)
 {
     uint32_t key_size = __block_size(key), value_size = __block_size(value);
-    memcpy(lkv->db->byte + lkv->pos, key->byte, key_size);
+    memcpy(lkv->head->byte + lkv->pos, key->byte, key_size);
     lkv->pos += key_size;
-    memcpy(lkv->db->byte + lkv->pos, value->byte, value_size);
+    memcpy(lkv->head->byte + lkv->pos, value->byte, value_size);
     lkv->pos += value_size;
 }
 
@@ -78,7 +78,7 @@ static inline Lineardb* linearkv_find(Linearkv *lkv, Lineardb *key)
 {
     uint32_t find_pos = 0, cmp_size = __block_size(key), key_size;
     while (find_pos < lkv->pos) {
-        lkv->key = (Lineardb*)(lkv->db->byte + find_pos);
+        lkv->key = (Lineardb*)(lkv->head->byte + find_pos);
         key_size = __block_size(lkv->key);
         find_pos += key_size;
         lkv->value = (Lineardb*)(lkv->key->byte + key_size);
@@ -95,7 +95,7 @@ static inline Lineardb* linearkv_find_string(Linearkv *lkv, char *key)
 {
     uint32_t find_pos = 0, cmp_size = strlen(key) + 1, key_size;
     while (find_pos < lkv->pos) {
-        lkv->key = (Lineardb*)(lkv->db->byte + find_pos);
+        lkv->key = (Lineardb*)(lkv->head->byte + find_pos);
         key_size = __block_size(lkv->key);
         find_pos += key_size;
         lkv->value = (Lineardb*)(lkv->key->byte + key_size);

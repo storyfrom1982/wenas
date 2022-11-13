@@ -139,7 +139,7 @@ static void number64_to_ldb()
 static void string_to_ldb()
 {
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    Lineardb *ldb = string2block(string8bit);
+    Lineardb *ldb = lineardb_load_string(string8bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string8bit, __byteof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     free(ldb);
@@ -149,7 +149,7 @@ static void string_to_ldb()
                         "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
                         "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
                         "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    ldb = string2block(string16bit);
+    ldb = lineardb_load_string(string16bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string16bit, __byteof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     free(ldb);
@@ -157,8 +157,9 @@ static void string_to_ldb()
     uint32_t len = 0xabcdef;
     ldb = malloc(BLOCK_HEAD + len);
     char *data = malloc(len);
-    bytes2block(ldb, data, len);
+    lineardb_bind_bytes(ldb, data, len);
     fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
+    free(data);
     free(ldb);
 }
 
