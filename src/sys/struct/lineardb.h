@@ -152,7 +152,7 @@ static inline float __b2f32(Lineardb *b)
 {
     float f;
 #ifdef __LITTLE_ENDIAN__
-    if ((((char*)(b))[0]) & 0x80) {
+    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
         ((char*)&(f))[0] = ((char*)(b))[4];
         ((char*)&(f))[1] = ((char*)(b))[3];
         ((char*)&(f))[2] = ((char*)(b))[2];
@@ -164,7 +164,7 @@ static inline float __b2f32(Lineardb *b)
         ((char*)&(f))[3] = ((char*)(b))[4];
     }
 #else    
-    if ((((char*)(b))[0]) & 0x80) {
+    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
         ((char*)&(f))[0] = ((char*)(b))[1];
         ((char*)&(f))[1] = ((char*)(b))[2];
         ((char*)&(f))[2] = ((char*)(b))[3];
@@ -183,7 +183,7 @@ static inline float __b2f64(Lineardb *b)
 {
     double f;
 #ifdef __LITTLE_ENDIAN__
-    if ((((char*)(b))[0]) & 0x80) {
+    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
         ((char*)&(f))[0] = ((char*)(b))[8];
         ((char*)&(f))[1] = ((char*)(b))[7];
         ((char*)&(f))[2] = ((char*)(b))[6];
@@ -203,7 +203,7 @@ static inline float __b2f64(Lineardb *b)
         ((char*)&(f))[7] = ((char*)(b))[8];
     }
 #else    
-    if ((((char*)(b))[0]) & 0x80) {
+    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
         ((char*)&(f))[0] = ((char*)(b))[1];
         ((char*)&(f))[1] = ((char*)(b))[2];
         ((char*)&(f))[2] = ((char*)(b))[3];
