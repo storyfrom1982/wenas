@@ -148,7 +148,57 @@ typedef struct linear_data_block {
 
 #endif //__LITTLE_ENDIAN__
 
-static inline float __b2f32(Lineardb *b)
+static inline Lineardb n2b8(int8_t n)
+{
+    return __n2b8(n);
+}
+
+static inline Lineardb n2b16(int16_t n)
+{
+    return __n2b16(n);
+}
+
+static inline Lineardb n2b32(int32_t n)
+{
+    return __n2b32(n);
+}
+
+static inline Lineardb n2b64(int64_t n)
+{
+    return __n2b64(n);
+}
+
+static inline Lineardb f2b32(float f)
+{
+    return __n2b32(f);
+}
+
+static inline Lineardb f2b64(double f)
+{
+    return __n2b64(f);
+}
+
+static inline int8_t b2n8(Lineardb *b)
+{
+    return __b2n8(b);
+}
+
+static inline int16_t b2n16(Lineardb *b)
+{
+    return __b2n16(b);
+}
+
+static inline int32_t b2n32(Lineardb *b)
+{
+    return __b2n32(b);
+}
+
+static inline int64_t b2n64(Lineardb *b)
+{
+    return __b2n64(b);
+}
+
+static inline float b2f32(Lineardb *b)
 {
     float f;
 #ifdef __LITTLE_ENDIAN__
@@ -179,7 +229,7 @@ static inline float __b2f32(Lineardb *b)
     return f;
 }
 
-static inline float __b2f64(Lineardb *b)
+static inline double b2f64(Lineardb *b)
 {
     double f;
 #ifdef __LITTLE_ENDIAN__

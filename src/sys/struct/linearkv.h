@@ -40,6 +40,18 @@ static inline void linearkv_release(Linearkv **pp_lkv)
     }
 }
 
+static inline void linearkv_append_number(Linearkv *lkv, char *key, Lineardb ldb)
+{
+    lkv->key = (LinearKey *)(lkv->head->byte + lkv->pos);
+    lkv->key->byte[0] = strlen(key);
+    memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
+    lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
+    lkv->pos += (lkv->key->byte[0] + 2);
+    lkv->value = (Lineardb *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    *lkv->value = ldb;
+    lkv->pos += __sizeof_block(lkv->value);
+}
+
 static inline void linearkv_append_string(Linearkv *lkv, char *key, char *value)
 {
     lkv->key = (LinearKey *)(lkv->head->byte + lkv->pos);
