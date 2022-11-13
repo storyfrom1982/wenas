@@ -82,7 +82,7 @@ static void test_find_number()
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linearkv_find(lkv, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
+		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linearkv_find_from(lkv, v, key_buf);
 	}
@@ -90,7 +90,7 @@ static void test_find_number()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linearkv_find(lkv, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
+		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linearkv_find_from(lkv, v, key_buf);
 	}
