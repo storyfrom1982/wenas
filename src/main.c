@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 #endif
 
 	lineardb_test();
-	// linearkv_test();
+	linearkv_test();
 
 	return 0;
 }

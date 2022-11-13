@@ -281,7 +281,7 @@ static inline double b2f64(Lineardb *b)
 #include <string.h>
 #include <stdlib.h>
 
-static inline Lineardb* lineardb_bind_bytes(Lineardb *db, const char *b, uint32_t s)
+static inline Lineardb* lineardb_copy_bytes(Lineardb *db, const char *b, uint32_t s)
 {
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
@@ -321,24 +321,29 @@ static inline Lineardb* lineardb_bind_bytes(Lineardb *db, const char *b, uint32_
     return db;
 }
 
-static inline Lineardb* lineardb_bind_string(Lineardb *db, char *s)
+static inline Lineardb* lineardb_copy_string(Lineardb *db, char *s)
 {
     size_t l = strlen(s);
-    lineardb_bind_bytes(db, s, l + 1);
+    lineardb_copy_bytes(db, s, l + 1);
     db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
 }
 
-static inline Lineardb* lineardb_load_string(const char *s)
+static inline Lineardb* lineardb_create_string(const char *s)
 {
     // fprintf(stdout, "strlen=%lu\n", strlen("1\0\0")); 
     // output strlen=1
     size_t l = strlen(s);
     Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l + 1);
-    lineardb_bind_bytes(db, s, l + 1);
+    lineardb_copy_bytes(db, s, l + 1);
     db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
     return db;
 }
 
+static inline Lineardb* lineardb_create_bytes(const uint8_t *b, size_t size)
+{
+    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + size);
+    return lineardb_copy_bytes(db, b, size);
+}
 
 #define __sizeof_head(b)   (1 + (((b)->byte[0]) & BLOCK_HEAD_MASK))
 

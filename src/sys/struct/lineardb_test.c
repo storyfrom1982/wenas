@@ -147,7 +147,7 @@ static void string_to_ldb()
     fprintf(stdout, "==================================\n");
 
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    Lineardb *ldb = lineardb_load_string(string8bit);
+    Lineardb *ldb = lineardb_create_string(string8bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string8bit, __byteof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     lineardb_release(&ldb);
@@ -160,7 +160,7 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
-    ldb = lineardb_load_string(string16bit);
+    ldb = lineardb_create_string(string16bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string16bit, __byteof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     lineardb_release(&ldb);
@@ -168,7 +168,7 @@ static void string_to_ldb()
     uint32_t len = 0xabcdef;
     ldb = malloc(BLOCK_HEAD + len);
     char *data = malloc(len);
-    lineardb_bind_bytes(ldb, data, len);
+    lineardb_copy_bytes(ldb, data, len);
     fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
     free(data);
     lineardb_release(&ldb);

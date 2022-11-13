@@ -62,7 +62,7 @@ static inline void linearkv_append_string(Linearkv *lkv, char *key, char *value)
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
     lkv->value = (Lineardb *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    lineardb_bind_string(lkv->value, value);
+    lineardb_copy_string(lkv->value, value);
     lkv->pos += __sizeof_block(lkv->value);
 }
 
