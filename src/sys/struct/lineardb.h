@@ -281,6 +281,40 @@ static inline double b2f64(Lineardb *b)
 #include <string.h>
 #include <stdlib.h>
 
+static inline Lineardb* lineardb_bind_bytes(Lineardb *db, const char *b, uint32_t s)
+{
+    db = (Lineardb*)b;
+    if (s < 0x100){
+#ifdef __LITTLE_ENDIAN__
+        db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT;
+#else
+        db->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+#endif
+        db->byte[1] = ((char*)&s)[0];
+
+    }else if (s < 0x10000){
+#ifdef __LITTLE_ENDIAN__
+        db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT;
+#else
+        db->byte[0] = BLOCK_TYPE_16BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+#endif        
+        db->byte[1] = ((char*)&s)[0];
+        db->byte[2] = ((char*)&s)[1];
+
+    }else {
+#ifdef __LITTLE_ENDIAN__
+        db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT;
+#else
+        db->byte[0] = BLOCK_TYPE_32BIT | BLOCK_TYPE_OBJECT | BLOCK_TYPE_BIGENDIAN;
+#endif            
+        db->byte[1] = ((char*)&s)[0];
+        db->byte[2] = ((char*)&s)[1];
+        db->byte[3] = ((char*)&s)[2];
+        db->byte[4] = ((char*)&s)[3];
+    }
+    return db;
+}
+
 static inline Lineardb* lineardb_copy_bytes(Lineardb *db, const char *b, uint32_t s)
 {
     if (s < 0x100){
