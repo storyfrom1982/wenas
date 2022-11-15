@@ -167,8 +167,8 @@ static void string_to_ldb()
 
     uint32_t len = 0xabcdef;
     ldb = malloc(BLOCK_HEAD + len);
-    char *data = malloc(len);
-    lineardb_copy_bytes(ldb, data, len);
+    uint8_t *data = malloc(len);
+    lineardb_load_bytes(ldb, data, len);
     fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
     free(data);
     lineardb_release(&ldb);
