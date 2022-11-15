@@ -290,9 +290,9 @@ static inline double b2f64(Lineardb *b)
         : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
         : 0 ))
 
-#define __byteof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
+#define __dataof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
 
-static inline uint32_t lineardb_bind_byte(Lineardb **ldb, const uint8_t *b, uint32_t s)
+static inline uint32_t lineardb_bind_address(Lineardb **ldb, const void *b, uint32_t s)
 {
     *ldb = (Lineardb*)b;
     if (s < 0x100){
@@ -333,7 +333,7 @@ static inline uint32_t lineardb_bind_byte(Lineardb **ldb, const uint8_t *b, uint
     return 0;
 }
 
-static inline Lineardb* lineardb_load_bytes(Lineardb *db, const uint8_t *b, uint32_t s)
+static inline Lineardb* lineardb_load_data(Lineardb *db, const void *b, uint32_t s)
 {
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
@@ -376,26 +376,26 @@ static inline Lineardb* lineardb_load_bytes(Lineardb *db, const uint8_t *b, uint
 static inline Lineardb* lineardb_load_string(Lineardb *db, const char *s)
 {
     size_t l = strlen(s);
-    lineardb_load_bytes(db, (const uint8_t *)s, l + 1);
+    lineardb_load_data(db, (const uint8_t *)s, l + 1);
     db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
     return db;
 }
 
-static inline Lineardb* lineardb_create_string(const char *s)
+static inline Lineardb* lineardb_create_with_string(const char *s)
 {
     // fprintf(stdout, "strlen=%lu\n", strlen("1\0\0")); 
     // output strlen=1
     size_t l = strlen(s);
     Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l + 1);
-    lineardb_load_bytes(db, (const uint8_t *)s, l + 1);
+    lineardb_load_data(db, (const uint8_t *)s, l + 1);
     db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
     return db;
 }
 
-static inline Lineardb* lineardb_create_bytes(const uint8_t *b, size_t size)
+static inline Lineardb* lineardb_create_with_data(const void *b, size_t size)
 {
     Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + size);
-    return lineardb_load_bytes(db, b, size);
+    return lineardb_load_data(db, b, size);
 }
 
 static inline void lineardb_release(Lineardb **pp_ldb)

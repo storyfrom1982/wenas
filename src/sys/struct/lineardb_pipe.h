@@ -5,7 +5,7 @@ typedef struct linear_data_block_pipe {
     uint32_t len;
     uint32_t read_pos;
     uint32_t write_pos;
-    uint32_t reserve_size;
+    uint32_t leftover;
     Lineardb *read_block;
     Lineardb *write_block;
     uint8_t *buf;
@@ -32,7 +32,7 @@ static inline LineardbPipe* lineardbPipe_create(uint32_t len)
     //     lp->len = (1 << 16);
     // }
 
-    lp->reserve_size = lp->len;
+    lp->leftover = lp->len;
 
     lp->buf = (uint8_t *)malloc(lp->len);
     if (lp->buf == NULL){
@@ -59,26 +59,20 @@ static inline uint32_t lineardbPipe_write(LineardbPipe *lp, void *data, uint32_t
 {
     while ((uint32_t)(lp->len - lp->write_pos + lp->read_pos) >= size) {
 
-        uint32_t ldb_size = lineardb_bind_byte(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+        uint32_t ldb_size = lineardb_bind_address(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
 
-        if (lp->reserve_size < ldb_size){
-            // fprintf(stdout, "write block: >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> %s\n", (char*)block);
+        if (lp->leftover < ldb_size){
+            // fprintf(stdout, "write block: >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> %s\n", (char*)data);
             lp->write_block->byte[0] = 0;
-            lp->write_pos += lp->reserve_size;
-            // lp->reserve_size = lp->len - (lp->write_pos & (lp->len - 1));
-            lp->reserve_size = lp->len;
-            // lp->write_block = (Lineardb *)(lp->buf + (lp->write_pos & (lp->len - 1)));
-            // ldb_size = lineardb_bind_bytes(lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+            lp->write_pos += lp->leftover;
+            lp->leftover = lp->len;
         }else {
-            // lineardb_load_bytes(lp->write_block, block, size);
-            // lp->write_pos += __sizeof_block(lp->write_block);
-            memcpy(__byteof_block(lp->write_block), data, size);
+            memcpy(__dataof_block(lp->write_block), data, size);
             lp->write_pos += ldb_size;
-            lp->reserve_size = lp->len - (lp->write_pos & (lp->len - 1));
+            lp->leftover = lp->len - (lp->write_pos & (lp->len - 1));
             // if (lp->write_block->byte == lp->buf){
             //     fprintf(stdout, "write block: >>>>> %s <<<<<\n", __byteof_block(lp->write_block));
             // }
-            // lp->write_block = (Lineardb *)(lp->buf + (lp->write_pos & (lp->len - 1)));
             return size;
         }
     }
@@ -105,7 +99,7 @@ static inline Lineardb* lineardbPipe_hold_block(LineardbPipe *lp)
 
 static inline void lineardbPipe_free_block(LineardbPipe *lp, Lineardb *ldb)
 {
-    //TODO
+    //TODO check
     if (ldb == lp->read_block){
         lp->read_pos += (__sizeof_block(lp->read_block));
         lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));

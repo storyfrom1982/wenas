@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-// extern void linearkv_test();
-// extern void lineardb_test();
+extern void linearkv_test();
+extern void lineardb_test();
 extern void linearPipe_test();
 
 int main(int argc, char *argv[]) 
@@ -13,8 +13,8 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "__BIG_ENDIAN__\n");
 #endif
 
-	// lineardb_test();
-	// linearkv_test();
+	lineardb_test();
+	linearkv_test();
 	linearPipe_test();
 
 	return 0;
