@@ -3,6 +3,7 @@
 extern void linearkv_test();
 extern void lineardb_test();
 extern void linearPipe_test();
+extern void thread_test();
 
 int main(int argc, char *argv[]) 
 {
@@ -13,9 +14,10 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "__BIG_ENDIAN__\n");
 #endif
 
-	lineardb_test();
+	// lineardb_test();
 	// linearkv_test();
-	linearPipe_test();
+	// linearPipe_test();
+	thread_test();
 
 	return 0;
 }
