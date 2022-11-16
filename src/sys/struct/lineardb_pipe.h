@@ -62,12 +62,12 @@ static inline uint32_t lineardbPipe_write(LineardbPipe *lp, void *data, uint32_t
     while ((uint32_t)(lp->len - lp->write_pos + lp->read_pos) >= ldb_size) {
 
         if (lp->leftover < ldb_size){
-            ldb_size = lineardb_bind_address(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+            ldb_size = lineardb_bind_buffer(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
             lp->write_block->byte[0] = 0;
             lp->write_pos += lp->leftover;
             lp->leftover = lp->len;
         }else {
-            ldb_size = lineardb_bind_address(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+            ldb_size = lineardb_bind_buffer(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
             memcpy(__dataof_block(lp->write_block), data, size);
             lp->write_pos += ldb_size;
             lp->leftover = lp->len - (lp->write_pos & (lp->len - 1));

@@ -13,9 +13,9 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "__BIG_ENDIAN__\n");
 #endif
 
-	// lineardb_test();
-	// linearkv_test();
-	linearPipe_test();
+	lineardb_test();
+	linearkv_test();
+	// linearPipe_test();
 
 	return 0;
 }

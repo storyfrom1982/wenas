@@ -51,7 +51,7 @@ static void test_find_from()
 	for (int k = 98; v != NULL; --k){
 		fprintf(stdout, "key %s from valude -> %s\n", key_buf, __dataof_block(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
@@ -59,7 +59,7 @@ static void test_find_from()
 	for (int k = 1; v != NULL; ++k){
 		fprintf(stdout, "key %s from valude -> %s\n", key_buf, __dataof_block(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	linearkv_release(&lkv);
@@ -84,7 +84,7 @@ static void test_find_number()
 	for (int k = 98; v != NULL; --k){
 		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
@@ -92,7 +92,7 @@ static void test_find_number()
 	for (int k = 1; v != NULL; ++k){
 		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	linearkv_release(&lkv);
@@ -123,7 +123,7 @@ static void test_find_float()
 	for (int k = 98; v != NULL; --k){
 		fprintf(stdout, "key %s from valude -> %lf\n", key_buf, b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
@@ -131,7 +131,7 @@ static void test_find_float()
 	for (int k = 1; v != NULL; ++k){
 		fprintf(stdout, "key %s from valude -> %lf\n", key_buf, b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
-		v = linearkv_find_from(lkv, v, key_buf);
+		v = linearkv_find_after(lkv, v, key_buf);
 	}
 
 	linearkv_release(&lkv);

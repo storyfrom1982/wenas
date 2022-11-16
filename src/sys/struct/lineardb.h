@@ -295,7 +295,7 @@ static inline double b2f64(Lineardb *b)
 #define __plan_sizeof_block(size) \
         (size < 0x100 ? (2 + size) : size < 0x10000 ? (3 + size) : (5 + size));
 
-static inline uint32_t lineardb_bind_address(Lineardb **ldb, const void *b, uint32_t s)
+static inline uint32_t lineardb_bind_buffer(Lineardb **ldb, const void *b, uint32_t s)
 {
     *ldb = (Lineardb*)b;
     if (s < 0x100){
