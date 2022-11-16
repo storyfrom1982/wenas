@@ -6,13 +6,20 @@
 
 static void* thread_func(void *ctx)
 {
+    int ret;
     EnvMutex *mutex = (EnvMutex *)ctx;
     env_mutex_lock(mutex);
     fprintf(stdout, "timedwait 5 second\n");
-    int ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
+    ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
     fprintf(stdout, "timedwait retcode=%d %s\n", ret, strerror(ret));
     env_mutex_signal(mutex);
+    fprintf(stdout, "timedwait 5 second\n");
+    ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
+    fprintf(stdout, "timedwait retcode=%d %s\n", ret, strerror(ret));
     env_mutex_unlock(mutex);
+
+    fprintf(stdout, "thread %x exit\n", env_thread_self());
+
     return NULL;
 }
 
@@ -33,6 +40,9 @@ void thread_test()
 
     env_mutex_wait(&mutex);
     env_mutex_unlock(&mutex);
+
+    fprintf(stdout, "join thread %x\n", tid);
+    env_thread_join(tid);
 
     fprintf(stdout, "exit\n");
 }
