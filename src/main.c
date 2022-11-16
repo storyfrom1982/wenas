@@ -14,8 +14,8 @@ int main(int argc, char *argv[])
 #endif
 
 	lineardb_test();
-	linearkv_test();
-	// linearPipe_test();
+	// linearkv_test();
+	linearPipe_test();
 
 	return 0;
 }

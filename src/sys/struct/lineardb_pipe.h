@@ -28,9 +28,9 @@ static inline LineardbPipe* lineardbPipe_create(uint32_t len)
         } while(len >>= 1);
     }
 
-    if (lp->len < (1U << 16)){
-        lp->len = (1U << 16);
-    }
+    // if (lp->len < (1U << 16)){
+    //     lp->len = (1U << 16);
+    // }
 
     lp->leftover = lp->len;
 

@@ -19,9 +19,9 @@ else()
 endif()
 
 set(kzx_sources src/main.c
-    src/sys/struct/lineardb_test.c
-    src/sys/struct/linearkv_test.c
-    src/sys/struct/lineardb_pipe_test.c
+    test/sys/struct/lineardb_test.c
+    test/sys/struct/linearkv_test.c
+    test/sys/struct/lineardb_pipe_test.c
 )
 
 set(kzx_defines "")
