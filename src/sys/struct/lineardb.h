@@ -21,19 +21,19 @@ enum {
 
 typedef struct linear_data_block {
     uint8_t byte[BLOCK_HEAD];
-}Lineardb;
+}lineardb_t;
 
 #ifdef __LITTLE_ENDIAN__
 
 #define __n2b8(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_8BIT, \
                 (((char*)&(n))[0]) \
             }
 #define __b2n8(b)    ((b)->byte[1])
 
 #   define __n2b16(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_16BIT, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]) \
             }
@@ -44,7 +44,7 @@ typedef struct linear_data_block {
 			)       
 
 #   define __n2b32(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_32BIT, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]) \
@@ -57,7 +57,7 @@ typedef struct linear_data_block {
 			)
 
 #   define __n2b64(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_64BIT, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]), \
@@ -87,14 +87,14 @@ typedef struct linear_data_block {
 #else //__BIG_ENDIAN__
 
 #define __n2b8(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_8BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]) \
             }
 #define __b2n8(b)    ((b)->byte[1])
 
 #   define __n2b16(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_16BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]) \
             }
@@ -105,7 +105,7 @@ typedef struct linear_data_block {
 			)       
 
 #   define __n2b32(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_32BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]) \
@@ -118,7 +118,7 @@ typedef struct linear_data_block {
 			)
 
 #   define __n2b64(n) \
-            (Lineardb){ \
+            (lineardb_t){ \
                 BLOCK_TYPE_64BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]), \
@@ -148,57 +148,57 @@ typedef struct linear_data_block {
 
 #endif //__LITTLE_ENDIAN__
 
-static inline Lineardb n2b8(int8_t n)
+static inline lineardb_t n2b8(int8_t n)
 {
     return __n2b8(n);
 }
 
-static inline Lineardb n2b16(int16_t n)
+static inline lineardb_t n2b16(int16_t n)
 {
     return __n2b16(n);
 }
 
-static inline Lineardb n2b32(int32_t n)
+static inline lineardb_t n2b32(int32_t n)
 {
     return __n2b32(n);
 }
 
-static inline Lineardb n2b64(int64_t n)
+static inline lineardb_t n2b64(int64_t n)
 {
     return __n2b64(n);
 }
 
-static inline Lineardb f2b32(float f)
+static inline lineardb_t f2b32(float f)
 {
     return __n2b32(f);
 }
 
-static inline Lineardb f2b64(double f)
+static inline lineardb_t f2b64(double f)
 {
     return __n2b64(f);
 }
 
-static inline int8_t b2n8(Lineardb *b)
+static inline int8_t b2n8(lineardb_t *b)
 {
     return __b2n8(b);
 }
 
-static inline int16_t b2n16(Lineardb *b)
+static inline int16_t b2n16(lineardb_t *b)
 {
     return __b2n16(b);
 }
 
-static inline int32_t b2n32(Lineardb *b)
+static inline int32_t b2n32(lineardb_t *b)
 {
     return __b2n32(b);
 }
 
-static inline int64_t b2n64(Lineardb *b)
+static inline int64_t b2n64(lineardb_t *b)
 {
     return __b2n64(b);
 }
 
-static inline float b2f32(Lineardb *b)
+static inline float b2f32(lineardb_t *b)
 {
     float f;
 #ifdef __LITTLE_ENDIAN__
@@ -229,7 +229,7 @@ static inline float b2f32(Lineardb *b)
     return f;
 }
 
-static inline double b2f64(Lineardb *b)
+static inline double b2f64(lineardb_t *b)
 {
     double f;
 #ifdef __LITTLE_ENDIAN__
@@ -300,9 +300,9 @@ static inline double b2f64(Lineardb *b)
 #define __plan_sizeof_block(size) \
         (size < 0x100 ? (2 + size) : size < 0x10000 ? (3 + size) : (5 + size));
 
-static inline uint32_t lineardb_bind_buffer(Lineardb **ldb, const void *b, uint32_t s)
+static inline uint32_t lineardb_bind_buffer(lineardb_t **ldb, const void *b, uint32_t s)
 {
-    *ldb = (Lineardb*)b;
+    *ldb = (lineardb_t*)b;
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
         (*ldb)->byte[0] = BLOCK_TYPE_8BIT | BLOCK_TYPE_OBJECT;
@@ -341,7 +341,7 @@ static inline uint32_t lineardb_bind_buffer(Lineardb **ldb, const void *b, uint3
     return 0;
 }
 
-static inline Lineardb* lineardb_load_data(Lineardb *db, const void *b, uint32_t s)
+static inline lineardb_t* lineardb_load_data(lineardb_t *db, const void *b, uint32_t s)
 {
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
@@ -381,7 +381,7 @@ static inline Lineardb* lineardb_load_data(Lineardb *db, const void *b, uint32_t
     return db;
 }
 
-static inline Lineardb* lineardb_load_string(Lineardb *db, const char *s)
+static inline lineardb_t* lineardb_load_string(lineardb_t *db, const char *s)
 {
     size_t l = strlen(s);
     lineardb_load_data(db, (const uint8_t *)s, l + 1);
@@ -389,27 +389,27 @@ static inline Lineardb* lineardb_load_string(Lineardb *db, const char *s)
     return db;
 }
 
-static inline Lineardb* lineardb_create_with_string(const char *s)
+static inline lineardb_t* lineardb_build_with_string(const char *s)
 {
     // fprintf(stdout, "strlen=%lu\n", strlen("1\0\0")); 
     // output strlen=1
     size_t l = strlen(s);
-    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + l + 1);
+    lineardb_t *db = (lineardb_t *)malloc(BLOCK_HEAD + l + 1);
     lineardb_load_data(db, (const uint8_t *)s, l + 1);
     db->byte[(1 + (((db)->byte[0]) & BLOCK_HEAD_MASK)) + l] = '\0';
     return db;
 }
 
-static inline Lineardb* lineardb_create_with_data(const void *b, size_t size)
+static inline lineardb_t* lineardb_build_with_data(const void *b, size_t size)
 {
-    Lineardb *db = (Lineardb *)malloc(BLOCK_HEAD + size);
+    lineardb_t *db = (lineardb_t *)malloc(BLOCK_HEAD + size);
     return lineardb_load_data(db, b, size);
 }
 
-static inline void lineardb_release(Lineardb **pp_ldb)
+static inline void lineardb_destroy(lineardb_t **pp_ldb)
 {
     if (pp_ldb && *pp_ldb){
-        Lineardb *ldb = *pp_ldb;
+        lineardb_t *ldb = *pp_ldb;
         *pp_ldb = NULL;
         if (ldb->byte[0] & BLOCK_TYPE_OBJECT){
             free(ldb);

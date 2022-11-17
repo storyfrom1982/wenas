@@ -7,7 +7,7 @@
 static void* thread_func(void *ctx)
 {
     int ret;
-    EnvMutex *mutex = (EnvMutex *)ctx;
+    env_mutex_t *mutex = (env_mutex_t *)ctx;
     env_mutex_lock(mutex);
     fprintf(stdout, "timedwait 5 second\n");
     ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
@@ -25,8 +25,8 @@ static void* thread_func(void *ctx)
 
 void thread_test()
 {
-    EnvThread tid;
-    EnvMutex mutex;
+    env_thread_t tid;
+    env_mutex_t mutex;
     int ret = env_mutex_init(&mutex);
     if (ret != 0){
         fprintf(stderr, "env_mutex_init failed: errcode=%d\n", ret);

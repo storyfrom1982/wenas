@@ -7,15 +7,15 @@ typedef struct linear_data_block_pipe {
     uint32_t write_pos;
     uint32_t leftover;
     uint32_t block_count;
-    Lineardb *read_block;
-    Lineardb *write_block;
+    lineardb_t *read_block;
+    lineardb_t *write_block;
     uint8_t *buf;
-}LineardbPipe;
+}lineardb_pipe_t;
 
 
-static inline LineardbPipe* lineardbPipe_create(uint32_t len)
+static inline lineardb_pipe_t* lineardb_pipe_build(uint32_t len)
 {
-    LineardbPipe *lp = (LineardbPipe *)malloc(sizeof(LineardbPipe));
+    lineardb_pipe_t *lp = (lineardb_pipe_t *)malloc(sizeof(lineardb_pipe_t));
     if (lp == NULL){
         return NULL;
     }
@@ -41,23 +41,23 @@ static inline LineardbPipe* lineardbPipe_create(uint32_t len)
         return NULL;
     }
 
-    lp->read_block = lp->write_block = (Lineardb*)lp->buf;
+    lp->read_block = lp->write_block = (lineardb_t*)lp->buf;
     lp->read_pos = lp->write_pos = 0;
 
     return lp;
 }
 
-static inline void lineardbPipe_release(LineardbPipe **pp_lp)
+static inline void lineardb_pipe_destroy(lineardb_pipe_t **pp_lp)
 {
     if (pp_lp && *pp_lp){
-        LineardbPipe *lp = *pp_lp;
+        lineardb_pipe_t *lp = *pp_lp;
         *pp_lp = NULL;
         free(lp->buf);
         free(lp);
     }
 }
 
-static inline uint32_t lineardbPipe_write(LineardbPipe *lp, void *data, uint32_t size)
+static inline uint32_t lineardb_pipe_write(lineardb_pipe_t *lp, void *data, uint32_t size)
 {
     uint32_t ldb_size = __plan_sizeof_block(size); 
     while ((uint32_t)(lp->len - lp->write_pos + lp->read_pos) >= ldb_size) {
@@ -80,18 +80,18 @@ static inline uint32_t lineardbPipe_write(LineardbPipe *lp, void *data, uint32_t
     return 0;
 }
 
-static inline uint32_t lineardbPipe_read(LineardbPipe *lp, uint8_t *buf, uint32_t size)
+static inline uint32_t lineardb_pipe_read(lineardb_pipe_t *lp, uint8_t *buf, uint32_t size)
 {
     while (((uint32_t)(lp->write_pos - lp->read_pos)) > 0) {
         if (lp->read_block->byte[0] == 0){
             lp->read_pos += ((lp->buf + lp->len) - lp->read_block->byte);
-            lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+            lp->read_block = (lineardb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
         }else {
             uint32_t data_size = __sizeof_data(lp->read_block);
             if (size >= data_size){
                 memcpy(buf, __dataof_block(lp->read_block), data_size);
                 lp->read_pos += (data_size + __sizeof_head(lp->read_block));
-                lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+                lp->read_block = (lineardb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
                 lp->block_count--;
             }
             return data_size;
@@ -101,12 +101,12 @@ static inline uint32_t lineardbPipe_read(LineardbPipe *lp, uint8_t *buf, uint32_
     return 0;
 }
 
-static inline Lineardb* lineardbPipe_hold_block(LineardbPipe *lp)
+static inline lineardb_t* lineardb_pipe_hold_block(lineardb_pipe_t *lp)
 {
     while (((uint32_t)(lp->write_pos - lp->read_pos)) > 0) {
         if (lp->read_block->byte[0] == 0){
             lp->read_pos += ((lp->buf + lp->len) - lp->read_block->byte);
-            lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+            lp->read_block = (lineardb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
         }else {
             return lp->read_block;
         }
@@ -115,26 +115,26 @@ static inline Lineardb* lineardbPipe_hold_block(LineardbPipe *lp)
     return NULL;
 }
 
-static inline void lineardbPipe_free_block(LineardbPipe *lp, Lineardb *ldb)
+static inline void lineardb_pipe_free_block(lineardb_pipe_t *lp, lineardb_t *ldb)
 {
     if (ldb == lp->read_block){
         lp->read_pos += (__sizeof_block(lp->read_block));
-        lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+        lp->read_block = (lineardb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
         lp->block_count--;
     }
 }
 
-static inline uint32_t lineardbPipe_readable(LineardbPipe *lp)
+static inline uint32_t lineardb_pipe_readable(lineardb_pipe_t *lp)
 {
     return ((uint32_t)(lp->write_pos - lp->read_pos));
 }
 
-static inline uint32_t lineardbPipe_writable(LineardbPipe *lp)
+static inline uint32_t lineardb_pipe_writable(lineardb_pipe_t *lp)
 {
     return ((uint32_t)(lp->len - lp->write_pos + lp->read_pos));
 }
 
-static inline uint32_t lineardbPipe_block_count(LineardbPipe *lp)
+static inline uint32_t lineardb_pipe_block_count(lineardb_pipe_t *lp)
 {
     return lp->block_count;
 }

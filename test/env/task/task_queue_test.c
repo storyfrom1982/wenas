@@ -1,7 +1,7 @@
 #include "task_queue.h"
 
 
-static void test_task_func(lkv_parser_t parser)
+static void test_task_func(linearkv_parser_t parser)
 {
     // Lineardb *ldb = lkv_find(parser, "func");
     // fprintf(stdout, "func: 0x%x\n", __b2n64(ldb));
@@ -27,10 +27,10 @@ void task_queue_test()
 {
     fprintf(stdout, "task_queue_test enter\n");
 
-    EnvTaskQueue *tq = env_taskQueue_create();
+    env_taskqueue_t *tq = env_taskqueue_build();
 
     char buf[256];
-    lkv_builder_t lkv;
+    linearkv_builder_t lkv;
     int test_number = 10240;
     float test_float = 123.456f;
     double test_double = 12345.12345f;
@@ -48,12 +48,12 @@ void task_queue_test()
         snprintf(buf, 256, "Hello World %ld %d", rand() * rand(), i);
         // fprintf(stdout, "task_queue_test push string %s\n", string_buf);
         lkv_add_str(&lkv, "string", buf);
-        env_taskQueue_push(tq, &lkv);
+        env_taskqueue_push(tq, &lkv);
     }
 
-    env_taskQueue_exit(tq);
+    env_taskqueue_exit(tq);
 
-    env_taskQueue_destroy(&tq);
+    env_taskqueue_destroy(&tq);
 
     fprintf(stdout, "task_queue_test exit\n");
 }

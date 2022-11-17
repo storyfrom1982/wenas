@@ -5,11 +5,11 @@
 
 
 typedef struct env_mutex {
-    EnvThreadCond cond[1];
-    EnvThreadMutex mutex[1];
-}EnvMutex;
+    env_thread_cond_t cond[1];
+    env_thread_mutex_t mutex[1];
+}env_mutex_t;
 
-static inline int env_mutex_init(EnvMutex *emutex)
+static inline int env_mutex_init(env_mutex_t *emutex)
 {
     int ret;
 
@@ -26,38 +26,38 @@ static inline int env_mutex_init(EnvMutex *emutex)
     return ret;
 }
 
-static inline void env_mutex_destroy(EnvMutex *emutex)
+static inline void env_mutex_destroy(env_mutex_t *emutex)
 {
     env_thread_cond_destroy(emutex->cond);
     env_thread_mutex_destroy(emutex->mutex);
 }
 
-static inline void env_mutex_lock(EnvMutex *emutex)
+static inline void env_mutex_lock(env_mutex_t *emutex)
 {
     env_thread_mutex_lock(emutex->mutex);
 }
 
-static inline void env_mutex_unlock(EnvMutex *emutex)
+static inline void env_mutex_unlock(env_mutex_t *emutex)
 {
     env_thread_mutex_unlock(emutex->mutex);
 }
 
-static inline void env_mutex_signal(EnvMutex *emutex)
+static inline void env_mutex_signal(env_mutex_t *emutex)
 {
     env_thread_cond_signal(emutex->cond);
 }
 
-static inline void env_mutex_broadcast(EnvMutex *emutex)
+static inline void env_mutex_broadcast(env_mutex_t *emutex)
 {
     env_thread_cond_broadcast(emutex->cond);
 }
 
-static inline void env_mutex_wait(EnvMutex *emutex)
+static inline void env_mutex_wait(env_mutex_t *emutex)
 {
     env_thread_cond_wait(emutex->cond, emutex->mutex);
 }
 
-static inline int env_mutex_timedwait(EnvMutex *emutex, uint64_t timeout)
+static inline int env_mutex_timedwait(env_mutex_t *emutex, uint64_t timeout)
 {
     return env_thread_cond_timedwait(emutex->cond, emutex->mutex, timeout + env_time());
 }

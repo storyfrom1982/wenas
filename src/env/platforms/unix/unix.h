@@ -14,9 +14,9 @@
 #undef NANOSEC
 #define NANOSEC     1000000000UL
 
-typedef pthread_t EnvThread;
-typedef pthread_cond_t EnvThreadCond;
-typedef pthread_mutex_t EnvThreadMutex;
+typedef pthread_t env_thread_t;
+typedef pthread_cond_t env_thread_cond_t;
+typedef pthread_mutex_t env_thread_mutex_t;
 
 
 static inline uint64_t env_time()
@@ -36,67 +36,67 @@ static inline uint64_t env_time()
     return 0;
 }
 
-static inline int env_thread_create(EnvThread *tid, void*(*func)(void*), void *ctx)
+static inline int env_thread_create(env_thread_t *tid, void*(*func)(void*), void *ctx)
 {
     return pthread_create(tid, NULL, func, ctx);
 }
 
-static inline EnvThread env_thread_self()
+static inline env_thread_t env_thread_self()
 {
     return pthread_self();
 }
 
-static inline int env_thread_join(EnvThread tid)
+static inline int env_thread_join(env_thread_t tid)
 {
     return pthread_join(tid, NULL);
 }
 
-static inline int env_thread_mutex_init(EnvThreadMutex *emutex)
+static inline int env_thread_mutex_init(env_thread_mutex_t *emutex)
 {
     return pthread_mutex_init(emutex, NULL);
 }
 
-static inline void env_thread_mutex_destroy(EnvThreadMutex *emutex)
+static inline void env_thread_mutex_destroy(env_thread_mutex_t *emutex)
 {
     pthread_mutex_destroy(emutex);
 }
 
-static inline void env_thread_mutex_lock(EnvThreadMutex *emutex)
+static inline void env_thread_mutex_lock(env_thread_mutex_t *emutex)
 {
     pthread_mutex_lock(emutex);
 }
 
-static inline void env_thread_mutex_unlock(EnvThreadMutex *emutex)
+static inline void env_thread_mutex_unlock(env_thread_mutex_t *emutex)
 {
     pthread_mutex_unlock(emutex);
 }
 
-static inline int env_thread_cond_init(EnvThreadCond *econd)
+static inline int env_thread_cond_init(env_thread_cond_t *econd)
 {
     return pthread_cond_init(econd, NULL);
 }
 
-static inline void env_thread_cond_destroy(EnvThreadCond *econd)
+static inline void env_thread_cond_destroy(env_thread_cond_t *econd)
 {
     pthread_cond_destroy(econd);
 }
 
-static inline void env_thread_cond_signal(EnvThreadCond *econd)
+static inline void env_thread_cond_signal(env_thread_cond_t *econd)
 {
     pthread_cond_signal(econd);
 }
 
-static inline void env_thread_cond_broadcast(EnvThreadCond *econd)
+static inline void env_thread_cond_broadcast(env_thread_cond_t *econd)
 {
     pthread_cond_broadcast(econd);
 }
 
-static inline void env_thread_cond_wait(EnvThreadCond *econd, EnvThreadMutex *emutex)
+static inline void env_thread_cond_wait(env_thread_cond_t *econd, env_thread_mutex_t *emutex)
 {
     pthread_cond_wait(econd, emutex);
 }
 
-static inline int env_thread_cond_timedwait(EnvThreadCond *econd, EnvThreadMutex *emutex, uint64_t timeout)
+static inline int env_thread_cond_timedwait(env_thread_cond_t *econd, env_thread_mutex_t *emutex, uint64_t timeout)
 {
     struct timespec ts;
     ts.tv_sec = timeout / NANOSEC;

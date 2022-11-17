@@ -86,7 +86,7 @@ static void number16_to_ldb()
     fprintf(stdout, "==================================\n");
 
     int16_t n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
-    Lineardb ldb = __n2b16(i16);
+    lineardb_t ldb = __n2b16(i16);
     n16 = __b2n16(&ldb);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
@@ -106,7 +106,7 @@ static void number32_to_ldb()
     fprintf(stdout, "==================================\n");
 
     int32_t n32, i32 = -12345;
-    Lineardb ldb = __n2b32(i32);
+    lineardb_t ldb = __n2b32(i32);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
@@ -126,7 +126,7 @@ static void number64_to_ldb()
     fprintf(stdout, "==================================\n");
 
     int64_t n64, i64 = -12345;
-    Lineardb ldb = __n2b64(i64);
+    lineardb_t ldb = __n2b64(i64);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
@@ -147,10 +147,10 @@ static void string_to_ldb()
     fprintf(stdout, "==================================\n");
 
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    Lineardb *ldb = lineardb_create_with_string(string8bit);
+    lineardb_t *ldb = lineardb_build_with_string(string8bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string8bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
-    lineardb_release(&ldb);
+    lineardb_destroy(&ldb);
 
     fprintf(stdout, "==================================\n");
 
@@ -160,10 +160,10 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
-    ldb = lineardb_create_with_string(string16bit);
+    ldb = lineardb_build_with_string(string16bit);
     fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string16bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
-    lineardb_release(&ldb);
+    lineardb_destroy(&ldb);
 
     uint32_t len = 0xabcdef;
     ldb = malloc(BLOCK_HEAD + len);
@@ -171,7 +171,7 @@ static void string_to_ldb()
     lineardb_load_data(ldb, data, len);
     fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
     free(data);
-    lineardb_release(&ldb);
+    lineardb_destroy(&ldb);
 }
 
 
@@ -180,7 +180,7 @@ static void float_to_ldb()
     fprintf(stdout, "==================================\n");
 
     float f32 = 12345.12345f, fn32;
-    Lineardb ldb = __n2b32(f32);
+    lineardb_t ldb = __n2b32(f32);
     fn32 = b2f32(&ldb);
     fprintf(stdout, "float=%f ldb=%f\n", f32, fn32);
 

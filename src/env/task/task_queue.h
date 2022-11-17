@@ -9,26 +9,26 @@ typedef struct env_task_queue {
     uint8_t running;
     uint8_t write_waiting;
     uint8_t read_waiting;
-    EnvThread ethread;
-    EnvMutex emutex;
-    LineardbPipe *lpipe;
-}EnvTaskQueue;
+    env_thread_t ethread;
+    env_mutex_t emutex;
+    lineardb_pipe_t *lpipe;
+}env_taskqueue_t;
 
 
-typedef void (*env_task_func)(lkv_parser_t parser);
+typedef void (*env_task_func)(linearkv_parser_t parser);
 
 static inline void* task_main_loop(void *ctx)
 {
-    EnvTaskQueue *tq = (EnvTaskQueue *)ctx;
-    Lineardb *ldb;
-    lkv_builder_t lkv;
+    env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
+    lineardb_t *ldb;
+    linearkv_builder_t lkv;
     lkv_clear(&lkv);
     
     while (1) {
 
         env_mutex_lock(&tq->emutex);
         // ldb = lineardbPipe_hold_block(tq->lpipe);
-        lkv.pos = lineardbPipe_read(tq->lpipe, lkv.head, lkv.len);
+        lkv.pos = lineardb_pipe_read(tq->lpipe, lkv.head, lkv.len);
         if (lkv.pos > lkv.len){
             fprintf(stderr, "Cannot read block: size %u\n", lkv.pos);
             break;
@@ -73,17 +73,17 @@ static inline void* task_main_loop(void *ctx)
 }
 
 
-static inline EnvTaskQueue* env_taskQueue_create()
+static inline env_taskqueue_t* env_taskqueue_build()
 {
     int ret;
 
-    EnvTaskQueue *tq = (EnvTaskQueue *)malloc(sizeof(EnvTaskQueue));
+    env_taskqueue_t *tq = (env_taskqueue_t *)malloc(sizeof(env_taskqueue_t));
     if (tq == NULL){
         fprintf(stderr, "1\n");
         return NULL;
     }
 
-    tq->lpipe = lineardbPipe_create(1 << 16);
+    tq->lpipe = lineardb_pipe_build(1 << 16);
     if (tq->lpipe == NULL){
         fprintf(stderr, "2\n");
         goto Clear;
@@ -105,12 +105,12 @@ static inline EnvTaskQueue* env_taskQueue_create()
     return tq;
 
 Clear:
-    if (tq->lpipe) lineardbPipe_release(&tq->lpipe);
+    if (tq->lpipe) lineardb_pipe_destroy(&tq->lpipe);
     if (tq) free(tq);
     return NULL;
 }
 
-static inline void env_taskQueue_exit(EnvTaskQueue *tq)
+static inline void env_taskqueue_exit(env_taskqueue_t *tq)
 {
     env_mutex_lock(&tq->emutex);
     if (tq->running){
@@ -123,22 +123,22 @@ static inline void env_taskQueue_exit(EnvTaskQueue *tq)
     }
 }
 
-static inline void env_taskQueue_destroy(EnvTaskQueue **pp_tq)
+static inline void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
 {
     if (pp_tq && *pp_tq){
-        EnvTaskQueue *tq = *pp_tq;
+        env_taskqueue_t *tq = *pp_tq;
         *pp_tq = NULL;
-        env_taskQueue_exit(tq);
+        env_taskqueue_exit(tq);
         env_mutex_destroy(&tq->emutex);
-        lineardbPipe_release(&tq->lpipe);
+        lineardb_pipe_destroy(&tq->lpipe);
         free(tq);
     }
 }
 
-static inline void env_taskQueue_push(EnvTaskQueue *tq, lkv_builder_t *lkv)
+static inline void env_taskqueue_push(env_taskqueue_t *tq, linearkv_builder_t *lkv)
 {
     env_mutex_lock(&tq->emutex);
-    while (lineardbPipe_write(tq->lpipe, lkv->head, lkv->pos) == 0) {
+    while (lineardb_pipe_write(tq->lpipe, lkv->head, lkv->pos) == 0) {
         tq->write_waiting = 1;
         env_mutex_wait(&tq->emutex);
         tq->write_waiting = 0;
