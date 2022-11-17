@@ -6,42 +6,54 @@
 #include "lineardb_pipe.h"
 
 typedef struct env_task_queue {
-    size_t running;
+    uint8_t running;
+    uint8_t write_waiting;
+    uint8_t read_waiting;
     EnvThread ethread;
     EnvMutex emutex;
     LineardbPipe *lpipe;
 }EnvTaskQueue;
 
 
-typedef void (*task_func)(Linearkv *lkv);
+typedef void (*task_func)(lkv_parser_t parser);
 
 static void* task_main_loop(void *ctx)
 {
     EnvTaskQueue *tq = (EnvTaskQueue *)ctx;
     Lineardb *ldb;
-    uint8_t buf[10240];
-    Linearkv lkv;
+    lkv_builder_t lkv;
+    lkv_builder_clear(&lkv);
     
-    while (tq->running) {
+    while (1) {
 
         env_mutex_lock(&tq->emutex);
-        ldb = lineardbPipe_hold_block(tq->lpipe);
-        if (ldb){
+        // ldb = lineardbPipe_hold_block(tq->lpipe);
+        lkv.pos = lineardbPipe_read(tq->lpipe, lkv.head, lkv.len);
+        if (lkv.pos > lkv.len){
+            fprintf(stderr, "Cannot read block: size %u\n", lkv.pos);
+            break;
+        }
+        // if (ldb)
+        if (lkv.pos != 0)
+        {
             // fprintf(stderr, "task working\n");
-            linearkv_bind_buffer(&lkv, buf, 10240);
-            linearkv_load_lineardb(&lkv, ldb);
+            // linearkv_bind_buffer(&lkv, buf, 10240);
+            // lkv_load_lineardb(&lkv, ldb);
             // fprintf(stdout, "task working hold kv size %u\n", __sizeof_data(ldb));
             // lkv.pos = __sizeof_data(ldb);
             // memcpy(buf, __dataof_block(ldb), lkv.pos);
             // fprintf(stderr, "task working 1\n");
-            lineardbPipe_free_block(tq->lpipe, ldb);
+            // lineardbPipe_free_block(tq->lpipe, ldb);
             // fprintf(stderr, "task working 2\n");
-            env_mutex_signal(&tq->emutex);
+            if (tq->write_waiting){
+                env_mutex_signal(&tq->emutex);
+            }
             env_mutex_unlock(&tq->emutex);
 
             // fprintf(stderr, "task working 3\n");
-            ldb = linearkv_find(&lkv, "func");
-            // fprintf(stderr, "task working %x\n", __b2n64(ldb));
+            ldb = lkv_find(&lkv, "func");
+            // ldb = lkv_find(&lkv, "string");
+            // fprintf(stderr, "task working %s\n", __dataof_block(ldb));
             ((task_func)__b2n64(ldb))(&lkv);
             // fprintf(stderr, "task working 5\n");
 
@@ -51,7 +63,9 @@ static void* task_main_loop(void *ctx)
                 env_mutex_unlock(&tq->emutex);
                 break;
             }
+            tq->read_waiting = 1;
             env_mutex_wait(&tq->emutex);
+            tq->read_waiting = 0;
             env_mutex_unlock(&tq->emutex);
         }
     }
@@ -96,21 +110,44 @@ Clear:
     return NULL;
 }
 
-static inline void env_taskQueue_push(EnvTaskQueue *tq, Linearkv *lkv)
+static inline void env_taskQueue_exit(EnvTaskQueue *tq)
 {
     env_mutex_lock(&tq->emutex);
-    // fprintf(stdout, "push kv size %u\n", lkv->pos);
-    while (lineardbPipe_write(tq->lpipe, lkv->head, lkv->pos) != lkv->pos) {
-        env_mutex_wait(&tq->emutex);
+    if (tq->running){
+        tq->running = 0;
+        env_mutex_broadcast(&tq->emutex);
+        env_mutex_unlock(&tq->emutex);
+        env_thread_join(tq->ethread);
+    }else {
+        env_mutex_unlock(&tq->emutex);
     }
-    env_mutex_signal(&tq->emutex);
+}
+
+static inline void env_taskQueue_destroy(EnvTaskQueue **pp_tq)
+{
+    if (pp_tq && *pp_tq){
+        EnvTaskQueue *tq = *pp_tq;
+        *pp_tq = NULL;
+        env_taskQueue_exit(tq);
+        env_mutex_destroy(&tq->emutex);
+        lineardbPipe_release(&tq->lpipe);
+        free(tq);
+    }
+}
+
+static inline void env_taskQueue_push(EnvTaskQueue *tq, lkv_builder_t *lkv)
+{
+    env_mutex_lock(&tq->emutex);
+    while (lineardbPipe_write(tq->lpipe, lkv->head, lkv->pos) == 0) {
+        tq->write_waiting = 1;
+        env_mutex_wait(&tq->emutex);
+        tq->write_waiting = 0;
+    }
+    if (tq->read_waiting){
+        env_mutex_signal(&tq->emutex);
+    }
     env_mutex_unlock(&tq->emutex);
 }
 
-static inline void env_taskQueue_flush(EnvTaskQueue *tq)
-{
-    // tq->running = 0;
-    env_thread_join(tq->ethread);
-}
 
 #endif //__ENV_TASK_QUEUE__

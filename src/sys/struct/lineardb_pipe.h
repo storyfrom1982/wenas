@@ -6,6 +6,7 @@ typedef struct linear_data_block_pipe {
     uint32_t read_pos;
     uint32_t write_pos;
     uint32_t leftover;
+    uint32_t block_count;
     Lineardb *read_block;
     Lineardb *write_block;
     uint8_t *buf;
@@ -71,7 +72,29 @@ static inline uint32_t lineardbPipe_write(LineardbPipe *lp, void *data, uint32_t
             memcpy(__dataof_block(lp->write_block), data, size);
             lp->write_pos += ldb_size;
             lp->leftover = lp->len - (lp->write_pos & (lp->len - 1));
+            lp->block_count++;
             return size;
+        }
+    }
+
+    return 0;
+}
+
+static inline uint32_t lineardbPipe_read(LineardbPipe *lp, uint8_t *buf, uint32_t size)
+{
+    while (((uint32_t)(lp->write_pos - lp->read_pos)) > 0) {
+        if (lp->read_block->byte[0] == 0){
+            lp->read_pos += ((lp->buf + lp->len) - lp->read_block->byte);
+            lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+        }else {
+            uint32_t data_size = __sizeof_data(lp->read_block);
+            if (size >= data_size){
+                memcpy(buf, __dataof_block(lp->read_block), data_size);
+                lp->read_pos += (data_size + __sizeof_head(lp->read_block));
+                lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+                lp->block_count--;
+            }
+            return data_size;
         }
     }
 
@@ -97,5 +120,21 @@ static inline void lineardbPipe_free_block(LineardbPipe *lp, Lineardb *ldb)
     if (ldb == lp->read_block){
         lp->read_pos += (__sizeof_block(lp->read_block));
         lp->read_block = (Lineardb *)(lp->buf + (lp->read_pos & (lp->len - 1)));
+        lp->block_count--;
     }
+}
+
+static inline uint32_t lineardbPipe_readable(LineardbPipe *lp)
+{
+    return ((uint32_t)(lp->write_pos - lp->read_pos));
+}
+
+static inline uint32_t lineardbPipe_writable(LineardbPipe *lp)
+{
+    return ((uint32_t)(lp->len - lp->write_pos + lp->read_pos));
+}
+
+static inline uint32_t lineardbPipe_block_count(LineardbPipe *lp)
+{
+    return lp->block_count;
 }
