@@ -15,14 +15,14 @@ typedef struct env_task_queue {
 }EnvTaskQueue;
 
 
-typedef void (*task_func)(lkv_parser_t parser);
+typedef void (*env_task_func)(lkv_parser_t parser);
 
-static void* task_main_loop(void *ctx)
+static inline void* task_main_loop(void *ctx)
 {
     EnvTaskQueue *tq = (EnvTaskQueue *)ctx;
     Lineardb *ldb;
     lkv_builder_t lkv;
-    lkv_builder_clear(&lkv);
+    lkv_clear(&lkv);
     
     while (1) {
 
@@ -54,7 +54,7 @@ static void* task_main_loop(void *ctx)
             ldb = lkv_find(&lkv, "func");
             // ldb = lkv_find(&lkv, "string");
             // fprintf(stderr, "task working %s\n", __dataof_block(ldb));
-            ((task_func)__b2n64(ldb))(&lkv);
+            ((env_task_func)__b2n64(ldb))(&lkv);
             // fprintf(stderr, "task working 5\n");
 
         }else {
