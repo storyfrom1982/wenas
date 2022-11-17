@@ -4,6 +4,7 @@ extern void linearkv_test();
 extern void lineardb_test();
 extern void linearPipe_test();
 extern void thread_test();
+extern void task_queue_test();
 
 int main(int argc, char *argv[]) 
 {
@@ -17,7 +18,8 @@ int main(int argc, char *argv[])
 	// lineardb_test();
 	// linearkv_test();
 	// linearPipe_test();
-	thread_test();
+	// thread_test();
+	task_queue_test();
 
 	return 0;
 }

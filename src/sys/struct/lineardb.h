@@ -282,6 +282,11 @@ static inline double b2f64(Lineardb *b)
 #include <stdlib.h>
 
 #define __sizeof_head(b)   (1 + (((b)->byte[0]) & BLOCK_HEAD_MASK))
+#define __sizeof_data(b) \
+        ( (((b)->byte[0]) & BLOCK_TYPE_OBJECT) \
+        ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? __b2n8(b) \
+        : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
+        : 0 )
 
 #define __sizeof_block(b) \
         ( __sizeof_head(b) + \

@@ -14,7 +14,7 @@ typedef struct linear_key_value {
 }Linearkv;
 
 
-static inline void linearkv_bind_buffer(Linearkv *lkv, char *buf, uint32_t size)
+static inline void linearkv_bind_buffer(Linearkv *lkv, uint8_t *buf, uint32_t size)
 {
     lkv->pos = 0;
     lkv->size = size;
@@ -22,10 +22,16 @@ static inline void linearkv_bind_buffer(Linearkv *lkv, char *buf, uint32_t size)
     lkv->value = NULL;
 }
 
+static inline void linearkv_load_lineardb(Linearkv *lkv, Lineardb *ldb)
+{
+    lkv->pos = __sizeof_data(ldb);
+    memcpy(lkv->head, __dataof_block(ldb), lkv->pos);
+}
+
 static inline Linearkv* linearkv_create(uint32_t capacity)
 {
     Linearkv *lkv = (Linearkv *)malloc(sizeof(Linearkv));
-    char *buf = (char *)malloc(capacity);
+    uint8_t *buf = (uint8_t *)malloc(capacity);
     linearkv_bind_buffer(lkv, buf, capacity);
     return lkv;
 }
