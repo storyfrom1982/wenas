@@ -17,9 +17,9 @@ typedef struct heap {
 }heap_t;
 
 
-#define __heap_top(i)       (i/2)
-#define __heap_left(i)      (2*i+1)
-#define __heap_right(i)     (2*i+2)
+#define __heap_top(i)       (i>>1)
+#define __heap_left(i)      (i<<1)
+#define __heap_right(i)     ((i<<1)+1)
 
 
 
@@ -43,56 +43,46 @@ static inline void heap_destroy(heap_t **pp_heap)
 //ascending/descending 升序/降序 最小堆/最大堆
 static inline int heap_aes_push(heap_t *h, heapment_t m)
 {
-    int i = h->pos;
-
-    while (i > 0) {
-        if (m.key < h->array[__heap_top(i)].key){
+    if(h->pos < h->len){
+        h->pos++;
+        int i = h->pos;
+        while (i > 0 && h->array[__heap_top(i)].key > m.key) {
             h->array[i] = h->array[__heap_top(i)];
             i = __heap_top(i);
-        }else {
-            h->array[i] = m;
-            h->pos ++;
-            return h->pos;
         }
+        h->array[i] = m;
+        return h->pos;
     }
 
-    h->array[0] = m;
-    h->pos ++;
-    return h->pos;
+    return 0;
 }
 
 static inline heapment_t heap_aes_pop(heap_t *h)
 {
-    int i = 0;
-    h->pos --;
-    h->array[h->len] = h->array[0];
-    h->array[0] = h->array[h->pos];
-    h->array[h->pos] = h->array[h->len];
+    heapment_t tmp, min = h->array[1];
+    h->array[1] = h->array[h->pos];
+    uint32_t left, right, index, smallest = 1;
 
-    while (__heap_left(i) < h->pos)
-    {
-        if (__heap_right(i) >= h->pos || h->array[__heap_left(i)].key < h->array[__heap_right(i)].key){
-            if (h->array[__heap_left(i)].key < h->array[i].key){
-                h->array[h->len] = h->array[i];
-                h->array[i] = h->array[__heap_left(i)];
-                h->array[__heap_left(i)] = h->array[h->len];
-                i = __heap_left(i);
-            }else {
-                break;
-            }
-        }else {
-            if (h->array[__heap_right(i)].key < h->array[i].key){
-                h->array[h->len] = h->array[i];
-                h->array[i] = h->array[__heap_right(i)];
-                h->array[__heap_right(i)] = h->array[h->len];
-                i = __heap_right(i);
-            }else {
-                break;
-            }
+    do {
+        index = smallest;
+        left = __heap_left(smallest);
+        right = __heap_right(smallest);
+
+        if (left < h->pos && h->array[smallest].key > h->array[left].key) {
+            smallest = left;
         }
-    }
+        if (right < h->pos && h->array[smallest].key > h->array[right].key) {
+            smallest = right;
+        }
 
-    return h->array[h->pos];
+        tmp = h->array[index];
+        h->array[index] = h->array[smallest];
+        h->array[smallest] = tmp;
+
+    }while (smallest != index);
+
+    h->pos--;
+    return min;
 }
 
 #endif //__HEAP_H__
