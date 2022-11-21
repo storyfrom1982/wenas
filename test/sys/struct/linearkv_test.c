@@ -2,9 +2,8 @@
 
 static void test_append_string()
 {
-	linearkv_builder_t lkv;
-	lkv_clear(&lkv);
-	linearkv_parser_t parser = &lkv;
+	linearkv_t *lkv = lkv_build(10240);
+	linearkv_parser_t parser = lkv;
 	lineardb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
@@ -30,16 +29,13 @@ static void test_append_string()
     value_buf[n] = '\0';
     fprintf(stdout, "memcpy=%s\n", value_buf);
 
-	fflush(stdout);
-
-	// linearkv_release(parser);
+	lkv_destroy(&lkv);
 }
 
 static void test_find_from()
 {
-	linearkv_builder_t lkv;
-	lkv_clear(&lkv);
-	linearkv_parser_t parser = &lkv;
+	linearkv_t *lkv = lkv_build(10240);
+	linearkv_parser_t parser = lkv;
 	lineardb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
@@ -66,14 +62,13 @@ static void test_find_from()
 		v = lkv_after(parser, key_buf);
 	}
 
-	fflush(stdout);
+	lkv_destroy(&lkv);
 }
 
 static void test_find_number()
 {
-	linearkv_builder_t lkv;
-	lkv_clear(&lkv);
-	linearkv_parser_t parser = &lkv;
+	linearkv_t *lkv = lkv_build(10240);
+	linearkv_parser_t parser = lkv;
 	lineardb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
@@ -101,14 +96,13 @@ static void test_find_number()
 		v = lkv_after(parser, key_buf);
 	}
 
-	fflush(stdout);
+	lkv_destroy(&lkv);
 }
 
 static void test_find_float()
 {
-	linearkv_builder_t lkv;
-	lkv_clear(&lkv);
-	linearkv_parser_t parser = &lkv;
+	linearkv_t *lkv = lkv_build(10240);
+	linearkv_parser_t parser = lkv;
 	lineardb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
@@ -144,6 +138,8 @@ static void test_find_float()
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = lkv_after(parser, key_buf);
 	}
+
+	lkv_destroy(&lkv);
 }
 
 void linearkv_test()

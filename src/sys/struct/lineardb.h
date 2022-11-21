@@ -71,19 +71,20 @@ typedef struct linear_data_block {
                 | (int64_t)(b)->byte[2] << 48 \
                 | (int64_t)(b)->byte[3] << 40 \
                 | (int64_t)(b)->byte[4] << 32 \
-                | (b)->byte[5] << 24 \
-                | (b)->byte[6] << 16 \
-                | (b)->byte[7] << 8 \
-                | (b)->byte[8]) \
+                | (int64_t)(b)->byte[5] << 24 \
+                | (int64_t)(b)->byte[6] << 16 \
+                | (int64_t)(b)->byte[7] << 8 \
+                | (int64_t)(b)->byte[8]) \
                 : ((int64_t)(b)->byte[8] << 56 \
                 | (int64_t)(b)->byte[7] << 48 \
                 | (int64_t)(b)->byte[6] << 40 \
                 | (int64_t)(b)->byte[5] << 32 \
-                | (b)->byte[4] << 24 \
-                | (b)->byte[3] << 16 \
-                | (b)->byte[2] << 8 \
-                | (b)->byte[1]) \
+                | (int64_t)(b)->byte[4] << 24 \
+                | (int64_t)(b)->byte[3] << 16 \
+                | (int64_t)(b)->byte[2] << 8 \
+                | (int64_t)(b)->byte[1]) \
 			)
+    
 #else //__BIG_ENDIAN__
 
 #define __n2b8(n) \
@@ -132,18 +133,18 @@ typedef struct linear_data_block {
                 | (int64_t)(b)->byte[7] << 48 \
                 | (int64_t)(b)->byte[6] << 40 \
                 | (int64_t)(b)->byte[5] << 32 \
-                | (b)->byte[4] << 24 \
-                | (b)->byte[3] << 16 \
-                | (b)->byte[2] << 8 \
-                | (b)->byte[1]) \
+                | (int64_t)(b)->byte[4] << 24 \
+                | (int64_t)(b)->byte[3] << 16 \
+                | (int64_t)(b)->byte[2] << 8 \
+                | (int64_t)(b)->byte[1]) \
                 : ((int64_t)(b)->byte[1] << 56 \
                 | (int64_t)(b)->byte[2] << 48 \
                 | (int64_t)(b)->byte[3] << 40 \
                 | (int64_t)(b)->byte[4] << 32 \
-                | (b)->byte[5] << 24 \
-                | (b)->byte[6] << 16 \
-                | (b)->byte[7] << 8 \
-                | (b)->byte[8]) \
+                | (int64_t)(b)->byte[5] << 24 \
+                | (int64_t)(b)->byte[6] << 16 \
+                | (int64_t)(b)->byte[7] << 8 \
+                | (int64_t)(b)->byte[8]) \
 			)
 
 #endif //__LITTLE_ENDIAN__

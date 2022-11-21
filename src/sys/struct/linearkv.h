@@ -3,8 +3,6 @@
 
 #include "lineardb.h"
 
-#define LKV_BUILDER_MAX_SIZE    10240
-
 typedef struct linear_key {
     uint8_t byte[8];
 }lkey_t;
@@ -13,19 +11,37 @@ typedef struct linear_key_value {
     uint32_t len, pos;
     lkey_t *key;
     lineardb_t *value;
-    uint8_t head[LKV_BUILDER_MAX_SIZE];
-}linearkv_builder_t, *linearkv_parser_t;
+    uint8_t head[1];
+}linearkv_t, *linearkv_parser_t;
 
 
-static inline void lkv_clear(linearkv_builder_t *builder)
+static inline linearkv_t* lkv_build(uint32_t size)
 {
-    builder->len = LKV_BUILDER_MAX_SIZE;
-    builder->pos = 0;
-    builder->key = NULL;
-    builder->value = NULL;
+    linearkv_t *lkv = malloc(sizeof(linearkv_t) + size);
+    lkv->len = size;
+    lkv->pos = 0;
+    lkv->key = NULL;
+    lkv->value = NULL;
+    return lkv;
 }
 
-static inline void lkv_add_str(linearkv_builder_t *lkv, char *key, char *value)
+static inline void lkv_destroy(linearkv_t **pp_lkv)
+{
+    if (pp_lkv && *pp_lkv){
+        linearkv_t *lkv = *pp_lkv;
+        *pp_lkv = NULL;
+        free(lkv);
+    }
+}
+
+static inline void lkv_clear(linearkv_t *lkv)
+{
+    if (lkv){
+        lkv->pos = 0;
+    }
+}
+
+static inline void lkv_add_str(linearkv_t *lkv, char *key, char *value)
 {
     lkv->key = (lkey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -37,7 +53,7 @@ static inline void lkv_add_str(linearkv_builder_t *lkv, char *key, char *value)
     lkv->pos += __sizeof_block(lkv->value);
 }
 
-static inline void lkv_add_number(linearkv_builder_t *lkv, char *key, lineardb_t ldb)
+static inline void lkv_add_number(linearkv_t *lkv, char *key, lineardb_t ldb)
 {
     lkv->key = (lkey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -49,37 +65,37 @@ static inline void lkv_add_number(linearkv_builder_t *lkv, char *key, lineardb_t
     lkv->pos += __sizeof_block(lkv->value);
 }
 
-static inline void lkv_add_n8(linearkv_builder_t *lkv, char *key, int8_t n)
+static inline void lkv_add_n8(linearkv_t *lkv, char *key, int8_t n)
 {
     lkv_add_number(lkv, key, __n2b8(n));
 }
 
-static inline void lkv_add_n16(linearkv_builder_t *lkv, char *key, int16_t n)
+static inline void lkv_add_n16(linearkv_t *lkv, char *key, int16_t n)
 {
     lkv_add_number(lkv, key, __n2b16(n));
 }
 
-static inline void lkv_add_n32(linearkv_builder_t *lkv, char *key, int32_t n)
+static inline void lkv_add_n32(linearkv_t *lkv, char *key, int32_t n)
 {
     lkv_add_number(lkv, key, __n2b32(n));
 }
 
-static inline void lkv_add_n64(linearkv_builder_t *lkv, char *key, int64_t n)
+static inline void lkv_add_n64(linearkv_t *lkv, char *key, int64_t n)
 {
     lkv_add_number(lkv, key, __n2b64(n));
 }
 
-static inline void lkv_add_f32(linearkv_builder_t *lkv, char *key, float f)
+static inline void lkv_add_f32(linearkv_t *lkv, char *key, float f)
 {
     lkv_add_number(lkv, key, f2b32(f));
 }
 
-static inline void lkv_add_f64(linearkv_builder_t *lkv, char *key, double f)
+static inline void lkv_add_f64(linearkv_t *lkv, char *key, double f)
 {
     lkv_add_number(lkv, key, f2b64(f));
 }
 
-static inline void lkv_add_ptr(linearkv_builder_t *lkv, char *key, void *p)
+static inline void lkv_add_ptr(linearkv_t *lkv, char *key, void *p)
 {
     lkv_add_number(lkv, key, n2b64((int64_t)(p)));
 }

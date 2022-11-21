@@ -20,8 +20,8 @@ int main(int argc, char *argv[])
 	// linearkv_test();
 	// linearPipe_test();
 	// thread_test();
-	// task_queue_test();
-	heap_test();
+	task_queue_test();
+	// heap_test();
 
 	return 0;
 }
