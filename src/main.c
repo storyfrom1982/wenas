@@ -16,11 +16,11 @@ int main(int argc, char *argv[])
 	fprintf(stdout, "__BIG_ENDIAN__\n");
 #endif
 
-	// lineardb_test();
-	// linearkv_test();
-	// linearPipe_test();
+	lineardb_test();
+	linearkv_test();
+	linearPipe_test();
 	// thread_test();
-	task_queue_test();
+	// task_queue_test();
 	// heap_test();
 
 	return 0;
