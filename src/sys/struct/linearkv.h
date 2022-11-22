@@ -11,13 +11,14 @@ typedef struct linear_key_value {
     uint32_t len, pos;
     lkey_t *key;
     lineardb_t *value;
-    uint8_t head[1];
+    uint8_t *head;
 }linearkv_t, *linearkv_parser_t;
 
 
 static inline linearkv_t* lkv_build(uint32_t size)
 {
-    linearkv_t *lkv = (linearkv_t *)malloc(sizeof(linearkv_t) + size);
+    linearkv_t *lkv = (linearkv_t *)malloc(sizeof(linearkv_t));
+    lkv->head = (uint8_t*) malloc(size);
     lkv->len = size;
     lkv->pos = 0;
     lkv->key = NULL;
@@ -30,8 +31,19 @@ static inline void lkv_destroy(linearkv_t **pp_lkv)
     if (pp_lkv && *pp_lkv){
         linearkv_t *lkv = *pp_lkv;
         *pp_lkv = NULL;
+        if (lkv->head){
+            free(lkv->head);
+        }
         free(lkv);
     }
+}
+
+static inline void lkv_bind_block(linearkv_t *lkv, lineardb_t *ldb)
+{
+    lkv->len = lkv->pos = __sizeof_data(ldb);
+    lkv->head = __dataof_block(ldb);
+    lkv->key = NULL;
+    lkv->value = NULL;
 }
 
 static inline void lkv_clear(linearkv_t *lkv)
@@ -53,7 +65,7 @@ static inline void lkv_add_str(linearkv_t *lkv, const char *key, char *value)
     lkv->pos += __sizeof_block(lkv->value);
 }
 
-static inline void lkv_add_obj(linearkv_t *lkv, const char *key, lineardb_t *ldb)
+static inline void lkv_add_obj(linearkv_t *lkv, const char *key, linearkv_t *obj)
 {
     lkv->key = (lkey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -61,7 +73,7 @@ static inline void lkv_add_obj(linearkv_t *lkv, const char *key, lineardb_t *ldb
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
     lkv->value = (lineardb_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    lineardb_load_binary(lkv->value, __dataof_block(ldb), __sizeof_data(ldb));
+    lineardb_load_binary(lkv->value, obj->head, obj->pos);
     lkv->value->byte[0] |= BLOCK_TYPE_BLOCK;
     lkv->pos += __sizeof_block(lkv->value);
 }
@@ -137,6 +149,35 @@ static inline void lkv_add_ptr(linearkv_t *lkv, const char *key, void *p)
 static inline void lkv_add_bool(linearkv_t *lkv, const char *key, uint8_t b)
 {
     lkv_add_number(lkv, key, __boolean2block(b));
+}
+
+static inline lineardb_t* lkv_head(linearkv_parser_t parser)
+{
+    parser->key = (lkey_t *)(parser->head);
+    parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+    return parser->value;
+}
+
+static inline lineardb_t* lkv_next(linearkv_parser_t parser)
+{
+    if (parser->value){
+        lineardb_t *start_pos = parser->value;
+        uint32_t find_pos = ((start_pos->byte) - (parser->head) + __sizeof_block(parser->value));
+        if (find_pos < parser->pos){
+            parser->key = (lkey_t *)(parser->head + find_pos);
+            parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+            return parser->value;
+        }
+    }
+    return NULL;
+}
+
+static inline const char* lkv_current_key(linearkv_parser_t parser)
+{
+    if (parser->key){
+        return (const char *)parser->key->byte;
+    }
+    return "";
 }
 
 static inline lineardb_t* lkv_find(linearkv_parser_t parser, const char *key)

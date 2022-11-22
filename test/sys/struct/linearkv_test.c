@@ -1,7 +1,7 @@
 #include "linearkv.h"
 #include <stdio.h>
 
-static void test_append_string()
+static void test_add_string()
 {
 	linearkv_t *lkv = lkv_build(10240);
 	linearkv_parser_t parser = lkv;
@@ -33,7 +33,7 @@ static void test_append_string()
 	lkv_destroy(&lkv);
 }
 
-static void test_find_from()
+static void test_find_after()
 {
 	linearkv_t *lkv = lkv_build(10240);
 	linearkv_parser_t parser = lkv;
@@ -143,10 +143,117 @@ static void test_find_float()
 	lkv_destroy(&lkv);
 }
 
+
+static void print_objcet(linearkv_t *lkv)
+{
+	fprintf(stdout, "objcet >>>>---------->\n");
+
+	lineardb_t *ldb = lkv_head(lkv);
+
+	do {
+
+		if (__typeis_number(ldb)){
+
+			if (__typeof_block(ldb) == BLOCK_TYPE_INTEGER){
+
+				if (ldb->byte[0] & BLOCK_TYPE_8BIT){
+					fprintf(stdout, "key=%s value=%hhd\n", lkv_current_key(lkv), __b2n8(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_16BIT){
+					fprintf(stdout, "key=%s value=%hd\n", lkv_current_key(lkv), __b2n16(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+					fprintf(stdout, "key=%s value=%d\n", lkv_current_key(lkv), __b2n32(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_64BIT){
+					fprintf(stdout, "key=%s value=%ld\n", lkv_current_key(lkv), __b2n64(ldb));
+				}
+
+			}else if (__typeof_block(ldb) == BLOCK_TYPE_UNSIGNED){
+
+				if (ldb->byte[0] & BLOCK_TYPE_8BIT){
+					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u8(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_16BIT){
+					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u16(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u32(ldb));
+				}else if (ldb->byte[0] & BLOCK_TYPE_64BIT){
+					fprintf(stdout, "key=%s value=%lu\n", lkv_current_key(lkv), __b2u64(ldb));
+				}
+
+			}else if (__typeof_block(ldb) == BLOCK_TYPE_FLOAT){
+
+				if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+					fprintf(stdout, "key=%s value=%f\n", lkv_current_key(lkv), __b2f32(ldb));
+				}else {
+					fprintf(stdout, "key=%s value=%lf\n", lkv_current_key(lkv), __b2f64(ldb));
+				}
+
+			}else if (__typeof_block(ldb) == BLOCK_TYPE_BOOLEAN){
+
+				fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u8(ldb));
+			}
+
+		}else if (__typeis_object(ldb)){
+
+			if (__typeof_block(ldb) == BLOCK_TYPE_STRING){
+
+				fprintf(stdout, "key=%s value %s\n", lkv_current_key(lkv), __dataof_block(ldb));
+
+			}else if (__typeof_block(ldb) == BLOCK_TYPE_BLOCK){
+
+				linearkv_t obj;
+				lkv_bind_block(&obj, ldb);
+				print_objcet(&obj);
+			}
+		}
+
+	}while ((ldb = lkv_next(lkv)) != NULL);
+}
+
+static void test_add_object()
+{
+	linearkv_t *lkv = lkv_build(10240);
+	linearkv_t *obj = lkv_build(10240);
+	linearkv_t *obj1 = lkv_build(10240);
+
+	lkv_add_n8(lkv, "int8", -8);
+	lkv_add_n16(lkv, "int16", -16);
+	lkv_add_n32(lkv, "int32", -32);
+	lkv_add_n64(lkv, "int32", -64);
+
+	lkv_add_bool(obj, "boolean", 1);
+	lkv_add_u8(obj, "uint8", 8);
+	lkv_add_u16(obj, "uint16", 16);
+	lkv_add_u32(obj, "uint32", 32);
+	lkv_add_u64(obj, "uint64", 64);
+	lkv_add_f32(obj, "float32", 32.32f);
+	lkv_add_f64(obj, "float64", 64.64f);
+	lkv_add_str(obj, "string", "string >>>>------------------------> object");
+
+	lkv_add_obj(lkv, "object", obj);
+
+	lkv_add_bool(obj1, "boolean", 1);
+	lkv_add_u8(obj1, "uint8", 8);
+	lkv_add_u16(obj1, "uint16", 16);
+	lkv_add_u32(obj1, "uint32", 32);
+	lkv_add_u64(obj1, "uint64", 64);
+	lkv_add_f32(obj1, "float32", 32.32f);
+	lkv_add_f64(obj1, "float64", 64.64f);
+	lkv_add_str(obj1, "string", "string >>>>------------------------> object 1");
+	lkv_add_obj(obj1, "object", obj);
+
+	lkv_add_obj(lkv, "object", obj1);
+
+	print_objcet(lkv);
+
+	lkv_destroy(&lkv);
+	lkv_destroy(&obj);
+	lkv_destroy(&obj1);
+}
+
 void linearkv_test()
 {
-	test_append_string();
-	test_find_from();
+	test_add_string();
+	test_find_after();
 	test_find_float();
 	test_find_number();
+	test_add_object();
 }
