@@ -156,31 +156,31 @@ static void print_objcet(linearkv_t *lkv)
 
 			if (__typeof_block(ldb) == BLOCK_TYPE_INTEGER){
 
-				if (ldb->byte[0] & BLOCK_TYPE_8BIT){
+				if (__typeis_n8bit(ldb)){
 					fprintf(stdout, "key=%s value=%hhd\n", lkv_current_key(lkv), __b2n8(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_16BIT){
+				}else if (__typeis_n16bit(ldb)){
 					fprintf(stdout, "key=%s value=%hd\n", lkv_current_key(lkv), __b2n16(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+				}else if (__typeis_n32bit(ldb)){
 					fprintf(stdout, "key=%s value=%d\n", lkv_current_key(lkv), __b2n32(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_64BIT){
+				}else if (__typeis_n64bit(ldb)){
 					fprintf(stdout, "key=%s value=%ld\n", lkv_current_key(lkv), __b2n64(ldb));
 				}
 
 			}else if (__typeof_block(ldb) == BLOCK_TYPE_UNSIGNED){
 
-				if (ldb->byte[0] & BLOCK_TYPE_8BIT){
+				if (__typeis_n8bit(ldb)){
 					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u8(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_16BIT){
+				}else if (__typeis_n16bit(ldb)){
 					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u16(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+				}else if (__typeis_n32bit(ldb)){
 					fprintf(stdout, "key=%s value=%u\n", lkv_current_key(lkv), __b2u32(ldb));
-				}else if (ldb->byte[0] & BLOCK_TYPE_64BIT){
+				}else if (__typeis_n64bit(ldb)){
 					fprintf(stdout, "key=%s value=%lu\n", lkv_current_key(lkv), __b2u64(ldb));
 				}
 
 			}else if (__typeof_block(ldb) == BLOCK_TYPE_FLOAT){
 
-				if (ldb->byte[0] & BLOCK_TYPE_32BIT){
+				if (__typeis_n32bit(ldb)){
 					fprintf(stdout, "key=%s value=%f\n", lkv_current_key(lkv), __b2f32(ldb));
 				}else {
 					fprintf(stdout, "key=%s value=%lf\n", lkv_current_key(lkv), __b2f64(ldb));

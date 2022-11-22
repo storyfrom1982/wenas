@@ -256,9 +256,13 @@ typedef union {
 #define __block2boolean(b)       __block2number8bit(b)
 
 
-
-#define __typeis_object(b)      ((b)->byte[0] & BLOCK_TYPE_OBJECT)
 #define __typeis_number(b)      (!((b)->byte[0] & BLOCK_TYPE_OBJECT))
+#define __typeis_n8bit(b)       ((b)->byte[0] & BLOCK_TYPE_8BIT)
+#define __typeis_n16bit(b)      ((b)->byte[0] & BLOCK_TYPE_16BIT)
+#define __typeis_n32bit(b)      ((b)->byte[0] & BLOCK_TYPE_32BIT)
+#define __typeis_n64bit(b)      ((b)->byte[0] & BLOCK_TYPE_64BIT)
+#define __typeis_object(b)      ((b)->byte[0] & BLOCK_TYPE_OBJECT)
+
 
 #define __typeof_block(b)       ((b)->byte[0] & BLOCK_TYPE_MASK)
 

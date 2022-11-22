@@ -50,6 +50,8 @@ static inline void lkv_clear(linearkv_t *lkv)
 {
     if (lkv){
         lkv->pos = 0;
+        lkv->key = NULL;
+        lkv->value = NULL;
     }
 }
 

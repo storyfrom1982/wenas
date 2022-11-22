@@ -41,7 +41,7 @@ static inline void heap_destroy(heap_t **pp_heap)
 }
 
 //ascending/descending 升序/降序 最小堆/最大堆
-static inline int heap_aes_push(heap_t *h, heapment_t m)
+static inline int heap_asc_push(heap_t *h, heapment_t m)
 {
     if(h->pos < h->len){
         h->pos++;
@@ -57,7 +57,7 @@ static inline int heap_aes_push(heap_t *h, heapment_t m)
     return 0;
 }
 
-static inline heapment_t heap_aes_pop(heap_t *h)
+static inline heapment_t heap_asc_pop(heap_t *h)
 {
     heapment_t tmp, min = h->array[1];
     h->array[1] = h->array[h->pos];

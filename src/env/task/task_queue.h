@@ -31,13 +31,13 @@ static inline void* task_main_loop(void *ctx)
         env_mutex_lock(&tq->emutex);
 
         while (tq->timed_task->pos > 0 && tq->timed_task->array[1].key <= env_time()){
-            heapment_t element = heap_aes_pop(tq->timed_task);
+            heapment_t element = heap_asc_pop(tq->timed_task);
             linearkv_t *task = (linearkv_t *)element.value;
             ldb = lkv_find(task, "func");
             ((env_task_func)__b2n64(ldb))(task);
             if (lkv_find_n64(task, "loop") > 0){
                 element.key = env_time() + lkv_find_n64(task, "time");
-                heap_aes_push(tq->timed_task, element);
+                heap_asc_push(tq->timed_task, element);
             }            
         }
 
@@ -150,7 +150,7 @@ static inline void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
         env_taskqueue_exit(tq);
         env_mutex_destroy(&tq->emutex);
         while (tq->timed_task->pos > 0){
-            heapment_t element = heap_aes_pop(tq->timed_task);
+            heapment_t element = heap_asc_pop(tq->timed_task);
             if (element.value){
                 free(element.value);
             }
@@ -184,7 +184,7 @@ static inline void env_taskqueue_push_timedtask(env_taskqueue_t *tq, linearkv_t 
     heapment_t t;
     t.key = env_time() + lkv_find_n64(task, "time");
     t.value = task;
-    heap_aes_push(tq->timed_task, t);
+    heap_asc_push(tq->timed_task, t);
     env_mutex_signal(&tq->emutex);
     env_mutex_unlock(&tq->emutex);
 }
