@@ -177,26 +177,52 @@ static void string_to_ldb()
 
 static void float_to_ldb()
 {
-    fprintf(stdout, "==================================\n");
-
     float f32 = 12345.12345f, fn32;
-    lineardb_t ldb = __n2b32(f32);
+    lineardb_t ldb = __f2b32(f32);
+    fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
+
     fn32 = b2f32(&ldb);
     fprintf(stdout, "float=%f ldb=%f\n", f32, fn32);
 
+    fprintf(stdout, ">>>>------------>\n");
+
     double f64 = 123456.123456f, fn64;
-    ldb = __n2b64(f64);
+    ldb = __f2b64(f64);
+    fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
     fn64 = b2f64(&ldb);
     fprintf(stdout, "double=%lf ldb=%lf\n", f64, fn64);
+
+    fprintf(stdout, ">>>>------------>\n");
 }
 
+static void test_lineardb_header()
+{
+    fprintf(stdout, "BLOCK_TYPE_BOOLEAN=0x%x\n", 0x03 << 6);
+    fprintf(stdout, "BLOCK_TYPE_FLOAT=0x%x\n", 0x02 << 6);
+    fprintf(stdout, "BLOCK_TYPE_UNSIGNED=0x%x\n", 0x01 << 6);
+    fprintf(stdout, "BLOCK_TYPE_INTEGER=%u\n", BLOCK_TYPE_INTEGER);
+    fprintf(stdout, ">>>>------------>\n");
+
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_UNSIGNED));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_FLOAT=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_FLOAT));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_BOOLEAN));
+    fprintf(stdout, ">>>>------------>\n");
+
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_16BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (BLOCK_TYPE_16BIT | BLOCK_TYPE_UNSIGNED) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_32BIT | BLOCK_TYPE_FLOAT=0x%x\n", (BLOCK_TYPE_32BIT | BLOCK_TYPE_FLOAT) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_64BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (BLOCK_TYPE_64BIT | BLOCK_TYPE_BOOLEAN) >> 6);
+    fprintf(stdout, ">>>>------------>\n");
+}
 
 void lineardb_test()
 {
-    test_byte_order();
-    number16_to_ldb();
-    number32_to_ldb();
-    number64_to_ldb();
+    // test_byte_order();
+    // number16_to_ldb();
+    // number32_to_ldb();
+    // number64_to_ldb();
     string_to_ldb();
-    float_to_ldb();
+    // float_to_ldb();
+    // test_lineardb_header();
 }

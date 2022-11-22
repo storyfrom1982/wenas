@@ -13,10 +13,20 @@ enum {
     BLOCK_TYPE_64BIT = 0x08,
     BLOCK_TYPE_OBJECT = 0x10,
     BLOCK_TYPE_BIGENDIAN = 0x20,
-    BLOCK_TYPE_INTEGER,
-    BLOCK_TYPE_UNSIGNED,
-    BLOCK_TYPE_FLOAT,
-    BLOCK_TYPE_ARRAY
+};
+
+enum {
+    BLOCK_TYPE_INTEGER = 0x00,
+    BLOCK_TYPE_UNSIGNED = 0x40,
+    BLOCK_TYPE_FLOAT = 0x80,
+    BLOCK_TYPE_BOOLEAN = 0xc0
+};
+
+enum {
+    BLOCK_TYPE_LINEARDB = 0x00,
+    BLOCK_TYPE_STRING = 0x40,
+    BLOCK_TYPE_ARRAY = 0x80,
+    BLOCK_TYPE_BINARY = 0xc0
 };
 
 #define BLOCK_HEAD      16
@@ -25,49 +35,61 @@ typedef struct linear_data_block {
     uint8_t byte[BLOCK_HEAD];
 }lineardb_t;
 
+typedef union {
+    float f;
+    uint8_t byte[4];
+}float32_t;
+
+typedef union {
+    double f;
+    uint8_t byte[8];
+}float64_t;
+
 #ifdef __LITTLE_ENDIAN__
 
-#define __n2b8(n) \
+#   define __number2block8bit(n, flag) \
             (lineardb_t){ \
-                BLOCK_TYPE_8BIT, \
+                BLOCK_TYPE_8BIT | (flag), \
                 (((char*)&(n))[0]) \
             }
-#define __b2n8(b)    ((b)->byte[1])
 
-#   define __n2b16(n) \
+#   define __block2number8it(b)    ((b)->byte[1])
+
+#   define __number2block16bit(n, flag) \
             (lineardb_t){ \
-                BLOCK_TYPE_16BIT, \
+                BLOCK_TYPE_16BIT | (flag), \
                 (((char*)&(n))[0]), (((char*)&(n))[1]) \
             }
-#   define __b2n16(b) \
+
+#   define __block2number16bit(b) \
             (((b)->byte[0] & BLOCK_TYPE_BIGENDIAN) \
                 ? ((b)->byte[1] << 8 | (b)->byte[2]) \
                 : ((b)->byte[2] << 8 | (b)->byte[1]) \
 			)       
 
-#   define __n2b32(n) \
+#   define __number2block32bit(n, flag) \
             (lineardb_t){ \
-                BLOCK_TYPE_32BIT, \
+                BLOCK_TYPE_32BIT | (flag), \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]) \
             }
 
-#   define __b2n32(b) \
+#   define __block2number32bit(b) \
             ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
                 ? ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
                 : ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
 			)
 
-#   define __n2b64(n) \
+#   define __number2block64bit(n, flag) \
             (lineardb_t){ \
-                BLOCK_TYPE_64BIT, \
+                BLOCK_TYPE_64BIT | (flag), \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]), \
                 (((char*)&(n))[4]), (((char*)&(n))[5]), \
                 (((char*)&(n))[6]), (((char*)&(n))[7]) \
             }
 
-#   define __b2n64(b) \
+#   define __block2number64bit(b) \
             ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
                 ? ((int64_t)(b)->byte[1] << 56 \
                 | (int64_t)(b)->byte[2] << 48 \
@@ -86,41 +108,63 @@ typedef struct linear_data_block {
                 | (int64_t)(b)->byte[2] << 8 \
                 | (int64_t)(b)->byte[1]) \
 			)
-    
+
+#   define __block2float32bit(b) \
+            ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
+                ? ((float32_t){.byte[0] = (b)->byte[4], .byte[1] = (b)->byte[3], .byte[2] = (b)->byte[2], .byte[3] = (b)->byte[1]}).f \
+                : ((float32_t){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f \
+            )
+
+#   define __block2float64bit(b) \
+            ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
+                ? ((float64_t) \
+                    { \
+                        .byte[0] = (b)->byte[8], .byte[1] = (b)->byte[7], .byte[2] = (b)->byte[6], .byte[3] = (b)->byte[4], \
+                        .byte[4] = (b)->byte[4], .byte[5] = (b)->byte[3], .byte[6] = (b)->byte[2], .byte[7] = (b)->byte[1], \
+                    } \
+                ).f \
+                : ((float64_t) \
+                    { \
+                        .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
+                        .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
+                    } \
+                ).f \
+            )
+
 #else //__BIG_ENDIAN__
 
-#define __n2b8(n) \
+#define __number2block8bit(n) \
             (lineardb_t){ \
                 BLOCK_TYPE_8BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]) \
             }
-#define __b2n8(b)    ((b)->byte[1])
+#define __block2number8it(b)    ((b)->byte[1])
 
-#   define __n2b16(n) \
+#   define __number2block16bit(n) \
             (lineardb_t){ \
                 BLOCK_TYPE_16BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]) \
             }
-#   define __b2n16(b) \
+#   define __block2number16bit(b) \
             (((b)->byte[0] & BLOCK_TYPE_BIGENDIAN) \
                 ? ((b)->byte[2] << 8 | (b)->byte[1]) \
                 : ((b)->byte[1] << 8 | (b)->byte[2]) \
 			)       
 
-#   define __n2b32(n) \
+#   define __number2block32bit(n) \
             (lineardb_t){ \
                 BLOCK_TYPE_32BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
                 (((char*)&(n))[2]), (((char*)&(n))[3]) \
             }
 
-#   define __b2n32(b) \
+#   define __block2number32bit(b) \
             ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
                 ? ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
                 : ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
 			)
 
-#   define __n2b64(n) \
+#   define __number2block64bit(n) \
             (lineardb_t){ \
                 BLOCK_TYPE_64BIT | BLOCK_TYPE_BIGENDIAN, \
                 (((char*)&(n))[0]), (((char*)&(n))[1]), \
@@ -129,7 +173,7 @@ typedef struct linear_data_block {
                 (((char*)&(n))[6]), (((char*)&(n))[7]) \
             }
 
-#   define __b2n64(b) \
+#   define __block2number64bit(b) \
             ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
                 ? ((int64_t)(b)->byte[8] << 56 \
                 | (int64_t)(b)->byte[7] << 48 \
@@ -149,7 +193,54 @@ typedef struct linear_data_block {
                 | (int64_t)(b)->byte[8]) \
 			)
 
+#   define __block2float32bit(b) \
+            ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
+                ? ((float32_t){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f \
+                : ((float32_t){.byte[0] = (b)->byte[4], .byte[1] = (b)->byte[3], .byte[2] = (b)->byte[2], .byte[3] = (b)->byte[1]}).f \
+            )
+
+#   define __block2float64bit(b) \
+            ((((b)->byte[0]) & BLOCK_TYPE_BIGENDIAN) \
+                ? ((float64_t) \
+                    { \
+                        .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
+                        .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
+                    } \
+                ).f \
+                : ((float64_t) \
+                    { \
+                        .byte[0] = (b)->byte[8], .byte[1] = (b)->byte[7], .byte[2] = (b)->byte[6], .byte[3] = (b)->byte[4], \
+                        .byte[4] = (b)->byte[4], .byte[5] = (b)->byte[3], .byte[6] = (b)->byte[2], .byte[7] = (b)->byte[1], \                    
+                    } \
+                ).f \
+            )
+
 #endif //__LITTLE_ENDIAN__
+
+
+#define __n2b8(n)        __number2block8bit(n, BLOCK_TYPE_INTEGER)
+#define __b2n8(b)        __block2number8it(b)
+#define __n2b16(n)       __number2block16bit(n, BLOCK_TYPE_INTEGER)
+#define __b2n16(b)       __block2number16bit(b)
+#define __n2b32(n)       __number2block32bit(n, BLOCK_TYPE_INTEGER)
+#define __b2n32(b)       __block2number32bit(b)
+#define __n2b64(n)       __number2block64bit(n, BLOCK_TYPE_INTEGER)
+#define __b2n64(b)       __block2number64bit(b)
+
+#define __u2b8(n)        __number2block8bit(n, BLOCK_TYPE_UNSIGNED)
+#define __b2u8(b)        __block2number8it(b)
+#define __u2b16(n)       __number2block16bit(n, BLOCK_TYPE_UNSIGNED)
+#define __b2u16(b)       __block2number16bit(b)
+#define __u2b32(n)       __number2block32bit(n, BLOCK_TYPE_UNSIGNED)
+#define __b2u32(b)       __block2number32bit(b)
+#define __u2b64(n)       __number2block64bit(n, BLOCK_TYPE_UNSIGNED)
+#define __b2u64(b)       __block2number64bit(b)
+
+#define __f2b32(f)       __number2block32bit(f, BLOCK_TYPE_FLOAT)
+#define __b2f32(b)       __block2float32bit(b)
+#define __f2b64(f)       __number2block64bit(f, BLOCK_TYPE_FLOAT)
+#define __b2f64(b)       __block2float64bit(b)
+
 
 static inline lineardb_t n2b8(int8_t n)
 {
@@ -203,80 +294,12 @@ static inline int64_t b2n64(lineardb_t *b)
 
 static inline float b2f32(lineardb_t *b)
 {
-    float f;
-#ifdef __LITTLE_ENDIAN__
-    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
-        ((char*)&(f))[0] = ((char*)(b))[4];
-        ((char*)&(f))[1] = ((char*)(b))[3];
-        ((char*)&(f))[2] = ((char*)(b))[2];
-        ((char*)&(f))[3] = ((char*)(b))[1];
-    } else {
-        ((char*)&(f))[0] = ((char*)(b))[1];
-        ((char*)&(f))[1] = ((char*)(b))[2];
-        ((char*)&(f))[2] = ((char*)(b))[3];
-        ((char*)&(f))[3] = ((char*)(b))[4];
-    }
-#else    
-    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
-        ((char*)&(f))[0] = ((char*)(b))[1];
-        ((char*)&(f))[1] = ((char*)(b))[2];
-        ((char*)&(f))[2] = ((char*)(b))[3];
-        ((char*)&(f))[3] = ((char*)(b))[4];
-    } else {
-        ((char*)&(f))[0] = ((char*)(b))[4];
-        ((char*)&(f))[1] = ((char*)(b))[3];
-        ((char*)&(f))[2] = ((char*)(b))[2];
-        ((char*)&(f))[3] = ((char*)(b))[1];
-    }
-#endif
-    return f;
+    return __b2f32(b);
 }
 
 static inline double b2f64(lineardb_t *b)
 {
-    double f;
-#ifdef __LITTLE_ENDIAN__
-    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
-        ((char*)&(f))[0] = ((char*)(b))[8];
-        ((char*)&(f))[1] = ((char*)(b))[7];
-        ((char*)&(f))[2] = ((char*)(b))[6];
-        ((char*)&(f))[3] = ((char*)(b))[5];
-        ((char*)&(f))[4] = ((char*)(b))[4];
-        ((char*)&(f))[5] = ((char*)(b))[3];
-        ((char*)&(f))[6] = ((char*)(b))[2];
-        ((char*)&(f))[7] = ((char*)(b))[1];
-    } else {
-        ((char*)&(f))[0] = ((char*)(b))[1];
-        ((char*)&(f))[1] = ((char*)(b))[2];
-        ((char*)&(f))[2] = ((char*)(b))[3];
-        ((char*)&(f))[3] = ((char*)(b))[4];
-        ((char*)&(f))[4] = ((char*)(b))[5];
-        ((char*)&(f))[5] = ((char*)(b))[6];
-        ((char*)&(f))[6] = ((char*)(b))[7];
-        ((char*)&(f))[7] = ((char*)(b))[8];
-    }
-#else    
-    if ((((char*)(b))[0]) & BLOCK_TYPE_BIGENDIAN) {
-        ((char*)&(f))[0] = ((char*)(b))[1];
-        ((char*)&(f))[1] = ((char*)(b))[2];
-        ((char*)&(f))[2] = ((char*)(b))[3];
-        ((char*)&(f))[3] = ((char*)(b))[4];
-        ((char*)&(f))[4] = ((char*)(b))[5];
-        ((char*)&(f))[5] = ((char*)(b))[6];
-        ((char*)&(f))[6] = ((char*)(b))[7];
-        ((char*)&(f))[7] = ((char*)(b))[8];
-    } else {
-        ((char*)&(f))[0] = ((char*)(b))[8];
-        ((char*)&(f))[1] = ((char*)(b))[7];
-        ((char*)&(f))[2] = ((char*)(b))[6];
-        ((char*)&(f))[3] = ((char*)(b))[5];
-        ((char*)&(f))[4] = ((char*)(b))[4];
-        ((char*)&(f))[5] = ((char*)(b))[3];
-        ((char*)&(f))[6] = ((char*)(b))[2];
-        ((char*)&(f))[7] = ((char*)(b))[1];
-    }
-#endif
-    return f;
+    return __b2f64(b);
 }
 
 
@@ -284,7 +307,10 @@ static inline double b2f64(lineardb_t *b)
 #include <string.h>
 #include <stdlib.h>
 
+#define __typeof_block(b)   ((b)->byte[0] >> 6)
+
 #define __sizeof_head(b)   (1 + (((b)->byte[0]) & BLOCK_HEAD_MASK))
+
 #define __sizeof_data(b) \
         ( (((b)->byte[0]) & BLOCK_TYPE_OBJECT) \
         ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? __b2n8(b) \
@@ -292,16 +318,13 @@ static inline double b2f64(lineardb_t *b)
         : 0 )
 
 #define __sizeof_block(b) \
-        ( __sizeof_head(b) + \
-        ( (((b)->byte[0]) & BLOCK_TYPE_OBJECT) \
-        ? (((b)->byte[0] & BLOCK_TYPE_8BIT)) ? __b2n8(b) \
-        : (((b)->byte[0] & BLOCK_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
-        : 0 ))
-
-#define __dataof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
+        ( __sizeof_head(b) + __sizeof_data(b))
 
 #define __plan_sizeof_block(size) \
         (size < 0x100 ? (2 + size) : size < 0x10000 ? (3 + size) : (5 + size));
+
+#define __dataof_block(b)   (&((b)->byte[0]) + __sizeof_head(b))
+
 
 static inline uint32_t lineardb_bind_buffer(lineardb_t **ldb, const void *b, uint32_t s)
 {

@@ -17,8 +17,8 @@ int main(int argc, char *argv[])
 #endif
 
 	lineardb_test();
-	linearkv_test();
-	linearPipe_test();
+	// linearkv_test();
+	// linearPipe_test();
 	// thread_test();
 	// task_queue_test();
 	// heap_test();
