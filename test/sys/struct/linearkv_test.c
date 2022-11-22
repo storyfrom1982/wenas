@@ -1,4 +1,5 @@
 #include "linearkv.h"
+#include <stdio.h>
 
 static void test_append_string()
 {
@@ -77,13 +78,13 @@ static void test_find_number()
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = rand();
 		fprintf(stdout, "input %d\n", n);
-		lkv_add_number(parser, key_buf, n2b32(n));
+		lkv_add_number(parser, key_buf, __n2b32(n));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = lkv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
+		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = lkv_after(parser, key_buf);
 	}
@@ -91,7 +92,7 @@ static void test_find_number()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = lkv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, b2n32(v));
+		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = lkv_after(parser, key_buf);
 	}
@@ -118,15 +119,15 @@ static void test_find_float()
 		}
 		fprintf(stdout, "input ====>>>>>%d %lf\n", i, f64);
 		// lkv_add_f64(parser, key_buf, f64);
-		value = f2b64(f64);
+		value = __f2b64(f64);
 		lkv_add_number(parser, key_buf, value);
-		fprintf(stdout, "input ====###>>>>>%d %lf\n", i, b2f64(&value));
+		fprintf(stdout, "input ====###>>>>>%d %lf\n", i, __b2f64(&value));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = lkv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude --------> %lf\n", key_buf, b2f64(v));
+		fprintf(stdout, "key %s from valude --------> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = lkv_after(parser, key_buf);
 	}
@@ -134,7 +135,7 @@ static void test_find_float()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = lkv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude >>>>>>>>-> %lf\n", key_buf, b2f64(v));
+		fprintf(stdout, "key %s from valude >>>>>>>>-> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = lkv_after(parser, key_buf);
 	}

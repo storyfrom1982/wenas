@@ -1,5 +1,6 @@
 #include "task_queue.h"
 #include <unistd.h>
+#include <stdio.h>
 
 
 static void test_task_func(linearkv_parser_t parser)

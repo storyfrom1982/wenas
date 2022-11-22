@@ -2,7 +2,7 @@
 
 extern void linearkv_test();
 extern void lineardb_test();
-extern void linearPipe_test();
+extern void lineardb_pipe_test();
 extern void thread_test();
 extern void task_queue_test();
 extern void heap_test();
@@ -17,11 +17,11 @@ int main(int argc, char *argv[])
 #endif
 
 	lineardb_test();
-	// linearkv_test();
-	// linearPipe_test();
-	// thread_test();
-	// task_queue_test();
-	// heap_test();
+	linearkv_test();
+	lineardb_pipe_test();
+	thread_test();
+	task_queue_test();
+	heap_test();
 
 	return 0;
 }

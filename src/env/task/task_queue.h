@@ -41,12 +41,6 @@ static inline void* task_main_loop(void *ctx)
             }            
         }
 
-        if (tq->timed_task->pos > 0){
-            timer = tq->timed_task->array[1].key - env_time();
-        }else {
-            timer = 0;
-        }
-
         ldb = lineardb_pipe_hold_block(tq->immediate_task);
         
         if (ldb){
@@ -72,6 +66,12 @@ static inline void* task_main_loop(void *ctx)
             if (!tq->running){
                 env_mutex_unlock(&tq->emutex);
                 break;
+            }
+
+            if (tq->timed_task->pos > 0){
+                timer = tq->timed_task->array[1].key - env_time();
+            }else {
+                timer = 0;
             }
 
             tq->read_waiting = 1;

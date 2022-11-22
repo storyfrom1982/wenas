@@ -53,6 +53,19 @@ static inline void lkv_add_str(linearkv_t *lkv, char *key, char *value)
     lkv->pos += __sizeof_block(lkv->value);
 }
 
+static inline void lkv_add_obj(linearkv_t *lkv, char *key, lineardb_t *ldb)
+{
+    lkv->key = (lkey_t *)(lkv->head + lkv->pos);
+    lkv->key->byte[0] = strlen(key);
+    memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
+    lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
+    lkv->pos += (lkv->key->byte[0] + 2);
+    lkv->value = (lineardb_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    lineardb_load_binary(lkv->value, __dataof_block(ldb), __sizeof_data(ldb));
+    lkv->value->byte[0] |= BLOCK_TYPE_BLOCK;
+    lkv->pos += __sizeof_block(lkv->value);
+}
+
 static inline void lkv_add_number(linearkv_t *lkv, char *key, lineardb_t ldb)
 {
     lkv->key = (lkey_t *)(lkv->head + lkv->pos);
@@ -65,39 +78,65 @@ static inline void lkv_add_number(linearkv_t *lkv, char *key, lineardb_t ldb)
     lkv->pos += __sizeof_block(lkv->value);
 }
 
-static inline void lkv_add_n8(linearkv_t *lkv, char *key, int8_t n)
+static inline void lkv_add_n8(linearkv_t *lkv, char *key, int8_t n8)
 {
-    lkv_add_number(lkv, key, __n2b8(n));
+    lkv_add_number(lkv, key, __n2b8(n8));
 }
 
-static inline void lkv_add_n16(linearkv_t *lkv, char *key, int16_t n)
+static inline void lkv_add_n16(linearkv_t *lkv, char *key, int16_t n16)
 {
-    lkv_add_number(lkv, key, __n2b16(n));
+    lkv_add_number(lkv, key, __n2b16(n16));
 }
 
-static inline void lkv_add_n32(linearkv_t *lkv, char *key, int32_t n)
+static inline void lkv_add_n32(linearkv_t *lkv, char *key, int32_t n32)
 {
-    lkv_add_number(lkv, key, __n2b32(n));
+    lkv_add_number(lkv, key, __n2b32(n32));
 }
 
-static inline void lkv_add_n64(linearkv_t *lkv, char *key, int64_t n)
+static inline void lkv_add_n64(linearkv_t *lkv, char *key, int64_t n64)
 {
-    lkv_add_number(lkv, key, __n2b64(n));
+    lkv_add_number(lkv, key, __n2b64(n64));
 }
 
-static inline void lkv_add_f32(linearkv_t *lkv, char *key, float f)
+static inline void lkv_add_u8(linearkv_t *lkv, char *key, uint8_t u8)
 {
-    lkv_add_number(lkv, key, f2b32(f));
+    lkv_add_number(lkv, key, __u2b8(u8));
 }
 
-static inline void lkv_add_f64(linearkv_t *lkv, char *key, double f)
+static inline void lkv_add_u16(linearkv_t *lkv, char *key, uint16_t u16)
 {
-    lkv_add_number(lkv, key, f2b64(f));
+    lkv_add_number(lkv, key, __u2b16(u16));
+}
+
+static inline void lkv_add_u32(linearkv_t *lkv, char *key, uint32_t u32)
+{
+    lkv_add_number(lkv, key, __u2b32(u32));
+}
+
+static inline void lkv_add_u64(linearkv_t *lkv, char *key, uint64_t u64)
+{
+    lkv_add_number(lkv, key, __u2b64(u64));
+}
+
+static inline void lkv_add_f32(linearkv_t *lkv, char *key, float f32)
+{
+    lkv_add_number(lkv, key, __f2b32(f32));
+}
+
+static inline void lkv_add_f64(linearkv_t *lkv, char *key, double f64)
+{
+    lkv_add_number(lkv, key, __f2b64(f64));
 }
 
 static inline void lkv_add_ptr(linearkv_t *lkv, char *key, void *p)
 {
-    lkv_add_number(lkv, key, n2b64((int64_t)(p)));
+    int64_t n = (int64_t)(p);
+    lkv_add_number(lkv, key, __n2b64(n));
+}
+
+static inline void lkv_add_bool(linearkv_t *lkv, char *key, uint8_t b)
+{
+    lkv_add_number(lkv, key, __boolean2block(b));
 }
 
 static inline lineardb_t* lkv_find(linearkv_parser_t parser, char *key)
@@ -151,6 +190,18 @@ static inline lineardb_t* lkv_after(linearkv_parser_t parser, char *key)
     return NULL;
 }
 
+static inline uint8_t lkv_find_bool(linearkv_parser_t parser, char *key)
+{
+    lineardb_t *ldb = lkv_after(parser, key);
+    if (ldb == NULL){
+        ldb = lkv_find(parser, key);
+    }
+    if (ldb){
+        return __block2boolean(ldb);
+    }
+    return 0;
+}
+
 static inline int8_t lkv_find_n8(linearkv_parser_t parser, char *key)
 {
     lineardb_t *ldb = lkv_after(parser, key);
@@ -199,6 +250,54 @@ static inline int64_t lkv_find_n64(linearkv_parser_t parser, char *key)
     return 0;
 }
 
+static inline uint8_t lkv_find_u8(linearkv_parser_t parser, char *key)
+{
+    lineardb_t *ldb = lkv_after(parser, key);
+    if (ldb == NULL){
+        ldb = lkv_find(parser, key);
+    }
+    if (ldb){
+        return __b2u8(ldb);
+    }
+    return 0;
+}
+
+static inline uint16_t lkv_find_u16(linearkv_parser_t parser, char *key)
+{
+    lineardb_t *ldb = lkv_after(parser, key);
+    if (ldb == NULL){
+        ldb = lkv_find(parser, key);
+    }
+    if (ldb){
+        return __b2u16(ldb);
+    }
+    return 0;
+}
+
+static inline uint32_t lkv_find_u32(linearkv_parser_t parser, char *key)
+{
+    lineardb_t *ldb = lkv_after(parser, key);
+    if (ldb == NULL){
+        ldb = lkv_find(parser, key);
+    }
+    if (ldb){
+        return __b2u32(ldb);
+    }
+    return 0;
+}
+
+static inline uint64_t lkv_find_u64(linearkv_parser_t parser, char *key)
+{
+    lineardb_t *ldb = lkv_after(parser, key);
+    if (ldb == NULL){
+        ldb = lkv_find(parser, key);
+    }
+    if (ldb){
+        return __b2u64(ldb);
+    }
+    return 0;
+}
+
 static inline float lkv_find_f32(linearkv_parser_t parser, char *key)
 {
     lineardb_t *ldb = lkv_after(parser, key);
@@ -206,7 +305,7 @@ static inline float lkv_find_f32(linearkv_parser_t parser, char *key)
         ldb = lkv_find(parser, key);
     }
     if (ldb){
-        return b2f32(ldb);
+        return __b2f32(ldb);
     }
     return 0.0f;
 }
@@ -218,7 +317,7 @@ static inline double lkv_find_f64(linearkv_parser_t parser, char *key)
         ldb = lkv_find(parser, key);
     }
     if (ldb){
-        return b2f64(ldb);
+        return __b2f64(ldb);
     }
     return 0.0f;
 }

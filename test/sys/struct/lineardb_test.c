@@ -24,7 +24,7 @@ static void test_byte_order()
     fprintf(stdout, "bit shift: little to little => little number= %x swap number= %x byte= %x %x %x %x\n",
         little_number, swap_number, byte[0], byte[1], byte[2], byte[3]);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
     
     swap_byte[0] = ((char*)&little_number)[0];
     swap_byte[1] = ((char*)&little_number)[1];
@@ -34,7 +34,7 @@ static void test_byte_order()
     fprintf(stdout, "swap byte: little to little => little number= %x swap number= %x byte= %x %x %x %x\n",
         little_number, swap_number, swap_byte[0],  swap_byte[1], swap_byte[2], swap_byte[3]);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
 
     // little to big => swap byte
     swap_byte[0] = byte[3];
@@ -48,7 +48,7 @@ static void test_byte_order()
     fprintf(stdout, "swap byte: little to big => little number=%x byte[]= %x %x %x %x\n", little_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
     fprintf(stdout, "swap byte: little to big => little number=%x big number=%x\n", little_number, big_number);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
 
     // little to big => bit shift
     swap_byte[0] = little_number >> 24 & 0xff;
@@ -59,7 +59,7 @@ static void test_byte_order()
     fprintf(stdout, "bit shift: little to big => little number= %x byte[]= %x %x %x %x\n", little_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
     fprintf(stdout, "swap byte: little to big => little number=%x big number=%x\n", little_number, big_number);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
 
     // big to byte => swap_byte
     swap_byte[0] = ((char*)&big_number)[0];
@@ -70,7 +70,7 @@ static void test_byte_order()
     little_number = swap_byte[0] << 24 | swap_byte[1] << 16 | swap_byte[2] << 8 | swap_byte[3];
     fprintf(stdout, "bit shift: big to little => little number=%x big number=%x\n", little_number, big_number);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
 
     swap_byte[0] = big_number & 0xff;
     swap_byte[1] = big_number >> 8 & 0xff;
@@ -79,12 +79,11 @@ static void test_byte_order()
     fprintf(stdout, "bit shift: big to byte => big number= %x byte[]= %x %x %x %x\n", big_number, swap_byte[0], swap_byte[1], swap_byte[2], swap_byte[3]);
     little_number = swap_byte[0] << 24 | swap_byte[1] << 16 | swap_byte[2] << 8 | swap_byte[3];
     fprintf(stdout, "bit shift: big to little => big number=%x little number=%x\n", big_number, little_number);
+    fprintf(stdout, ">>>>------------>\n");
 }
 
 static void number16_to_ldb()
 {
-    fprintf(stdout, "==================================\n");
-
     int16_t n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
     lineardb_t ldb = __n2b16(i16);
     n16 = __b2n16(&ldb);
@@ -99,12 +98,12 @@ static void number16_to_ldb()
     u16 = __b2n16(&ldb);
     size = __sizeof_block(&ldb);
     fprintf(stdout, "uint16_t %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
+
+    fprintf(stdout, ">>>>------------>\n");
 }
 
 static void number32_to_ldb()
 {
-    fprintf(stdout, "==================================\n");
-
     int32_t n32, i32 = -12345;
     lineardb_t ldb = __n2b32(i32);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
@@ -119,12 +118,12 @@ static void number32_to_ldb()
     size = __sizeof_block(&ldb);
     u32 = __b2n32(&ldb);
     fprintf(stdout, "uint32_t %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
+
+    fprintf(stdout, ">>>>------------>\n");
 }
 
 static void number64_to_ldb()
 {
-    fprintf(stdout, "==================================\n");
-
     int64_t n64, i64 = -12345;
     lineardb_t ldb = __n2b64(i64);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
@@ -139,20 +138,21 @@ static void number64_to_ldb()
     size = __sizeof_block(&ldb);
     u64 = __b2n64(&ldb);
     fprintf(stdout, "uint64_t %lu to linear block %lu sizeof(block)=%u\n", iu64, u64, size);
+
+    fprintf(stdout, ">>>>------------>\n");
 }
 
 
 static void string_to_ldb()
 {
-    fprintf(stdout, "==================================\n");
-
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
     lineardb_t *ldb = lineardb_build_with_string(string8bit);
-    fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
+    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
+    fprintf(stdout, "string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string8bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     lineardb_destroy(&ldb);
 
-    fprintf(stdout, "==================================\n");
+    fprintf(stdout, ">>>>------------>\n");
 
     const char *string16bit =   "\nHello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
@@ -161,17 +161,23 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
     ldb = lineardb_build_with_string(string16bit);
-    fprintf(stdout, "string %s\n===> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
+    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
+    fprintf(stdout, "string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string16bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
     lineardb_destroy(&ldb);
+
+    fprintf(stdout, ">>>>------------>\n");
 
     uint32_t len = 0xabcdef;
     ldb = malloc(BLOCK_HEAD + len);
     uint8_t *data = malloc(len);
-    lineardb_load_data(ldb, data, len);
+    lineardb_load_binary(ldb, data, len);
+    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
     fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
     free(data);
     lineardb_destroy(&ldb);
+
+    fprintf(stdout, ">>>>------------>\n");
 }
 
 
@@ -181,7 +187,7 @@ static void float_to_ldb()
     lineardb_t ldb = __f2b32(f32);
     fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
 
-    fn32 = b2f32(&ldb);
+    fn32 = __b2f32(&ldb);
     fprintf(stdout, "float=%f ldb=%f\n", f32, fn32);
 
     fprintf(stdout, ">>>>------------>\n");
@@ -189,7 +195,7 @@ static void float_to_ldb()
     double f64 = 123456.123456f, fn64;
     ldb = __f2b64(f64);
     fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
-    fn64 = b2f64(&ldb);
+    fn64 = __b2f64(&ldb);
     fprintf(stdout, "double=%lf ldb=%lf\n", f64, fn64);
 
     fprintf(stdout, ">>>>------------>\n");
@@ -218,11 +224,11 @@ static void test_lineardb_header()
 
 void lineardb_test()
 {
-    // test_byte_order();
-    // number16_to_ldb();
-    // number32_to_ldb();
-    // number64_to_ldb();
+    test_byte_order();
+    number16_to_ldb();
+    number32_to_ldb();
+    number64_to_ldb();
     string_to_ldb();
-    // float_to_ldb();
-    // test_lineardb_header();
+    float_to_ldb();
+    test_lineardb_header();
 }

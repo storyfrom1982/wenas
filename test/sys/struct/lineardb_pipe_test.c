@@ -1,5 +1,5 @@
 #include "lineardb_pipe.h"
-
+#include <stdio.h>
 
 static void test_pipe_write_read()
 {
@@ -50,7 +50,7 @@ static void test_pipe_producer_consumer()
 }
 
 
-void linearPipe_test()
+void lineardb_pipe_test()
 {
     test_pipe_write_read();
     test_pipe_producer_consumer();
