@@ -29,9 +29,9 @@ static inline linekv_t* linekv_build(uint32_t size)
 {
     linekv_t *lkv = (linekv_t *)malloc(sizeof(linekv_t));
     lkv->head = (uint8_t*) malloc(size);
+    lkv->key = (linekey_t *)(lkv->head);
     lkv->len = size;
     lkv->pos = 0;
-    lkv->key = NULL;
     lkv->val = NULL;
     return lkv;
 }
@@ -52,7 +52,7 @@ static inline void linekv_bind_object(linekv_t *lkv, lineval_t *val)
 {
     lkv->len = lkv->pos = __sizeof_data(val);
     lkv->head = __dataof_linedb(val);
-    lkv->key = NULL;
+    lkv->key = (linekey_t *)(lkv->head);
     lkv->val = NULL;
 }
 
@@ -65,7 +65,7 @@ static inline void linekv_load_object(linekv_t *lkv, lineval_t *val)
     }
     lkv->pos = size;
     memcpy(lkv->head, __dataof_linedb(val), size);
-    lkv->key = NULL;
+    lkv->key = (linekey_t *)(lkv->head);
     lkv->val = NULL;
 }
 
@@ -73,7 +73,7 @@ static inline void linekv_clear(linekv_t *lkv)
 {
     if (lkv){
         lkv->pos = 0;
-        lkv->key = NULL;
+        lkv->key = (linekey_t *)(lkv->head);
         lkv->val = NULL;
     }
 }
@@ -194,13 +194,13 @@ static inline lineval_t* linekv_next(linekv_parser_t parser)
             return parser->val;
         }
     }
-    return linekv_head(parser);
+    return NULL;
 }
 
 static inline const char* linekv_current_key(linekv_parser_t parser)
 {
     if (parser->key){
-        return (const char *)parser->key->byte;
+        return (const char *)&(parser->key->byte[1]);
     }
     return "";
 }
