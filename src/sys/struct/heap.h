@@ -12,7 +12,7 @@ typedef struct heap_element {
 
 
 typedef struct heap {
-    uint32_t len, pos;
+    uint32_t pos, len;
     heapment_t array[1];
 }heap_t;
 
@@ -41,7 +41,7 @@ static inline void heap_destroy(heap_t **pp_heap)
 }
 
 //ascending/descending 升序/降序 最小堆/最大堆
-static inline int heap_asc_push(heap_t *h, heapment_t m)
+static inline int min_heapify_push(heap_t *h, heapment_t m)
 {
     if(h->pos < h->len){
         h->pos++;
@@ -57,9 +57,10 @@ static inline int heap_asc_push(heap_t *h, heapment_t m)
     return 0;
 }
 
-static inline heapment_t heap_asc_pop(heap_t *h)
+static inline heapment_t min_heapify_pop(heap_t *h)
 {
-    heapment_t tmp, min = h->array[1];
+    heapment_t tmp;
+    h->array[0] = h->array[1];
     h->array[1] = h->array[h->pos];
     uint32_t left, right, index, smallest = 1;
 
@@ -82,7 +83,7 @@ static inline heapment_t heap_asc_pop(heap_t *h)
     }while (smallest != index);
 
     h->pos--;
-    return min;
+    return h->array[0];
 }
 
 #endif //__HEAP_H__

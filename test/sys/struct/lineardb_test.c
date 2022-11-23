@@ -85,18 +85,18 @@ static void test_byte_order()
 static void number16_to_ldb()
 {
     int16_t n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
-    lineardb_t ldb = __n2b16(i16);
+    linedb_t ldb = __n2b16(i16);
     n16 = __b2n16(&ldb);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_block(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     fprintf(stdout, "int16_t %d to linear block %d sizeof(block)=%u\n", i16, n16, size);
 
     int16_t u16, iu16 = 12345;
     ldb = __n2b16(iu16);
     u16 = __b2n16(&ldb);
-    size = __sizeof_block(&ldb);
+    size = __sizeof_linedb(&ldb);
     fprintf(stdout, "uint16_t %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
 
     fprintf(stdout, ">>>>------------>\n");
@@ -105,17 +105,17 @@ static void number16_to_ldb()
 static void number32_to_ldb()
 {
     int32_t n32, i32 = -12345;
-    lineardb_t ldb = __n2b32(i32);
+    linedb_t ldb = __n2b32(i32);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_block(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n32 = __b2n32(&ldb);
     fprintf(stdout, "int32_t %d to linear block %d sizeof(block)=%u\n", i32, n32, size);
 
     uint32_t u32, iu32 = 12345;
     ldb = __n2b32(iu32);
-    size = __sizeof_block(&ldb);
+    size = __sizeof_linedb(&ldb);
     u32 = __b2n32(&ldb);
     fprintf(stdout, "uint32_t %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
 
@@ -125,17 +125,17 @@ static void number32_to_ldb()
 static void number64_to_ldb()
 {
     int64_t n64, i64 = -12345;
-    lineardb_t ldb = __n2b64(i64);
+    linedb_t ldb = __n2b64(i64);
     fprintf(stdout, "block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (uint8_t)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_block(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n64 = __b2n64(&ldb);
     fprintf(stdout, "int64_t %ld to linear block %ld sizeof(block)=%u\n", i64, n64, size);
 
     uint64_t u64, iu64 = 12345;
     ldb = __n2b64(iu64);
-    size = __sizeof_block(&ldb);
+    size = __sizeof_linedb(&ldb);
     u64 = __b2n64(&ldb);
     fprintf(stdout, "uint64_t %lu to linear block %lu sizeof(block)=%u\n", iu64, u64, size);
 
@@ -146,11 +146,11 @@ static void number64_to_ldb()
 static void string_to_ldb()
 {
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    lineardb_t *ldb = lineardb_build_with_string(string8bit);
-    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
+    linedb_t *ldb = string2inedb(string8bit);
+    fprintf(stdout, "ldb type = %u\n", __typeof_linedb(ldb));
     fprintf(stdout, "string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string8bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
-    lineardb_destroy(&ldb);
+        string8bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
+    linedb_destroy(&ldb);
 
     fprintf(stdout, ">>>>------------>\n");
 
@@ -160,22 +160,22 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
-    ldb = lineardb_build_with_string(string16bit);
-    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
+    ldb = string2inedb(string16bit);
+    fprintf(stdout, "ldb type = %u\n", __typeof_linedb(ldb));
     fprintf(stdout, "string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string16bit, __dataof_block(ldb), __sizeof_head(ldb), __sizeof_block(ldb));
-    lineardb_destroy(&ldb);
+        string16bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
+    linedb_destroy(&ldb);
 
     fprintf(stdout, ">>>>------------>\n");
 
     uint32_t len = 0xabcdef;
-    ldb = malloc(BLOCK_HEAD + len);
+    ldb = malloc(__LINEDB_HEAD_ALLOC_SIZE + len);
     uint8_t *data = malloc(len);
-    lineardb_load_binary(ldb, data, len);
-    fprintf(stdout, "ldb type = %u\n", __typeof_block(ldb));
-    fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_block(ldb));
+    linedb_load_binary(ldb, data, len);
+    fprintf(stdout, "ldb type = %u\n", __typeof_linedb(ldb));
+    fprintf(stdout, "data size=%u + %u sizeof(block)=%u\n", len, __sizeof_head(ldb), __sizeof_linedb(ldb));
     free(data);
-    lineardb_destroy(&ldb);
+    linedb_destroy(&ldb);
 
     fprintf(stdout, ">>>>------------>\n");
 }
@@ -184,8 +184,8 @@ static void string_to_ldb()
 static void float_to_ldb()
 {
     float f32 = 12345.12345f, fn32;
-    lineardb_t ldb = __f2b32(f32);
-    fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
+    linedb_t ldb = __f2b32(f32);
+    fprintf(stdout, "ldb type %u\n", __typeof_linedb(&ldb));
 
     fn32 = __b2f32(&ldb);
     fprintf(stdout, "float=%f ldb=%f\n", f32, fn32);
@@ -194,7 +194,7 @@ static void float_to_ldb()
 
     double f64 = 123456.123456f, fn64;
     ldb = __f2b64(f64);
-    fprintf(stdout, "ldb type %u\n", __typeof_block(&ldb));
+    fprintf(stdout, "ldb type %u\n", __typeof_linedb(&ldb));
     fn64 = __b2f64(&ldb);
     fprintf(stdout, "double=%lf ldb=%lf\n", f64, fn64);
 
@@ -206,19 +206,19 @@ static void test_lineardb_header()
     fprintf(stdout, "BLOCK_TYPE_BOOLEAN=0x%x\n", 0x03 << 6);
     fprintf(stdout, "BLOCK_TYPE_FLOAT=0x%x\n", 0x02 << 6);
     fprintf(stdout, "BLOCK_TYPE_UNSIGNED=0x%x\n", 0x01 << 6);
-    fprintf(stdout, "BLOCK_TYPE_INTEGER=%u\n", BLOCK_TYPE_INTEGER);
+    fprintf(stdout, "BLOCK_TYPE_INTEGER=%u\n", LINEDB_NUMBER_INTEGER);
     fprintf(stdout, ">>>>------------>\n");
 
-    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER));
-    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_UNSIGNED));
-    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_FLOAT=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_FLOAT));
-    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_BOOLEAN));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_UNSIGNED));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_FLOAT=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_FLOAT));
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_BOOLEAN));
     fprintf(stdout, ">>>>------------>\n");
 
-    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER) >> 6);
-    fprintf(stdout, "BLOCK_TYPE_16BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (BLOCK_TYPE_16BIT | BLOCK_TYPE_UNSIGNED) >> 6);
-    fprintf(stdout, "BLOCK_TYPE_32BIT | BLOCK_TYPE_FLOAT=0x%x\n", (BLOCK_TYPE_32BIT | BLOCK_TYPE_FLOAT) >> 6);
-    fprintf(stdout, "BLOCK_TYPE_64BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (BLOCK_TYPE_64BIT | BLOCK_TYPE_BOOLEAN) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_8BIT | BLOCK_TYPE_INTEGER=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_16BIT | BLOCK_TYPE_UNSIGNED=0x%x\n", (LINEDB_TYPE_16BIT | LINEDB_NUMBER_UNSIGNED) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_32BIT | BLOCK_TYPE_FLOAT=0x%x\n", (LINEDB_TYPE_32BIT | LINEDB_NUMBER_FLOAT) >> 6);
+    fprintf(stdout, "BLOCK_TYPE_64BIT | BLOCK_TYPE_BOOLEAN=0x%x\n", (LINEDB_TYPE_64BIT | LINEDB_NUMBER_BOOLEAN) >> 6);
     fprintf(stdout, ">>>>------------>\n");
 }
 

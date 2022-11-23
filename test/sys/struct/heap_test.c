@@ -26,13 +26,13 @@ void heap_test()
     heap_t *h = heap_build(256);
     for (int i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         hm.key = array[i];
-        heap_asc_push(h, hm);
+        min_heapify_push(h, hm);
     }
 
     fprintf(stdout, "len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
 
     for (int i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
-        hm = heap_asc_pop(h);
+        hm = min_heapify_pop(h);
         fprintf(stdout, "key = %lu\n", hm.key);
     }
 

@@ -3,33 +3,43 @@
 
 #include "lineardb.h"
 
+typedef linedb_t lineval_t;
+
 typedef struct linear_key {
     uint8_t byte[8];
-}lkey_t;
+}linekey_t;
 
-typedef struct linear_key_value {
-    uint32_t len, pos;
-    lkey_t *key;
-    lineardb_t *value;
+typedef struct linear_key_value_pair {
+    uint32_t pos, len;
+    linekey_t *key;
+    lineval_t *val;
     uint8_t *head;
-}linearkv_t, *linearkv_parser_t;
+}linekv_t, *linekv_parser_t;
+
+enum {
+    LINEDB_OBJECT_ARRAY = LINEDB_OBJECT_CUSTOM,
+    LINEDB_OBJECT_LINEKV = LINEDB_OBJECT_RESERVED
+};
+
+#define __objectis_array(b)         (__typeof_linedb(b) == LINEDB_OBJECT_ARRAY)
+#define __objectis_linekv(b)        (__typeof_linedb(b) == LINEDB_OBJECT_LINEKV)
 
 
-static inline linearkv_t* lkv_build(uint32_t size)
+static inline linekv_t* linekv_build(uint32_t size)
 {
-    linearkv_t *lkv = (linearkv_t *)malloc(sizeof(linearkv_t));
+    linekv_t *lkv = (linekv_t *)malloc(sizeof(linekv_t));
     lkv->head = (uint8_t*) malloc(size);
     lkv->len = size;
     lkv->pos = 0;
     lkv->key = NULL;
-    lkv->value = NULL;
+    lkv->val = NULL;
     return lkv;
 }
 
-static inline void lkv_destroy(linearkv_t **pp_lkv)
+static inline void linekv_destroy(linekv_t **pp_lkv)
 {
     if (pp_lkv && *pp_lkv){
-        linearkv_t *lkv = *pp_lkv;
+        linekv_t *lkv = *pp_lkv;
         *pp_lkv = NULL;
         if (lkv->head){
             free(lkv->head);
@@ -38,143 +48,156 @@ static inline void lkv_destroy(linearkv_t **pp_lkv)
     }
 }
 
-static inline void lkv_bind_block(linearkv_t *lkv, lineardb_t *ldb)
+static inline void linekv_bind_object(linekv_t *lkv, lineval_t *val)
 {
-    lkv->len = lkv->pos = __sizeof_data(ldb);
-    lkv->head = __dataof_block(ldb);
+    lkv->len = lkv->pos = __sizeof_data(val);
+    lkv->head = __dataof_linedb(val);
     lkv->key = NULL;
-    lkv->value = NULL;
+    lkv->val = NULL;
 }
 
-static inline void lkv_clear(linearkv_t *lkv)
+static inline void linekv_load_object(linekv_t *lkv, lineval_t *val)
+{
+    uint32_t size = __sizeof_data(val);
+    if (size > lkv->len){
+        free(lkv);
+        lkv = linekv_build(size);
+    }
+    lkv->pos = size;
+    memcpy(lkv->head, __dataof_linedb(val), size);
+    lkv->key = NULL;
+    lkv->val = NULL;
+}
+
+static inline void linekv_clear(linekv_t *lkv)
 {
     if (lkv){
         lkv->pos = 0;
         lkv->key = NULL;
-        lkv->value = NULL;
+        lkv->val = NULL;
     }
 }
 
-static inline void lkv_add_str(linearkv_t *lkv, const char *key, char *value)
+static inline void linekv_add_string(linekv_t *lkv, const char *key, char *value)
 {
-    lkv->key = (lkey_t *)(lkv->head + lkv->pos);
+    lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
     memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
-    lkv->value = (lineardb_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    lineardb_load_string(lkv->value, value);
-    lkv->pos += __sizeof_block(lkv->value);
+    lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    linedb_load_string(lkv->val, value);
+    lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void lkv_add_obj(linearkv_t *lkv, const char *key, linearkv_t *obj)
+static inline void linekv_add_object(linekv_t *lkv, const char *key, linekv_t *obj)
 {
-    lkv->key = (lkey_t *)(lkv->head + lkv->pos);
+    lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
     memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
-    lkv->value = (lineardb_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    lineardb_load_binary(lkv->value, obj->head, obj->pos);
-    lkv->value->byte[0] |= BLOCK_TYPE_BLOCK;
-    lkv->pos += __sizeof_block(lkv->value);
+    lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    linedb_load_binary(lkv->val, obj->head, obj->pos);
+    lkv->val->byte[0] |= LINEDB_OBJECT_LINEKV;
+    lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void lkv_add_number(linearkv_t *lkv, const char *key, lineardb_t ldb)
+static inline void linekv_add_number(linekv_t *lkv, const char *key, lineval_t val)
 {
-    lkv->key = (lkey_t *)(lkv->head + lkv->pos);
+    lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
     memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
-    lkv->value = (lineardb_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    *lkv->value = ldb;
-    lkv->pos += __sizeof_block(lkv->value);
+    lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    *lkv->val = val;
+    lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void lkv_add_n8(linearkv_t *lkv, const char *key, int8_t n8)
+static inline void linekv_add_n8(linekv_t *lkv, const char *key, int8_t n8)
 {
-    lkv_add_number(lkv, key, __n2b8(n8));
+    linekv_add_number(lkv, key, __n2b8(n8));
 }
 
-static inline void lkv_add_n16(linearkv_t *lkv, const char *key, int16_t n16)
+static inline void linekv_add_n16(linekv_t *lkv, const char *key, int16_t n16)
 {
-    lkv_add_number(lkv, key, __n2b16(n16));
+    linekv_add_number(lkv, key, __n2b16(n16));
 }
 
-static inline void lkv_add_n32(linearkv_t *lkv, const char *key, int32_t n32)
+static inline void linekv_add_n32(linekv_t *lkv, const char *key, int32_t n32)
 {
-    lkv_add_number(lkv, key, __n2b32(n32));
+    linekv_add_number(lkv, key, __n2b32(n32));
 }
 
-static inline void lkv_add_n64(linearkv_t *lkv, const char *key, int64_t n64)
+static inline void linekv_add_n64(linekv_t *lkv, const char *key, int64_t n64)
 {
-    lkv_add_number(lkv, key, __n2b64(n64));
+    linekv_add_number(lkv, key, __n2b64(n64));
 }
 
-static inline void lkv_add_u8(linearkv_t *lkv, const char *key, uint8_t u8)
+static inline void linekv_add_u8(linekv_t *lkv, const char *key, uint8_t u8)
 {
-    lkv_add_number(lkv, key, __u2b8(u8));
+    linekv_add_number(lkv, key, __u2b8(u8));
 }
 
-static inline void lkv_add_u16(linearkv_t *lkv, const char *key, uint16_t u16)
+static inline void linekv_add_u16(linekv_t *lkv, const char *key, uint16_t u16)
 {
-    lkv_add_number(lkv, key, __u2b16(u16));
+    linekv_add_number(lkv, key, __u2b16(u16));
 }
 
-static inline void lkv_add_u32(linearkv_t *lkv, const char *key, uint32_t u32)
+static inline void linekv_add_u32(linekv_t *lkv, const char *key, uint32_t u32)
 {
-    lkv_add_number(lkv, key, __u2b32(u32));
+    linekv_add_number(lkv, key, __u2b32(u32));
 }
 
-static inline void lkv_add_u64(linearkv_t *lkv, const char *key, uint64_t u64)
+static inline void linekv_add_u64(linekv_t *lkv, const char *key, uint64_t u64)
 {
-    lkv_add_number(lkv, key, __u2b64(u64));
+    linekv_add_number(lkv, key, __u2b64(u64));
 }
 
-static inline void lkv_add_f32(linearkv_t *lkv, const char *key, float f32)
+static inline void linekv_add_f32(linekv_t *lkv, const char *key, float f32)
 {
-    lkv_add_number(lkv, key, __f2b32(f32));
+    linekv_add_number(lkv, key, __f2b32(f32));
 }
 
-static inline void lkv_add_f64(linearkv_t *lkv, const char *key, double f64)
+static inline void linekv_add_f64(linekv_t *lkv, const char *key, double f64)
 {
-    lkv_add_number(lkv, key, __f2b64(f64));
+    linekv_add_number(lkv, key, __f2b64(f64));
 }
 
-static inline void lkv_add_ptr(linearkv_t *lkv, const char *key, void *p)
+static inline void linekv_add_address(linekv_t *lkv, const char *key, void *p)
 {
     int64_t n = (int64_t)(p);
-    lkv_add_number(lkv, key, __n2b64(n));
+    linekv_add_number(lkv, key, __n2b64(n));
 }
 
-static inline void lkv_add_bool(linearkv_t *lkv, const char *key, uint8_t b)
+static inline void linekv_add_boolean(linekv_t *lkv, const char *key, uint8_t b)
 {
-    lkv_add_number(lkv, key, __boolean2block(b));
+    linekv_add_number(lkv, key, __boolean2block(b));
 }
 
-static inline lineardb_t* lkv_head(linearkv_parser_t parser)
+static inline lineval_t* linekv_head(linekv_parser_t parser)
 {
-    parser->key = (lkey_t *)(parser->head);
-    parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
-    return parser->value;
+    parser->key = (linekey_t *)(parser->head);
+    parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+    return parser->val;
 }
 
-static inline lineardb_t* lkv_next(linearkv_parser_t parser)
+static inline lineval_t* linekv_next(linekv_parser_t parser)
 {
-    if (parser->value){
-        lineardb_t *start_pos = parser->value;
-        uint32_t find_pos = ((start_pos->byte) - (parser->head) + __sizeof_block(parser->value));
+    if (parser->val){
+        lineval_t *start_val = parser->val;
+        uint32_t find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
         if (find_pos < parser->pos){
-            parser->key = (lkey_t *)(parser->head + find_pos);
-            parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
-            return parser->value;
+            parser->key = (linekey_t *)(parser->head + find_pos);
+            parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+            return parser->val;
         }
     }
     return NULL;
 }
 
-static inline const char* lkv_current_key(linearkv_parser_t parser)
+static inline const char* linekv_current_key(linekv_parser_t parser)
 {
     if (parser->key){
         return (const char *)parser->key->byte;
@@ -182,209 +205,209 @@ static inline const char* lkv_current_key(linearkv_parser_t parser)
     return "";
 }
 
-static inline lineardb_t* lkv_find(linearkv_parser_t parser, const char *key)
+static inline lineval_t* linekv_find(linekv_parser_t parser, const char *key)
 {
     uint32_t find_pos = 0;
     while (find_pos < parser->pos) {
-        parser->key = (lkey_t *)(parser->head + find_pos);
+        parser->key = (linekey_t *)(parser->head + find_pos);
         find_pos += (parser->key->byte[0] + 2);
-        parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+        parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
         if (strlen(key) == parser->key->byte[0]
             && memcmp(&parser->key->byte[1], key, parser->key->byte[0]) == 0){
-            return parser->value;
+            return parser->val;
         }
-        find_pos += __sizeof_block(parser->value);
+        find_pos += __sizeof_linedb(parser->val);
     }
     return NULL;
 }
 
-static inline lineardb_t* lkv_after(linearkv_parser_t parser, const char *key)
+static inline lineval_t* linekv_after(linekv_parser_t parser, const char *key)
 {
-    if (parser->value){
+    if (parser->val){
 
-        lineardb_t *start_pos = parser->value;
-        uint32_t find_pos = ((start_pos->byte) - (parser->head) + __sizeof_block(parser->value));
+        lineval_t *start_val = parser->val;
+        uint32_t find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
 
         while (find_pos < parser->pos) {
-            parser->key = (lkey_t *)(parser->head + find_pos);
+            parser->key = (linekey_t *)(parser->head + find_pos);
             find_pos += (parser->key->byte[0] + 2);
-            parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+            parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
             if (strlen(key) == parser->key->byte[0]
                 && memcmp(&parser->key->byte[1], key, parser->key->byte[0]) == 0){
-                return parser->value;
+                return parser->val;
             }
-            find_pos += __sizeof_block(parser->value);
+            find_pos += __sizeof_linedb(parser->val);
         }
 
         find_pos = 0;
 
         do {
-            parser->key = (lkey_t *)(parser->head + find_pos);
+            parser->key = (linekey_t *)(parser->head + find_pos);
             find_pos += (parser->key->byte[0] + 2);
-            parser->value = (lineardb_t *)(parser->key->byte + (parser->key->byte[0] + 2));
-            find_pos += __sizeof_block(parser->value);
+            parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
+            find_pos += __sizeof_linedb(parser->val);
             if (strlen(key) == parser->key->byte[0]
                 && memcmp(&parser->key->byte[1], key, parser->key->byte[0]) == 0){
-                return parser->value;
+                return parser->val;
             }
-        } while (parser->value != start_pos);
+        } while (parser->val != start_val);
     }
 
     return NULL;
 }
 
-static inline uint8_t lkv_find_bool(linearkv_parser_t parser, const char *key)
+static inline uint8_t linekv_find_bool(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __block2boolean(ldb);
+    if (val){
+        return __block2boolean(val);
     }
     return 0;
 }
 
-static inline int8_t lkv_find_n8(linearkv_parser_t parser, const char *key)
+static inline int8_t linekv_find_n8(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2n8(ldb);
+    if (val){
+        return __b2n8(val);
     }
     return 0;
 }
 
-static inline int16_t lkv_find_n16(linearkv_parser_t parser, const char *key)
+static inline int16_t linekv_find_n16(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2n16(ldb);
+    if (val){
+        return __b2n16(val);
     }
     return 0;
 }
 
-static inline int32_t lkv_find_n32(linearkv_parser_t parser, const char *key)
+static inline int32_t linekv_find_n32(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2n32(ldb);
+    if (val){
+        return __b2n32(val);
     }
     return 0;
 }
 
-static inline int64_t lkv_find_n64(linearkv_parser_t parser, const char *key)
+static inline int64_t linekv_find_n64(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2n64(ldb);
+    if (val){
+        return __b2n64(val);
     }
     return 0;
 }
 
-static inline uint8_t lkv_find_u8(linearkv_parser_t parser, const char *key)
+static inline uint8_t linekv_find_u8(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2u8(ldb);
+    if (val){
+        return __b2u8(val);
     }
     return 0;
 }
 
-static inline uint16_t lkv_find_u16(linearkv_parser_t parser, const char *key)
+static inline uint16_t linekv_find_u16(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2u16(ldb);
+    if (val){
+        return __b2u16(val);
     }
     return 0;
 }
 
-static inline uint32_t lkv_find_u32(linearkv_parser_t parser, const char *key)
+static inline uint32_t linekv_find_u32(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2u32(ldb);
+    if (val){
+        return __b2u32(val);
     }
     return 0;
 }
 
-static inline uint64_t lkv_find_u64(linearkv_parser_t parser, const char *key)
+static inline uint64_t linekv_find_u64(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2u64(ldb);
+    if (val){
+        return __b2u64(val);
     }
     return 0;
 }
 
-static inline float lkv_find_f32(linearkv_parser_t parser, const char *key)
+static inline float linekv_find_f32(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2f32(ldb);
+    if (val){
+        return __b2f32(val);
     }
     return 0.0f;
 }
 
-static inline double lkv_find_f64(linearkv_parser_t parser, const char *key)
+static inline double linekv_find_f64(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return __b2f64(ldb);
+    if (val){
+        return __b2f64(val);
     }
     return 0.0f;
 }
 
-static inline void* lkv_find_ptr(linearkv_parser_t parser, const char *key)
+static inline void* linekv_find_address(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return (void *)(__b2n64(ldb));
+    if (val){
+        return (void *)(__b2n64(val));
     }
     return NULL;
 }
 
-static inline const char* lkv_find_str(linearkv_parser_t parser, const char *key)
+static inline const char* linekv_find_string(linekv_parser_t parser, const char *key)
 {
-    lineardb_t *ldb = lkv_after(parser, key);
-    if (ldb == NULL){
-        ldb = lkv_find(parser, key);
+    lineval_t *val = linekv_after(parser, key);
+    if (val == NULL){
+        val = linekv_find(parser, key);
     }
-    if (ldb){
-        return (const char *)__dataof_block(ldb);
+    if (val){
+        return (const char *)__dataof_linedb(val);
     }
     return NULL;
 }
