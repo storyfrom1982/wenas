@@ -194,7 +194,7 @@ static inline lineval_t* linekv_next(linekv_parser_t parser)
             return parser->val;
         }
     }
-    return NULL;
+    return linekv_head(parser);
 }
 
 static inline const char* linekv_current_key(linekv_parser_t parser)
