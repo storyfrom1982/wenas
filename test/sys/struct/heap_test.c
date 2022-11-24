@@ -33,7 +33,7 @@ void heap_test()
 
     for (int i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         hm = min_heapify_pop(h);
-        fprintf(stdout, "key = %lu\n", hm.key);
+        fprintf(stdout, "heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
     }
 
     heap_destroy(&h);

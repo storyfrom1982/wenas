@@ -97,24 +97,24 @@ typedef union {
                 (((char*)&(n))[6]), (((char*)&(n))[7]) \
             }
 
-#   define __block2number64bit(b) \
+#   define __block2number64bit(b, type) \
             ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((int64_t)(b)->byte[1] << 56 \
-                | (int64_t)(b)->byte[2] << 48 \
-                | (int64_t)(b)->byte[3] << 40 \
-                | (int64_t)(b)->byte[4] << 32 \
-                | (int64_t)(b)->byte[5] << 24 \
-                | (int64_t)(b)->byte[6] << 16 \
-                | (int64_t)(b)->byte[7] << 8 \
-                | (int64_t)(b)->byte[8]) \
-                : ((int64_t)(b)->byte[8] << 56 \
-                | (int64_t)(b)->byte[7] << 48 \
-                | (int64_t)(b)->byte[6] << 40 \
-                | (int64_t)(b)->byte[5] << 32 \
-                | (int64_t)(b)->byte[4] << 24 \
-                | (int64_t)(b)->byte[3] << 16 \
-                | (int64_t)(b)->byte[2] << 8 \
-                | (int64_t)(b)->byte[1]) \
+                ? ((type)(b)->byte[1] << 56 \
+                | (type)(b)->byte[2] << 48 \
+                | (type)(b)->byte[3] << 40 \
+                | (type)(b)->byte[4] << 32 \
+                | (type)(b)->byte[5] << 24 \
+                | (type)(b)->byte[6] << 16 \
+                | (type)(b)->byte[7] << 8 \
+                | (type)(b)->byte[8]) \
+                : ((type)(b)->byte[8] << 56 \
+                | (type)(b)->byte[7] << 48 \
+                | (type)(b)->byte[6] << 40 \
+                | (type)(b)->byte[5] << 32 \
+                | (type)(b)->byte[4] << 24 \
+                | (type)(b)->byte[3] << 16 \
+                | (type)(b)->byte[2] << 8 \
+                | (type)(b)->byte[1]) \
 			)
 
 #   define __block2float32bit(b) \
@@ -182,24 +182,24 @@ typedef union {
                 (((char*)&(n))[6]), (((char*)&(n))[7]) \
             }
 
-#   define __block2number64bit(b) \
+#   define __block2number64bit(b, type) \
             ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((int64_t)(b)->byte[8] << 56 \
-                | (int64_t)(b)->byte[7] << 48 \
-                | (int64_t)(b)->byte[6] << 40 \
-                | (int64_t)(b)->byte[5] << 32 \
-                | (int64_t)(b)->byte[4] << 24 \
-                | (int64_t)(b)->byte[3] << 16 \
-                | (int64_t)(b)->byte[2] << 8 \
-                | (int64_t)(b)->byte[1]) \
-                : ((int64_t)(b)->byte[1] << 56 \
-                | (int64_t)(b)->byte[2] << 48 \
-                | (int64_t)(b)->byte[3] << 40 \
-                | (int64_t)(b)->byte[4] << 32 \
-                | (int64_t)(b)->byte[5] << 24 \
-                | (int64_t)(b)->byte[6] << 16 \
-                | (int64_t)(b)->byte[7] << 8 \
-                | (int64_t)(b)->byte[8]) \
+                ? ((type)(b)->byte[8] << 56 \
+                | (type)(b)->byte[7] << 48 \
+                | (type)(b)->byte[6] << 40 \
+                | (type)(b)->byte[5] << 32 \
+                | (type)(b)->byte[4] << 24 \
+                | (type)(b)->byte[3] << 16 \
+                | (type)(b)->byte[2] << 8 \
+                | (type)(b)->byte[1]) \
+                : ((type)(b)->byte[1] << 56 \
+                | (type)(b)->byte[2] << 48 \
+                | (type)(b)->byte[3] << 40 \
+                | (type)(b)->byte[4] << 32 \
+                | (type)(b)->byte[5] << 24 \
+                | (type)(b)->byte[6] << 16 \
+                | (type)(b)->byte[7] << 8 \
+                | (type)(b)->byte[8]) \
 			)
 
 #   define __block2float32bit(b) \
@@ -235,7 +235,7 @@ typedef union {
 #define __n2b32(n)       __number2block32bit(n, LINEDB_NUMBER_INTEGER)
 #define __b2n32(b)       __block2number32bit(b)
 #define __n2b64(n)       __number2block64bit(n, LINEDB_NUMBER_INTEGER)
-#define __b2n64(b)       __block2number64bit(b)
+#define __b2n64(b)       __block2number64bit(b, int64_t)
 
 #define __u2b8(n)        __number2block8bit(n, LINEDB_NUMBER_UNSIGNED)
 #define __b2u8(b)        __block2number8bit(b)
@@ -244,7 +244,7 @@ typedef union {
 #define __u2b32(n)       __number2block32bit(n, LINEDB_NUMBER_UNSIGNED)
 #define __b2u32(b)       __block2number32bit(b)
 #define __u2b64(n)       __number2block64bit(n, LINEDB_NUMBER_UNSIGNED)
-#define __b2u64(b)       __block2number64bit(b)
+#define __b2u64(b)       __block2number64bit(b, uint64_t)
 
 #define __f2b32(f)       __number2block32bit(f, LINEDB_NUMBER_FLOAT)
 #define __b2f32(b)       __block2float32bit(b)
