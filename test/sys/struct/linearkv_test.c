@@ -13,7 +13,7 @@ static void test_add_string()
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
 		fprintf(stdout, "key = %s value = %s\n", key_buf, value_buf);
-		linekv_add_string(parser, key_buf, value_buf);
+		linekv_add_str(parser, key_buf, value_buf);
 	}
 
 	for (int k = 0; k < 100; ++k){
@@ -44,7 +44,7 @@ static void test_find_after()
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
-		linekv_add_string(parser, key_buf, value_buf);
+		linekv_add_str(parser, key_buf, value_buf);
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
@@ -214,33 +214,33 @@ static void test_add_object()
 	linekv_t *obj = linekv_build(10240);
 	linekv_t *obj1 = linekv_build(10240);
 
-	linekv_add_n8(lkv, "int8", -8);
-	linekv_add_n16(lkv, "int16", -16);
-	linekv_add_n32(lkv, "int32", -32);
-	linekv_add_n64(lkv, "int32", -64);
+	linekv_add_int8(lkv, "int8", -8);
+	linekv_add_int16(lkv, "int16", -16);
+	linekv_add_int32(lkv, "int32", -32);
+	linekv_add_int64(lkv, "int32", -64);
 
-	linekv_add_boolean(obj, "boolean", 1);
-	linekv_add_u8(obj, "uint8", 8);
-	linekv_add_u16(obj, "uint16", 16);
-	linekv_add_u32(obj, "uint32", 32);
-	linekv_add_u64(obj, "uint64", 64);
-	linekv_add_f32(obj, "float32", 32.32f);
-	linekv_add_f64(obj, "float64", 64.64f);
-	linekv_add_string(obj, "string", "string >>>>------------------------> object");
+	linekv_add_bool(obj, "boolean", 1);
+	linekv_add_uint8(obj, "uint8", 8);
+	linekv_add_uint16(obj, "uint16", 16);
+	linekv_add_uint32(obj, "uint32", 32);
+	linekv_add_uint64(obj, "uint64", 64);
+	linekv_add_float32(obj, "float32", 32.32f);
+	linekv_add_float64(obj, "float64", 64.64f);
+	linekv_add_str(obj, "string", "string >>>>------------------------> object");
 
-	linekv_add_object(lkv, "object", obj);
+	linekv_add_obj(lkv, "object", obj);
 
-	linekv_add_boolean(obj1, "boolean", 1);
-	linekv_add_u8(obj1, "uint8", 8);
-	linekv_add_u16(obj1, "uint16", 16);
-	linekv_add_u32(obj1, "uint32", 32);
-	linekv_add_u64(obj1, "uint64", 64);
-	linekv_add_f32(obj1, "float32", 32.32f);
-	linekv_add_f64(obj1, "float64", 64.64f);
-	linekv_add_string(obj1, "string", "string >>>>------------------------> object 1");
-	linekv_add_object(obj1, "object", obj);
+	linekv_add_bool(obj1, "boolean", 1);
+	linekv_add_uint8(obj1, "uint8", 8);
+	linekv_add_uint16(obj1, "uint16", 16);
+	linekv_add_uint32(obj1, "uint32", 32);
+	linekv_add_uint64(obj1, "uint64", 64);
+	linekv_add_float32(obj1, "float32", 32.32f);
+	linekv_add_float64(obj1, "float64", 64.64f);
+	linekv_add_str(obj1, "string", "string >>>>------------------------> object 1");
+	linekv_add_obj(obj1, "object", obj);
 
-	linekv_add_object(lkv, "object", obj1);
+	linekv_add_obj(lkv, "object", obj1);
 
 	print_objcet(lkv);
 

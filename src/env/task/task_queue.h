@@ -178,7 +178,7 @@ static inline void env_taskqueue_push_timedtask(env_taskqueue_t *tq, linekv_t *l
     task->pos = lkv->pos;
     memcpy(task->head, lkv->head, lkv->pos);
     heapment_t t;
-    t.key = env_time() + linekv_find_n64(task, "time");
+    t.key = env_time() + linekv_find_int64(task, "time");
     t.value = task;
     min_heapify_push(tq->timed_task, t);
     env_mutex_signal(&tq->emutex);

@@ -78,7 +78,7 @@ static inline void linekv_clear(linekv_t *lkv)
     }
 }
 
-static inline void linekv_add_string(linekv_t *lkv, const char *key, char *value)
+static inline void linekv_add_str(linekv_t *lkv, const char *key, const char *value)
 {
     lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -90,7 +90,7 @@ static inline void linekv_add_string(linekv_t *lkv, const char *key, char *value
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void linekv_add_object(linekv_t *lkv, const char *key, linekv_t *obj)
+static inline void linekv_add_obj(linekv_t *lkv, const char *key, linekv_t *obj)
 {
     lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -115,63 +115,63 @@ static inline void linekv_add_number(linekv_t *lkv, const char *key, lineval_t v
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void linekv_add_n8(linekv_t *lkv, const char *key, int8_t n8)
+static inline void linekv_add_int8(linekv_t *lkv, const char *key, int8_t n8)
 {
     linekv_add_number(lkv, key, __n2b8(n8));
 }
 
-static inline void linekv_add_n16(linekv_t *lkv, const char *key, int16_t n16)
+static inline void linekv_add_int16(linekv_t *lkv, const char *key, int16_t n16)
 {
     linekv_add_number(lkv, key, __n2b16(n16));
 }
 
-static inline void linekv_add_n32(linekv_t *lkv, const char *key, int32_t n32)
+static inline void linekv_add_int32(linekv_t *lkv, const char *key, int32_t n32)
 {
     linekv_add_number(lkv, key, __n2b32(n32));
 }
 
-static inline void linekv_add_n64(linekv_t *lkv, const char *key, int64_t n64)
+static inline void linekv_add_int64(linekv_t *lkv, const char *key, int64_t n64)
 {
     linekv_add_number(lkv, key, __n2b64(n64));
 }
 
-static inline void linekv_add_u8(linekv_t *lkv, const char *key, uint8_t u8)
+static inline void linekv_add_uint8(linekv_t *lkv, const char *key, uint8_t u8)
 {
     linekv_add_number(lkv, key, __u2b8(u8));
 }
 
-static inline void linekv_add_u16(linekv_t *lkv, const char *key, uint16_t u16)
+static inline void linekv_add_uint16(linekv_t *lkv, const char *key, uint16_t u16)
 {
     linekv_add_number(lkv, key, __u2b16(u16));
 }
 
-static inline void linekv_add_u32(linekv_t *lkv, const char *key, uint32_t u32)
+static inline void linekv_add_uint32(linekv_t *lkv, const char *key, uint32_t u32)
 {
     linekv_add_number(lkv, key, __u2b32(u32));
 }
 
-static inline void linekv_add_u64(linekv_t *lkv, const char *key, uint64_t u64)
+static inline void linekv_add_uint64(linekv_t *lkv, const char *key, uint64_t u64)
 {
     linekv_add_number(lkv, key, __u2b64(u64));
 }
 
-static inline void linekv_add_f32(linekv_t *lkv, const char *key, float f32)
+static inline void linekv_add_float32(linekv_t *lkv, const char *key, float f32)
 {
     linekv_add_number(lkv, key, __f2b32(f32));
 }
 
-static inline void linekv_add_f64(linekv_t *lkv, const char *key, double f64)
+static inline void linekv_add_float64(linekv_t *lkv, const char *key, double f64)
 {
     linekv_add_number(lkv, key, __f2b64(f64));
 }
 
-static inline void linekv_add_address(linekv_t *lkv, const char *key, void *p)
+static inline void linekv_add_ptr(linekv_t *lkv, const char *key, void *p)
 {
     int64_t n = (int64_t)(p);
     linekv_add_number(lkv, key, __n2b64(n));
 }
 
-static inline void linekv_add_boolean(linekv_t *lkv, const char *key, uint8_t b)
+static inline void linekv_add_bool(linekv_t *lkv, const char *key, uint8_t b)
 {
     linekv_add_number(lkv, key, __boolean2block(b));
 }
@@ -268,7 +268,7 @@ static inline uint8_t linekv_find_bool(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline int8_t linekv_find_n8(linekv_parser_t parser, const char *key)
+static inline int8_t linekv_find_int8(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -280,7 +280,7 @@ static inline int8_t linekv_find_n8(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline int16_t linekv_find_n16(linekv_parser_t parser, const char *key)
+static inline int16_t linekv_find_int16(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -292,7 +292,7 @@ static inline int16_t linekv_find_n16(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline int32_t linekv_find_n32(linekv_parser_t parser, const char *key)
+static inline int32_t linekv_find_int32(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -304,7 +304,7 @@ static inline int32_t linekv_find_n32(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline int64_t linekv_find_n64(linekv_parser_t parser, const char *key)
+static inline int64_t linekv_find_int64(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -316,7 +316,7 @@ static inline int64_t linekv_find_n64(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline uint8_t linekv_find_u8(linekv_parser_t parser, const char *key)
+static inline uint8_t linekv_find_uint8(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -328,7 +328,7 @@ static inline uint8_t linekv_find_u8(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline uint16_t linekv_find_u16(linekv_parser_t parser, const char *key)
+static inline uint16_t linekv_find_uint16(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -340,7 +340,7 @@ static inline uint16_t linekv_find_u16(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline uint32_t linekv_find_u32(linekv_parser_t parser, const char *key)
+static inline uint32_t linekv_find_uint32(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -352,7 +352,7 @@ static inline uint32_t linekv_find_u32(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline uint64_t linekv_find_u64(linekv_parser_t parser, const char *key)
+static inline uint64_t linekv_find_uint64(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -364,7 +364,7 @@ static inline uint64_t linekv_find_u64(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline float linekv_find_f32(linekv_parser_t parser, const char *key)
+static inline float linekv_find_float32(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -376,7 +376,7 @@ static inline float linekv_find_f32(linekv_parser_t parser, const char *key)
     return 0.0f;
 }
 
-static inline double linekv_find_f64(linekv_parser_t parser, const char *key)
+static inline double linekv_find_float64(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -388,7 +388,7 @@ static inline double linekv_find_f64(linekv_parser_t parser, const char *key)
     return 0.0f;
 }
 
-static inline void* linekv_find_address(linekv_parser_t parser, const char *key)
+static inline void* linekv_find_ptr(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -400,7 +400,7 @@ static inline void* linekv_find_address(linekv_parser_t parser, const char *key)
     return NULL;
 }
 
-static inline const char* linekv_find_string(linekv_parser_t parser, const char *key)
+static inline const char* linekv_find_str(linekv_parser_t parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
