@@ -13,20 +13,20 @@ static void test_task_func(linekv_parser_t parser)
     fprintf(stdout, "string: %s\n", linekv_find_string(parser, "string"));
 }
 
-static void test_timedtask_func(linekv_parser_t parser)
+static uint64_t test_timedtask_func(linekv_parser_t parser)
 {
     fprintf(stdout, "================= time: %lu\n", (char*)linekv_find_address(parser, "time"));
     fprintf(stdout, "func: 0x%x\n", linekv_find_n64(parser, "func"));
     fprintf(stdout, "ctx: %s\n", (char*)linekv_find_address(parser, "ctx"));
-    fprintf(stdout, "loop: %lu\n", (char*)linekv_find_address(parser, "loop"));
+    return 3000000000ULL;
 }
 
-static void test_timedtask_func1(linekv_parser_t parser)
+static uint64_t test_timedtask_func1(linekv_parser_t parser)
 {
     fprintf(stdout, "time: %lu\n", (char*)linekv_find_address(parser, "time"));
     fprintf(stdout, "func: 0x%x\n", linekv_find_n64(parser, "func"));
     fprintf(stdout, "ctx: %s\n", (char*)linekv_find_address(parser, "ctx"));
-    fprintf(stdout, "loop: %lu\n", (char*)linekv_find_address(parser, "loop"));
+    return 1000000000ULL;
 }
 
 void task_queue_test()
@@ -61,14 +61,12 @@ void task_queue_test()
     linekv_add_address(lkv, "func", test_timedtask_func);
     linekv_add_address(lkv, "ctx", (void*)test_string);
     linekv_add_n64(lkv, "time", 3000000000ULL);
-    linekv_add_n64(lkv, "loop", 1000000000ULL);
     env_taskqueue_push_timedtask(tq, lkv);
 
     linekv_clear(lkv);
     linekv_add_address(lkv, "func", test_timedtask_func1);
     linekv_add_address(lkv, "ctx", (void*)test_string);
     linekv_add_n64(lkv, "time", 1000000000ULL);
-    linekv_add_n64(lkv, "loop", 1000000000ULL);
     env_taskqueue_push_timedtask(tq, lkv);    
 
     sleep(10*3);

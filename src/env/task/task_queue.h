@@ -19,6 +19,7 @@ typedef struct env_task_queue {
 typedef linekv_parser_t task_ctx_t;
 
 typedef void (*env_task_func)(task_ctx_t ctx);
+typedef uint64_t (*env_timedtask_func)(task_ctx_t ctx);
 
 static inline void* task_main_loop(void *ctx)
 {
@@ -35,11 +36,11 @@ static inline void* task_main_loop(void *ctx)
             heapment_t element = min_heapify_pop(tq->timed_task);
             task_ctx_t ctx = (task_ctx_t) element.value;
             ldb = linekv_find(ctx, "func");
-            if (linekv_find_n64(ctx, "loop") > 0){
-                element.key = env_time() + linekv_find_n64(ctx, "time");
+            element.key = ((env_timedtask_func)__b2n64(ldb))(ctx); 
+            if (element.key != 0){
+                element.key += env_time();
                 min_heapify_push(tq->timed_task, element);
             }
-            ((env_task_func)__b2n64(ldb))(ctx); 
         }
 
         ldb = linedb_pipe_hold_block(tq->immediate_task);
