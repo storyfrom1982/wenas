@@ -78,6 +78,18 @@ static inline void linekv_clear(linekv_t *lkv)
     }
 }
 
+static inline void linekv_add_binary(linekv_t *lkv, const char *key, const void *value, uint32_t size)
+{
+    lkv->key = (linekey_t *)(lkv->head + lkv->pos);
+    lkv->key->byte[0] = strlen(key);
+    memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
+    lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
+    lkv->pos += (lkv->key->byte[0] + 2);
+    lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
+    linedb_load_binary(lkv->val, value, size);
+    lkv->pos += __sizeof_linedb(lkv->val);
+}
+
 static inline void linekv_add_str(linekv_t *lkv, const char *key, const char *value)
 {
     lkv->key = (linekey_t *)(lkv->head + lkv->pos);
