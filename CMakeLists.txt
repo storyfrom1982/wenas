@@ -31,6 +31,11 @@ set(kzx_defines "")
 # set(kzx_cflags "")
 set(kzx_cflags "-Wno-format")
 # set(kzx_cflags "-Wformat")
+set(kzx_ldflags "")
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND kzx_ldflags pthread)
+endif()
 
 add_executable(kang ${kzx_sources})
 target_compile_definitions(kang PRIVATE ${kzx_defines})
@@ -40,4 +45,4 @@ target_include_directories(kang PRIVATE
     src/env
     src/env/task
     )
-target_link_libraries(kang m)
+target_link_libraries(kang m ${kzx_ldflags})
