@@ -19,22 +19,24 @@ else()
 endif()
 
 set(kzx_sources src/main.c
+    src/env/malloc/sr_malloc.c
     test/sys/struct/heap_test.c
     test/sys/struct/lineardb_test.c
     test/sys/struct/linearkv_test.c
     test/sys/struct/lineardb_pipe_test.c
     test/env/thread_test.c
     test/env/task/task_queue_test.c
+    test/env/malloc/sr_malloc.c
 )
 
 set(kzx_defines "")
 # set(kzx_cflags "")
-set(kzx_cflags "-Wno-format")
+set(kzx_cflags "-Wno-format -DSR_LOG_DEBUG -DSR_MALLOC_BACKTRACE -DSR_MALLOC_PAGE_SIZE=0xA00000 -DSR_MALLOC_MAX_POOL=16")
 # set(kzx_cflags "-Wformat")
 set(kzx_ldflags "")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND kzx_ldflags pthread)
+    list(APPEND kzx_ldflags pthread dl)
 endif()
 
 add_executable(kang ${kzx_sources})
@@ -44,5 +46,6 @@ target_include_directories(kang PRIVATE
     src/sys/struct
     src/env
     src/env/task
+    src/env/malloc
     )
 target_link_libraries(kang m ${kzx_ldflags})
