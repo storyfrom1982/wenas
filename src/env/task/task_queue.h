@@ -57,6 +57,13 @@ static inline void* task_main_loop(void *ctx)
             ldb = linekv_find(task_ctx, "func");
             ((env_task_func)__b2n64(ldb))(task_ctx);
 
+            env_mutex_t *waiting = (env_mutex_t *)linekv_find_ptr(task_ctx, "waiting");
+            if (waiting){
+                env_mutex_lock(waiting);
+                env_mutex_signal(waiting);
+                env_mutex_unlock(waiting);
+            }
+
         }else {
 
             if (!tq->running){
@@ -95,7 +102,7 @@ static inline env_taskqueue_t* env_taskqueue_build()
         return NULL;
     }
 
-    tq->immediate_task = linedb_pipe_build(1 << 16);
+    tq->immediate_task = linedb_pipe_build(1 << 14);
     if (tq->immediate_task == NULL){
         goto Clear;
     }
@@ -183,6 +190,31 @@ static inline void env_taskqueue_push_timedtask(env_taskqueue_t *tq, linekv_t *l
     min_heapify_push(tq->timed_task, t);
     env_mutex_signal(&tq->emutex);
     env_mutex_unlock(&tq->emutex);
+}
+
+static inline void env_taskqueue_push_task_waiting(env_taskqueue_t *tq, linekv_t *lkv)
+{
+    env_mutex_lock(&tq->emutex);
+
+    env_mutex_t mutex;
+    env_mutex_init(&mutex);
+    env_mutex_lock(&mutex);
+
+    linekv_add_ptr(lkv, "waiting", &mutex);
+
+    while (linedb_pipe_write(tq->immediate_task, lkv->head, lkv->pos) == 0) {
+        tq->write_waiting = 1;
+        env_mutex_wait(&tq->emutex);
+        tq->write_waiting = 0;
+    }
+    if (tq->read_waiting){
+        env_mutex_signal(&tq->emutex);
+    }
+    env_mutex_unlock(&tq->emutex);
+
+    env_mutex_wait(&mutex);
+    env_mutex_unlock(&mutex);
+    env_mutex_destroy(&mutex);
 }
 
 

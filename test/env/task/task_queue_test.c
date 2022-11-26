@@ -29,6 +29,15 @@ static uint64_t test_timedtask_func1(linekv_parser_t parser)
     return 1000000000ULL;
 }
 
+static void test_timedtask_func_waiting(linekv_parser_t parser)
+{
+
+    for (int i = 0; i < 3; ++i){
+        fprintf(stdout, "waiting=====================%d\n", i);
+        fprintf(stdout, "func: 0x%x\n", linekv_find_int64(parser, "func"));
+    }
+}
+
 void task_queue_test()
 {
     fprintf(stdout, "task_queue_test enter\n");
@@ -58,6 +67,10 @@ void task_queue_test()
     }
 
     linekv_clear(lkv);
+    linekv_add_ptr(lkv, "func", test_timedtask_func_waiting);
+    env_taskqueue_push_task_waiting(tq, lkv);
+
+    linekv_clear(lkv);
     linekv_add_ptr(lkv, "func", test_timedtask_func);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_int64(lkv, "time", 3000000000ULL);
@@ -67,7 +80,7 @@ void task_queue_test()
     linekv_add_ptr(lkv, "func", test_timedtask_func1);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_int64(lkv, "time", 1000000000ULL);
-    env_taskqueue_push_timedtask(tq, lkv);    
+    env_taskqueue_push_timedtask(tq, lkv);
 
     sleep(10*3);
 

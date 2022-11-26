@@ -31,12 +31,13 @@ set(kzx_sources src/main.c
 
 set(kzx_defines "")
 # set(kzx_cflags "")
-set(kzx_cflags "-Wno-format -DSR_LOG_DEBUG -DSR_MALLOC_BACKTRACE -DSR_MALLOC_PAGE_SIZE=0xA00000 -DSR_MALLOC_MAX_POOL=16")
+set(kzx_cflags "-Wno-format")
 # set(kzx_cflags "-Wformat")
 set(kzx_ldflags "")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND kzx_ldflags pthread dl)
+    list(APPEND kzx_cflags -DSR_LOG_DEBUG -DSR_MALLOC_BACKTRACE -DSR_MALLOC_PAGE_SIZE=0xA00000 -DSR_MALLOC_MAX_POOL=16)
 endif()
 
 add_executable(kang ${kzx_sources})

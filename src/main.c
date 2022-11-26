@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 	// linearkv_test();
 	// lineardb_pipe_test();
 	// thread_test();
-	// task_queue_test();
+	task_queue_test();
 	// heap_test();
 	sr_malloc_test();
 
