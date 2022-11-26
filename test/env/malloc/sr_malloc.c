@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 
 #define __USE_GNU
 #define _GNU_SOURCE
@@ -73,6 +74,14 @@ static void log_cb(const char *fmt, ...){
 
 void sr_malloc_test()
 {
+
+#ifdef ENV_HAVE_EXECINFO
+    printf("%s\n", "ENV_HAVE_EXECINFO");
+#endif
+
+#ifdef ENV_HAVE_STDATOMIC
+    printf("%s\n", "ENV_HAVE_STDATOMIC");
+#endif
 
     // test4();
 
