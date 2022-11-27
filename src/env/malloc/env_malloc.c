@@ -1,29 +1,4 @@
-/*
- * sr_malloc.c
- *
- * Author: storyfrom1982@gmail.com
- *
- * Copyright (C) 2017 storyfrom1982@gmail.com all rights reserved.
- *
- * This file is part of sr_malloc.
- *
- * self-reliance is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * self-reliance is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
-
-
-#include "sr_malloc.h"
+#include "env_malloc.h"
 
 
 #include <time.h>
@@ -956,7 +931,7 @@ int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void sr_malloc_release()
+void env_malloc_release()
 {
     __atom_lock(mm->lock);
     for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
@@ -975,7 +950,7 @@ void sr_malloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void sr_malloc_debug(void (*cb)(const char *fmt, ...))
+void env_malloc_debug(void (*cb)(const char *fmt, ...))
 {
 	sr_memory_pool_t *pool = NULL;
 	pointer_t *pointer = NULL;

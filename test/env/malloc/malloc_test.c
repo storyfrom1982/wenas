@@ -13,7 +13,7 @@
 
 
 #define SR_MALLOC_BACKTRACE 1
-#include "sr_malloc.h"
+#include "env_malloc.h"
 
 
 // void test1(){
@@ -72,7 +72,7 @@ static void log_cb(const char *fmt, ...){
     printf("%s\n", text);
 }
 
-void sr_malloc_test()
+void malloc_test()
 {
 
 #ifdef ENV_HAVE_EXECINFO
@@ -93,7 +93,7 @@ void sr_malloc_test()
     
 
 
-    sr_malloc_debug(log_cb);
+    env_malloc_debug(log_cb);
 
     free(p);
 }

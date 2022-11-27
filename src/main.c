@@ -6,7 +6,7 @@ extern void lineardb_pipe_test();
 extern void thread_test();
 extern void task_queue_test();
 extern void heap_test();
-extern void sr_malloc_test();
+extern void malloc_test();
 
 int main(int argc, char *argv[]) 
 {
@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	// thread_test();
 	// task_queue_test();
 	// heap_test();
-	sr_malloc_test();
+	malloc_test();
 
 	return 0;
 }
