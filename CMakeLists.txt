@@ -22,7 +22,8 @@ include(CheckCSourceRuns)
 check_c_source_runs("
     #include <execinfo.h>
     int main() {
-        backtrace(NULL, 0);
+        void *p[1];
+        backtrace(p, 1);
         return 0;
     }" ENV_HAVE_EXECINFO)
 
