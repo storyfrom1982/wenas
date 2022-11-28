@@ -73,10 +73,12 @@ static void log_cb(const char *fmt, ...){
     printf("%s\n", text);
 }
 
+
+static char *str, *strn;
 static void test_strdup()
 {
-    char *str = strdup("12345");
-    char *strn = strndup("12345", strlen("12345"));
+    str = strdup("12345");
+    strn = strndup("12345", strlen("12345"));
 }
 
 void malloc_test()
@@ -100,7 +102,22 @@ void malloc_test()
     
     test_strdup();
 
+    printf(">>>>--------------->\n");
     env_malloc_debug(log_cb);
+    
 
     free(p);
+    free(p1);
+    free(p2);
+
+    printf(">>>>--------------->\n");
+    env_malloc_debug(log_cb);
+    
+
+    free(str);
+    free(strn);
+
+    printf(">>>>--------------->\n");
+    env_malloc_debug(log_cb);
+    
 }

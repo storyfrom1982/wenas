@@ -46,7 +46,7 @@
 
 #define	__max_page_number			1024
 
-#define	__max_recycle_bin_number	3
+#define	__max_recycle_bin_number	7
 
 #define	__align_size				( sizeof(size_t) )
 #define	__align_mask				( __align_size - 1 )
