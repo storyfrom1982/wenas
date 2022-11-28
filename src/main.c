@@ -7,6 +7,7 @@ extern void thread_test();
 extern void task_queue_test();
 extern void heap_test();
 extern void malloc_test();
+extern void crash_backtrace_test();
 
 int main(int argc, char *argv[]) 
 {
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
 	// task_queue_test();
 	// heap_test();
 	malloc_test();
+	crash_backtrace_test();
 
 	return 0;
 }

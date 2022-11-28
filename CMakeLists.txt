@@ -31,6 +31,23 @@ check_c_source_runs("
     }" ENV_HAVE_EXECINFO)
 
 check_c_source_runs("
+    #include <dlfcn.h>
+    #include <signal.h>
+    #include <unwind.h>
+    #include <execinfo.h>
+    static _Unwind_Reason_Code cb(struct _Unwind_Context* a, void* b){
+        return _URC_NO_REASON;
+    }
+    int main() {
+        Dl_info info= {0};
+        void *p[1];
+        backtrace(p, 1);
+        dladdr(p[0], &info);
+        _Unwind_Backtrace(cb, NULL);
+        return 0;
+    }" ENV_HAVE_UNWIND)
+
+check_c_source_runs("
     #include <stdatomic.h>
     int main() {
         atomic_size_t a;
@@ -59,6 +76,10 @@ if(ENV_HAVE_EXECINFO)
     list(APPEND kzx_cflags -DENV_HAVE_EXECINFO -DENV_MALLOC_BACKTRACE)
 endif()
 
+if(ENV_HAVE_UNWIND)
+    list(APPEND kzx_sources test/env/backtrace/crash_backtrace_test.c)
+endif()
+
 if(ENV_HAVE_STDATOMIC)
     list(APPEND kzx_cflags -DENV_HAVE_STDATOMIC)
 endif()
@@ -76,5 +97,6 @@ target_include_directories(kang PRIVATE
     src/env
     src/env/task
     src/env/malloc
+    src/env/backtrace
     )
 target_link_libraries(kang m ${kzx_ldflags})
