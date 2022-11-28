@@ -20,10 +20,13 @@ endif()
 
 include(CheckCSourceRuns)
 check_c_source_runs("
+    #include <dlfcn.h>
     #include <execinfo.h>
     int main() {
+        Dl_info info= {0};
         void *p[1];
         backtrace(p, 1);
+        dladdr(p[0], &info);
         return 0;
     }" ENV_HAVE_EXECINFO)
 
@@ -53,7 +56,7 @@ set(kzx_cflags "-Wno-format")
 set(kzx_ldflags "")
 
 if(ENV_HAVE_EXECINFO)
-    list(APPEND kzx_cflags -DENV_HAVE_EXECINFO -DSR_MALLOC_BACKTRACE)
+    list(APPEND kzx_cflags -DENV_HAVE_EXECINFO -DENV_MALLOC_BACKTRACE)
 endif()
 
 if(ENV_HAVE_STDATOMIC)
@@ -62,7 +65,7 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND kzx_ldflags pthread dl)
-    list(APPEND kzx_cflags -DSR_LOG_DEBUG -DSR_MALLOC_PAGE_SIZE=0xA00000 -DSR_MALLOC_MAX_POOL=16)
+    list(APPEND kzx_cflags -DSR_LOG_DEBUG -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
 endif()
 
 add_executable(kang ${kzx_sources})

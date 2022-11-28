@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <stdatomic.h>
+#include <string.h>
 
 #define __USE_GNU
 #define _GNU_SOURCE
@@ -72,6 +73,12 @@ static void log_cb(const char *fmt, ...){
     printf("%s\n", text);
 }
 
+static void test_strdup()
+{
+    char *str = strdup("12345");
+    char *strn = strndup("12345", strlen("12345"));
+}
+
 void malloc_test()
 {
 
@@ -91,7 +98,7 @@ void malloc_test()
 
     void *p2 = malloc(1024);
     
-
+    test_strdup();
 
     env_malloc_debug(log_cb);
 

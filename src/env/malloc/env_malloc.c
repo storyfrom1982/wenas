@@ -8,9 +8,13 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
-// #include <pthread.h>
 
-#define SR_MALLOC_BACKTRACE 1
+
+#ifdef ENV_MALLOC_BACKTRACE
+#	include <dlfcn.h>
+#	include <execinfo.h>
+#	define ENV_MALLOC_BACKTRACE_DEPTH	33
+#endif
 
 #define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
 #define	__is_false(x)		__sync_bool_compare_and_swap(&(x), false, false)
@@ -28,14 +32,14 @@
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#ifdef SR_MALLOC_PAGE_SIZE
-# define __page_size                SR_MALLOC_PAGE_SIZE
+#ifdef ENV_MALLOC_PAGE_SIZE
+# define __page_size                ENV_MALLOC_PAGE_SIZE
 #else
 # define __page_size                0xA00000
 #endif
 
-#ifdef SR_MALLOC_MAX_POOL
-# define	__max_pool_number		SR_MALLOC_MAX_POOL
+#ifdef ENV_MALLOC_MAX_POOL
+# define	__max_pool_number		ENV_MALLOC_MAX_POOL
 #else
 # define	__max_pool_number		16
 #endif
@@ -53,60 +57,11 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef SR_MALLOC_BACKTRACE
-
-# define __debug_msg_size			(256 - (__align_size << 2))
-
-
-# ifndef __MACOS__
-
-//TODO why some of the stack backtrace with can't get
-#define __backtrace_depth           21
-
-#include <unwind.h>
-#define __USE_GNU
-#define _GNU_SOURCE
-#include <dlfcn.h>
-
-typedef struct BacktraceState
-{
-    void** current;
-    void** end;
-}BacktraceState;
-
-static _Unwind_Reason_Code unwindCallback(struct _Unwind_Context* context, void* arg)
-{
-    BacktraceState* state = (BacktraceState*)(arg);
-    void* pc = (void*) _Unwind_GetIP(context);
-#if __thumb__
-    // Reset the Thumb bit, if it is set.
-    const uintptr_t thumb_bit = 1;
-    pc &= ~thumb_bit;
-#endif
-    if (pc) {
-        if (state->current == state->end) {
-            return _URC_END_OF_STACK;
-        } else {
-            *state->current++ = (void*)(pc);
-        }
-    }
-    return _URC_NO_REASON;
-}
-
-static inline int _backtrace(void **buffer, int size)
-{
-	BacktraceState state = {buffer, buffer + __backtrace_depth};
-	_Unwind_Backtrace(unwindCallback, &state);
-	return  state.current - buffer;
-}
-
-# endif
-
+#ifdef ENV_MALLOC_BACKTRACE
+# define __debug_msg_size			((sizeof(void*) * ENV_MALLOC_BACKTRACE_DEPTH) - (__align_size << 2))
 #else
-
 # define __debug_msg_size			0
-
-#endif //SR_MALLOC_BACKTRACE
+#endif //ENV_MALLOC_BACKTRACE
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -156,7 +111,7 @@ typedef struct pointer_t {
 	 * 定位指针信息
 	 */
 
-#ifdef	SR_MALLOC_BACKTRACE
+#ifdef	ENV_MALLOC_BACKTRACE
 	char debug_msg[__debug_msg_size];
 #endif
 
@@ -188,7 +143,7 @@ typedef struct pointer_queue_t{
 }pointer_queue_t;
 
 
-typedef struct sr_memory_page_t{
+typedef struct env_memory_page{
 
 	bool lock;
 
@@ -218,20 +173,20 @@ typedef struct sr_memory_page_t{
 	 */
 	pointer_queue_t recycle_bin[__max_recycle_bin_number];
 
-}sr_memory_page_t;
+}env_memory_page_t;
 
 
-typedef struct sr_memory_pool_t{
+typedef struct env_memory_pool{
 	bool lock;
 	size_t id;
 	size_t page_number;
 	void *aligned_address;
 	// pthread_t tid;
-	sr_memory_page_t page[__max_page_number + 1];
-}sr_memory_pool_t;
+	env_memory_page_t page[__max_page_number + 1];
+}env_memory_pool_t;
 
 
-typedef struct sr_memory_manager_t{
+typedef struct env_memory_manager{
 
 	bool lock;
 	bool init;
@@ -240,15 +195,15 @@ typedef struct sr_memory_manager_t{
 	size_t pool_number;
 	size_t preloading_page;
 	size_t page_aligned_mask;
-	sr_memory_pool_t pool[__max_pool_number + 1];
+	env_memory_pool_t pool[__max_pool_number + 1];
 
-}sr_memory_manager_t;
-
-
-static sr_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
+}env_memory_manager_t;
 
 
-static int malloc_page(sr_memory_pool_t *pool, sr_memory_page_t *page, size_t page_size)
+static env_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
+
+
+static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, size_t page_size)
 {
 	page->size = (page_size + mm->page_aligned_mask) & (~mm->page_aligned_mask);
 
@@ -326,7 +281,7 @@ static int malloc_pool()
 }
 
 
-static void free_page(sr_memory_page_t *page, sr_memory_pool_t *pool)
+static void free_page(env_memory_page_t *page, env_memory_pool_t *pool)
 {
 	//TODO 是否从最顶端的分页开始释放
 	////当然最好能够回收空闲的内存，但是需要在线程退出时回收内存，需要封装线程来配合
@@ -334,7 +289,7 @@ static void free_page(sr_memory_page_t *page, sr_memory_pool_t *pool)
 }
 
 
-inline static void free_pointer(pointer_t *pointer, sr_memory_page_t *page, sr_memory_pool_t *pool)
+inline static void free_pointer(pointer_t *pointer, env_memory_page_t *page, env_memory_pool_t *pool)
 {
 
 	if (__next_pointer(pointer) == page->pointer){
@@ -417,7 +372,7 @@ inline static void free_pointer(pointer_t *pointer, sr_memory_page_t *page, sr_m
 }
 
 
-static void flush_page(sr_memory_page_t *page, sr_memory_pool_t *pool)
+static void flush_page(env_memory_page_t *page, env_memory_pool_t *pool)
 {
 	pointer_t *pointer = NULL;
 	for (size_t i = 0; i < __max_recycle_bin_number; ++i){
@@ -447,8 +402,8 @@ void free(void *address)
 	size_t page_id = 0;
 	size_t pool_id = 0;
 	pointer_t *pointer = NULL;
-	sr_memory_page_t *page = NULL;
-	sr_memory_pool_t *pool = NULL;
+	env_memory_page_t *page = NULL;
+	env_memory_pool_t *pool = NULL;
 
 	if (address){
 
@@ -509,61 +464,7 @@ void* malloc(size_t size)
         }
 	}
 
-    sr_memory_pool_t *pool = &mm->pool[(__atom_add(mm->pool_index, 1) & (__max_pool_number-1))];
-
-#if 0
-	//获取当前线程的内存池
-	sr_memory_pool_t *pool = (sr_memory_pool_t *)pthread_getspecific(mm->key);
-
-	if (pool == NULL){
-
-		//处理当前线程还没有创建内存池的情况
-		//如果当前内存池数量未到达上限就为当前线程创建一个内存池
-		while(mm->pool_number < __max_pool_number){
-			size_t pool_id = mm->pool_number;
-			if (__atom_try_lock(mm->pool[pool_id].lock)){
-				if (mm->pool[pool_id].file_id == 0){
-					mm->pool[pool_id].file_id = pool_id;
-					pool = &(mm->pool[pool_id]);
-					break;
-				}
-				__atom_unlock(mm->pool[pool_id].lock);
-			}
-		}
-
-		if (mm->pool_number >= __max_pool_number){
-
-			if (pool != NULL){
-				__atom_unlock(pool->lock);
-			}
-			size_t pool_id = __atom_add(mm->thread_number, 1) % __max_pool_number;
-			pool = &(mm->pool[pool_id]);
-
-			if (pthread_setspecific(mm->key, pool) != 0){
-				return NULL;
-			}
-
-		}else{
-
-			pool->m_tid = pthread_self();
-			for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
-				pool->page[page_id].file_id = page_id;
-				if (assign_page(pool, &(pool->page[page_id]), mm->page_size) != 0){
-					__atom_unlock(pool->lock);
-					return NULL;
-				}
-				__atom_add(pool->page_number, 1);
-			}
-
-			__atom_add(mm->pool_number, 1);
-			__atom_unlock(pool->lock);
-
-			if (pthread_setspecific(mm->key, pool) != 0){
-				return NULL;
-			}
-		}
-	}
-#endif
+    env_memory_pool_t *pool = &mm->pool[(__atom_add(mm->pool_index, 1) & (__max_pool_number-1))];
 
 	size = request2allocation(size);
 
@@ -613,27 +514,8 @@ void* malloc(size_t size)
 
 		__atom_unlock(pool->page[i].lock);
 
-#ifdef SR_MALLOC_BACKTRACE
-
-# ifndef __MACOS__
-        {
-            size_t n = 0, msg_size = __debug_msg_size - 1;
-            void* buffer[__backtrace_depth];
-			unsigned count = _backtrace(buffer, __backtrace_depth);
-			for (size_t idx = 0; idx < count; ++idx) {
-                const void* addr = buffer[idx];
-                Dl_info info= {0};
-                if (dladdr(addr, &info) && info.dli_sname) {
-                    if (n + strlen(info.dli_sname) > msg_size){
-                        break;
-                    }
-                    n += snprintf(pointer->debug_msg + n, msg_size - n, "@%s ", info.dli_sname);
-                }
-            }
-            pointer->debug_msg[n] = '\0';
-        }
-# endif //__MACOS__
-
+#ifdef ENV_MALLOC_BACKTRACE
+		*((int64_t*)pointer->debug_msg) = backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
 		return __pointer2address(pointer);
@@ -641,7 +523,7 @@ void* malloc(size_t size)
 
 
 	//创建一个分页
-	sr_memory_page_t *page = NULL;
+	env_memory_page_t *page = NULL;
 
 	while(pool->page_number < __max_page_number){
 		size_t page_id = pool->page_number;
@@ -692,27 +574,8 @@ void* malloc(size_t size)
 	__atom_add(pool->page_number, 1);
 	__atom_unlock(page->lock);
 
-#ifdef SR_MALLOC_BACKTRACE
-
-# ifndef __MACOS__
-        {
-            size_t n = 0, msg_size = __debug_msg_size - 1;
-            void* buffer[__backtrace_depth];
-			unsigned count = _backtrace(buffer, __backtrace_depth);
-			for (size_t idx = 0; idx < count; ++idx) {
-                const void* addr = buffer[idx];
-                Dl_info info= {0};
-                if (dladdr(addr, &info) && info.dli_sname) {
-                    if (n + strlen(info.dli_sname) > msg_size){
-                        break;
-                    }
-                    n += snprintf(pointer->debug_msg + n, msg_size - n, "@%s ", info.dli_sname);
-                }
-            }
-            pointer->debug_msg[n] = '\0';
-        }
-# endif //__MACOS__
-
+#ifdef ENV_MALLOC_BACKTRACE
+	*((int64_t*)pointer->debug_msg) = backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
 	return __pointer2address(pointer);
@@ -807,7 +670,7 @@ void* aligned_alloc(size_t alignment, size_t size)
 		aligned_pointer->flag = __next_pointer(pointer)->flag;
 		pointer->size = free_size;
 
-#ifdef SR_MALLOC_BACKTRACE
+#ifdef ENV_MALLOC_BACKTRACE
 		memcpy(aligned_pointer->debug_msg, pointer->debug_msg, __debug_msg_size);
 #endif
 
@@ -880,69 +743,18 @@ char* strndup(const char *s, size_t n)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#if 0
-int sr_malloc_initialize(size_t page_size, size_t preloaded_page)
-{
-#ifdef ___SR_MALLOC___
-	if (__atom_try_lock(mm->lock)){
-
-		size_t pool_id = mm->pool_number;
-		mm->pool_number ++;
-
-		if (page_size < 1024 << 11){
-			page_size = 1024 << 11;
-		}
-
-		if (preloaded_page < 1){
-			preloaded_page = 2;
-		}
-
-		if (pthread_key_create(&(mm->key), NULL) != 0){
-			__atom_unlock(mm->lock);
-			return -1;
-		}
-
-		mm->page_size = page_size;
-		mm->preloading_page = preloaded_page < __max_page_number ? preloaded_page : __max_page_number;
-		mm->page_aligned_mask = (size_t) sysconf(_SC_PAGESIZE) - 1;
-
-		mm->pool[pool_id].file_id = pool_id;
-
-		for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
-			mm->pool[pool_id].page[page_id].file_id = page_id;
-			mm->pool[pool_id].page_number ++;
-			if (assign_page(&(mm->pool[pool_id]), &(mm->pool[pool_id].page[page_id]), mm->page_size) != 0){
-				return -1;
-			}
-		}
-
-		if (pthread_setspecific(mm->key, &(mm->pool[pool_id])) != 0){
-			__atom_unlock(mm->lock);
-			return -1;
-		}
-	}
-#endif //___SR_MALLOC___
-
-	return 0;
-}
-#endif
-
-/////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////
-
 void env_malloc_release()
 {
     __atom_lock(mm->lock);
     for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-        sr_memory_pool_t *pool = &(mm->pool[pool_id]);
+        env_memory_pool_t *pool = &(mm->pool[pool_id]);
         for (int page_id = 0; page_id < pool->page_number; ++page_id){
             if ( pool->page[page_id].start_address != NULL){
                 munmap(pool->page[page_id].start_address, pool->page[page_id].size);
             }
         }
     }
-    memset(mm, 0, sizeof(sr_memory_manager_t));
+    memset(mm, 0, sizeof(env_memory_manager_t));
     __atom_unlock(mm->lock);
 }
 
@@ -952,12 +764,15 @@ void env_malloc_release()
 
 void env_malloc_debug(void (*cb)(const char *fmt, ...))
 {
-	sr_memory_pool_t *pool = NULL;
+	env_memory_pool_t *pool = NULL;
 	pointer_t *pointer = NULL;
 
 	if (cb == NULL){
 		return;
 	}
+
+	size_t buf_size = 10240;
+	char buf[10240];
 
 	flush_cache();
 
@@ -970,9 +785,23 @@ void env_malloc_debug(void (*cb)(const char *fmt, ...))
 				cb("[!!! Found a memory leak !!!]\n");
 				pointer = (__next_pointer(pool->page[page_id].head));
 				while(pointer != pool->page[page_id].end){
-#ifdef SR_MALLOC_BACKTRACE
+#ifdef ENV_MALLOC_BACKTRACE
 					if (!__mergeable(__next_pointer(pointer))){
-						cb("[%s]\n", pointer->debug_msg);
+						size_t n = 0;
+						int64_t count = *((int64_t*)pointer->debug_msg);
+						void** buffer = ((void**)pointer->debug_msg) + 1;
+						for (size_t idx = 0; idx < count; ++idx) {
+							const void* addr = buffer[idx];
+							Dl_info info= {0};
+							if (dladdr(addr, &info) && info.dli_sname) {
+								if (n + strlen(info.dli_sname) > buf_size - 1){
+									break;
+								}
+								n += snprintf(buf + n, buf_size - 1 - n, "@%s ", info.dli_sname);
+							}
+						}
+						buf[n] = '\0';
+						cb("[%s]\n", buf);
 					}
 #endif
 					pointer = __next_pointer(pointer);
