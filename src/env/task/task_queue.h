@@ -89,6 +89,10 @@ static inline void* task_main_loop(void *ctx)
         }
     }
 
+    linekv_destroy(&task_ctx);
+
+    printf("task_main_loop(0x%x) exit\n", env_thread_self());
+
     return NULL;
 }
 
@@ -155,7 +159,7 @@ static inline void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
         while (tq->timed_task->pos > 0){
             heapment_t element = min_heapify_pop(tq->timed_task);
             if (element.value){
-                free(element.value);
+                linekv_destroy((linekv_t**)&(element.value));
             }
         }
         heap_destroy(&tq->timed_task);

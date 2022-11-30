@@ -45,7 +45,7 @@ void malloc_test()
     test_strdup();
 
     printf(">>>>--------------->\n");
-    env_malloc_debug(log_cb);
+    // env_malloc_debug(log_cb);
     
 
     free(p);
@@ -53,7 +53,7 @@ void malloc_test()
     free(p2);
 
     printf(">>>>--------------->\n");
-    env_malloc_debug(log_cb);
+    // env_malloc_debug(log_cb);
     
 
     free(str);

@@ -72,15 +72,17 @@ static inline heapment_t min_heapify_pop(heap_t *h)
         if (left < h->pos && h->array[smallest].key > h->array[left].key) {
             smallest = left;
         }
+
         if (right < h->pos && h->array[smallest].key > h->array[right].key) {
             smallest = right;
         }
 
+        //TODO 是否需要判断 smallest != index 再交换
         tmp = h->array[index];
         h->array[index] = h->array[smallest];
         h->array[smallest] = tmp;
 
-    }while (smallest != index);
+    } while (smallest != index);
 
     h->pos--;
     return h->array[0];

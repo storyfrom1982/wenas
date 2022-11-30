@@ -60,7 +60,7 @@ static inline void linekv_load_object(linekv_t *lkv, lineval_t *val)
 {
     uint32_t size = __sizeof_data(val);
     if (size > lkv->len){
-        free(lkv);
+        linekv_destroy(&lkv);
         lkv = linekv_build(size);
     }
     lkv->pos = size;

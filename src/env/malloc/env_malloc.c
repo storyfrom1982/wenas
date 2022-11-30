@@ -406,23 +406,26 @@ void free(void *address)
 	env_memory_pool_t *pool = NULL;
 
 	if (address){
-
 		pointer = __address2pointer(address);
-		if (pointer->size == 0 || pointer->size > mm->page_size || pointer->flag > mm->page_size){
+		if (pointer->size == 0 || pointer->flag == 0){
+			//TODO
 			return;
 		}
+
 		pool_id = ((__next_pointer(pointer)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
+			//TODO
 			return;
 		}
-		pool = &(mm->pool[pool_id]);
 
+		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(pointer)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
+			//TODO
 			return;
 		}
-		page = &(pool->page[page_id]);
 
+		page = &(pool->page[page_id]);
 		if (__atom_try_lock(page->lock)){
 			free_pointer(pointer, page, pool);
 			__atom_unlock(page->lock);

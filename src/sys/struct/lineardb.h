@@ -391,11 +391,15 @@ static inline linedb_t* string2inedb(const char *s)
     db->byte[(1 + (((db)->byte[0]) & LINEDB_HEAD_MASK)) + l] = '\0';
     return db;
 }
-
-static inline linedb_t* linedb_build(const void *b, size_t size)
+#include <stdio.h>
+static inline linedb_t* linedb_build(const void *data, size_t size)
 {
     linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + size);
-    return linedb_load_binary(db, b, size);
+    if (data){
+        return linedb_load_binary(db, data, size);
+    }
+    linedb_bind_buffer(&db, db, size);
+    return db;
 }
 
 static inline void linedb_destroy(linedb_t **pp_ldb)
