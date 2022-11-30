@@ -25,5 +25,5 @@ void crash_backtrace_test()
 {
     printf("crash_backtrace_test thread[%x]\n", pthread_self());
     env_crash_backtrace_setup();
-    test4();
+    // test4();
 }

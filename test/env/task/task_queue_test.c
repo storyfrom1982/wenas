@@ -23,7 +23,7 @@ static uint64_t test_timedtask_func(linekv_parser_t parser)
 
 static uint64_t test_timedtask_func1(linekv_parser_t parser)
 {
-    fprintf(stdout, "time: %lu\n", (char*)linekv_find_ptr(parser, "time"));
+    fprintf(stdout, ">>>>------------> time: %lu\n", (char*)linekv_find_ptr(parser, "time"));
     fprintf(stdout, "func: 0x%x\n", linekv_find_int64(parser, "func"));
     fprintf(stdout, "ctx: %s\n", (char*)linekv_find_ptr(parser, "ctx"));
     return 1000000000ULL;

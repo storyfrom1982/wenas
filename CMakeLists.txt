@@ -64,6 +64,7 @@ set(kzx_sources src/main.c
     test/env/thread_test.c
     test/env/task/task_queue_test.c
     test/env/malloc/malloc_test.c
+    test/env/file_system_test.c
 )
 
 set(kzx_defines "")
@@ -84,15 +85,19 @@ if(ENV_HAVE_STDATOMIC)
     list(APPEND kzx_cflags -DENV_HAVE_STDATOMIC)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND kzx_ldflags pthread dl)
+if (UNIX)    
     list(APPEND kzx_cflags -DSR_LOG_DEBUG -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        list(APPEND kzx_ldflags pthread dl)
+    endif()    
 endif()
 
 add_executable(kang ${kzx_sources})
 target_compile_definitions(kang PRIVATE ${kzx_defines})
 target_compile_options(kang PRIVATE ${kzx_cflags})
-target_include_directories(kang PRIVATE     
+target_include_directories(kang PRIVATE
+    src
+    src/env/platforms
     src/sys/struct
     src/env
     src/env/task
