@@ -73,13 +73,13 @@ void task_queue_test()
     linekv_clear(lkv);
     linekv_add_ptr(lkv, "func", test_timedtask_func);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
-    linekv_add_int64(lkv, "time", 3000000000ULL);
+    linekv_add_uint64(lkv, "time", 3000000000ULL);
     env_taskqueue_push_timedtask(tq, lkv);
 
     linekv_clear(lkv);
     linekv_add_ptr(lkv, "func", test_timedtask_func1);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
-    linekv_add_int64(lkv, "time", 1000000000ULL);
+    linekv_add_uint64(lkv, "time", 1000000000ULL);
     env_taskqueue_push_timedtask(tq, lkv);
 
     sleep(10*3);

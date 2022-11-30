@@ -46,7 +46,7 @@ static inline int min_heapify_push(heap_t *h, heapment_t m)
     if(h->pos < h->len){
         h->pos++;
         int i = h->pos;
-        while (i > 0 && h->array[__heap_top(i)].key > m.key) {
+        while (__heap_top(i) && h->array[__heap_top(i)].key > m.key) {
             h->array[i] = h->array[__heap_top(i)];
             i = __heap_top(i);
         }
