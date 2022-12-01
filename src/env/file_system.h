@@ -68,6 +68,11 @@ static inline int env_fs_file_exists(const char *path)
     return 0;
 }
 
+static inline int64_t env_fs_ltell(int fd)
+{
+    return lseek(fd, 0, SEEK_END);
+}
+
 static inline int env_fs_mkpath(const char *path)
 {
     int ret = 0;

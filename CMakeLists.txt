@@ -65,6 +65,7 @@ set(kzx_sources src/main.c
     test/env/task/task_queue_test.c
     test/env/malloc/malloc_test.c
     test/env/file_system_test.c
+    test/env/logger_test.c
 )
 
 set(kzx_defines "")
@@ -98,6 +99,7 @@ target_compile_options(kang PRIVATE ${kzx_cflags})
 target_include_directories(kang PRIVATE
     src
     src/env/platforms
+    src/sys
     src/sys/struct
     src/env
     src/env/task

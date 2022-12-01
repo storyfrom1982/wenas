@@ -110,9 +110,9 @@ static inline int env_fflush(env_file_t *fp)
     return fflush(fp);
 }
 
-static inline int env_open(const char *path, int flags)
+static inline int env_open(const char *path, int flags, int mask)
 {
-    return open(path, flags);
+    return open(path, flags, mask);
 }
 
 static inline int env_close(int fd)
@@ -129,5 +129,11 @@ static inline ssize_t env_write(int fd, void *data, size_t size)
 {
     return write(fd, data, size);
 }
+
+static inline int64_t env_lseek(int fd, int64_t offset, int64_t whence)
+{
+    return lseek(fd, offset, whence);
+}
+
 
 #endif
