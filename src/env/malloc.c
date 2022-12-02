@@ -1,10 +1,9 @@
 #include "env/malloc.h"
-
+#include "env/atomic.h"
 
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <stdbool.h>
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
@@ -13,20 +12,8 @@
 #ifdef ENV_MALLOC_BACKTRACE
 #	include <dlfcn.h>
 #	include "env/backtrace.h"
-#	define ENV_MALLOC_BACKTRACE_DEPTH		256
+#	define ENV_MALLOC_BACKTRACE_DEPTH	    256
 #endif
-
-#define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
-#define	__is_false(x)		__sync_bool_compare_and_swap(&(x), false, false)
-#define	__set_true(x)		__sync_bool_compare_and_swap(&(x), false, true)
-#define	__set_false(x)		__sync_bool_compare_and_swap(&(x), true, false)
-
-#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
-#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
-
-#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
-#define __atom_try_lock(x)		__set_true(x)
-#define __atom_unlock(x)		__set_false(x)
 
 /////////////////////////////////////////////////////////////////////////////
 ////
@@ -85,7 +72,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-typedef struct pointer_t {
+typedef struct pointer {
 
 	/**
 	 * 已分配状态：
@@ -119,8 +106,8 @@ typedef struct pointer_t {
 	 * 指针队列索引
 	 */
 
-	struct pointer_t *prev;
-	struct pointer_t *next;
+	struct pointer *prev;
+	struct pointer *next;
 
 }pointer_t;
 
@@ -136,8 +123,12 @@ typedef struct pointer_t {
 #define	__assign_pointer(p, s)		( (pointer_t *)( (char *)( p ) + ( s ) ) )
 
 
-typedef struct pointer_queue_t{
-	bool lock;
+typedef struct pointer_queue{
+#if ENV_HAVE_STDATOMIC
+	atomic_bool lock;
+#else
+    bool lock;
+#endif
 	pointer_t *head;
 	size_t memory_size;
 }pointer_queue_t;
@@ -145,7 +136,11 @@ typedef struct pointer_queue_t{
 
 typedef struct env_memory_page{
 
-	bool lock;
+#if ENV_HAVE_STDATOMIC
+    atomic_bool lock;
+#else
+    bool lock;
+#endif
 
 	//本页的索引
 	size_t id;
@@ -177,9 +172,14 @@ typedef struct env_memory_page{
 
 
 typedef struct env_memory_pool{
-	bool lock;
-	size_t id;
-	size_t page_number;
+#if ENV_HAVE_STDATOMIC
+    atomic_bool lock;
+    atomic_size_t page_number;
+#else
+    bool lock;
+    size_t page_number;
+#endif
+    size_t id;
 	void *aligned_address;
 	// pthread_t tid;
 	env_memory_page_t page[__max_page_number + 1];
@@ -188,9 +188,15 @@ typedef struct env_memory_pool{
 
 typedef struct env_memory_manager{
 
-	bool lock;
-	bool init;
-	size_t pool_index;
+#if ENV_HAVE_STDATOMIC
+    atomic_bool lock;
+    atomic_bool init;
+    atomic_size_t pool_index;
+#else
+    bool lock;
+    bool init;
+    size_t pool_index;
+#endif
 	size_t page_size;
 	size_t pool_number;
 	size_t preloading_page;

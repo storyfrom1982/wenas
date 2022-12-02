@@ -64,6 +64,7 @@ check_c_source_runs("
     }" ENV_HAVE_STDATOMIC)
 
 set(kzx_sources src/main.c
+        src/env/logger.c
         src/env/malloc.c
     test/sys/struct/heap_test.c
     test/sys/struct/lineardb_test.c
