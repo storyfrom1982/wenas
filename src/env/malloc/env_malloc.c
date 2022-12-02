@@ -12,8 +12,8 @@
 
 #ifdef ENV_MALLOC_BACKTRACE
 #	include <dlfcn.h>
-#	include <execinfo.h>
-#	define ENV_MALLOC_BACKTRACE_DEPTH	33
+#include "env/backtrace/env_unwind.h"
+#	define ENV_MALLOC_BACKTRACE_DEPTH	256
 #endif
 
 #define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)
@@ -518,7 +518,7 @@ void* malloc(size_t size)
 		__atom_unlock(pool->page[i].lock);
 
 #ifdef ENV_MALLOC_BACKTRACE
-		*((int64_t*)pointer->debug_msg) = backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
+		*((int64_t*)pointer->debug_msg) = env_backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
 		return __pointer2address(pointer);
@@ -578,7 +578,7 @@ void* malloc(size_t size)
 	__atom_unlock(page->lock);
 
 #ifdef ENV_MALLOC_BACKTRACE
-	*((int64_t*)pointer->debug_msg) = backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
+    *((int64_t*)pointer->debug_msg) = env_backtrace(((void**)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
 	return __pointer2address(pointer);
@@ -765,7 +765,7 @@ void env_malloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void env_malloc_debug(void (*cb)(const char *fmt, ...))
+void env_malloc_debug(void (*cb)(const char *fmt))
 {
 	env_memory_pool_t *pool = NULL;
 	pointer_t *pointer = NULL;
@@ -804,7 +804,7 @@ void env_malloc_debug(void (*cb)(const char *fmt, ...))
 							}
 						}
 						buf[n] = '\0';
-						cb("[%s]\n", buf);
+						cb(buf);
 					}
 #endif
 					pointer = __next_pointer(pointer);

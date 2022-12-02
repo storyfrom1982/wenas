@@ -2,22 +2,35 @@
 #define __ENV_BACKTRACE_H__
 
 #include <signal.h>
-#include <unwind.h>
+//#include <unwind.h>
 #include <string.h>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "env/logger.h"
+#include "env/backtrace/env_unwind.h"
+
 
 #define ENV_BACKTRACE_STACK_DEPTH       256
 
 
-struct backtrace_state {
-    uintptr_t* current;
-    uintptr_t* end;
-};
-
+//struct backtrace_stack {
+//    uintptr_t* head;
+//    uintptr_t* end;
+//};
+//
+//static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* state_voidp)
+//{
+//    struct backtrace_stack* state = (struct backtrace_stack*)state_voidp;
+//    *state->head = _Unwind_GetIP(unwind_context);
+//    ++state->head;
+//    if (!*(state->head - 1) || state->head == state->end) {
+//        return _URC_END_OF_STACK;
+//    }
+//    return _URC_NO_REASON;
+//}
 
 #ifndef __LP64__
 #   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08lx  %s() + %lu"
@@ -56,36 +69,28 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 		symbol_offset = (uintptr_t)addr;
 	}
 
-	return printf(
+	LOGD("CRASH",
 			ENV_BACKTRACE_FORMAT,
 			frame,
 			image,
 			(uintptr_t)addr,
 			symbol,
 			symbol_offset);
-}
 
-static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* state_voidp)
-{
-    struct backtrace_state* state = (struct backtrace_state*)state_voidp;
-    *state->current = _Unwind_GetIP(unwind_context);
-    ++state->current;
-    if (!*(state->current - 1) || state->current == state->end) {
-        return _URC_END_OF_STACK;
-    }
-    return _URC_NO_REASON;
+    return 0;
 }
 
 static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
 {
-    printf("****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
+    LOGE("CRASH", "****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
     const ucontext_t* signal_ucontext = (const ucontext_t*)ucontext;
-    uintptr_t stacks[ENV_BACKTRACE_STACK_DEPTH];
-    struct backtrace_state backtrace_state = {0};
-    backtrace_state.current = stacks;
-    backtrace_state.end = stacks + ENV_BACKTRACE_STACK_DEPTH;
-    _Unwind_Backtrace(env_unwind_backtrace_callback, &backtrace_state);
-    size_t stack_depth = backtrace_state.current - &stacks[0];
+    void *stacks[ENV_BACKTRACE_STACK_DEPTH];
+//    struct backtrace_stack backtrace_stack = {0};
+//    backtrace_stack.head = stacks;
+//    backtrace_stack.end = stacks + ENV_BACKTRACE_STACK_DEPTH;
+//    _Unwind_Backtrace(env_unwind_backtrace_callback, &backtrace_stack);
+//    size_t stack_depth = backtrace_stack.head - &stacks[0];
+    size_t stack_depth = env_backtrace(stacks, ENV_BACKTRACE_STACK_DEPTH);
     for (size_t i = 0; i < stack_depth; ++ i) {
         Dl_info info = {};
         if (dladdr((void*)(stacks[i]), &info) && info.dli_sname) {

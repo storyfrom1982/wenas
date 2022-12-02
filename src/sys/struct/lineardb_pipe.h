@@ -1,3 +1,6 @@
+#ifndef __LINEDB_PIPE_H__
+#define __LINEDB_PIPE_H__
+
 #include "lineardb.h"
 
 
@@ -138,3 +141,5 @@ static inline uint32_t linedb_pipe_block_count(linedb_pipe_t *lp)
 {
     return lp->block_count;
 }
+
+#endif

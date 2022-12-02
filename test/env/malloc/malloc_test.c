@@ -8,13 +8,8 @@
 #include "env/logger.h"
 
 
-static void log_cb(const char *fmt, ...){
-    char text[4096] = {0};
-    va_list args;
-    va_start (args, fmt);
-    size_t n = (size_t) vsnprintf(text, 4096, fmt, args);
-    va_end (args);
-    printf("%s\n", text);
+static void log_cb(const char *fmt){
+    printf("%s\n", fmt);
 }
 
 

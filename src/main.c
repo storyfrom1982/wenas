@@ -30,8 +30,8 @@ int main(int argc, char *argv[])
 	// heap_test();
 	// file_system_test();
 
-	// malloc_test();
-	logger_test();
+	 malloc_test();
+//	logger_test();
 
 	return 0;
 }

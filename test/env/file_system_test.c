@@ -67,6 +67,6 @@ void file_system_test()
     printf("get size %lld\n", env_fs_stat_file_size(&info));
     printf("get uid %lld\n", env_fs_stat_uid(&info));
     printf("get gid %lld\n", env_fs_stat_gid(&info));
-    printf("get last access %lld\n", env_fs_stat_last_access(&info));
-    printf("get last modification %lld\n", env_fs_stat_last_modification(&info));
+//    printf("get last access %lld\n", env_fs_stat_last_access(&info));
+//    printf("get last modification %lld\n", env_fs_stat_last_modification(&info));
 }

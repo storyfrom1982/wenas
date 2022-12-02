@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-extern void env_malloc_debug(void (*cb)(const char *fmt, ...));
+extern void env_malloc_debug(void (*cb)(const char *fmt));
 
 extern void* malloc(size_t size);
 extern void* calloc(size_t number, size_t size);

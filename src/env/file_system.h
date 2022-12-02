@@ -10,15 +10,15 @@ static inline const char* env_fs_entry_name(env_fs_entry_t *entry)
     return entry->d_name;
 }
 
-static inline int64_t env_fs_stat_last_modification(env_fs_stat_t *info)
-{
-    return info->st_mtimespec.tv_sec * 1000000000UL + info->st_mtimespec.tv_nsec;
-}
-
-static inline int64_t env_fs_stat_last_access(env_fs_stat_t *info)
-{
-    return info->st_atimespec.tv_sec * 1000000000UL + info->st_atimespec.tv_nsec;
-}
+//static inline int64_t env_fs_stat_last_modification(env_fs_stat_t *info)
+//{
+//    return info->st_mtimespec.tv_sec * 1000000000UL + info->st_mtimespec.tv_nsec;
+//}
+//
+//static inline int64_t env_fs_stat_last_access(env_fs_stat_t *info)
+//{
+//    return info->st_atimespec.tv_sec * 1000000000UL + info->st_atimespec.tv_nsec;
+//}
 
 static inline int64_t env_fs_stat_gid(env_fs_stat_t *info)
 {

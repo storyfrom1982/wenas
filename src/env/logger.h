@@ -40,7 +40,6 @@ typedef struct env_logger {
 
 static env_logger_t g_logger = {0};
 
-
 static void* env_logger_write_loop(void *p)
 {
     int fd;
@@ -55,6 +54,7 @@ static void* env_logger_write_loop(void *p)
         n = snprintf(log_path, 1024, "%s/%s", g_logger.path, "0.log");
         log_path[n] = '\0';
         fd = env_open(log_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
+        n = env_write(fd, (void*)"\n\n\nLogger start >>>>-------------->\n\n\n", strlen("\n\n\nLogger start >>>>-------------->\n\n\n"));
     }
 
     linedb_t *ldb;
@@ -96,6 +96,8 @@ static void* env_logger_write_loop(void *p)
             env_mutex_unlock(&g_logger.mutex);
         }
     }
+
+    env_close(fd);
     
     return NULL;
 }
@@ -129,6 +131,12 @@ static inline void env_logger_stop()
         env_mutex_signal(&g_logger.mutex);
         env_mutex_unlock(&g_logger.mutex);
         env_thread_join(g_logger.tid);
+        env_mutex_destroy(&g_logger.mutex);
+        linedb_pipe_destroy(&g_logger.lpipe);
+        if (g_logger.path){
+            free(g_logger.path);
+        }
+        memset(&g_logger, 0, sizeof(g_logger));
     }
 }
 
