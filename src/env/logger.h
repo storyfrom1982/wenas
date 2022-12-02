@@ -173,7 +173,7 @@ static inline void env_logger_printf(enum env_log_level level, const char *tag, 
         while (linedb_pipe_writable(g_logger.lpipe) < n){
             env_mutex_wait(&g_logger.mutex);
         }
-        linedb_pipe_write(g_logger.lpipe, text, n);
+        linedb_pipe_write(g_logger.lpipe, text, n - 1); //去掉'\0'
         env_mutex_signal(&g_logger.mutex);
         env_mutex_unlock(&g_logger.mutex);
     }
