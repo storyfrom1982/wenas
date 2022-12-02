@@ -18,6 +18,14 @@ else()
     add_definitions(-D__LITTLE_ENDIAN__)
 endif()
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "CMAKE_SIZEOF_VOID_P EQUAL 8")
+    add_definitions(-D__PL64__)
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(STATUS "CMAKE_SIZEOF_VOID_P EQUAL 4")
+    add_definitions(-D__PL32__)
+endif()
+
 include(CheckCSourceRuns)
 check_c_source_runs("
     #include <dlfcn.h>

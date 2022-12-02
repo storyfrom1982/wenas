@@ -2,7 +2,6 @@
 #define __ENV_CRASH_BACKTRACE_H__
 
 #include <signal.h>
-//#include <unwind.h>
 #include <string.h>
 #include <dlfcn.h>
 #include <pthread.h>
@@ -16,28 +15,12 @@
 #define ENV_BACKTRACE_STACK_DEPTH       256
 
 
-//struct backtrace_stack {
-//    uintptr_t* head;
-//    uintptr_t* end;
-//};
-//
-//static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* state_voidp)
-//{
-//    struct backtrace_stack* state = (struct backtrace_stack*)state_voidp;
-//    *state->head = _Unwind_GetIP(unwind_context);
-//    ++state->head;
-//    if (!*(state->head - 1) || state->head == state->end) {
-//        return _URC_END_OF_STACK;
-//    }
-//    return _URC_NO_REASON;
-//}
-
-#ifndef __LP64__
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08lx  %s() + %lu"
-#   define ENV_BACKTRACE_ADDRESS_LEN 10 /* 0x + 8 (no NUL) */
-#else
+#ifdef __PL64__
 #   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%016lx  %s() + %lu\n"
 #   define ENV_BACKTRACE_ADDRESS_LEN 18 /* 0x + 16 (no NUL) */
+#else
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08lx  %s() + %lu"
+#   define ENV_BACKTRACE_ADDRESS_LEN 10 /* 0x + 8 (no NUL) */
 #endif
 
 
@@ -85,11 +68,6 @@ static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
     LOGE("CRASH", "****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
     const ucontext_t* signal_ucontext = (const ucontext_t*)ucontext;
     void *stacks[ENV_BACKTRACE_STACK_DEPTH];
-//    struct backtrace_stack backtrace_stack = {0};
-//    backtrace_stack.head = stacks;
-//    backtrace_stack.end = stacks + ENV_BACKTRACE_STACK_DEPTH;
-//    _Unwind_Backtrace(env_unwind_backtrace_callback, &backtrace_stack);
-//    size_t stack_depth = backtrace_stack.head - &stacks[0];
     size_t stack_depth = env_backtrace(stacks, ENV_BACKTRACE_STACK_DEPTH);
     for (size_t i = 0; i < stack_depth; ++ i) {
         Dl_info info = {};
