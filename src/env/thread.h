@@ -2,7 +2,7 @@
 #define __ENV_THREAD_H__
 
 
-#include "unix/thread.h"
+#include "env/unix/thread.h"
 
 
 typedef struct env_mutex {

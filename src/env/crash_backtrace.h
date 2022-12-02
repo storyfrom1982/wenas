@@ -1,5 +1,5 @@
-#ifndef __ENV_BACKTRACE_H__
-#define __ENV_BACKTRACE_H__
+#ifndef __ENV_CRASH_BACKTRACE_H__
+#define __ENV_CRASH_BACKTRACE_H__
 
 #include <signal.h>
 //#include <unwind.h>
@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 #include "env/logger.h"
-#include "env/backtrace/env_unwind.h"
+#include "env/backtrace.h"
 
 
 #define ENV_BACKTRACE_STACK_DEPTH       256

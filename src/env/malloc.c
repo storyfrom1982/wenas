@@ -1,4 +1,4 @@
-#include "env_malloc.h"
+#include "env/malloc.h"
 
 
 #include <time.h>
@@ -12,8 +12,8 @@
 
 #ifdef ENV_MALLOC_BACKTRACE
 #	include <dlfcn.h>
-#include "env/backtrace/env_unwind.h"
-#	define ENV_MALLOC_BACKTRACE_DEPTH	256
+#	include "env/backtrace.h"
+#	define ENV_MALLOC_BACKTRACE_DEPTH		256
 #endif
 
 #define	__is_true(x)		__sync_bool_compare_and_swap(&(x), true, true)

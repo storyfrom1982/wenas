@@ -1,4 +1,4 @@
-#include "lineardb_pipe.h"
+#include "sys/struct/lineardb_pipe.h"
 #include <stdio.h>
 
 static void test_pipe_write_read()

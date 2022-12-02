@@ -1,9 +1,9 @@
 #ifndef __ENV_LOGGER_H__
 #define __ENV_LOGGER_H__
 
-#include "thread.h"
-#include "file_system.h"
-#include "struct/lineardb_pipe.h"
+#include "env/thread.h"
+#include "env/file_system.h"
+#include "sys/struct/lineardb_pipe.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -27,7 +27,7 @@ enum env_log_level {
 
 static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E", "W", "I", "D", "T"};
 
-typedef void (*logger_cb_t) (int level, const char *log);
+typedef void (*logger_cb_t) (int level, const char *tag, const char *debug, const char *log);
 
 typedef struct env_logger {
     uint8_t running;
@@ -147,10 +147,13 @@ static inline void env_logger_printf(enum env_log_level level, const char *tag, 
     
     uint64_t millisecond = env_time() / MICROSEC;
     time_t sec = millisecond / MILLISEC;
-    n = strftime(text, __log_text_size, "%Y/%m/%d-%H:%M:%S", localtime(&sec));
+    n = strftime(text, __log_text_size, "%Y-%m-%d-%H:%M:%S", localtime(&sec));
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] [%s] [%-8s %32s:%5d] %32s() ", (unsigned int)(millisecond % 1000), 
-                    env_thread_self(), s_log_level_strings[level], tag, file != NULL ? __path_clear(file) : "<*>", line, func);
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] [%s] [%s] ", (unsigned int)(millisecond % 1000),
+                    env_thread_self(), s_log_level_strings[level], tag);
+
+    const char *log = text + n;
+    n += snprintf(text + n, __log_text_size - n, "[%s %d %s] ", file != NULL ? __path_clear(file) : "<*>", line, func);
 
     va_list args;
     va_start (args, fmt);
@@ -176,7 +179,7 @@ static inline void env_logger_printf(enum env_log_level level, const char *tag, 
     }
 
     if (g_logger.printer != NULL){
-        g_logger.printer(level, text);
+        g_logger.printer(level, tag, text, log);
     }
 }
 

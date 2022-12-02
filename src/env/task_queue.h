@@ -2,9 +2,9 @@
 #define __ENV_TASK_QUEUE__
 
 #include "env.h"
-#include "linearkv.h"
-#include "lineardb_pipe.h"
-#include "heap.h"
+#include "sys/struct/linearkv.h"
+#include "sys/struct/lineardb_pipe.h"
+#include "sys/struct/heap.h"
 
 typedef struct env_task_queue {
     uint8_t running;

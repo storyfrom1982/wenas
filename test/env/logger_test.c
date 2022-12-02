@@ -1,8 +1,8 @@
 #include "env/logger.h"
 
-static void log_print(int level, const char *log)
+static void log_print(int level, const char *tag, const char *debug, const char *log)
 {
-    printf("%s", log);
+    printf("%s", debug);
 }
 
 void logger_test()

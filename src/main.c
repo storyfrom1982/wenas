@@ -22,16 +22,16 @@ int main(int argc, char *argv[])
 
 	crash_backtrace_test();
 	
-	// lineardb_test();
-	// linearkv_test();
-	// lineardb_pipe_test();
-	// thread_test();
-	// task_queue_test();
-	// heap_test();
-	// file_system_test();
+	 lineardb_test();
+	 linearkv_test();
+	 lineardb_pipe_test();
+	 thread_test();
+	 task_queue_test();
+	 heap_test();
+	 file_system_test();
 
 	 malloc_test();
-//	logger_test();
+	 logger_test();
 
 	return 0;
 }

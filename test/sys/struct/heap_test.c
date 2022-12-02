@@ -1,4 +1,4 @@
-#include "heap.h"
+#include "sys/struct/heap.h"
 #include <stdio.h>
 
 void heap_test()

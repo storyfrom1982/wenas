@@ -56,7 +56,7 @@ check_c_source_runs("
     }" ENV_HAVE_STDATOMIC)
 
 set(kzx_sources src/main.c
-    src/env/malloc/env_malloc.c
+        src/env/malloc.c
     test/sys/struct/heap_test.c
     test/sys/struct/lineardb_test.c
     test/sys/struct/linearkv_test.c
@@ -98,12 +98,5 @@ target_compile_definitions(kang PRIVATE ${kzx_defines})
 target_compile_options(kang PRIVATE ${kzx_cflags})
 target_include_directories(kang PRIVATE
     src
-    src/env/platforms
-    src/sys
-    src/sys/struct
-    src/env
-    src/env/task
-    src/env/malloc
-    src/env/backtrace
     )
 target_link_libraries(kang m ${kzx_ldflags})
