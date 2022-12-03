@@ -77,3 +77,4 @@ libuv-*.tar.*
 
 /src/env/dep
 .vscode/
+/test/business/Android/.idea/
