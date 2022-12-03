@@ -5,10 +5,10 @@
 #include "env/logger.h"
 #include "env/thread.h"
 #include "env/file_system.h"
-#include "sys/struct/lineardb_pipe.h"
+#include "sys/struct/lineardb.h"
 
 #define __log_text_size			4096
-#define __log_file_size         1024 * 1024 * 2
+#define __log_file_size         1024 * 1024 * 8
 
 #define __path_clear(path) \
     ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )

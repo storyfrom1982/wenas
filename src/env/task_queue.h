@@ -3,7 +3,7 @@
 
 #include "env.h"
 #include "sys/struct/linearkv.h"
-#include "sys/struct/lineardb_pipe.h"
+#include "sys/struct/lineardb.h"
 #include "sys/struct/heap.h"
 
 typedef struct env_task_queue {

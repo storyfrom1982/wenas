@@ -1,5 +1,6 @@
 #include "sys/struct/linearkv.h"
-#include <stdio.h>
+
+#include "env/env.h"
 
 static void test_add_string()
 {
@@ -12,7 +13,7 @@ static void test_add_string()
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
-		fprintf(stdout, "key = %s value = %s\n", key_buf, value_buf);
+		LOGD("LINEKV", "key = %s value = %s\n", key_buf, value_buf);
 		linekv_add_str(parser, key_buf, value_buf);
 	}
 
@@ -20,15 +21,15 @@ static void test_add_string()
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_find(parser, key_buf);
 		if (v){
-			fprintf(stdout, "key %s -> value %s\n", key_buf, __dataof_linedb(v));
+			LOGD("LINEKV", "key %s -> value %s\n", key_buf, __dataof_linedb(v));
 		}
 	}
 
 	n = snprintf(key_buf, 1024, "1%d", 2);
-    fprintf(stdout, "strlen=%lu n=%u\n", strlen(key_buf), n);
+    LOGD("LINEKV", "strlen=%lu n=%u\n", strlen(key_buf), n);
     memcpy(value_buf, key_buf, n);
     value_buf[n] = '\0';
-    fprintf(stdout, "memcpy=%s\n", value_buf);
+    LOGD("LINEKV", "memcpy=%s\n", value_buf);
 
 	linekv_destroy(&lkv);
 }
@@ -50,7 +51,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+		LOGD("LINEKV", "key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -58,7 +59,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+		LOGD("LINEKV", "key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -77,14 +78,14 @@ static void test_find_number()
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = rand();
-		fprintf(stdout, "input %d\n", n);
+		LOGD("LINEKV", "input %d\n", n);
 		linekv_add_number(parser, key_buf, __n2b32(n));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
+		LOGD("LINEKV", "key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -92,7 +93,7 @@ static void test_find_number()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude -> %u\n", key_buf, __b2n32(v));
+		LOGD("LINEKV", "key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -117,17 +118,17 @@ static void test_find_float()
 		}else {
 			f64 = (double)n / 2.2f;
 		}
-		fprintf(stdout, "input ====>>>>>%d %lf\n", i, f64);
+		LOGD("LINEKV", "input ====>>>>>%d %lf\n", i, f64);
 		// lkv_add_f64(parser, key_buf, f64);
 		value = __f2b64(f64);
 		linekv_add_number(parser, key_buf, value);
-		fprintf(stdout, "input ====###>>>>>%d %lf\n", i, __b2f64(&value));
+		LOGD("LINEKV", "input ====###>>>>>%d %lf\n", i, __b2f64(&value));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		fprintf(stdout, "key %s from valude --------> %lf\n", key_buf, __b2f64(v));
+		LOGD("LINEKV", "key %s from valude --------> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -135,7 +136,7 @@ static void test_find_float()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		fprintf(stdout, "key %s from valude >>>>>>>>-> %lf\n", key_buf, __b2f64(v));
+		LOGD("LINEKV", "key %s from valude >>>>>>>>-> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -146,7 +147,7 @@ static void test_find_float()
 
 static void print_objcet(linekv_t *kv)
 {
-	fprintf(stdout, "objcet >>>>---------->\n");
+	LOGD("LINEKV", "objcet >>>>---------->\n");
 
 	lineval_t *val = linekv_head(kv);
 
@@ -157,45 +158,45 @@ static void print_objcet(linekv_t *kv)
 			if (__numberis_integer(val)){
 
 				if (__numberis_8bit(val)){
-					fprintf(stdout, "key=%s value=%hhd\n", linekv_current_key(kv), __b2n8(val));
+					LOGD("LINEKV", "key=%s value=%hhd\n", linekv_current_key(kv), __b2n8(val));
 				}else if (__numberis_16bit(val)){
-					fprintf(stdout, "key=%s value=%hd\n", linekv_current_key(kv), __b2n16(val));
+					LOGD("LINEKV", "key=%s value=%hd\n", linekv_current_key(kv), __b2n16(val));
 				}else if (__numberis_32bit(val)){
-					fprintf(stdout, "key=%s value=%d\n", linekv_current_key(kv), __b2n32(val));
+					LOGD("LINEKV", "key=%s value=%d\n", linekv_current_key(kv), __b2n32(val));
 				}else if (__numberis_64bit(val)){
-					fprintf(stdout, "key=%s value=%ld\n", linekv_current_key(kv), __b2n64(val));
+					LOGD("LINEKV", "key=%s value=%ld\n", linekv_current_key(kv), __b2n64(val));
 				}
 
 			}else if (__numberis_unsigned(val)){
 
 				if (__numberis_8bit(val)){
-					fprintf(stdout, "key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
+					LOGD("LINEKV", "key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
 				}else if (__numberis_16bit(val)){
-					fprintf(stdout, "key=%s value=%u\n", linekv_current_key(kv), __b2u16(val));
+					LOGD("LINEKV", "key=%s value=%u\n", linekv_current_key(kv), __b2u16(val));
 				}else if (__numberis_32bit(val)){
-					fprintf(stdout, "key=%s value=%u\n", linekv_current_key(kv), __b2u32(val));
+					LOGD("LINEKV", "key=%s value=%u\n", linekv_current_key(kv), __b2u32(val));
 				}else if (__numberis_64bit(val)){
-					fprintf(stdout, "key=%s value=%lu\n", linekv_current_key(kv), __b2u64(val));
+					LOGD("LINEKV", "key=%s value=%lu\n", linekv_current_key(kv), __b2u64(val));
 				}
 
 			}else if (__numberis_float(val)){
 
 				if (__numberis_32bit(val)){
-					fprintf(stdout, "key=%s value=%f\n", linekv_current_key(kv), __b2f32(val));
+					LOGD("LINEKV", "key=%s value=%f\n", linekv_current_key(kv), __b2f32(val));
 				}else {
-					fprintf(stdout, "key=%s value=%lf\n", linekv_current_key(kv), __b2f64(val));
+					LOGD("LINEKV", "key=%s value=%lf\n", linekv_current_key(kv), __b2f64(val));
 				}
 
 			}else if (__numberis_boolean(val)){
 
-				fprintf(stdout, "key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
+				LOGD("LINEKV", "key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
 			}
 
 		}else if (__typeis_object(val)){
 
 			if (__objectis_string(val)){
 
-				fprintf(stdout, "key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
+				LOGD("LINEKV", "key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
 
 			}else if (__objectis_linekv(val)){
 

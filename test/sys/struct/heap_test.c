@@ -1,5 +1,6 @@
 #include "sys/struct/heap.h"
-#include <stdio.h>
+
+#include "env/env.h"
 
 void heap_test()
 {
@@ -29,11 +30,11 @@ void heap_test()
         min_heapify_push(h, hm);
     }
 
-    fprintf(stdout, "len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
+    LOGD("HEAP", "len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
 
     for (int i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         hm = min_heapify_pop(h);
-        fprintf(stdout, "heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
+        LOGD("HEAP", "heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
     }
 
     heap_destroy(&h);

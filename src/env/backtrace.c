@@ -1,35 +1,62 @@
-#ifndef __ENV_CRASH_BACKTRACE_H__
-#define __ENV_CRASH_BACKTRACE_H__
+#include "backtrace.h"
 
 #include <signal.h>
 #include <string.h>
-#include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unwind.h>
 
 #include "env/logger.h"
-#include "env/backtrace.h"
 
 
-#define ENV_BACKTRACE_STACK_DEPTH       256
+struct backtrace_stack {
+    void** head;
+    void** end;
+};
+
+static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* vp)
+{
+    struct backtrace_stack* stack = (struct backtrace_stack*)vp;
+    if (stack->head == stack->end) {
+        return _URC_END_OF_STACK;
+    }
+    *stack->head = (void*)_Unwind_GetIP(unwind_context);
+    if (*stack->head == NULL) {
+        return _URC_END_OF_STACK;
+    }
+    ++stack->head;
+    return _URC_NO_REASON;
+}
+
+size_t env_backtrace(void** array, int depth)
+{
+    struct backtrace_stack stack = {0};
+    stack.head = &array[0];
+    stack.end = &array[0] + (depth - 2);
+    _Unwind_Backtrace(env_unwind_backtrace_callback, &stack);
+    return stack.head - &array[0];
+}
 
 
 #ifdef __PL64__
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%016lx  %s() + %lu\n"
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%016X  %s() + %lu\n"
 #   define ENV_BACKTRACE_ADDRESS_LEN 18 /* 0x + 16 (no NUL) */
 #else
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08lx  %s() + %lu"
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08X  %s() + %lu"
 #   define ENV_BACKTRACE_ADDRESS_LEN 10 /* 0x + 8 (no NUL) */
 #endif
 
+
+#define __USE_GNU
+#include <dlfcn.h>
 
 static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info)
 {
 	char symbuf[ENV_BACKTRACE_ADDRESS_LEN + 1];
 	const char* image = "???";
 	const char* symbol = "0x0";
-	uintptr_t symbol_offset = 0;
+	int64_t symbol_offset = 0;
 
 	if (info->dli_fname) {
 		const char *tmp = strrchr(info->dli_fname, '/');
@@ -41,27 +68,27 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 	
 	if (info->dli_sname) {
 		symbol = info->dli_sname;
-		symbol_offset = (uintptr_t)addr - (uintptr_t)info->dli_saddr;
+		symbol_offset = addr - info->dli_saddr;
 	} else if(info->dli_fname) {
 		symbol = image;
-		symbol_offset = (uintptr_t)addr - (uintptr_t)info->dli_fbase;
-	} else if(0 < snprintf(symbuf, sizeof(symbuf), "0x%lx", (uintptr_t)info->dli_saddr)) {
+		symbol_offset = addr - info->dli_fbase;
+	} else if(0 < snprintf(symbuf, sizeof(symbuf), "0x%X", info->dli_saddr)) {
 		symbol = symbuf;
-		symbol_offset = (uintptr_t)addr - (uintptr_t)info->dli_saddr;
-	} else {
-		symbol_offset = (uintptr_t)addr;
+		symbol_offset = addr - info->dli_saddr;
 	}
 
-	LOGD("CRASH",
+	LOGE("Backtrace",
 			ENV_BACKTRACE_FORMAT,
 			frame,
 			image,
-			(uintptr_t)addr,
+			addr,
 			symbol,
 			symbol_offset);
 
     return 0;
 }
+
+#define ENV_BACKTRACE_STACK_DEPTH       256
 
 static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
 {
@@ -70,15 +97,15 @@ static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
     void *stacks[ENV_BACKTRACE_STACK_DEPTH];
     size_t stack_depth = env_backtrace(stacks, ENV_BACKTRACE_STACK_DEPTH);
     for (size_t i = 0; i < stack_depth; ++ i) {
-        Dl_info info = {};
-        if (dladdr((void*)(stacks[i]), &info) && info.dli_sname) {
+        Dl_info info = {0};
+        if (dladdr((stacks[i]), &info) && info.dli_sname) {
             env_backtrace_printf(i, (const void*)stacks[i], &info);
         }
     }
     exit(0);
 }
 
-static inline void env_crash_backtrace_setup()
+void env_backtrace_setup()
 {
     struct sigaction action = {};
     memset(&action, 0, sizeof(action));
@@ -92,5 +119,3 @@ static inline void env_crash_backtrace_setup()
     sigaction(SIGFPE, &action, NULL);
     sigaction(SIGSEGV, &action, NULL);
 }
-
-#endif

@@ -7,9 +7,10 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
-
+#include <stdint.h>
 
 #ifdef ENV_MALLOC_BACKTRACE
+#	define __USE_GNU
 #	include <dlfcn.h>
 #	include "env/backtrace.h"
 #	define ENV_MALLOC_BACKTRACE_DEPTH	    256

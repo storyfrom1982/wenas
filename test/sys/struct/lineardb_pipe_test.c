@@ -1,5 +1,6 @@
-#include "sys/struct/lineardb_pipe.h"
-#include <stdio.h>
+#include "sys/struct/lineardb.h"
+
+#include "env/env.h"
 
 static void test_pipe_write_read()
 {
@@ -10,10 +11,10 @@ static void test_pipe_write_read()
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(buf, 1024, "hello world %d %d", i, rand());
         buf[n] = '\0';
-        fprintf(stdout, "write block: =========== %s\n", buf);
+        LOGD("LINEDBPIPE", "write block: =========== %s\n", buf);
         linedb_pipe_write(lp, buf, n+1);
         ldb = linedb_pipe_hold_block(lp);
-        fprintf(stdout, "hold block: >>>>> %s <<<<<\n", __dataof_linedb(ldb));
+        LOGD("LINEDBPIPE", "hold block: >>>>> %s <<<<<\n", __dataof_linedb(ldb));
         linedb_pipe_free_block(lp, ldb);
 	}
     linedb_pipe_destroy(&lp);
@@ -31,7 +32,7 @@ static void test_pipe_producer_consumer()
             n = snprintf(buf, 1024, "hello world %d %d %.3f", i, n, (double)n / 3.3f);
             buf[n] = '\0';
             n++;
-            // fprintf(stdout, "write block: =========== %s\n", buf);
+            // LOGD("LINEDBPIPE", "write block: =========== %s\n", buf);
             if (linedb_pipe_write(lp, buf, n) != n){
                 break;
             }
@@ -40,13 +41,13 @@ static void test_pipe_producer_consumer()
         while ((ldb = linedb_pipe_hold_block(lp)) != NULL)
         {
             ldb1 = ldb;
-            fprintf(stdout, "hold block: >>>>> %s <<<<<\n", __dataof_linedb(ldb));
+            LOGD("LINEDBPIPE", "hold block: >>>>> %s <<<<<\n", __dataof_linedb(ldb));
             linedb_pipe_free_block(lp, ldb);
         }
 	}
 
     linedb_pipe_destroy(&lp);
-    fprintf(stdout, "exit\n");
+    LOGD("LINEDBPIPE", "exit\n");
 }
 
 

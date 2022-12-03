@@ -1,5 +1,5 @@
-#include "env/logger.h"
-#include "env/crash_backtrace.h"
+#include "env/env.h"
+
 
 extern void linearkv_test();
 extern void lineardb_test();
@@ -19,15 +19,13 @@ static void log_print(int level, const char *tag, const char *debug, const char 
 
 int main(int argc, char *argv[])
 {
-    env_crash_backtrace_setup();
+    env_backtrace_setup();
 	env_logger_start("/tmp/log", log_print);
 
 	LOGD("TEST", "hello world\n");
 
 #ifdef __PL64__
     LOGD("TEST", "__PL64__\n");
-#else
-    LOGD("TEST", "__PL32__\n");
 #endif
 
 #ifdef __LITTLE_ENDIAN__

@@ -9,7 +9,7 @@
 
 
 static void log_cb(const char *fmt){
-    printf("%s\n", fmt);
+    LOGD("MALLOC", "%s\n", fmt);
 }
 
 
@@ -22,12 +22,12 @@ static void test_strdup()
 
 void malloc_test()
 {
-#ifdef ENV_HAVE_EXECINFO
-    printf("%s\n", "ENV_HAVE_EXECINFO");
+#ifdef ENV_MALLOC_BACKTRACE
+    LOGD("MALLOC", "%s\n", "ENV_MALLOC_BACKTRACE");
 #endif
 
 #ifdef ENV_HAVE_STDATOMIC
-    printf("%s\n", "ENV_HAVE_STDATOMIC");
+    LOGD("MALLOC", "%s\n", "ENV_HAVE_STDATOMIC");
 #endif
 
     // test4();
@@ -40,7 +40,7 @@ void malloc_test()
     
     test_strdup();
 
-    printf(">>>>--------------->\n");
+    LOGD("MALLOC", ">>>>--------------->\n");
     env_malloc_debug(log_cb);
     
 
@@ -48,14 +48,14 @@ void malloc_test()
     free(p1);
     free(p2);
 
-    printf(">>>>--------------->\n");
+    LOGD("MALLOC", ">>>>--------------->\n");
     env_malloc_debug(log_cb);
     
 
     free(str);
     free(strn);
 
-    printf(">>>>--------------->\n");
+    LOGD("MALLOC", ">>>>--------------->\n");
     env_malloc_debug(log_cb);
     
 }
