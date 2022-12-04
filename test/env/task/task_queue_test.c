@@ -29,13 +29,15 @@ static uint64_t test_timedtask_func1(linekv_parser_t parser)
     return 1000000000ULL;
 }
 
-static void test_timedtask_func_waiting(linekv_parser_t parser)
+static linekv_t* test_join_task_func(linekv_parser_t parser)
 {
-
+    linekv_t *result = linekv_build(10240);
+    linekv_add_float64(result, "result", 12345.12345f);
     for (int i = 0; i < 3; ++i){
-        LOGD("TASKQUEUE", "waiting=====================%d\n", i);
+        LOGD("TASKQUEUE", "join task result=====================%d\n", i);
         LOGD("TASKQUEUE", "func: 0x%x\n", linekv_find_int64(parser, "func"));
     }
+    return result;
 }
 
 void task_queue_test()
@@ -62,25 +64,27 @@ void task_queue_test()
         snprintf(buf, 256, "Hello World %ld %d", rand() * rand(), i);
         // LOGD("TASKQUEUE", "task_queue_test push string %s\n", string_buf);
         linekv_add_str(lkv, "string", buf);
-        env_taskqueue_push_task(tq, lkv);
+        env_taskqueue_post_task(tq, lkv);
         linekv_clear(lkv);
     }
 
     linekv_clear(lkv);
-    linekv_add_ptr(lkv, "func", test_timedtask_func_waiting);
-    env_taskqueue_push_task_waiting(tq, lkv);
+    linekv_add_ptr(lkv, "func", test_join_task_func);
+    linekv_t *result = env_taskqueue_join_task(tq, lkv);
+    LOGD("TEST JOIN TASK", "result >>>>------------>  >>>>------------>  >>>>------------> %lf\n", linekv_find_float64(result, "result"));
+    linekv_destroy(&result);
 
     linekv_clear(lkv);
     linekv_add_ptr(lkv, "func", test_timedtask_func);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_uint64(lkv, "time", 3000000000ULL);
-    env_taskqueue_push_timedtask(tq, lkv);
+    env_taskqueue_insert_timedtask(tq, lkv);
 
     linekv_clear(lkv);
     linekv_add_ptr(lkv, "func", test_timedtask_func1);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_uint64(lkv, "time", 1000000000ULL);
-    env_taskqueue_push_timedtask(tq, lkv);
+    env_taskqueue_insert_timedtask(tq, lkv);
 
     sleep(10*3);
 

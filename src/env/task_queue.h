@@ -20,8 +20,9 @@ typedef linekv_parser_t task_ctx_t;
 
 typedef void (*env_task_func)(task_ctx_t ctx);
 typedef uint64_t (*env_timedtask_func)(task_ctx_t ctx);
+typedef linekey_t* (*env_join_task_func)(task_ctx_t ctx);
 
-static inline void* task_main_loop(void *ctx)
+static inline void* env_taskqueue_loop(void *ctx)
 {
     env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
     uint64_t timer = 0;
@@ -55,13 +56,16 @@ static inline void* task_main_loop(void *ctx)
             env_mutex_unlock(&tq->emutex);
 
             ldb = linekv_find(task_ctx, "func");
-            ((env_task_func)__b2n64(ldb))(task_ctx);
-
-            env_mutex_t *waiting = (env_mutex_t *)linekv_find_ptr(task_ctx, "waiting");
-            if (waiting){
-                env_mutex_lock(waiting);
-                env_mutex_signal(waiting);
-                env_mutex_unlock(waiting);
+            
+            env_mutex_t *join = (env_mutex_t *)linekv_find_ptr(task_ctx, "join");
+            if (join){
+                linekey_t **result = (linekey_t **)linekv_find_ptr(task_ctx, "result");
+                *result = ((env_join_task_func)__b2n64(ldb))(task_ctx);
+                env_mutex_lock(join);
+                env_mutex_signal(join);
+                env_mutex_unlock(join);
+            }else {
+                ((env_task_func)__b2n64(ldb))(task_ctx);
             }
 
         }else {
@@ -91,7 +95,7 @@ static inline void* task_main_loop(void *ctx)
 
     linekv_destroy(&task_ctx);
 
-    printf("task_main_loop(0x%x) exit\n", env_thread_self());
+    LOGI("TASK QUEUE", "taskqueue_loop(0x%x) exit\n", env_thread_self());
 
     return NULL;
 }
@@ -122,7 +126,7 @@ static inline env_taskqueue_t* env_taskqueue_build()
     }
 
     tq->running = 1;
-    ret = env_thread_create(&tq->ethread, task_main_loop, tq);
+    ret = env_thread_create(&tq->ethread, env_taskqueue_loop, tq);
     if (ret != 0){
         goto Clear;
     }
@@ -168,7 +172,7 @@ static inline void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
     }
 }
 
-static inline void env_taskqueue_push_task(env_taskqueue_t *tq, linekv_t *lkv)
+static inline void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv)
 {
     env_mutex_lock(&tq->emutex);
     while (linedb_pipe_write(tq->immediate_task, lkv->head, lkv->pos) == 0) {
@@ -182,7 +186,7 @@ static inline void env_taskqueue_push_task(env_taskqueue_t *tq, linekv_t *lkv)
     env_mutex_unlock(&tq->emutex);
 }
 
-static inline void env_taskqueue_push_timedtask(env_taskqueue_t *tq, linekv_t *lkv)
+static inline void env_taskqueue_insert_timedtask(env_taskqueue_t *tq, linekv_t *lkv)
 {
     env_mutex_lock(&tq->emutex);
     linekv_t *task = linekv_build(lkv->pos);
@@ -196,16 +200,16 @@ static inline void env_taskqueue_push_timedtask(env_taskqueue_t *tq, linekv_t *l
     env_mutex_unlock(&tq->emutex);
 }
 
-static inline void env_taskqueue_push_task_waiting(env_taskqueue_t *tq, linekv_t *lkv)
+static inline linekv_t* env_taskqueue_join_task(env_taskqueue_t *tq, linekv_t *lkv)
 {
-    env_mutex_lock(&tq->emutex);
-
+    linekv_t *result = NULL;
     env_mutex_t mutex;
     env_mutex_init(&mutex);
     env_mutex_lock(&mutex);
+    linekv_add_ptr(lkv, "join", &mutex);
+    linekv_add_ptr(lkv, "result", &result);
 
-    linekv_add_ptr(lkv, "waiting", &mutex);
-
+    env_mutex_lock(&tq->emutex);    
     while (linedb_pipe_write(tq->immediate_task, lkv->head, lkv->pos) == 0) {
         tq->write_waiting = 1;
         env_mutex_wait(&tq->emutex);
@@ -219,6 +223,8 @@ static inline void env_taskqueue_push_task_waiting(env_taskqueue_t *tq, linekv_t
     env_mutex_wait(&mutex);
     env_mutex_unlock(&mutex);
     env_mutex_destroy(&mutex);
+
+    return result;
 }
 
 
