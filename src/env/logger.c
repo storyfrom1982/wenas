@@ -97,7 +97,7 @@ int env_logger_start(const char *path, logger_cb_t cb)
         g_logger.path = strdup(path);
         if (g_logger.path){
             env_mutex_init(&g_logger.mutex);
-            g_logger.lpipe = linedb_pipe_build(1 << 15);
+            g_logger.lpipe = linedb_pipe_create(1 << 15);
             if (!g_logger.lpipe){
                 return -1;
             }

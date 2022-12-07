@@ -23,7 +23,7 @@ typedef struct heap {
 
 
 
-static inline heap_t* heap_build(uint32_t size)
+static inline heap_t* heap_create(uint32_t size)
 {
     heap_t *heap = (heap_t *) malloc(sizeof(heap_t) + sizeof(heapment_t) * size);
     heap->len = size;

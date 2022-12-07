@@ -4,7 +4,7 @@
 
 static void test_add_string()
 {
-	linekv_t *lkv = linekv_build(10240);
+	linekv_t *lkv = linekv_create(10240);
 	linekv_parser_t parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
@@ -36,7 +36,7 @@ static void test_add_string()
 
 static void test_find_after()
 {
-	linekv_t *lkv = linekv_build(10240);
+	linekv_t *lkv = linekv_create(10240);
 	linekv_parser_t parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
@@ -69,7 +69,7 @@ static void test_find_after()
 
 static void test_find_number()
 {
-	linekv_t *lkv = linekv_build(10240);
+	linekv_t *lkv = linekv_create(10240);
 	linekv_parser_t parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
@@ -103,7 +103,7 @@ static void test_find_number()
 
 static void test_find_float()
 {
-	linekv_t *lkv = linekv_build(10240);
+	linekv_t *lkv = linekv_create(10240);
 	linekv_parser_t parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
@@ -211,9 +211,9 @@ static void print_objcet(linekv_t *kv)
 
 static void test_add_object()
 {
-	linekv_t *lkv = linekv_build(10240);
-	linekv_t *obj = linekv_build(10240);
-	linekv_t *obj1 = linekv_build(10240);
+	linekv_t *lkv = linekv_create(10240);
+	linekv_t *obj = linekv_create(10240);
+	linekv_t *obj1 = linekv_create(10240);
 
 	linekv_add_int8(lkv, "int8", -8);
 	linekv_add_int16(lkv, "int16", -16);

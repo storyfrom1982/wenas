@@ -169,7 +169,7 @@ static void string_to_ldb()
     LOGD("LINEDB", ">>>>------------>\n");
 
     uint32_t len = 0xabcdef;
-    ldb = linedb_build(NULL, len);
+    ldb = linedb_create(NULL, len);
     uint8_t *data = malloc(len);
     linedb_load_binary(ldb, data, len);
     LOGD("LINEDB", "ldb type = %u\n", __typeof_linedb(ldb));

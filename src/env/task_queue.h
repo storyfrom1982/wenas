@@ -27,7 +27,8 @@ static inline void* env_taskqueue_loop(void *ctx)
     env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
     uint64_t timer = 0;
     linedb_t *ldb;
-    task_ctx_t task_ctx = linekv_build(10240);
+    task_ctx_t task_ctx = linekv_create(10240);
+    __env_check(tq == NULL, "linekv_create()");
 
     while (1) {
 
@@ -93,6 +94,8 @@ static inline void* env_taskqueue_loop(void *ctx)
         }
     }
 
+Reset:
+
     linekv_destroy(&task_ctx);
 
     LOGI("TASK QUEUE", "env_taskqueue_loop(0x%X) exit\n", env_thread_self());
@@ -101,39 +104,29 @@ static inline void* env_taskqueue_loop(void *ctx)
 }
 
 
-static inline env_taskqueue_t* env_taskqueue_build()
+static inline env_taskqueue_t* env_taskqueue_create()
 {
     int ret;
 
-    env_taskqueue_t *tq = (env_taskqueue_t *)malloc(sizeof(env_taskqueue_t));
-    if (tq == NULL){
-        return NULL;
-    }
+    env_taskqueue_t *tq = (env_taskqueue_t *)calloc(1, sizeof(env_taskqueue_t));
+    __env_check(tq == NULL, "calloc()");
 
-    tq->immediate_task = linedb_pipe_build(1 << 14);
-    if (tq->immediate_task == NULL){
-        goto Clear;
-    }
+    tq->immediate_task = linedb_pipe_create(1 << 14);
+    __env_check(tq->immediate_task == NULL, "linedb_pipe_create()");
 
-    tq->timed_task = heap_build(1 << 8);
-    if (tq->timed_task == NULL){
-        goto Clear;
-    }
+    tq->timed_task = heap_create(1 << 8);
+    __env_check(tq->timed_task == NULL, "heap_create()");
 
     ret = env_mutex_init(&tq->mutex);
-    if (ret != 0){
-        goto Clear;
-    }
+    __env_check(ret != 0, "env_mutex_init()");
 
     tq->running = 1;
     ret = env_thread_create(&tq->tid, env_taskqueue_loop, tq);
-    if (ret != 0){
-        goto Clear;
-    }
+    __env_check(ret != 0, "env_thread_create()");
 
     return tq;
 
-Clear:
+Reset:
     if (tq->immediate_task) linedb_pipe_destroy(&tq->immediate_task);
     if (tq->timed_task) heap_destroy(&tq->timed_task);
     if (tq) free(tq);
@@ -192,7 +185,7 @@ static inline void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv)
 static inline void env_taskqueue_insert_timedtask(env_taskqueue_t *tq, linekv_t *lkv)
 {
     env_mutex_lock(&tq->mutex);
-    linekv_t *task = linekv_build(lkv->pos);
+    linekv_t *task = linekv_create(lkv->pos);
     task->pos = lkv->pos;
     memcpy(task->head, lkv->head, lkv->pos);
     heapment_t t;

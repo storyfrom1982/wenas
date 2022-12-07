@@ -25,7 +25,7 @@ enum {
 #define __objectis_linekv(b)        (__typeof_linedb(b) == LINEDB_OBJECT_LINEKV)
 
 
-static inline linekv_t* linekv_build(uint32_t size)
+static inline linekv_t* linekv_create(uint32_t size)
 {
     linekv_t *lkv = (linekv_t *)malloc(sizeof(linekv_t));
     lkv->head = (uint8_t*) malloc(size);
@@ -61,7 +61,7 @@ static inline void linekv_load_object(linekv_t *lkv, lineval_t *val)
     uint32_t size = __sizeof_data(val);
     if (size > lkv->len){
         linekv_destroy(&lkv);
-        lkv = linekv_build(size);
+        lkv = linekv_create(size);
     }
     lkv->pos = size;
     memcpy(lkv->head, __dataof_linedb(val), size);

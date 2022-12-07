@@ -4,7 +4,7 @@
 
 static void test_pipe_write_read()
 {
-    linedb_pipe_t *lp = linedb_pipe_build(128);
+    linedb_pipe_t *lp = linedb_pipe_create(128);
     linedb_t *ldb;
 	char buf[1024] = {0};
 	int32_t n;
@@ -22,7 +22,7 @@ static void test_pipe_write_read()
 
 static void test_pipe_producer_consumer()
 {
-    linedb_pipe_t *lp = linedb_pipe_build(1U << 6);
+    linedb_pipe_t *lp = linedb_pipe_create(1U << 6);
     linedb_t *ldb, *ldb1 = NULL;
 	char buf[1024] = {0};
 	int32_t n;

@@ -391,8 +391,8 @@ static inline linedb_t* string2inedb(const char *s)
     db->byte[(1 + (((db)->byte[0]) & LINEDB_HEAD_MASK)) + l] = '\0';
     return db;
 }
-#include <stdio.h>
-static inline linedb_t* linedb_build(const void *data, size_t size)
+
+static inline linedb_t* linedb_create(const void *data, size_t size)
 {
     linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + size);
     if (data){
@@ -429,7 +429,7 @@ typedef struct linear_data_block_pipeline {
 }linedb_pipe_t;
 
 
-static inline linedb_pipe_t* linedb_pipe_build(uint32_t len)
+static inline linedb_pipe_t* linedb_pipe_create(uint32_t len)
 {
     linedb_pipe_t *lp = (linedb_pipe_t *)malloc(sizeof(linedb_pipe_t));
     if (lp == NULL){

@@ -24,7 +24,7 @@ void heap_test()
         99, 50, 22, 97, 56, 44, 7, 10, 3, 21, 1, 0, 33,        
         99, 50, 22, 97, 56, 44, 7, 10, 3, 21, 1, 0, 33
         };
-    heap_t *h = heap_build(256);
+    heap_t *h = heap_create(256);
     for (int i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         hm.key = array[i];
         min_heapify_push(h, hm);

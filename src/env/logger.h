@@ -46,6 +46,15 @@ void env_logger_printf(enum env_log_level level, const char *tag, const char *fi
 #define LOGT(__TAG, __FORMAT__, ...) \
         env_logger_printf(ENV_LOG_LEVEL_TRACE, __TAG, __FILE__, __LINE__, __FUNCTION__, __FORMAT__, ##__VA_ARGS__)
 
+
+#define __env_check(condition, func) \
+        do { \
+            if ((condition)) { \
+                LOGE("CHECK STATUS", "%s Unusual, %s", func, strerror(errno)); \
+                goto Reset; \
+            } \
+        } while (0)
+
 #ifdef __cplusplus
 }
 #endif

@@ -31,7 +31,7 @@ static uint64_t test_timedtask_func1(linekv_parser_t parser)
 
 static linekv_t* test_join_task_func(linekv_parser_t parser)
 {
-    linekv_t *result = linekv_build(10240);
+    linekv_t *result = linekv_create(10240);
     linekv_add_float64(result, "result", 12345.12345f);
     for (int i = 0; i < 3; ++i){
         LOGD("TASKQUEUE", "join task result=====================%d\n", i);
@@ -44,10 +44,10 @@ void task_queue_test()
 {
     LOGD("TASKQUEUE", "task_queue_test enter\n");
 
-    env_taskqueue_t *tq = env_taskqueue_build();
+    env_taskqueue_t *tq = env_taskqueue_create();
 
     char buf[256];
-    linekv_t *lkv = linekv_build(10240);
+    linekv_t *lkv = linekv_create(10240);
     int test_number = 10240;
     float test_float = 123.456f;
     double test_double = 12345.12345f;
