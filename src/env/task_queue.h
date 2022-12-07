@@ -71,7 +71,7 @@ static inline void* env_taskqueue_loop(void *ctx)
 
         }else {
 
-            if (!tq->running){
+            if (__is_false(tq->running)){
                 env_mutex_unlock(&tq->mutex);
                 break;
             }
@@ -135,8 +135,8 @@ Reset:
 
 static inline void env_taskqueue_exit(env_taskqueue_t *tq)
 {
-    env_mutex_lock(&tq->mutex);
-    if (tq->running){
+    if (__set_false(tq->running)){
+        env_mutex_lock(&tq->mutex);
         tq->running = 0;
         env_mutex_broadcast(&tq->mutex);
         env_mutex_unlock(&tq->mutex);
@@ -144,8 +144,6 @@ static inline void env_taskqueue_exit(env_taskqueue_t *tq)
         if (ret != 0){
             LOGE("TASK QUEUE", "env_thread_join(0x%X) failed. error: %s\n", tq->tid, strerror(ret));
         }
-    }else {
-        env_mutex_unlock(&tq->mutex);
     }
 }
 

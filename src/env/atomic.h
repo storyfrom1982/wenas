@@ -14,10 +14,10 @@
 static bool __const_true = true;
 static bool __const_false = false;
 
-#define	__is_true(x)		atomic_compare_exchange_strong(&(x), &__const_true, true)
-#define	__is_false(x)		atomic_compare_exchange_strong(&(x), &__const_false, false)
-#define	__set_true(x)		atomic_compare_exchange_strong(&(x), &__const_false, true)
-#define	__set_false(x)		atomic_compare_exchange_strong(&(x), &__const_true, false)
+#define	__is_true(x)		    atomic_compare_exchange_strong(&(x), &__const_true, true)
+#define	__is_false(x)		    atomic_compare_exchange_strong(&(x), &__const_false, false)
+#define	__set_true(x)		    atomic_compare_exchange_strong(&(x), &__const_false, true)
+#define	__set_false(x)		    atomic_compare_exchange_strong(&(x), &__const_true, false)
 
 #define __atom_sub(x, y)		atomic_fetch_sub(&(x), (y))
 #define __atom_add(x, y)		atomic_fetch_add(&(x), (y))

@@ -2,6 +2,7 @@
 // Created by liyong kang on 2022/12/2.
 //
 
+#include "env/atomic.h"
 #include "env/logger.h"
 #include "env/thread.h"
 #include "env/file_system.h"
@@ -75,7 +76,7 @@ static void* env_logger_write_loop(void *p)
 
         }else {
 
-            if (!g_logger.running){
+            if (__is_false(g_logger.running)){
                 env_mutex_unlock(&g_logger.mutex);
                 break;
             }
@@ -91,7 +92,7 @@ static void* env_logger_write_loop(void *p)
 
 int env_logger_start(const char *path, logger_cb_t cb)
 {
-    if (!g_logger.running){
+    if (__set_true(g_logger.running)){
         g_logger.running = 1;
         g_logger.printer = cb;
         g_logger.path = strdup(path);
@@ -112,8 +113,7 @@ int env_logger_start(const char *path, logger_cb_t cb)
 
 void env_logger_stop()
 {
-    if (g_logger.running){
-        g_logger.running = 0;
+    if (__set_false(g_logger.running)){
         env_mutex_lock(&g_logger.mutex);
         env_mutex_signal(&g_logger.mutex);
         env_mutex_unlock(&g_logger.mutex);

@@ -62,9 +62,9 @@ if(ENV_HAVE_BACKTRACE)
     list(APPEND kzx_cflags -DENV_MALLOC_BACKTRACE)
 endif()
 
-if(ENV_HAVE_STDATOMIC)
-    list(APPEND kzx_cflags -DENV_HAVE_STDATOMIC)
-endif()
+#if(ENV_HAVE_STDATOMIC)
+#    list(APPEND kzx_cflags -DENV_HAVE_STDATOMIC)
+#endif()
 
 if (UNIX)    
     list(APPEND kzx_cflags -DSR_LOG_DEBUG -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)

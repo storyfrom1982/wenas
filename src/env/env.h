@@ -2,6 +2,7 @@
 #define __ENV_ENV_H__
 
 
+#include "env/atomic.h"
 #include "env/logger.h"
 #include "env/malloc.h"
 #include "env/backtrace.h"
