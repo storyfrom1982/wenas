@@ -44,81 +44,49 @@ extern "C" {
 #define KVS_SOCKET_IN_PROGRESS EINPROGRESS
 #endif
 
-typedef char CHAR;
-typedef short WCHAR;
-typedef uint8_t UINT8;
-typedef int8_t INT8;
-typedef uint16_t UINT16;
-typedef int16_t INT16;
-typedef uint32_t UINT32;
-typedef int32_t INT32;
-typedef uint64_t UINT64;
-typedef int64_t INT64;
-typedef double DOUBLE;
-typedef long double LDOUBLE;
-typedef float FLOAT;
-typedef bool BOOL;
-#ifndef VOID
-#define VOID void
-#endif
+typedef char __sym;
+typedef bool __bool;
+typedef int8_t __int8;
+typedef int16_t __int16;
+typedef int32_t __int32;
+typedef int64_t __int64;
+typedef uint8_t __uint8;
+typedef uint16_t __uint16;
+typedef uint32_t __uint32;
+typedef uint64_t __uint64;
+typedef float __real32;
+typedef double __real64;
+typedef void __void;
 
-typedef UINT8 BYTE;
-typedef VOID* PVOID;
-typedef BYTE* PBYTE;
-typedef BOOL* PBOOL;
-typedef CHAR* PCHAR;
-typedef WCHAR* PWCHAR;
-typedef INT8* PINT8;
-typedef UINT8* PUINT8;
-typedef INT16* PINT16;
-typedef UINT16* PUINT16;
-typedef INT32* PINT32;
-typedef UINT32* PUINT32;
-typedef INT64* PINT64;
-typedef UINT64* PUINT64;
-typedef long LONG, *PLONG;
-typedef unsigned long ULONG, *PULONG;
-typedef DOUBLE* PDOUBLE;
-typedef LDOUBLE* PLDOUBLE;
-typedef FLOAT* PFLOAT;
+#define __false         0
+#define __true          1
 
-#ifndef FALSE
-#define FALSE 0
-#endif
+#define __res           __int32
+#define __failed(x)     (((__res)(x)) != 0)
+#define __passed(x)     (((__res)(x)) == 0)
 
-#ifndef TRUE
-#define TRUE 1
-#endif
-
-#define STATUS UINT32
-
-#define STATUS_SUCCESS ((STATUS) 0x00000000)
-
-#define STATUS_FAILED(x)    (((STATUS)(x)) != STATUS_SUCCESS)
-#define STATUS_SUCCEEDED(x) (!STATUS_FAILED(x))
-
-#define IPV6_ADDRESS_LENGTH (UINT16) 16
-#define IPV4_ADDRESS_LENGTH (UINT16) 4
-
-#define CHK(condition, errRet)                                                                                                                       \
+#define __check(condition, errRet)                                                                                                                       \
     do {                                                                                                                                             \
         if (!(condition)) {                                                                                                                          \
             retStatus = (errRet);                                                                                                                    \
             goto CleanUp;                                                                                                                            \
         }                                                                                                                                            \
-    } while (FALSE)
+    } while (__false)
 
+
+#define IPV6_ADDRESS_LENGTH (__uint16) 16
+#define IPV4_ADDRESS_LENGTH (__uint16) 4
 
 typedef enum {
-    KVS_IP_FAMILY_TYPE_IPV4 = (UINT16) 0x0001,
-    KVS_IP_FAMILY_TYPE_IPV6 = (UINT16) 0x0002,
+    KVS_IP_FAMILY_TYPE_IPV4 = (__uint16) 0x0001,
+    KVS_IP_FAMILY_TYPE_IPV6 = (__uint16) 0x0002,
 } KVS_IP_FAMILY_TYPE;
 
 typedef struct {
-    UINT16 family;
-    UINT16 port;                       // port is stored in network byte order
-    BYTE address[IPV6_ADDRESS_LENGTH]; // address is stored in network byte order
-    BOOL isPointToPoint;
+    __uint16 family;
+    __uint16 port;                       // port is stored in network byte order
+    __sym address[IPV6_ADDRESS_LENGTH]; // address is stored in network byte order
+    __bool isPointToPoint;
 } KvsIpAddress, *PKvsIpAddress;
 
 #define IS_IPV4_ADDR(pAddress) ((pAddress)->family == KVS_IP_FAMILY_TYPE_IPV4)
@@ -129,7 +97,7 @@ typedef enum {
     KVS_SOCKET_PROTOCOL_UDP,
 } KVS_SOCKET_PROTOCOL;
 
-typedef BOOL (*IceSetInterfaceFilterFunc)(UINT64, PCHAR);
+typedef __bool (*IceSetInterfaceFilterFunc)(__uint64, __sym*);
 
 /**
  * @param - PKvsIpAddress - IN/OUT - array for getLocalhostIpAddresses to store any local ips it found. The ip address and port
@@ -141,24 +109,24 @@ typedef BOOL (*IceSetInterfaceFilterFunc)(UINT64, PCHAR);
  *@param - UINT64 - IN - Set to custom data that can be used in the callback later
  * @return - STATUS status of execution
  */
-STATUS getLocalhostIpAddresses(PKvsIpAddress, PUINT32, IceSetInterfaceFilterFunc, UINT64);
+__res getLocalhostIpAddresses(PKvsIpAddress, __uint32*, IceSetInterfaceFilterFunc, __uint64);
 
 /**
  * @param - KVS_IP_FAMILY_TYPE - IN - Family for the socket. Must be one of KVS_IP_FAMILY_TYPE
  * @param - KVS_SOCKET_PROTOCOL - IN - either tcp or udp
  * @param - UINT32 - IN - send buffer size in bytes
- * @param - PINT32 - OUT - PINT32 for the socketfd
+ * @param - __int32* - OUT - __int32* for the socketfd
  *
  * @return - STATUS status of execution
  */
-STATUS createSocket(KVS_IP_FAMILY_TYPE, KVS_SOCKET_PROTOCOL, UINT32, PINT32);
+__res createSocket(KVS_IP_FAMILY_TYPE, KVS_SOCKET_PROTOCOL, __uint32, __int32*);
 
 /**
  * @param - INT32 - IN - INT32 for the socketfd
  *
  * @return - STATUS status of execution
  */
-STATUS closeSocket(INT32);
+__res closeSocket(__int32);
 
 /**
  * @param - PKvsIpAddress - IN - address for the socket to bind. PKvsIpAddress->port will be changed to the actual port number
@@ -166,7 +134,7 @@ STATUS closeSocket(INT32);
  *
  * @return - STATUS status of execution
  */
-STATUS socketBind(PKvsIpAddress, INT32);
+__res socketBind(PKvsIpAddress, __int32);
 
 /**
  * @param - PKvsIpAddress - IN - address for the socket to connect.
@@ -174,32 +142,32 @@ STATUS socketBind(PKvsIpAddress, INT32);
  *
  * @return - STATUS status of execution
  */
-STATUS socketConnect(PKvsIpAddress, INT32);
+__res socketConnect(PKvsIpAddress, __int32);
 
 /**
- * @param - PCHAR - IN - hostname to resolve
+ * @param - __byte* - IN - hostname to resolve
  *
  * @param - PKvsIpAddress - OUT - resolved ip address
  *
  * @return - STATUS status of execution
  */
-STATUS getIpWithHostName(PCHAR, PKvsIpAddress);
+__res getIpWithHostName(__sym*, PKvsIpAddress);
 
-STATUS getIpAddrStr(PKvsIpAddress, PCHAR, UINT32);
+__res getIpAddrStr(PKvsIpAddress, __sym*, __uint32);
 
-BOOL isSameIpAddress(PKvsIpAddress, PKvsIpAddress, BOOL);
+__bool isSameIpAddress(PKvsIpAddress, PKvsIpAddress, __bool);
 
 /**
  * @return - INT32 error code
  */
-INT32 getErrorCode(VOID);
+__int32 getErrorCode(__void);
 
 /**
  * @param - INT32 - IN - error code
  *
- * @return - PCHAR string associated with error code
+ * @return - __byte* string associated with error code
  */
-PCHAR getErrorString(INT32);
+__sym* getErrorString(__int32);
 
 #ifdef _WIN32
 #define POLL WSAPoll

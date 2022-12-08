@@ -53,7 +53,7 @@
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof *(array))
 #endif
 
-#define EMPTY_STRING ((PCHAR) "")
+#define EMPTY_STRING ((__byte*) "")
 
 #define STATUS_BASE                                     0x00000000
 #define STATUS_NULL_ARG                                 STATUS_BASE + 0x00000001
@@ -88,23 +88,23 @@
             LOGE("Network", ##__VA_ARGS__);                                                                                                      \
             goto CleanUp;                                                                                                                            \
         }                                                                                                                                            \
-    } while (FALSE)
+    } while (__false)
 
 #define CHK_STATUS(condition)                                                                                                                        \
     do {                                                                                                                                             \
-        STATUS __status = condition;                                                                                                                 \
-        if (STATUS_FAILED(__status)) {                                                                                                               \
+        __res __status = condition;                                                                                                                 \
+        if (__failed(__status)) {                                                                                                               \
             retStatus = (__status);                                                                                                                  \
             goto CleanUp;                                                                                                                            \
         }                                                                                                                                            \
-    } while (FALSE)
+    } while (__false)
 
-STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen, IceSetInterfaceFilterFunc filter, UINT64 customData)
+__res getLocalhostIpAddresses(PKvsIpAddress destIpList, __uint32* pDestIpListLen, IceSetInterfaceFilterFunc filter, __uint64 customData)
 {
     ENTERS();
-    STATUS retStatus = STATUS_SUCCESS;
-    UINT32 ipCount = 0, destIpListLen;
-    BOOL filterSet = TRUE;
+    __res retStatus = 0;
+    __uint32 ipCount = 0, destIpListLen;
+    __bool filterSet = __true;
 
 #ifdef _WIN32
     DWORD retWinStatus, sizeAAPointer;
@@ -116,18 +116,18 @@ STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen,
     struct sockaddr_in* pIpv4Addr = NULL;
     struct sockaddr_in6* pIpv6Addr = NULL;
 
-    CHK(destIpList != NULL && pDestIpListLen != NULL, STATUS_NULL_ARG);
-    CHK(*pDestIpListLen != 0, STATUS_INVALID_ARG);
+    __check(destIpList != NULL && pDestIpListLen != NULL, STATUS_NULL_ARG);
+    __check(*pDestIpListLen != 0, STATUS_INVALID_ARG);
 
     destIpListLen = *pDestIpListLen;
 #ifdef _WIN32
     retWinStatus = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, NULL, &sizeAAPointer);
-    CHK(retWinStatus == ERROR_BUFFER_OVERFLOW, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
+    __check(retWinStatus == ERROR_BUFFER_OVERFLOW, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
 
     adapterAddresses = (PIP_ADAPTER_ADDRESSES) MEMALLOC(sizeAAPointer);
 
     retWinStatus = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, adapterAddresses, &sizeAAPointer);
-    CHK(retWinStatus == ERROR_SUCCESS, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
+    __check(retWinStatus == ERROR_SUCCESS, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
 
     for (aa = adapterAddresses; aa != NULL && ipCount < destIpListLen; aa = aa->Next) {
         char ifa_name[BUFSIZ];
@@ -141,12 +141,12 @@ STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen,
                 if (filter(customData, ifa_name) == FALSE) {
                     filterSet = FALSE;
                 } else {
-                    filterSet = TRUE;
+                    filterSet = __true;
                 }
             }
 
             // If filter is set, ensure the details are collected for the interface
-            if (filterSet == TRUE) {
+            if (filterSet == __true) {
                 int family = ua->Address.lpSockaddr->sa_family;
 
                 if (family == AF_INET) {
@@ -176,7 +176,7 @@ STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen,
         }
     }
 #else
-    CHK(getifaddrs(&ifaddr) != -1, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
+    __check(getifaddrs(&ifaddr) != -1, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
     for (ifa = ifaddr; ifa != NULL && ipCount < destIpListLen; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr != NULL && (ifa->ifa_flags & IFF_LOOPBACK) == 0 && // ignore loopback interface
             (ifa->ifa_flags & IFF_RUNNING) > 0 &&                            // interface has to be allocated
@@ -186,15 +186,15 @@ STATUS getLocalhostIpAddresses(PKvsIpAddress destIpList, PUINT32 pDestIpListLen,
 
             if (filter != NULL) {
                 // The callback evaluates to a FALSE if the application is interested in black listing an interface
-                if (filter(customData, ifa->ifa_name) == FALSE) {
-                    filterSet = FALSE;
+                if (filter(customData, ifa->ifa_name) == __false) {
+                    filterSet = __false;
                 } else {
-                    filterSet = TRUE;
+                    filterSet = __true;
                 }
             }
 
             // If filter is set, ensure the details are collected for the interface
-            if (filterSet == TRUE) {
+            if (filterSet == __true) {
                 if (ifa->ifa_addr->sa_family == AF_INET) {
                     destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV4;
                     destIpList[ipCount].port = 0;
@@ -242,21 +242,21 @@ CleanUp:
     return retStatus;
 }
 
-STATUS createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, UINT32 sendBufSize, PINT32 pOutSockFd)
+__res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, __uint32 sendBufSize, __int32* pOutSockFd)
 {
-    STATUS retStatus = STATUS_SUCCESS;
+    __res retStatus = 0;
 
-    INT32 sockfd, sockType, flags;
-    INT32 optionValue;
+    __int32 sockfd, sockType, flags;
+    __int32 optionValue;
 
-    CHK(pOutSockFd != NULL, STATUS_NULL_ARG);
+    __check(pOutSockFd != NULL, STATUS_NULL_ARG);
 
     sockType = protocol == KVS_SOCKET_PROTOCOL_UDP ? SOCK_DGRAM : SOCK_STREAM;
 
     sockfd = socket(familyType == KVS_IP_FAMILY_TYPE_IPV4 ? AF_INET : AF_INET6, sockType, 0);
     if (sockfd == -1) {
         LOGW("Network", "socket() failed to create socket with errno %s", getErrorString(getErrorCode()));
-        CHK(FALSE, STATUS_CREATE_UDP_SOCKET_FAILED);
+        __check(__false, STATUS_CREATE_UDP_SOCKET_FAILED);
     }
 
     optionValue = 1;
@@ -266,10 +266,10 @@ STATUS createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol,
 
     if (sendBufSize > 0 && setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendBufSize, SIZEOF(sendBufSize)) < 0) {
         LOGW("Network", "setsockopt() SO_SNDBUF failed with errno %s", getErrorString(getErrorCode()));
-        CHK(FALSE, STATUS_SOCKET_SET_SEND_BUFFER_SIZE_FAILED);
+        __check(__false, STATUS_SOCKET_SET_SEND_BUFFER_SIZE_FAILED);
     }
 
-    *pOutSockFd = (INT32) sockfd;
+    *pOutSockFd = (__int32) sockfd;
 
 #ifdef _WIN32
     UINT32 nonblock = 1;
@@ -283,7 +283,7 @@ STATUS createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol,
 #endif
 
     // done at this point for UDP
-    CHK(protocol == KVS_SOCKET_PROTOCOL_TCP, retStatus);
+    __check(protocol == KVS_SOCKET_PROTOCOL_TCP, retStatus);
 
     /* disable Nagle algorithm to not delay sending packets. We should have enough density to justify using it. */
     optionValue = 1;
@@ -296,9 +296,9 @@ CleanUp:
     return retStatus;
 }
 
-STATUS closeSocket(INT32 sockfd)
+__res closeSocket(__int32 sockfd)
 {
-    STATUS retStatus = STATUS_SUCCESS;
+    __res retStatus = 0;
 
 #ifdef _WIN32
     CHK_ERR(closesocket(sockfd) == 0, STATUS_CLOSE_SOCKET_FAILED, "Failed to close the socket %s", getErrorString(getErrorCode()));
@@ -311,17 +311,17 @@ CleanUp:
     return retStatus;
 }
 
-STATUS socketBind(PKvsIpAddress pHostIpAddress, INT32 sockfd)
+__res socketBind(PKvsIpAddress pHostIpAddress, __int32 sockfd)
 {
-    STATUS retStatus = STATUS_SUCCESS;
+    __res retStatus = 0;
     struct sockaddr_in ipv4Addr;
     struct sockaddr_in6 ipv6Addr;
     struct sockaddr* sockAddr = NULL;
     socklen_t addrLen;
 
-    CHAR ipAddrStr[KVS_IP_ADDRESS_STRING_BUFFER_LEN];
+    __sym ipAddrStr[KVS_IP_ADDRESS_STRING_BUFFER_LEN];
 
-    CHK(pHostIpAddress != NULL, STATUS_NULL_ARG);
+    __check(pHostIpAddress != NULL, STATUS_NULL_ARG);
 
     if (pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4) {
         MEMSET(&ipv4Addr, 0x00, SIZEOF(ipv4Addr));
@@ -348,30 +348,30 @@ STATUS socketBind(PKvsIpAddress pHostIpAddress, INT32 sockfd)
         CHK_STATUS(getIpAddrStr(pHostIpAddress, ipAddrStr, ARRAY_SIZE(ipAddrStr)));
 //        LOGW("Network", "bind() failed for ip%s address: %s, port %u with errno %s", IS_IPV4_ADDR(pHostIpAddress) ? EMPTY_STRING : "V6", ipAddrStr,
 //              (UINT16) getInt16(pHostIpAddress->port), getErrorString(getErrorCode()));
-        CHK(FALSE, STATUS_BINDING_SOCKET_FAILED);
+        __check(__false, STATUS_BINDING_SOCKET_FAILED);
     }
 
     if (getsockname(sockfd, sockAddr, &addrLen) < 0) {
         LOGW("Network", "getsockname() failed with errno %s", getErrorString(getErrorCode()));
-        CHK(FALSE, STATUS_GET_PORT_NUMBER_FAILED);
+        __check(__false, STATUS_GET_PORT_NUMBER_FAILED);
     }
 
-    pHostIpAddress->port = (UINT16) pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4 ? ipv4Addr.sin_port : ipv6Addr.sin6_port;
+    pHostIpAddress->port = (__uint16) pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4 ? ipv4Addr.sin_port : ipv6Addr.sin6_port;
 
 CleanUp:
     return retStatus;
 }
 
-STATUS socketConnect(PKvsIpAddress pPeerAddress, INT32 sockfd)
+__res socketConnect(PKvsIpAddress pPeerAddress, __int32 sockfd)
 {
-    STATUS retStatus = STATUS_SUCCESS;
+    __res retStatus = 0;
     struct sockaddr_in ipv4PeerAddr;
     struct sockaddr_in6 ipv6PeerAddr;
     struct sockaddr* peerSockAddr = NULL;
     socklen_t addrLen;
-    INT32 retVal;
+    __int32 retVal;
 
-    CHK(pPeerAddress != NULL, STATUS_NULL_ARG);
+    __check(pPeerAddress != NULL, STATUS_NULL_ARG);
 
     if (pPeerAddress->family == KVS_IP_FAMILY_TYPE_IPV4) {
         MEMSET(&ipv4PeerAddr, 0x00, SIZEOF(ipv4PeerAddr));
@@ -397,22 +397,22 @@ CleanUp:
     return retStatus;
 }
 
-STATUS getIpWithHostName(PCHAR hostname, PKvsIpAddress destIp)
+__res getIpWithHostName(__sym* hostname, PKvsIpAddress destIp)
 {
-    STATUS retStatus = STATUS_SUCCESS;
-    INT32 errCode;
-    PCHAR errStr;
+    __res retStatus = 0;
+    __int32 errCode;
+    __sym* errStr;
     struct addrinfo *res, *rp;
-    BOOL resolved = FALSE;
+    __bool resolved = __false;
     struct sockaddr_in* ipv4Addr;
     struct sockaddr_in6* ipv6Addr;
 
-    CHK(hostname != NULL, STATUS_NULL_ARG);
+    __check(hostname != NULL, STATUS_NULL_ARG);
 
     errCode = getaddrinfo(hostname, NULL, NULL, &res);
     if (errCode != 0) {
-        errStr = errCode == EAI_SYSTEM ? strerror(errno) : (PCHAR) gai_strerror(errCode);
-        CHK_ERR(FALSE, STATUS_RESOLVE_HOSTNAME_FAILED, "getaddrinfo() with errno %s", errStr);
+        errStr = errCode == EAI_SYSTEM ? strerror(errno) : (__sym*) gai_strerror(errCode);
+        CHK_ERR(__false, STATUS_RESOLVE_HOSTNAME_FAILED, "getaddrinfo() with errno %s", errStr);
     }
 
     for (rp = res; rp != NULL && !resolved; rp = rp->ai_next) {
@@ -420,12 +420,12 @@ STATUS getIpWithHostName(PCHAR hostname, PKvsIpAddress destIp)
             ipv4Addr = (struct sockaddr_in*) rp->ai_addr;
             destIp->family = KVS_IP_FAMILY_TYPE_IPV4;
             MEMCPY(destIp->address, &ipv4Addr->sin_addr, IPV4_ADDRESS_LENGTH);
-            resolved = TRUE;
+            resolved = __true;
         } else if (rp->ai_family == AF_INET6) {
             ipv6Addr = (struct sockaddr_in6*) rp->ai_addr;
             destIp->family = KVS_IP_FAMILY_TYPE_IPV6;
             MEMCPY(destIp->address, &ipv6Addr->sin6_addr, IPV6_ADDRESS_LENGTH);
-            resolved = TRUE;
+            resolved = __true;
         }
     }
 
@@ -439,13 +439,13 @@ CleanUp:
     return retStatus;
 }
 
-STATUS getIpAddrStr(PKvsIpAddress pKvsIpAddress, PCHAR pBuffer, UINT32 bufferLen)
+__res getIpAddrStr(PKvsIpAddress pKvsIpAddress, __sym* pBuffer, __uint32 bufferLen)
 {
-    STATUS retStatus = STATUS_SUCCESS;
-    UINT32 generatedStrLen = 0; // number of characters written if buffer is large enough not counting the null terminator
+    __res retStatus = 0;
+    __uint32 generatedStrLen = 0; // number of characters written if buffer is large enough not counting the null terminator
 
-    CHK(pKvsIpAddress != NULL, STATUS_NULL_ARG);
-    CHK(pBuffer != NULL && bufferLen > 0, STATUS_INVALID_ARG);
+    __check(pKvsIpAddress != NULL, STATUS_NULL_ARG);
+    __check(pBuffer != NULL && bufferLen > 0, STATUS_INVALID_ARG);
 
     if (IS_IPV4_ADDR(pKvsIpAddress)) {
         generatedStrLen = SNPRINTF(pBuffer, bufferLen, "%u.%u.%u.%u", pKvsIpAddress->address[0], pKvsIpAddress->address[1], pKvsIpAddress->address[2],
@@ -459,20 +459,20 @@ STATUS getIpAddrStr(PKvsIpAddress pKvsIpAddress, PCHAR pBuffer, UINT32 bufferLen
     }
 
     // bufferLen should be strictly larger than generatedStrLen because bufferLen includes null terminator
-    CHK(generatedStrLen < bufferLen, STATUS_BUFFER_TOO_SMALL);
+    __check(generatedStrLen < bufferLen, STATUS_BUFFER_TOO_SMALL);
 
 CleanUp:
 
     return retStatus;
 }
 
-BOOL isSameIpAddress(PKvsIpAddress pAddr1, PKvsIpAddress pAddr2, BOOL checkPort)
+__bool isSameIpAddress(PKvsIpAddress pAddr1, PKvsIpAddress pAddr2, __bool checkPort)
 {
-    BOOL ret;
-    UINT32 addrLen;
+    __bool ret;
+    __uint32 addrLen;
 
     if (pAddr1 == NULL || pAddr2 == NULL) {
-        return FALSE;
+        return __false;
     }
 
     addrLen = IS_IPV4_ADDR(pAddr1) ? IPV4_ADDRESS_LENGTH : IPV6_ADDRESS_LENGTH;
@@ -507,16 +507,16 @@ INT32 getErrorCode(VOID)
     return error;
 }
 #else
-INT32 getErrorCode(VOID)
+__int32 getErrorCode(__void)
 {
     return errno;
 }
 #endif
 
 #ifdef _WIN32
-PCHAR getErrorString(INT32 error)
+__sym* getErrorString(INT32 error)
 {
-    static CHAR buffer[1024];
+    static __sym buffer[1024];
     switch (error) {
         case EWOULDBLOCK:
             error = WSAEWOULDBLOCK;
@@ -542,7 +542,7 @@ PCHAR getErrorString(INT32 error)
     return buffer;
 }
 #else
-PCHAR getErrorString(INT32 error)
+__sym* getErrorString(__int32 error)
 {
     return strerror(error);
 }
