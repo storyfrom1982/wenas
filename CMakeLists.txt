@@ -40,6 +40,7 @@ check_c_source_runs("
 set(kzx_sources src/main.c
     src/env/logger.c
     src/env/malloc.c
+    src/env/socket.c
     src/env/backtrace.c
     test/sys/struct/heap_test.c
     test/sys/struct/lineardb_test.c
