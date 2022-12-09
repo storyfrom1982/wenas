@@ -6,8 +6,7 @@ HostInfo internal include file
 
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "env/env.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,35 +43,16 @@ extern "C" {
 #define KVS_SOCKET_IN_PROGRESS EINPROGRESS
 #endif
 
-typedef char __sym;
-typedef bool __bool;
-typedef int8_t __int8;
-typedef int16_t __int16;
-typedef int32_t __int32;
-typedef int64_t __int64;
-typedef uint8_t __uint8;
-typedef uint16_t __uint16;
-typedef uint32_t __uint32;
-typedef uint64_t __uint64;
-typedef float __real32;
-typedef double __real64;
-typedef void __void;
-
-#define __false         0
-#define __true          1
-
 #define __res           __int32
 #define __failed(x)     (((__res)(x)) != 0)
-#define __passed(x)     (((__res)(x)) == 0)
 
-#define __check(condition, errRet)                                                                                                                       \
-    do {                                                                                                                                             \
-        if (!(condition)) {                                                                                                                          \
-            retStatus = (errRet);                                                                                                                    \
-            goto CleanUp;                                                                                                                            \
-        }                                                                                                                                            \
+#define __check(condition, x) \
+    do { \
+        if ((condition)) { \
+            LOGE("CHECK", "Describe: %s, %s\n", #condition, env_status_describe(env_status())); \
+            goto Reset; \
+        } \
     } while (__false)
-
 
 #define IPV6_ADDRESS_LENGTH (__uint16) 16
 #define IPV4_ADDRESS_LENGTH (__uint16) 4

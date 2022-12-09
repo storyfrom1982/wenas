@@ -2,8 +2,8 @@
 #define __ENV_LOGGER_H__
 
 
-#include <stdio.h>
-#include <stdarg.h>
+#include "env/unix/unix.h"
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,13 +47,14 @@ void env_logger_printf(enum env_log_level level, const char *tag, const char *fi
         env_logger_printf(ENV_LOG_LEVEL_TRACE, __TAG, __FILE__, __LINE__, __FUNCTION__, __FORMAT__, ##__VA_ARGS__)
 
 
-#define __env_check(condition, func) \
-        do { \
-            if ((condition)) { \
-                LOGE("CHECK STATUS", "%s Unusual, %s", func, strerror(errno)); \
-                goto Reset; \
-            } \
-        } while (0)
+#define __pass(condition) \
+    do { \
+        if (!(condition)) { \
+            LOGE("CHECK STATUS", "Check condition failed: %s, %s\n", #condition, env_status_describe(env_status())); \
+            goto Reset; \
+        } \
+    } while (__false)
+
 
 #ifdef __cplusplus
 }

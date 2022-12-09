@@ -11,6 +11,7 @@ extern void malloc_test();
 extern void crash_backtrace_test();
 extern void file_system_test();
 extern void logger_test();
+extern int test_error(const char *test);
 
 static void log_print(int level, const char *tag, const char *debug, const char *log)
 {
@@ -34,17 +35,20 @@ int main(int argc, char *argv[])
 	LOGD("TEST", "__BIG_ENDIAN__\n");
 #endif
 
-    // lineardb_test();
-    // linearkv_test();
-    // lineardb_pipe_test();
-    // thread_test();
+
+
+    lineardb_test();
+    linearkv_test();
+    lineardb_pipe_test();
+    thread_test();
     task_queue_test();
-    // heap_test();
-    // file_system_test();
+    heap_test();
+    file_system_test();
 
 
-    // env_logger_stop();
-    // malloc_test();
+    logger_test();
+    malloc_test();
+
 
 	return 0;
 }

@@ -86,7 +86,7 @@
         if (!(condition)) {                                                                                                                          \
             retStatus = (errRet);                                                                                                                    \
             LOGE("Network", ##__VA_ARGS__);                                                                                                      \
-            goto CleanUp;                                                                                                                            \
+            goto Reset;                                                                                                                            \
         }                                                                                                                                            \
     } while (__false)
 
@@ -95,7 +95,7 @@
         __res __status = condition;                                                                                                                 \
         if (__failed(__status)) {                                                                                                               \
             retStatus = (__status);                                                                                                                  \
-            goto CleanUp;                                                                                                                            \
+            goto Reset;                                                                                                                            \
         }                                                                                                                                            \
     } while (__false)
 
@@ -222,7 +222,7 @@ __res getLocalhostIpAddresses(PKvsIpAddress destIpList, __uint32* pDestIpListLen
     }
 #endif
 
-CleanUp:
+Reset:
 
 #ifdef _WIN32
     if (adapterAddresses != NULL) {
@@ -291,7 +291,7 @@ __res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, 
         LOGW("Network", "setsockopt() TCP_NODELAY failed with errno %s", getErrorString(getErrorCode()));
     }
 
-CleanUp:
+Reset:
 
     return retStatus;
 }
@@ -306,7 +306,7 @@ __res closeSocket(__int32 sockfd)
     CHK_ERR(close(sockfd) == 0, STATUS_CLOSE_SOCKET_FAILED, "Failed to close the socket %s", strerror(errno));
 #endif
 
-CleanUp:
+Reset:
 
     return retStatus;
 }
@@ -358,7 +358,7 @@ __res socketBind(PKvsIpAddress pHostIpAddress, __int32 sockfd)
 
     pHostIpAddress->port = (__uint16) pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4 ? ipv4Addr.sin_port : ipv6Addr.sin6_port;
 
-CleanUp:
+Reset:
     return retStatus;
 }
 
@@ -393,7 +393,7 @@ __res socketConnect(PKvsIpAddress pPeerAddress, __int32 sockfd)
     CHK_ERR(retVal >= 0 || getErrorCode() == KVS_SOCKET_IN_PROGRESS, STATUS_SOCKET_CONNECT_FAILED, "connect() failed with errno %s",
             getErrorString(getErrorCode()));
 
-CleanUp:
+Reset:
     return retStatus;
 }
 
@@ -432,7 +432,7 @@ __res getIpWithHostName(__sym* hostname, PKvsIpAddress destIp)
     freeaddrinfo(res);
     CHK_ERR(resolved, STATUS_HOSTNAME_NOT_FOUND, "could not find network address of %s", hostname);
 
-CleanUp:
+Reset:
 
 //    CHK_LOG_ERR(retStatus);
 
@@ -461,7 +461,7 @@ __res getIpAddrStr(PKvsIpAddress pKvsIpAddress, __sym* pBuffer, __uint32 bufferL
     // bufferLen should be strictly larger than generatedStrLen because bufferLen includes null terminator
     __check(generatedStrLen < bufferLen, STATUS_BUFFER_TOO_SMALL);
 
-CleanUp:
+Reset:
 
     return retStatus;
 }

@@ -134,18 +134,18 @@ void env_logger_printf(enum env_log_level level, const char *tag, const char *fi
 
     uint64_t millisecond = env_time() / MICROSEC;
     time_t sec = millisecond / MILLISEC;
-    n = strftime(text, __log_text_size, "%Y-%m-%d-%H:%M:%S", localtime(&sec));
+    n = env_strftime(text, __log_text_size, "%Y-%m-%d-%H:%M:%S", localtime(&sec));
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] [%s] [%s] ", (unsigned int)(millisecond % 1000),
+    n += env_snprintf(text + n, __log_text_size - n, ".%03u [0x%X] [%s] [%s] ", (unsigned int)(millisecond % 1000),
                   env_thread_self(), s_log_level_strings[level], tag);
 
     const char *log = text + n;
-    n += snprintf(text + n, __log_text_size - n, "[%s %d %s] ", file != NULL ? __path_clear(file) : "<*>", line, func);
+    n += env_snprintf(text + n, __log_text_size - n, "[%s %d %s] ", file != NULL ? __path_clear(file) : "<*>", line, func);
 
-    va_list args;
-    va_start (args, fmt);
-    n += vsnprintf(text + n, __log_text_size - n, fmt, args);
-    va_end (args);
+    env_va_list args;
+    env_va_start (args, fmt);
+    n += env_vsnprintf(text + n, __log_text_size - n, fmt, args);
+    env_va_end (args);
 
     if (n < __log_text_size - 1){
         text[n++] = '\n';

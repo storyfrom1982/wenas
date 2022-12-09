@@ -105,7 +105,7 @@ static inline void linekv_add_str(linekv_t *lkv, const char *key, const char *va
 static inline void linekv_add_obj(linekv_t *lkv, const char *key, linekv_t *obj)
 {
     lkv->key = (linekey_t *)(lkv->head + lkv->pos);
-    lkv->key->byte[0] = strlen(key);
+    lkv->key->byte[0] = strlen(key); //TODO check len > 256
     memcpy(&(lkv->key->byte[1]), key, lkv->key->byte[0]);
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);

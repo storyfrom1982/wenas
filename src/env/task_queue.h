@@ -24,11 +24,12 @@ typedef linekey_t* (*env_jointask_func)(task_ctx_t ctx);
 
 static inline void* env_taskqueue_loop(void *ctx)
 {
-    env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
     uint64_t timer = 0;
     linedb_t *ldb;
+    env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
+    __pass(tq != NULL);
     task_ctx_t task_ctx = linekv_create(10240);
-    __env_check(tq == NULL, "linekv_create()");
+    __pass(task_ctx != NULL);
 
     while (1) {
 
@@ -109,20 +110,26 @@ static inline env_taskqueue_t* env_taskqueue_create()
     int ret;
 
     env_taskqueue_t *tq = (env_taskqueue_t *)calloc(1, sizeof(env_taskqueue_t));
-    __env_check(tq == NULL, "calloc()");
 
-    tq->immediate_task = linedb_pipe_create(1 << 14);
-    __env_check(tq->immediate_task == NULL, "linedb_pipe_create()");
+    __pass(tq != NULL);
 
-    tq->timed_task = heap_create(1 << 8);
-    __env_check(tq->timed_task == NULL, "heap_create()");
+    __pass(
+        (tq->immediate_task = linedb_pipe_create(1 << 14)) != NULL
+    );
 
-    ret = env_mutex_init(&tq->mutex);
-    __env_check(ret != 0, "env_mutex_init()");
+    __pass(
+        (tq->timed_task = heap_create(1 << 8)) != NULL
+    );
+
+    __pass(
+        (ret = env_mutex_init(&tq->mutex)) == 0
+    );
 
     tq->running = 1;
-    ret = env_thread_create(&tq->tid, env_taskqueue_loop, tq);
-    __env_check(ret != 0, "env_thread_create()");
+
+    __pass(
+        (ret = env_thread_create(&tq->tid, env_taskqueue_loop, tq)) == 0
+    );
 
     return tq;
 
