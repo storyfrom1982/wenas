@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.4)
 
-project(KangZiXin LANGUAGES C)
+project(kangzixin LANGUAGES C)
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
