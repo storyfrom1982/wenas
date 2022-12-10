@@ -21,18 +21,21 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_definitions(-D__PL64__)
 endif()
 
-include(CheckCSourceRuns)
-check_c_source_runs("
+include(CheckCSourceCompiles)
+check_c_source_compiles("
     #include <unwind.h>
+    #define __USE_GNU
     #include <dlfcn.h>
     int main() {
+        struct _Unwind_Context *ctx;
         return 0;
     }" ENV_CHECK_BACKTRACE)
 
-check_c_source_runs("
+check_c_source_compiles("
     #include <stdatomic.h>
     int main() {
         atomic_size_t a;
+        atomic_fetch_add(&a, 1);
         return 0;
     }" ENV_CHECK_STDATOMIC)
 
