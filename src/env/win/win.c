@@ -62,7 +62,7 @@ static inline uint64_t aws_add_u64_saturating(uint64_t a, uint64_t b) {
 static inline uint64_t
     aws_timestamp_convert_u64(uint64_t ticks, uint64_t old_frequency, uint64_t new_frequency, uint64_t *remainder) {
 
-    AWS_FATAL_ASSERT(old_frequency > 0 && new_frequency > 0);
+    assert(old_frequency > 0 && new_frequency > 0);
 
     /*
      * The remainder, as defined in the contract of the original version of this function, only makes mathematical
@@ -127,7 +127,7 @@ static BOOL CALLBACK s_get_system_time_init_once(PINIT_ONCE init_once, PVOID par
     (void)param;
     (void)context;
 
-    HMODULE kernel = GetModuleHandleW(WIDEN("Kernel32") L".dll");
+    HMODULE kernel = GetModuleHandleW("Kernel32.dll");
     timefunc_t *time_func = (timefunc_t *)GetProcAddress(kernel, "GetSystemTimePreciseAsFileTime");
 
     if (time_func == NULL) {
