@@ -12,6 +12,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#include <dlfcn.h>
+#include <unistd.h>
+
 // #define env_strftime strftime
 
 // #define env_va_list va_list
@@ -42,6 +45,7 @@ enum aws_timestamp_unit {
 
 #include <mach/mach.h>
 #include <mach/mach_time.h>
+#include <mach-o/dyld.h>
 
 static uint64_t (*time_func)(void);
 static mach_timebase_info_data_t timebase;

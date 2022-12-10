@@ -118,10 +118,6 @@ static inline uint64_t
     return aws_add_u64_saturating(new_ticks_whole_part, new_ticks_remainder_part);
 }
 
-/* Convert a string from a macro to a wide string */
-#define WIDEN2(s) L## #s
-#define WIDEN(s) WIDEN2(s)
-
 static BOOL CALLBACK s_get_system_time_init_once(PINIT_ONCE init_once, PVOID param, PVOID *context) {
     (void)init_once;
     (void)param;
