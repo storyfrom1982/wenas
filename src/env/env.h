@@ -5,7 +5,7 @@
 
 #include <env/win/win.h>
 
-#else //_WIN32
+#else // UNIX
 
 #include <env/unix/unix.h>
 
@@ -32,4 +32,16 @@ typedef void* __ptr;
 #define __true          1
 
 
-#endif
+
+static inline void env_init()
+{
+#ifdef _WIN32
+    win32_init();
+#else // UNIX
+    unix_init();
+#endif //_WIN32
+}
+
+
+
+#endif //__ENV_ENV_H__

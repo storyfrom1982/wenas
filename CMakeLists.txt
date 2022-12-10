@@ -74,6 +74,13 @@ if (UNIX)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND kzx_ldflags pthread dl)
     endif()
+
+    list(APPEND kzx_sources src/env/unix/unix.c)
+
+else()
+
+    list(APPEND kzx_sources src/env/win/win.c)
+
 endif()
 
 add_executable(kang ${kzx_sources})
