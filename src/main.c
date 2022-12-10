@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 	// LOGD("TEST", "hello world\n");
     printf("hello world\n");
 
-    printf("date %lu time %lu\n", env_time(), env_sys_time());
+    printf("date %llu time %llu\n", env_time(), env_sys_time());
 
 #ifdef __PL64__
     // LOGD("TEST", "__PL64__\n");
