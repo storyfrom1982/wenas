@@ -55,5 +55,5 @@ jobs:
     - name: Test
       shell: cmd
       working-directory: ${{github.workspace}}/build
-      run: .\\kang.exe -C ${{env.BUILD_TYPE}}
+      run: kang.exe
 
