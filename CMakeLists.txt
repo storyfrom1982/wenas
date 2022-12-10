@@ -38,19 +38,19 @@ check_c_source_runs("
     }" ENV_HAVE_STDATOMIC)
 
 set(kzx_sources src/main.c
-    src/env/logger.c
-    src/env/malloc.c
-    src/env/socket.c
-    src/env/backtrace.c
-    test/sys/struct/heap_test.c
-    test/sys/struct/lineardb_test.c
-    test/sys/struct/linearkv_test.c
-    test/sys/struct/lineardb_pipe_test.c
-    test/env/thread_test.c
-    test/env/task/task_queue_test.c
-    test/env/malloc/malloc_test.c
-    test/env/file_system_test.c
-    test/env/logger_test.c
+    # src/env/logger.c
+    # src/env/malloc.c
+    # src/env/socket.c
+    # src/env/backtrace.c
+    # test/sys/struct/heap_test.c
+    # test/sys/struct/lineardb_test.c
+    # test/sys/struct/linearkv_test.c
+    # test/sys/struct/lineardb_pipe_test.c
+    # test/env/thread_test.c
+    # test/env/task/task_queue_test.c
+    # test/env/malloc/malloc_test.c
+    # test/env/file_system_test.c
+    # test/env/logger_test.c
 )
 
 set(kzx_defines "")
