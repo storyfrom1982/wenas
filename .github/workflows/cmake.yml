@@ -53,6 +53,7 @@ jobs:
       shell: cmd
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
     - name: Test
+      shell: cmd
       working-directory: ${{github.workspace}}/build
-      run: kang -C ${{env.BUILD_TYPE}}
+      run: kang.exe -C ${{env.BUILD_TYPE}}
 
