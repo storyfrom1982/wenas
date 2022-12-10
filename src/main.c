@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
 
 #ifdef __PL64__
     // LOGD("TEST", "__PL64__\n");
-    fprintf(stdout, "__PL64__\n");
+    printf("__PL64__\n");
 #endif
 
 #ifdef __LITTLE_ENDIAN__
@@ -37,6 +37,14 @@ int main(int argc, char *argv[])
 #else
 	// LOGD("TEST", "__BIG_ENDIAN__\n");
     printf("__BIG_ENDIAN__\n");
+#endif
+
+#ifdef ENV_HAVA_BACKTRACE
+    printf("ENV_HAVA_BACKTRACE\n");
+#endif
+
+#ifdef ENV_HAVA_STDATOMIC
+    printf("ENV_HAVA_STDATOMIC\n");
 #endif
 
 

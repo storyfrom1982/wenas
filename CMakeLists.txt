@@ -27,15 +27,14 @@ check_c_source_runs("
     #include <dlfcn.h>
     int main() {
         return 0;
-    }" ENV_HAVE_BACKTRACE)
+    }" ENV_CHECK_BACKTRACE)
 
 check_c_source_runs("
     #include <stdatomic.h>
     int main() {
         atomic_size_t a;
-        atomic_fetch_add(&a, 1);
         return 0;
-    }" ENV_HAVE_STDATOMIC)
+    }" ENV_CHECK_STDATOMIC)
 
 set(kzx_sources src/main.c
     # src/env/logger.c
@@ -57,21 +56,21 @@ set(kzx_defines "")
 set(kzx_cflags "")
 set(kzx_ldflags "")
 
-if(ENV_HAVE_BACKTRACE)
-    list(APPEND kzx_cflags -DENV_MALLOC_BACKTRACE)
+if(ENV_CHECK_BACKTRACE)
+    list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
 endif()
 
-#if(ENV_HAVE_STDATOMIC)
-#    list(APPEND kzx_cflags -DENV_HAVE_STDATOMIC)
-#endif()
+if(ENV_CHECK_STDATOMIC)
+   list(APPEND kzx_defines -DENV_HAVA_STDATOMIC)
+endif()
 
 if (UNIX)
     set(kzx_cflags "-Wno-format")
     # set(kzx_cflags "-Wformat")
-    list(APPEND kzx_cflags -DSR_LOG_DEBUG -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
+    list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND kzx_ldflags pthread dl)
-    endif()    
+    endif()
 endif()
 
 add_executable(kang ${kzx_sources})
