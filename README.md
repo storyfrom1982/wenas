@@ -4,6 +4,8 @@
 
 
 平台相关的代码，参考/引用了以下项目
+https://github.com/ireader/sdk.git
+https://github.com/ireader/media-server.git
 https://github.com/libuv/libuv.git
 https://github.com/awslabs/amazon-kinesis-video-streams-webrtc-sdk-c.git
 https://github.com/mysql/mysql-server.git
