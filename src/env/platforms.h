@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 typedef char __sym;
 typedef uint8_t __uint8;
@@ -47,8 +48,18 @@ typedef int64_t __int64;
 #include <Windows.h>
 #else
 #include <time.h>
+#include <errno.h>
 #endif
 
+
+static inline const __sym* env_status(void)
+{
+#if defined(OS_WINDOWS)
+	return strerror((int)GetLastError());
+#else
+	return strerror(errno);
+#endif
+}
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
