@@ -20,14 +20,14 @@ static void log_print(int level, const char *tag, const char *debug, const char 
 
 int main(int argc, char *argv[])
 {
-    env_init();
+    // env_init();
     // env_backtrace_setup();
 	// env_logger_start("/tmp/log", log_print);
 
 	// LOGD("TEST", "hello world\n");
     printf("hello world\n");
 
-    printf("date %llu time %llu\n", env_time(), env_sys_time());
+    printf("date %llu time %llu\n", env_time(), env_clock());
 
 #ifdef __PL64__
     // LOGD("TEST", "__PL64__\n");

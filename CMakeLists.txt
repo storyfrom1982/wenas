@@ -75,11 +75,11 @@ if (UNIX)
         list(APPEND kzx_ldflags pthread dl)
     endif()
 
-    list(APPEND kzx_sources src/env/unix/unix.c)
+    # list(APPEND kzx_sources src/env/unix/unix.c)
 
 else()
 
-    list(APPEND kzx_sources src/env/win/win.c)
+    # list(APPEND kzx_sources src/env/win/win.c)
 
 endif()
 
