@@ -34,7 +34,9 @@ typedef void* __ptr;
 #define __false         0
 #define __true          1
 
-#if !defined(OS_WINDOWS)
+#if defined(OS_WINDOWS)
+typedef bool __bool;
+#else
 #include <stdbool.h>
 typedef bool __bool;
 typedef int8_t __int8;
