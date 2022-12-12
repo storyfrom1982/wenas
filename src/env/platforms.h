@@ -61,7 +61,7 @@ static inline __uint64 env_time(void)
 	GetSystemTimeAsFileTime(&ticks);
     time_conv.LowPart = ticks.dwLowDateTime;
     time_conv.HighPart = ticks.dwHighDateTime;
-    return (__uint64)(time_conv.QuadPart - (10000000ULL * 11644473600000ULL; /* Jan 1, 1601 */)) * 100ULL;
+    return (__uint64)(time_conv.QuadPart - (10000000ULL * 11644473600000ULL/* Jan 1, 1601 */)) * 100ULL;
 #else
 #if defined(CLOCK_REALTIME)
 	struct timespec tp;
