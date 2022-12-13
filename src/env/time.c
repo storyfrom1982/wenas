@@ -16,7 +16,7 @@
 inline const __sym* env_status(void)
 {
 #if defined(OS_WINDOWS)
-	return strerror((int)GetLastError());
+	return strerror((__sint32)GetLastError());
 #else
 	return strerror(errno);
 #endif

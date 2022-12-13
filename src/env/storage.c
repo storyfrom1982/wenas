@@ -22,37 +22,37 @@
 #include <sys/stat.h>
 
 
-inline __fp env_fopen(const __symptr path, const __symptr mode)
+__fp env_fopen(const __symptr path, const __symptr mode)
 {
 	return fopen(path, mode);
 }
 
-inline __bit env_fclose(__fp fp)
+__bit env_fclose(__fp fp)
 {
 	return fclose((FILE*)fp) == 0 ? __true : __false;
 }
 
-inline __sint64 env_ftell(__fp fp)
+__sint64 env_ftell(__fp fp)
 {
 	return ftello((FILE*)fp);
 }
 
-inline __sint64 env_fflush(__fp fp)
+__sint64 env_fflush(__fp fp)
 {
 	return fflush((FILE*)fp);
 }
 
-inline __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size)
+__sint64 env_fwrite(__fp fp, __ptr data, __uint64 size)
 {
 	return fwrite(data, 1, size, (FILE*)fp);
 }
 
-inline __sint64 env_fread(__fp fp, __ptr buf, __uint64 size)
+__sint64 env_fread(__fp fp, __ptr buf, __uint64 size)
 {
 	return fread(buf, 1, size, (FILE*)fp);
 }
 
-inline __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
+__sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 {
 	return fseeko((FILE*)fp, offset, whence);
 }
@@ -60,7 +60,7 @@ inline __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-inline __bit env_find_file(const __symptr path)
+__bit env_find_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	// we must use GetFileAttributes() instead of the ANSI C functions because
@@ -75,7 +75,7 @@ inline __bit env_find_file(const __symptr path)
 
 /// get file size in bytes
 /// return file size
-inline __uint64 env_file_size(const __symptr filename)
+__uint64 env_file_size(const __symptr filename)
 {
 #if defined(OS_WINDOWS)
 	struct _stat64 st;
@@ -90,7 +90,7 @@ inline __uint64 env_file_size(const __symptr filename)
 #endif
 }
 
-inline __bit env_find_path(const __symptr path)
+__bit env_find_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	DWORD ret = GetFileAttributesA(path);
@@ -101,7 +101,7 @@ inline __bit env_find_path(const __symptr path)
 #endif
 }
 
-static inline __bit env_mkdir(const __symptr path)
+static __bit env_mkdir(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = CreateDirectoryA(path, NULL);
@@ -112,7 +112,7 @@ static inline __bit env_mkdir(const __symptr path)
 #endif
 }
 
-inline __bit env_remove_path(const __symptr path)
+__bit env_remove_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = RemoveDirectoryA(path);
@@ -123,7 +123,7 @@ inline __bit env_remove_path(const __symptr path)
 #endif
 }
 
-inline __bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
+__bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 {
 #if defined(OS_WINDOWS)
 	DWORD r = GetFullPathNameA(path, PATH_MAX, resolved_path, NULL);
@@ -136,7 +136,7 @@ inline __bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-inline __bit env_remove_file(const __symptr path)
+__bit env_remove_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = DeleteFileA(path);
@@ -149,7 +149,7 @@ inline __bit env_remove_file(const __symptr path)
 
 /// change the name or location of a file
 /// 0-ok, other-error
-inline __bit env_move_path(const __symptr from, const __symptr to)
+__bit env_move_path(const __symptr from, const __symptr to)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = MoveFileA(from, to);
@@ -160,7 +160,7 @@ inline __bit env_move_path(const __symptr from, const __symptr to)
 #endif
 }
 
-inline __bit env_make_path(const __symptr path)
+__bit env_make_path(const __symptr path)
 {
     if (path == NULL || path[0] == '\0'){
         return __false;

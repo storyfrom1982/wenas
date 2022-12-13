@@ -13,6 +13,14 @@
 #   define OS_ANDROID
 #endif
 
+#if defined(OS_WINDOWS)
+	#define __dllexport __declspec(dllexport)
+	#define __dllimport __declspec(dllimport)
+#else
+    #define __dllexport __attribute__((visibility ("default")))
+    #define __dllimport
+#endif
+
 ///////////////////////////////////////////////////////
 ///// 2进制
 ///////////////////////////////////////////////////////
@@ -61,7 +69,7 @@ typedef void*                   __ptr;
 ///////////////////////////////////////////////////////
 ///// 当前状态
 ///////////////////////////////////////////////////////
-const __sym* env_status(void);
+__dllexport const __sym* env_status(void);
 
 ///////////////////////////////////////////////////////
 ///// 时间相关
@@ -70,28 +78,28 @@ const __sym* env_status(void);
 #define MICRO_SECONDS    1000000ULL
 #define NANO_SECONDS     1000000000ULL
 
-__uint64 env_time(void);
-__uint64 env_clock(void);
+__dllexport __uint64 env_time(void);
+__dllexport __uint64 env_clock(void);
 
 ///////////////////////////////////////////////////////
 ///// 存储相关
 ///////////////////////////////////////////////////////
 typedef void*   __fp;
 
-__fp env_fopen(const __symptr path, const __symptr mode);
-__bit env_fclose(__fp fp);
-__sint64 env_ftell(__fp fp);
-__sint64 env_fflush(__fp fp);
-__sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
-__sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
-__sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
+__dllexport __fp env_fopen(const __symptr path, const __symptr mode);
+__dllexport __bit env_fclose(__fp fp);
+__dllexport __sint64 env_ftell(__fp fp);
+__dllexport __sint64 env_fflush(__fp fp);
+__dllexport __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
+__dllexport __sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
+__dllexport __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
 
-__bit env_make_path(const __symptr path);
-__bit env_find_path(const __symptr path);
-__bit env_find_file(const __symptr path);
-__bit env_remove_path(const __symptr path);
-__bit env_remove_file(const __symptr path);
-__bit env_move_path(const __symptr from, const __symptr to);
+__dllexport __bit env_make_path(const __symptr path);
+__dllexport __bit env_find_path(const __symptr path);
+__dllexport __bit env_find_file(const __symptr path);
+__dllexport __bit env_remove_path(const __symptr path);
+__dllexport __bit env_remove_file(const __symptr path);
+__dllexport __bit env_move_path(const __symptr from, const __symptr to);
 
 
 // #define __pass(condition) \
