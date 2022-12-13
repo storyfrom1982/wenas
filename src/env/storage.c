@@ -59,7 +59,7 @@ __sint64 env_fread(__fp fp, __ptr buf, __uint64 size)
 __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 {
 #if defined(OS_WINDOWS)
-	return _fseeki64((FILE*)fp);
+	return _fseeki64((FILE*)fp, offset, whence);
 #else
 	return fseeko((FILE*)fp, offset, whence);
 #endif	
