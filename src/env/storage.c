@@ -34,7 +34,11 @@ __bit env_fclose(__fp fp)
 
 __sint64 env_ftell(__fp fp)
 {
+#if defined(OS_WINDOWS)
+	return _ftelli64((FILE*)fp);
+#else
 	return ftello((FILE*)fp);
+#endif
 }
 
 __sint64 env_fflush(__fp fp)
@@ -54,7 +58,11 @@ __sint64 env_fread(__fp fp, __ptr buf, __uint64 size)
 
 __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 {
+#if defined(OS_WINDOWS)
+	return _fseeki64((FILE*)fp);
+#else
 	return fseeko((FILE*)fp, offset, whence);
+#endif	
 }
 
 
