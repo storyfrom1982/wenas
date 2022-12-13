@@ -1,10 +1,10 @@
 #include <env/env.h>
 
 
-extern void disk_test();
+extern void storage_test();
 
 
 void test()
 {
-    disk_test();
+    storage_test();
 }

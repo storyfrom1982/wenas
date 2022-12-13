@@ -99,14 +99,14 @@ __res getLocalhostIpAddresses(PKvsIpAddress, __uint32*, IceSetInterfaceFilterFun
  *
  * @return - STATUS status of execution
  */
-__res createSocket(KVS_IP_FAMILY_TYPE, KVS_SOCKET_PROTOCOL, __uint32, __int32*);
+__res createSocket(KVS_IP_FAMILY_TYPE, KVS_SOCKET_PROTOCOL, __uint32, __sint32*);
 
 /**
  * @param - INT32 - IN - INT32 for the socketfd
  *
  * @return - STATUS status of execution
  */
-__res closeSocket(__int32);
+__res closeSocket(__sint32);
 
 /**
  * @param - PKvsIpAddress - IN - address for the socket to bind. PKvsIpAddress->port will be changed to the actual port number
@@ -114,7 +114,7 @@ __res closeSocket(__int32);
  *
  * @return - STATUS status of execution
  */
-__res socketBind(PKvsIpAddress, __int32);
+__res socketBind(PKvsIpAddress, __sint32);
 
 /**
  * @param - PKvsIpAddress - IN - address for the socket to connect.
@@ -122,7 +122,7 @@ __res socketBind(PKvsIpAddress, __int32);
  *
  * @return - STATUS status of execution
  */
-__res socketConnect(PKvsIpAddress, __int32);
+__res socketConnect(PKvsIpAddress, __sint32);
 
 /**
  * @param - __byte* - IN - hostname to resolve
@@ -140,14 +140,14 @@ __bool isSameIpAddress(PKvsIpAddress, PKvsIpAddress, __bool);
 /**
  * @return - INT32 error code
  */
-__int32 getErrorCode(__void);
+__sint32 getErrorCode(__void);
 
 /**
  * @param - INT32 - IN - error code
  *
  * @return - __byte* string associated with error code
  */
-__sym* getErrorString(__int32);
+__sym* getErrorString(__sint32);
 
 #ifdef _WIN32
 #define POLL WSAPoll

@@ -60,7 +60,7 @@ static inline int env_rmdir(const char *path)
     return rmdir(path);
 }
 
-static inline int env_rename(const char *from_path, const char *to_path)
+static inline int env_rename_path(const char *from_path, const char *to_path)
 {
     return rename(from_path, to_path);
 }

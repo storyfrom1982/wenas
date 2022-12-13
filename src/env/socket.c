@@ -242,12 +242,12 @@ Reset:
     return retStatus;
 }
 
-__res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, __uint32 sendBufSize, __int32* pOutSockFd)
+__res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, __uint32 sendBufSize, __sint32* pOutSockFd)
 {
     __res retStatus = 0;
 
-    __int32 sockfd, sockType, flags;
-    __int32 optionValue;
+    __sint32 sockfd, sockType, flags;
+    __sint32 optionValue;
 
     __check(pOutSockFd != NULL, STATUS_NULL_ARG);
 
@@ -269,7 +269,7 @@ __res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, 
         __check(__false, STATUS_SOCKET_SET_SEND_BUFFER_SIZE_FAILED);
     }
 
-    *pOutSockFd = (__int32) sockfd;
+    *pOutSockFd = (__sint32) sockfd;
 
 #ifdef _WIN32
     UINT32 nonblock = 1;
@@ -296,7 +296,7 @@ Reset:
     return retStatus;
 }
 
-__res closeSocket(__int32 sockfd)
+__res closeSocket(__sint32 sockfd)
 {
     __res retStatus = 0;
 
@@ -311,7 +311,7 @@ Reset:
     return retStatus;
 }
 
-__res socketBind(PKvsIpAddress pHostIpAddress, __int32 sockfd)
+__res socketBind(PKvsIpAddress pHostIpAddress, __sint32 sockfd)
 {
     __res retStatus = 0;
     struct sockaddr_in ipv4Addr;
@@ -362,14 +362,14 @@ Reset:
     return retStatus;
 }
 
-__res socketConnect(PKvsIpAddress pPeerAddress, __int32 sockfd)
+__res socketConnect(PKvsIpAddress pPeerAddress, __sint32 sockfd)
 {
     __res retStatus = 0;
     struct sockaddr_in ipv4PeerAddr;
     struct sockaddr_in6 ipv6PeerAddr;
     struct sockaddr* peerSockAddr = NULL;
     socklen_t addrLen;
-    __int32 retVal;
+    __sint32 retVal;
 
     __check(pPeerAddress != NULL, STATUS_NULL_ARG);
 
@@ -400,7 +400,7 @@ Reset:
 __res getIpWithHostName(__sym* hostname, PKvsIpAddress destIp)
 {
     __res retStatus = 0;
-    __int32 errCode;
+    __sint32 errCode;
     __sym* errStr;
     struct addrinfo *res, *rp;
     __bool resolved = __false;
@@ -507,7 +507,7 @@ INT32 getErrorCode(VOID)
     return error;
 }
 #else
-__int32 getErrorCode(__void)
+__sint32 getErrorCode(__void)
 {
     return errno;
 }
@@ -542,7 +542,7 @@ __sym* getErrorString(INT32 error)
     return buffer;
 }
 #else
-__sym* getErrorString(__int32 error)
+__sym* getErrorString(__sint32 error)
 {
     return strerror(error);
 }

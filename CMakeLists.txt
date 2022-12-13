@@ -39,8 +39,11 @@ check_c_source_compiles("
         return 0;
     }" ENV_CHECK_STDATOMIC)
 
-set(kzx_sources src/main.c test/test.c
-    test/env/disk_test.c
+set(kzx_sources src/main.c 
+    src/env/time.c
+    src/env/storage.c
+    test/test.c
+    test/env/storage_test.c
     # src/env/logger.c
     # src/env/malloc.c
     # src/env/socket.c

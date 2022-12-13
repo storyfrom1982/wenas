@@ -67,7 +67,7 @@ static void* env_logger_write_loop(void *p)
                 char tmp_path[1024];
                 n = snprintf(tmp_path, 1024, "%s/1.log", g_logger.path);
                 tmp_path[n] = '\0';
-                env_rename(log_path, tmp_path);
+                env_rename_path(log_path, tmp_path);
                 fd = env_open(log_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
                 if (fd < 0){
                     return NULL;

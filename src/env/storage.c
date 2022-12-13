@@ -2,7 +2,7 @@
 #define __ENV_DISK_H__
 
 
-#include "env/platforms.h"
+#include "env/env.h"
 
 #if defined(OS_WINDOWS)
 #include <Windows.h>
@@ -22,9 +22,45 @@
 #include <sys/stat.h>
 
 
+inline __fp env_fopen(const __symptr path, const __symptr mode)
+{
+	return fopen(path, mode);
+}
+
+inline __bit env_fclose(__fp fp)
+{
+	return fclose((FILE*)fp) == 0 ? __true : __false;
+}
+
+inline __sint64 env_ftell(__fp fp)
+{
+	return ftello((FILE*)fp);
+}
+
+inline __sint64 env_fflush(__fp fp)
+{
+	return fflush((FILE*)fp);
+}
+
+inline __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size)
+{
+	return fwrite(data, 1, size, (FILE*)fp);
+}
+
+inline __sint64 env_fread(__fp fp, __ptr buf, __uint64 size)
+{
+	return fread(buf, 1, size, (FILE*)fp);
+}
+
+inline __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
+{
+	return fseeko((FILE*)fp, offset, whence);
+}
+
+
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-static inline __bool env_file_exists(const char *path)
+inline __bit env_find_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	// we must use GetFileAttributes() instead of the ANSI C functions because
@@ -39,7 +75,7 @@ static inline __bool env_file_exists(const char *path)
 
 /// get file size in bytes
 /// return file size
-static inline int64_t env_file_size(const char* filename)
+inline __uint64 env_file_size(const __symptr filename)
 {
 #if defined(OS_WINDOWS)
 	struct _stat64 st;
@@ -54,7 +90,7 @@ static inline int64_t env_file_size(const char* filename)
 #endif
 }
 
-static inline __bool env_path_exists(const char *path)
+inline __bit env_find_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	DWORD ret = GetFileAttributesA(path);
@@ -65,75 +101,75 @@ static inline __bool env_path_exists(const char *path)
 #endif
 }
 
-static inline int env_mkdir(const char* path)
+static inline __bit env_mkdir(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = CreateDirectoryA(path, NULL);
-	return r ? 0 : (int)GetLastError();
+	return r ? __true : __false;
 #else
 	int r = mkdir(path, 0777);
-	return 0 == r ? 0 : errno;
+	return 0 == r ? __true : __false;
 #endif
 }
 
-static inline int env_rmdir(const char* path)
+inline __bit env_remove_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = RemoveDirectoryA(path);
-	return r ? 0 : (int)GetLastError();
+	return r ? __true : __false;
 #else
 	int r = rmdir(path);
-	return 0 == r ? 0 : errno;
+	return 0 == r ? __true : __false;
 #endif
 }
 
-static inline int env_realpath(const char* path, char resolved_path[PATH_MAX])
+inline __bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 {
 #if defined(OS_WINDOWS)
 	DWORD r = GetFullPathNameA(path, PATH_MAX, resolved_path, NULL);
-	return r > 0 ? 0 : (int)GetLastError();
+	return r > 0 ? __true : __false;
 #else
 	char* p = realpath(path, resolved_path);
-	return p ? 0 : errno;
+	return p ? __true : __false;
 #endif
 }
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-static inline int env_remove(const char* file)
+inline __bit env_remove_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = DeleteFileA(file);
-	return r ? 0 : (int)GetLastError();
+	BOOL r = DeleteFileA(path);
+	return r ? __true : __false;
 #else
-	int r = remove(file);
-	return 0 == r ? 0 : errno;
+	int r = remove(path);
+	return 0 == r ? __true : __false;
 #endif
 }
 
 /// change the name or location of a file
 /// 0-ok, other-error
-static inline int env_rename(const char* oldpath, const char* newpath)
+inline __bit env_move_path(const __symptr from, const __symptr to)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = MoveFileA(oldpath, newpath);
-	return r ? 0:(int)GetLastError();
+	BOOL r = MoveFileA(from, to);
+	return r ? __true : __false;
 #else
-	int r = rename(oldpath, newpath);
-	return 0 == r? 0 : errno;
+	int r = rename(from, to);
+	return 0 == r ? __true : __false;
 #endif
 }
 
-static inline __int32 env_mkpath(const char *path)
+inline __bit env_make_path(const __symptr path)
 {
     if (path == NULL || path[0] == '\0'){
-        return -1;
+        return __false;
     }
 
-    __int32 ret = 0;
+    __bit ret = __true;
     __uint64 len = strlen(path);
 
-    if (!env_path_exists(path)){
+    if (!env_find_path(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -142,16 +178,16 @@ static inline __int32 env_mkpath(const char *path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!env_path_exists(buf)){
+                if (!env_find_path(buf)){
                     ret = env_mkdir(buf);
-                    if (ret != 0){
+                    if (!ret){
                         break;
                     }
                 }
                 *p = '/';
             }
         }
-        if (ret == 0){
+        if (ret){
             ret = env_mkdir(buf);
         }
     }

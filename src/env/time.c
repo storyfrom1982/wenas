@@ -1,49 +1,8 @@
-#ifndef __ENV_PLATFORMS_H__
-#define __ENV_PLATFORMS_H__
-
-#ifdef _WIN64
-#   define OS_WINDOWS
-#endif
-
-#ifdef __APPLE__
-#   define OS_APPLE
-#endif
-
-#ifdef __ANDROID__
-#   define OS_ANDROID
-#endif
-
-#define MILLI_SECONDS    1000ULL
-#define MICRO_SECONDS    1000000ULL
-#define NANO_SECONDS     1000000000ULL
+#include "env/env.h"
 
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
-typedef char __sym;
-typedef uint8_t __uint8;
-typedef uint16_t __uint16;
-typedef uint32_t __uint32;
-typedef uint64_t __uint64;
-typedef float __real32;
-typedef double __real64;
-typedef void __void;
-typedef void* __ptr;
-
-#define __false         0
-#define __true          1
-
-#if defined(OS_WINDOWS)
-typedef bool __bool;
-#else
-#include <stdbool.h>
-typedef bool __bool;
-typedef int8_t __int8;
-typedef int16_t __int16;
-typedef int32_t __int32;
-typedef int64_t __int64;
-#endif
 
 
 #if defined(OS_WINDOWS)
@@ -54,7 +13,7 @@ typedef int64_t __int64;
 #endif
 
 
-static inline const __sym* env_status(void)
+inline const __sym* env_status(void)
 {
 #if defined(OS_WINDOWS)
 	return strerror((int)GetLastError());
@@ -66,7 +25,7 @@ static inline const __sym* env_status(void)
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
-static inline __uint64 env_time(void)
+__uint64 env_time(void)
 {
 #if defined(OS_WINDOWS)
 	FILETIME ticks;
@@ -87,7 +46,7 @@ static inline __uint64 env_time(void)
 }
 
 ///@return nanoseconds(relative time)
-static inline __uint64 env_clock(void)
+__uint64 env_clock(void)
 {
 #if defined(OS_WINDOWS)
 	LARGE_INTEGER freq;
@@ -109,6 +68,3 @@ static inline __uint64 env_clock(void)
 #endif
 #endif
 }
-
-
-#endif //__ENV_PLATFORMS_H__
