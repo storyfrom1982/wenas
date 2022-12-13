@@ -22,7 +22,7 @@ static inline env_thread_t env_thread_self()
     return pthread_self();
 }
 
-static inline int env_thread_join(env_thread_t tid)
+static inline int env_thread_destroy(env_thread_t tid)
 {
     return pthread_join(tid, NULL);
 }

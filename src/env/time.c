@@ -22,6 +22,15 @@ inline const __sym* env_status(void)
 #endif
 }
 
+const __sym* env_parser(__result error)
+{
+#if defined(OS_WINDOWS)
+	return strerror(error);
+#else
+	return strerror(error);
+#endif
+}
+
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))

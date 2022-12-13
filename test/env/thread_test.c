@@ -1,48 +1,54 @@
 #include <env/env.h>
 
 #include <stdio.h>
-#include <errno.h>
-#include <string.h>
+#include <stdlib.h>
 
-static void* thread_func(void *ctx)
+#define __pass(condition) \
+    do { \
+        if (!(condition)) { \
+            printf("Check condition failed: %s, %s\n", #condition, env_status()); \
+            goto Reset; \
+        } \
+    } while (__false)
+
+static __result thread_func(__ptr ctx)
 {
     int ret;
     env_mutex_t *mutex = (env_mutex_t *)ctx;
     env_mutex_lock(mutex);
-    LOGD("THREAD", "timedwait 5 second\n");
-    ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
-    LOGD("THREAD", "timedwait retcode=%d %s\n", ret, strerror(ret));
+    printf("timedwait 5 second\n");
+    ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));
+    printf("timedwait retcode=%llu %s\n", env_time(), env_status());
     env_mutex_signal(mutex);
-    LOGD("THREAD", "timedwait 5 second\n");
-    ret = env_mutex_timedwait(mutex, (uint64_t)(5 * NANOSEC));
-    LOGD("THREAD", "timedwait retcode=%d %s\n", ret, strerror(ret));
+    printf("timedwait 5 second\n");
+    ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));
+    printf("timedwait retcode=%llu %s\n", env_time(), env_parser(ret));
     env_mutex_unlock(mutex);
 
-    LOGD("THREAD", "thread %x exit\n", env_thread_self());
+    printf("thread %x exit\n", env_thread_self());
 
-    return NULL;
+    return 0;
 }
 
 void thread_test()
 {
-    env_thread_t tid;
-    env_mutex_t mutex;
-    int ret = env_mutex_init(&mutex);
-    if (ret != 0){
-        fprintf(stderr, "env_mutex_init failed: errcode=%d\n", ret);
-    }
-    env_mutex_lock(&mutex);
+    env_mutex_t *mutex = env_mutex_create();
+    __pass(mutex != NULL);
 
-    ret = env_thread_create(&tid, thread_func, &mutex);
-    if (ret != 0){
-        fprintf(stderr, "env_thread_create failed: errcode=%d\n", ret);
-    }
+    env_mutex_lock(mutex);
 
-    env_mutex_wait(&mutex);
-    env_mutex_unlock(&mutex);
+    env_thread_t *thread = env_thread_create(thread_func, mutex);
+    __pass(thread != NULL);
 
-    LOGD("THREAD", "join thread %x\n", tid);
-    env_thread_join(tid);
+    env_mutex_wait(mutex);
+    env_mutex_unlock(mutex);
 
-    LOGD("THREAD", "exit\n");
+    printf("join thread %x\n", env_thread_self());
+    env_thread_destroy(&thread);
+    env_mutex_destroy(&mutex);
+
+    printf("exit\n");
+
+Reset:
+    return;
 }

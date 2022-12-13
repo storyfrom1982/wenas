@@ -42,8 +42,10 @@ check_c_source_compiles("
 set(kzx_sources src/main.c 
     src/env/time.c
     src/env/storage.c
+    src/env/thread.c
     test/test.c
     test/env/storage_test.c
+    test/env/thread_test.c
     # src/env/logger.c
     # src/env/malloc.c
     # src/env/socket.c
@@ -52,7 +54,6 @@ set(kzx_sources src/main.c
     # test/sys/struct/lineardb_test.c
     # test/sys/struct/linearkv_test.c
     # test/sys/struct/lineardb_pipe_test.c
-    # test/env/thread_test.c
     # test/env/task/task_queue_test.c
     # test/env/malloc/malloc_test.c
     # test/env/logger_test.c
