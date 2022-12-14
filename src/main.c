@@ -16,8 +16,15 @@ int main(int argc, char *argv[])
 
 	// LOGD("TEST", "hello world\n");
     printf("hello world\n");
-
     printf("time %llu clock %llu\n", env_time(), env_clock());
+    __sym buf[1024] = {0};
+    __uint64 n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    buf[n] = '\0';
+    printf("time %s\n", buf);
+
+    n = env_strtime(buf, 1024, env_clock() / NANO_SECONDS);
+    buf[n] = '\0';
+    printf("clock %s\n", buf);
 
 #ifdef __PL64__
     // LOGD("TEST", "__PL64__\n");

@@ -6,7 +6,7 @@
 #define __pass(condition) \
     do { \
         if (!(condition)) { \
-            printf("Check condition failed: %s, %s\n", #condition, env_status()); \
+            printf("Check condition failed: %s, %s\n", #condition, env_check()); \
             goto Reset; \
         } \
     } while (__false)
@@ -20,7 +20,7 @@ static __result thread_func(__ptr ctx)
     env_mutex_lock(mutex);
     printf("timedwait 5 second\n");
     ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));
-    printf("timedwait retcode=%llu %s\n", env_time(), env_status());
+    printf("timedwait retcode=%llu %s\n", env_time(), env_check());
     env_mutex_signal(mutex);
     printf("timedwait 5 second\n");
     ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));

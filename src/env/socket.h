@@ -49,7 +49,7 @@ extern "C" {
 #define __check(condition, x) \
     do { \
         if ((condition)) { \
-            LOGE("CHECK", "Describe: %s, %s\n", #condition, env_status_describe(env_status())); \
+            LOGE("CHECK", "Describe: %s, %s\n", #condition, env_status_describe(env_check())); \
             goto Reset; \
         } \
     } while (__false)

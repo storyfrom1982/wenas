@@ -75,7 +75,7 @@ typedef int                     __result;
 ///////////////////////////////////////////////////////
 ///// 当前状态
 ///////////////////////////////////////////////////////
-__env_export const __sym* env_status(void);
+__env_export const __sym* env_check(void);
 __env_export const __sym* env_parser(__result error);
 
 ///////////////////////////////////////////////////////
@@ -87,6 +87,7 @@ __env_export const __sym* env_parser(__result error);
 
 __env_export __uint64 env_time(void);
 __env_export __uint64 env_clock(void);
+__env_export __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 millisecond);
 
 ///////////////////////////////////////////////////////
 ///// 存储相关

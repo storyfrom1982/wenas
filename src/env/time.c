@@ -1,7 +1,6 @@
 #include "env/env.h"
 
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
 
 
@@ -13,16 +12,16 @@
 #endif
 
 
-inline const __sym* env_status(void)
+inline const __sym* env_check(void)
 {
 #if defined(OS_WINDOWS)
-	return strerror((__sint32)GetLastError());
+	return strerror((__result)GetLastError());
 #else
 	return strerror(errno);
 #endif
 }
 
-const __sym* env_parser(__result error)
+inline const __sym* env_parser(__result error)
 {
 #if defined(OS_WINDOWS)
 	return strerror(error);
@@ -34,7 +33,7 @@ const __sym* env_parser(__result error)
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
-__uint64 env_time(void)
+inline __uint64 env_time(void)
 {
 #if defined(OS_WINDOWS)
 	FILETIME ticks;
@@ -55,7 +54,7 @@ __uint64 env_time(void)
 }
 
 ///@return nanoseconds(relative time)
-__uint64 env_clock(void)
+inline __uint64 env_clock(void)
 {
 #if defined(OS_WINDOWS)
 	LARGE_INTEGER freq;
@@ -76,4 +75,10 @@ __uint64 env_clock(void)
 	return (__uint64)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
 #endif
 #endif
+}
+
+inline __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 seconds)
+{
+	time_t sec = (time_t)seconds;
+    return strftime(buf, size, "%Y-%m-%d %H:%M:%S", localtime(&sec));
 }

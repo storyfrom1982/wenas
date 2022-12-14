@@ -50,7 +50,7 @@ void env_logger_printf(enum env_log_level level, const char *tag, const char *fi
 #define __pass(condition) \
     do { \
         if (!(condition)) { \
-            LOGE("CHECK STATUS", "Check condition failed: %s, %s\n", #condition, env_status_describe(env_status())); \
+            LOGE("CHECK STATUS", "Check condition failed: %s, %s\n", #condition, env_status_describe(env_check())); \
             goto Reset; \
         } \
     } while (__false)
