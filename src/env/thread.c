@@ -128,7 +128,7 @@ void env_thread_cond_destroy(env_thread_cond_t *cond)
 void env_thread_cond_signal(env_thread_cond_t *cond)
 {
 #if defined(OS_WINDOWS)
-	WakeConditionVariable(*cond);
+	WakeConditionVariable(cond);
 #else
     pthread_cond_signal(cond);
 #endif
@@ -137,7 +137,7 @@ void env_thread_cond_signal(env_thread_cond_t *cond)
 void env_thread_cond_broadcast(env_thread_cond_t *cond)
 {
 #if defined(OS_WINDOWS)
-    WakeAllConditionVariable(*cond);
+    WakeAllConditionVariable(cond);
 #else
     pthread_cond_broadcast(cond);
 #endif
@@ -147,7 +147,7 @@ void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
 {
 #if defined(OS_WINDOWS)
     env_thread_mutex_unlock(mutex);
-    SleepConditionVariableCS(*cond, *mutex, INFINITE);
+    SleepConditionVariableCS(cond, mutex, INFINITE);
     env_thread_mutex_lock(mutex);
 #else
     pthread_cond_wait(cond, mutex);
@@ -160,7 +160,7 @@ __result env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *
     env_thread_mutex_unlock(mutex);
     timeout /= 1000000ULL;
     if (timeout < 1) timeout = 1;
-    BOOL b = SleepConditionVariableCS(*cond, *mutex, timeout);
+    BOOL b = SleepConditionVariableCS(cond, mutex, timeout);
     env_thread_mutex_lock(mutex);
 	return b ? 0 : GetLastError();
 #else // !defined(OS_WINDOWS)
