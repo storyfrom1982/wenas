@@ -25,7 +25,7 @@ static __result thread_func(__ptr ctx)
     printf("timedwait retcode=%llu %s\n", env_time(), env_parser(ret));
     env_mutex_unlock(mutex);
 
-    printf("thread %x exit\n", env_thread_self());
+    printf("tid %llx exit\n", env_thread_self());
 
     return 0;
 }
@@ -37,14 +37,15 @@ void thread_test()
 
     env_mutex_lock(mutex);
 
-    env_thread_t *thread = env_thread_create(thread_func, mutex);
-    __pass(thread != NULL);
+    env_thread_t tid;
+    __result r = env_thread_create(&tid, thread_func, mutex);
+    __pass(r == 0);
 
     env_mutex_wait(mutex);
     env_mutex_unlock(mutex);
 
-    printf("join thread %x\n", env_thread_self());
-    env_thread_destroy(&thread);
+    printf("join tid %llx\n", env_thread_self());
+    env_thread_destroy(tid);
     env_mutex_destroy(&mutex);
 
     printf("exit\n");

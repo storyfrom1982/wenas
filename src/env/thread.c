@@ -4,22 +4,12 @@
 #if defined(OS_WINDOWS)
 
 #include <Windows.h>
-typedef struct env_thread{
-	DWORD id;
-	HANDLE handle;
-} env_thread_t;
-typedef HANDLE	env_thread_cond_t;
+typedef PCONDITION_VARIABLE env_thread_cond_t;
 typedef CRITICAL_SECTION env_thread_mutex_t;
-
 #else //!defined(OS_WINDOWS)
-
 #include <pthread.h>
-typedef struct env_thread{
-    pthread_t id;
-} env_thread_t;
 typedef pthread_cond_t env_thread_cond_t;
 typedef pthread_mutex_t env_thread_mutex_t;
-
 #endif //defined(OS_WINDOWS)
 
 #include <stdlib.h>
@@ -31,95 +21,73 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-env_thread_t* env_thread_create(__result(*func)(__ptr), __ptr ctx)
+__result env_thread_create(env_thread_t *tid, __result(*func)(__ptr), __ptr ctx)
 {
-    env_thread_t *thread = (env_thread_t *)malloc(sizeof(env_thread_t));
+    __result r = 0;
 #if defined(OS_WINDOWS)
-	typedef unsigned __sint32(__stdcall *thread_routine)(__ptr);
-	thread->handle = (HANDLE)_beginthreadex(NULL, 0, (thread_routine)func, ctx, 0, (__uint32*)&thread->id);
+	typedef __result(__stdcall *thread_routine)(__ptr);
+	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)func, ctx, 0, NULL);
+    if (*tid == NULL) r = -1;
 #else
     typedef __ptr (*thread_routine)(__ptr);
-    pthread_create(&thread->id, NULL, (thread_routine)func, ctx);
+    r = pthread_create((pthread_t *)tid, NULL, (thread_routine)func, ctx);
 #endif
-    return thread;
+    return r;
 }
 
 __uint32 env_thread_self()
 {
 #if defined(OS_WINDOWS)
-	return (__uint32)GetCurrentThreadId();
+	return (env_thread_t)GetCurrentThread();
 #else
-	return (__uint32)pthread_self();
+	return (env_thread_t)pthread_self();
 #endif
 }
 
-__result env_thread_detach(env_thread_t *thread)
-{
-#if defined(OS_WINDOWS)
-	CloseHandle(thread->handle);
-	return 0;
-#else
-	return pthread_detach(thread->id);
-#endif
-}
-
-__result env_thread_destroy(env_thread_t **pp_thread)
+__result env_thread_destroy(env_thread_t tid)
 {
     __result r = 0;
-    if (pp_thread && *pp_thread){
-        env_thread_t *thread = *pp_thread;
-        *pp_thread = NULL;
 #if defined(OS_WINDOWS)
-        if(thread->id != GetCurrentThreadId())
-            WaitForSingleObjectEx(thread->handle, INFINITE, TRUE);
-        CloseHandle(thread->handle);
+        CloseHandle((HANDLE)tid);
 #else
-        void* value = NULL;
-        if(pthread_equal(pthread_self(), thread->id))
-            r = pthread_detach(thread->id);
-        else
-            r = pthread_join(thread->id, &value);
+        r = pthread_join((pthread_t)tid, NULL);
 #endif
-        free(thread);
-    }
     return r;
 }
 
 __result env_thread_mutex_init(env_thread_mutex_t *mutex)
 {
+    __result r = 0;
 #if defined(OS_WINDOWS)
 	InitializeCriticalSection(mutex);
-	return 0;
 #else
-    return pthread_mutex_init(mutex, NULL);
+    r = pthread_mutex_init(mutex, NULL);
 #endif
+    return r;
 }
 
-__void env_thread_mutex_destroy(env_thread_mutex_t *mutex)
+void env_thread_mutex_destroy(env_thread_mutex_t *mutex)
 {
 #if defined(OS_WINDOWS)
 	DeleteCriticalSection(mutex);
-	return 0;
 #else
     pthread_mutex_destroy(mutex);
 #endif
 }
 
-__void env_thread_mutex_lock(env_thread_mutex_t *mutex)
+void env_thread_mutex_lock(env_thread_mutex_t *mutex)
 {
 #if defined(OS_WINDOWS)
 	EnterCriticalSection(mutex);
-	return 0;
 #else
     pthread_mutex_lock(mutex);
 #endif    
 }
 
-__void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
+void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
 {
 #if defined(OS_WINDOWS)
 	LeaveCriticalSection(mutex);
-	return 0;
 #else
     pthread_mutex_unlock(mutex);
 #endif    
@@ -127,51 +95,46 @@ __void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
 
 __result env_thread_cond_init(env_thread_cond_t *cond)
 {
+    __result r = 0;
 #if defined(OS_WINDOWS)
-	HANDLE h = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if(NULL==h)
-		return (int)GetLastError();
-	*cond = h;
-	return 0;
+    InitializeConditionVariable(cond);
 #else    
-    return pthread_cond_init(cond, NULL);
-#endif    
+    r = pthread_cond_init(cond, NULL);
+#endif
+    return r;
 }
 
-__void env_thread_cond_destroy(env_thread_cond_t *cond)
+void env_thread_cond_destroy(env_thread_cond_t *cond)
 {
-#if defined(OS_WINDOWS)
-	BOOL r = CloseHandle(*cond);
-	return r ? 0 : (int)GetLastError();
-#else
+#if !defined(OS_WINDOWS)
     pthread_cond_destroy(cond);
 #endif     
 }
 
-__void env_thread_cond_signal(env_thread_cond_t *cond)
+void env_thread_cond_signal(env_thread_cond_t *cond)
 {
 #if defined(OS_WINDOWS)
-	SetEvent(*cond) ? 0 : (int)GetLastError();
+	WakeConditionVariable(*cond);
 #else
     pthread_cond_signal(cond);
 #endif
 }
 
-__void env_thread_cond_broadcast(env_thread_cond_t *cond)
+void env_thread_cond_broadcast(env_thread_cond_t *cond)
 {
 #if defined(OS_WINDOWS)
-	DWORD r = WaitForSingleObjectEx(*event, INFINITE, TRUE);
-	return WAIT_FAILED==r ? GetLastError() : r;
+    WakeAllConditionVariable(*cond);
 #else
     pthread_cond_broadcast(cond);
 #endif
 }
 
-__void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
+void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
 {
 #if defined(OS_WINDOWS)
-	DWORD r = WaitForSingleObjectEx(*event, INFINITE, TRUE);
-	return WAIT_FAILED==r ? GetLastError() : r;
+    env_thread_mutex_unlock(mutex);
+    SleepConditionVariableCS(*cond, *mutex, INFINITE);
+    env_thread_mutex_lock(mutex);
 #else
     pthread_cond_wait(cond, mutex);
 #endif
@@ -180,8 +143,12 @@ __void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
 __result env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, __uint64 timeout)
 {
 #if defined(OS_WINDOWS)
-	DWORD r = WaitForSingleObjectEx(*cond, timeout / 1000000ULL, TRUE);
-	return WAIT_FAILED == r ? GetLastError() : r;
+    env_thread_mutex_unlock(mutex);
+    timeout /= 1000000ULL;
+    if (timeout < 1) timeout = 1;
+    BOOL b = SleepConditionVariableCS(*cond, *mutex, timeout);
+    env_thread_mutex_lock(mutex);
+	return b ? 0 : GetLastError();
 #else // !defined(OS_WINDOWS)
 #if defined(CLOCK_REALTIME)
 	__result r = 0;
@@ -202,15 +169,33 @@ __result env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *
 #endif // defined(OS_WINDOWS)
 }
 
-env_mutex_t* env_mutex_create(__void)
+__result env_mutex_init(env_mutex_t *mutex)
+{
+    __result r;
+    r = env_thread_mutex_init(mutex->mutex);
+    if (r == 0){
+        r = env_thread_cond_init(mutex->cond);
+        if (r != 0){
+            env_thread_mutex_destroy(mutex->mutex);
+        }
+    }
+    return r;
+}
+
+env_mutex_t* env_mutex_create(void)
 {
     env_mutex_t *mutex = (env_mutex_t*)malloc(sizeof(env_mutex_t));
-    env_thread_mutex_init(mutex->mutex);
-    env_thread_cond_init(mutex->cond);
+    if (mutex == NULL){
+        return NULL;
+    }
+    if (env_mutex_init(mutex) != 0){
+        free(mutex);
+        mutex = NULL;
+    }
     return mutex;
 }
 
-__void env_mutex_destroy(env_mutex_t **pp_mutex)
+void env_mutex_destroy(env_mutex_t **pp_mutex)
 {
     if (pp_mutex && *pp_mutex){
         env_mutex_t *mutex = *pp_mutex;
@@ -221,27 +206,27 @@ __void env_mutex_destroy(env_mutex_t **pp_mutex)
     }
 }
 
-__void env_mutex_lock(env_mutex_t *mutex)
+void env_mutex_lock(env_mutex_t *mutex)
 {
     env_thread_mutex_lock(mutex->mutex);
 }
 
-__void env_mutex_unlock(env_mutex_t *mutex)
+void env_mutex_unlock(env_mutex_t *mutex)
 {
     env_thread_mutex_unlock(mutex->mutex);
 }
 
-__void env_mutex_signal(env_mutex_t *mutex)
+void env_mutex_signal(env_mutex_t *mutex)
 {
     env_thread_cond_signal(mutex->cond);
 }
 
-__void env_mutex_broadcast(env_mutex_t *mutex)
+void env_mutex_broadcast(env_mutex_t *mutex)
 {
     env_thread_cond_broadcast(mutex->cond);
 }
 
-__void env_mutex_wait(env_mutex_t *mutex)
+void env_mutex_wait(env_mutex_t *mutex)
 {
     env_thread_cond_wait(mutex->cond, mutex->mutex);
 }

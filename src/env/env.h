@@ -35,6 +35,11 @@ typedef char                    __sym;
 typedef char*                   __symptr;
 
 ///////////////////////////////////////////////////////
+///// 可变类型指针
+///////////////////////////////////////////////////////
+typedef void*                   __ptr;
+
+///////////////////////////////////////////////////////
 ///// 自然数集
 ///////////////////////////////////////////////////////
 typedef unsigned char           __uint8;
@@ -57,16 +62,6 @@ typedef float                   __real32;
 typedef double                  __real64;
 
 ///////////////////////////////////////////////////////
-///// 可变类型
-///////////////////////////////////////////////////////
-typedef void                    __void;
-
-///////////////////////////////////////////////////////
-///// 可变类型指针
-///////////////////////////////////////////////////////
-typedef void*                   __ptr;
-
-///////////////////////////////////////////////////////
 ///// 返回值类型
 ///////////////////////////////////////////////////////
 typedef int                     __result;
@@ -74,7 +69,7 @@ typedef int                     __result;
 ///////////////////////////////////////////////////////
 ///// 当前状态
 ///////////////////////////////////////////////////////
-__dllexport const __sym* env_status(__void);
+__dllexport const __sym* env_status(void);
 __dllexport const __sym* env_parser(__result error);
 
 ///////////////////////////////////////////////////////
@@ -84,8 +79,8 @@ __dllexport const __sym* env_parser(__result error);
 #define MICRO_SECONDS    1000000ULL
 #define NANO_SECONDS     1000000000ULL
 
-__dllexport __uint64 env_time(__void);
-__dllexport __uint64 env_clock(__void);
+__dllexport __uint64 env_time(void);
+__dllexport __uint64 env_clock(void);
 
 ///////////////////////////////////////////////////////
 ///// 存储相关
@@ -115,20 +110,20 @@ __dllexport __bit env_move_path(const __symptr from, const __symptr to);
 #endif
 typedef __result (STDCALL *thread_process)(__ptr ctx);
 
-typedef struct env_thread env_thread_t;
+typedef __uint64 env_thread_t;
 typedef struct env_mutex env_mutex_t;
 
-__dllexport env_thread_t* env_thread_create(__result(*func)(__ptr), __ptr ctx);
-__dllexport __result env_thread_destroy(env_thread_t **pp_thread);
+__dllexport __result env_thread_create(env_thread_t *tid, __result(*func)(__ptr), __ptr ctx);
+__dllexport __result env_thread_destroy(env_thread_t tid);
 __dllexport __uint32 env_thread_self();
 
-__dllexport env_mutex_t* env_mutex_create(__void);
-__dllexport __void env_mutex_destroy(env_mutex_t **pp_mutex);
-__dllexport __void env_mutex_lock(env_mutex_t *mutex);
-__dllexport __void env_mutex_unlock(env_mutex_t *mutex);
-__dllexport __void env_mutex_signal(env_mutex_t *mutex);
-__dllexport __void env_mutex_broadcast(env_mutex_t *mutex);
-__dllexport __void env_mutex_wait(env_mutex_t *mutex);
+__dllexport env_mutex_t* env_mutex_create(void);
+__dllexport void env_mutex_destroy(env_mutex_t **pp_mutex);
+__dllexport void env_mutex_lock(env_mutex_t *mutex);
+__dllexport void env_mutex_unlock(env_mutex_t *mutex);
+__dllexport void env_mutex_signal(env_mutex_t *mutex);
+__dllexport void env_mutex_broadcast(env_mutex_t *mutex);
+__dllexport void env_mutex_wait(env_mutex_t *mutex);
 __dllexport __result env_mutex_timedwait(env_mutex_t *mutex, __sint64 timeout);
 
 // #define __pass(condition) \
