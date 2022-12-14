@@ -1,118 +1,221 @@
-#include "unix.h"
+/*** The following code is copy from: https://github.com/awslabs/amazon-kinesis-video-streams-webrtc-sdk-c.git ***/
+#if defined(__GNUC__) || defined(__clang__)
 
-#include <errno.h>
-#include <string.h>
+#include <env/env.h>
 
-#include <time.h>
-#include <sys/time.h>
+#if defined(__ATOMIC_RELAXED)
 
-#include <errno.h>
-#include <string.h>
-
-#include <stdlib.h>
-#include <stdarg.h>
-
-#include <dlfcn.h>
-#include <unistd.h>
-
-// #define env_strftime strftime
-
-// #define env_va_list va_list
-// #define env_va_start va_start
-// #define env_va_end va_end
-// #define env_vsnprintf vsnprintf
-// #define env_snprintf snprintf
-
-// #define env_malloc malloc
-// #define env_free free
-
-// #define env_memset memset
-// #define env_memcmp memcmp
-
-// #define env_strdup strdup
-// #define env_strlen strlen
-
-
-enum aws_timestamp_unit {
-    AWS_TIMESTAMP_SECS = 1,
-    AWS_TIMESTAMP_MILLIS = 1000,
-    AWS_TIMESTAMP_MICROS = 1000000,
-    AWS_TIMESTAMP_NANOS = 1000000000,
-};
-
-
-#ifdef __APPLE__
-
-#include <mach/mach.h>
-#include <mach/mach_time.h>
-#include <mach-o/dyld.h>
-
-static uint64_t (*time_func)(void);
-static mach_timebase_info_data_t timebase;
-
-inline static void uv__hrtime_init_once(void) {
-  if (KERN_SUCCESS != mach_timebase_info(&timebase))
-    abort();
-  time_func = (uint64_t (*)(void)) dlsym(RTLD_DEFAULT, "mach_continuous_time");
-  if (time_func == NULL)
-    time_func = mach_absolute_time;
-}
-
-inline static uint64_t uv__hrtime() {
-  return time_func() * timebase.numer / timebase.denom;
-}
-
-#else // LINUX
-
-inline static uint64_t uv__hrtime() {
-  struct timespec ts;
-  //https://man7.org/linux/man-pages/man2/clock_getres.2.html
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0){
-      return ts.tv_sec * AWS_TIMESTAMP_NANOS + ts.tv_nsec;
-  }
-  abort();
-  return 0;
-}
-
-
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc11-extensions"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 
-
-void unix_init(void)
+inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
 {
-#ifdef __APPLE__
-  uv__hrtime_init_once();
+    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST);
+}
+
+inline void env_atomic_store(volatile __uint64* pAtomic, __uint64 var)
+{
+    __atomic_store_n(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_exchange_n(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+{
+    return __atomic_compare_exchange_n(pAtomic, pExpected, desired, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)
+{
+    return __atomic_fetch_add(pAtomic, 1, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_decrement(volatile __uint64* pAtomic)
+{
+    return __atomic_fetch_sub(pAtomic, 1, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_add(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_fetch_add(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_subtract(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_fetch_sub(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_and(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_fetch_and(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_or(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_fetch_or(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __uint64 env_atomic_xor(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __atomic_fetch_xor(pAtomic, var, __ATOMIC_SEQ_CST);
+}
+
+inline __atombool env_atomic_is_true(volatile __atombool* pAtomic)
+{
+    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == __true;
+}
+
+inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
+{
+    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == __false;
+}
+
+inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
+{
+    __atombool compare = __false;
+    return __atomic_compare_exchange_n(pAtomic, &compare, __true, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
+inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
+{
+    __atombool compare = __true;
+    return __atomic_compare_exchange_n(pAtomic, &compare, __false, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
+#else //!defined(__ATOMIC_RELAXED)
+
+
+#if defined(__GNUC__)
+#if (__GNUC__ < 4)
+#error GCC versions before 4.1.2 are not supported
+#elif (defined(__arm__) || defined(__ia64__)) && (__GNUC__ == 4 && __GNUC_MINOR__ < 4)
+/* See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36793 Itanium codegen */
+/* https://bugs.launchpad.net/ubuntu/+source/gcc-4.4/+bug/491872 ARM codegen*/
+/* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=42263 ARM codegen */
+#error GCC versions before 4.4.0 are not supported on ARM or Itanium
+#elif (defined(__x86_64__) || defined(__i386__)) && (__GNUC__ == 4 && (__GNUC_MINOR__ < 1 || (__GNUC_MINOR__ == 1 && __GNUC_PATCHLEVEL__ < 2)))
+/* 4.1.2 is the first gcc version with 100% working atomic intrinsics on Intel */
+#error GCC versions before 4.1.2 are not supported on x86/x64
 #endif
+#endif
+
+static inline void atomicFullBarrier()
+{
+    __sync_synchronize();
+    __asm__ __volatile__("" : : : "memory");
 }
 
-uint64_t env_time(void)
+inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
 {
-  struct timespec ts;
-  //https://man7.org/linux/man-pages/man2/clock_getres.2.html
-  if (clock_gettime(CLOCK_REALTIME, &ts) == 0){
-      return ts.tv_sec * AWS_TIMESTAMP_NANOS + ts.tv_nsec;
-  }else {
-      struct timeval tv;
-      //https://man7.org/linux/man-pages/man2/settimeofday.2.html
-      if (gettimeofday(&tv, NULL) == 0){
-          return tv.tv_sec * AWS_TIMESTAMP_NANOS + tv.tv_usec * 1000UL;
-      }
-  }
-  abort();
-  return 0;  
+    __uint64 atomic;
+
+    atomicFullBarrier();
+    atomic = *pAtomic;
+    atomicFullBarrier();
+
+    return atomic;
 }
 
-uint64_t env_sys_time(void)
+inline void env_atomic_store(volatile __uint64* pAtomic, __uint64 var)
 {
-  return uv__hrtime();
+    atomicFullBarrier();
+    *pAtomic = var;
+    atomicFullBarrier();
 }
 
-int env_status(void)
+inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
 {
-    return errno;
+    /*
+     * GCC 4.6 and before have only __sync_lock_test_and_set as an exchange operation,
+     * which may not support arbitrary values on all architectures. We simply emulate
+     * with a CAS instead.
+     */
+
+    __uint64 oldval;
+    do {
+        oldval = *pAtomic;
+    } while (!__sync_bool_compare_and_swap(pAtomic, oldval, var));
+
+    /* __sync_bool_compare_and_swap implies a full barrier */
+
+    return oldval;
 }
 
-char* env_status_describe(int status)
+inline __uint64 env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
 {
-    return strerror(status);
+    __uint64 result = __sync_bool_compare_and_swap(pAtomic, *pExpected, desired);
+    if (!result) {
+        *pExpected = *pAtomic;
+    }
+
+    return result;
 }
+
+inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)
+{
+    return __sync_fetch_and_add(pAtomic, 1);
+}
+
+inline __uint64 env_atomic_decrement(volatile __uint64* pAtomic)
+{
+    return __sync_fetch_and_sub(pAtomic, 1);
+}
+
+inline __uint64 env_atomic_add(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __sync_fetch_and_add(pAtomic, var);
+}
+
+inline __uint64 env_atomic_subtract(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __sync_fetch_and_sub(pAtomic, var);
+}
+
+inline __uint64 env_atomic_and(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __sync_fetch_and_and(pAtomic, var);
+}
+
+inline __uint64 env_atomic_or(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __sync_fetch_and_or(pAtomic, var);
+}
+
+inline __uint64 env_atomic_xor(volatile __uint64* pAtomic, __uint64 var)
+{
+    return __sync_fetch_and_xor(pAtomic, var);
+}
+
+inline __atombool env_atomic_is_true(volatile __atombool* pAtomic)
+{
+    return __sync_bool_compare_and_swap(pAtomic, __true, __true);
+}
+
+inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
+{
+    return __sync_bool_compare_and_swap(pAtomic, __false, __false);
+}
+
+inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
+{
+    return __sync_bool_compare_and_swap(pAtomic, __false, __true);
+}
+
+inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
+{
+    return __sync_bool_compare_and_swap(pAtomic, __true, __false);
+}
+
+#endif //defined(__ATOMIC_RELAXED)
+
+#else
+#error No atomics implementation for your compiler is available
+#endif

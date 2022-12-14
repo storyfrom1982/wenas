@@ -7,6 +7,7 @@
 typedef PCONDITION_VARIABLE env_thread_cond_t;
 typedef CRITICAL_SECTION env_thread_mutex_t;
 #else //!defined(OS_WINDOWS)
+#include <unistd.h>
 #include <pthread.h>
 typedef pthread_cond_t env_thread_cond_t;
 typedef pthread_mutex_t env_thread_mutex_t;
@@ -35,12 +36,25 @@ __result env_thread_create(env_thread_t *tid, __result(*func)(__ptr), __ptr ctx)
     return r;
 }
 
-__uint32 env_thread_self()
+env_thread_t env_thread_self()
 {
 #if defined(OS_WINDOWS)
 	return (env_thread_t)GetCurrentThread();
 #else
 	return (env_thread_t)pthread_self();
+#endif
+}
+
+void env_thread_sleep(__uint64 nano_seconds)
+{
+#if defined(OS_WINDOWS)
+    nano_seconds /= 1000000ULL;
+	if (nano_seconds < 1) nano_seconds = 1;
+    Sleep(nano_seconds);
+#else
+    nano_seconds /= 1000ULL;
+    if (nano_seconds < 1) nano_seconds = 1;
+	usleep(nano_seconds);
 #endif
 }
 

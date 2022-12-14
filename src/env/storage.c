@@ -27,7 +27,7 @@ __fp env_fopen(const __symptr path, const __symptr mode)
 	return fopen(path, mode);
 }
 
-__bit env_fclose(__fp fp)
+__1bit env_fclose(__fp fp)
 {
 	return fclose((FILE*)fp) == 0 ? __true : __false;
 }
@@ -68,7 +68,7 @@ __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-__bit env_find_file(const __symptr path)
+__1bit env_find_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	// we must use GetFileAttributes() instead of the ANSI C functions because
@@ -98,7 +98,7 @@ __uint64 env_file_size(const __symptr filename)
 #endif
 }
 
-__bit env_find_path(const __symptr path)
+__1bit env_find_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	DWORD ret = GetFileAttributesA(path);
@@ -109,7 +109,7 @@ __bit env_find_path(const __symptr path)
 #endif
 }
 
-static __bit env_mkdir(const __symptr path)
+static __1bit env_mkdir(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = CreateDirectoryA(path, NULL);
@@ -120,7 +120,7 @@ static __bit env_mkdir(const __symptr path)
 #endif
 }
 
-__bit env_remove_path(const __symptr path)
+__1bit env_remove_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = RemoveDirectoryA(path);
@@ -131,7 +131,7 @@ __bit env_remove_path(const __symptr path)
 #endif
 }
 
-__bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
+__1bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 {
 #if defined(OS_WINDOWS)
 	DWORD r = GetFullPathNameA(path, PATH_MAX, resolved_path, NULL);
@@ -144,7 +144,7 @@ __bit env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-__bit env_remove_file(const __symptr path)
+__1bit env_remove_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = DeleteFileA(path);
@@ -157,7 +157,7 @@ __bit env_remove_file(const __symptr path)
 
 /// change the name or location of a file
 /// 0-ok, other-error
-__bit env_move_path(const __symptr from, const __symptr to)
+__1bit env_move_path(const __symptr from, const __symptr to)
 {
 #if defined(OS_WINDOWS)
 	BOOL r = MoveFileA(from, to);
@@ -168,13 +168,13 @@ __bit env_move_path(const __symptr from, const __symptr to)
 #endif
 }
 
-__bit env_make_path(const __symptr path)
+__1bit env_make_path(const __symptr path)
 {
     if (path == NULL || path[0] == '\0'){
         return __false;
     }
 
-    __bit ret = __true;
+    __1bit ret = __true;
     __uint64 len = strlen(path);
 
     if (!env_find_path(path)){
