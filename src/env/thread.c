@@ -245,7 +245,7 @@ void env_mutex_wait(env_mutex_t *mutex)
     env_thread_cond_wait(mutex->cond, mutex->mutex);
 }
 
-__result env_mutex_timedwait(env_mutex_t *mutex, __sint64 timeout)
+__result env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout)
 {
     return env_thread_cond_timedwait(mutex->cond, mutex->mutex, timeout);
 }

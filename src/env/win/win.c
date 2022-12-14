@@ -33,13 +33,10 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
     return INTERLOCKED_OP(Exchange)(pAtomic, var);
 }
 
-inline __1bit env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline __bool_ env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
 {
     __uint64 oldval = INTERLOCKED_OP(CompareExchange)(pAtomic, desired, *pExpected);
-    __1bit successful = (oldval == *pExpected) ? __true : __false;
-    *pExpected = oldval;
-
-    return successful;
+    return (oldval == *pExpected);
 }
 
 inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)

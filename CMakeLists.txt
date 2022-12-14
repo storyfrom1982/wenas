@@ -7,6 +7,11 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_C_STANDARD 11)
 
 include (TestBigEndian)
+include (CheckCSourceCompiles)
+include (CheckFunctionExists)
+include (CheckIncludeFiles)
+include (CheckTypeSize)
+
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
 if(IS_BIG_ENDIAN)
     message(STATUS "BIG_ENDIAN")
@@ -21,7 +26,15 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_definitions(-D__PL64__)
 endif()
 
-include(CheckCSourceCompiles)
+check_type_size ("long" ENV_LONG)
+if (${ENV_LONG} EQUAL 4)
+    message(STATUS "ENV_LONG EQUAL 4")
+    add_definitions(-D__ENV_LONG_32__)
+elseif (${ENV_LONG} EQUAL 8)
+    message(STATUS "ENV_LONG EQUAL 8")
+    add_definitions(-D__ENV_LONG_64__)
+endif()
+
 check_c_source_compiles("
     #include <unwind.h>
     #define __USE_GNU
@@ -30,14 +43,6 @@ check_c_source_compiles("
         struct _Unwind_Context *ctx;
         return 0;
     }" ENV_CHECK_BACKTRACE)
-
-check_c_source_compiles("
-    #include <stdatomic.h>
-    int main() {
-        atomic_size_t a;
-        atomic_fetch_add(&a, 1);
-        return 0;
-    }" ENV_CHECK_STDATOMIC)
 
 set(kzx_sources src/main.c 
     src/env/time.c
@@ -65,10 +70,6 @@ set(kzx_ldflags "")
 
 if(ENV_CHECK_BACKTRACE)
     list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-endif()
-
-if(ENV_CHECK_STDATOMIC)
-   list(APPEND kzx_defines -DENV_HAVA_STDATOMIC)
 endif()
 
 if (UNIX)

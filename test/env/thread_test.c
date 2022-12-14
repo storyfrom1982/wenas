@@ -19,12 +19,22 @@ static __result thread_func(__ptr ctx)
     env_mutex_t *mutex = (env_mutex_t *)ctx;
     env_mutex_lock(mutex);
     printf("timedwait 5 second\n");
-    ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));
-    printf("timedwait retcode=%llu %s\n", env_time(), env_check());
+    __sym buf[1024] = {0};
+    __uint64 n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    buf[n] = '\0';
+    printf("timedwait retcode=%s %s\n", buf, env_check());
+    ret = env_mutex_timedwait(mutex, 5 * NANO_SECONDS);
+
+    n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    buf[n] = '\0';
+    printf("timedwait retcode=%s %s\n", buf, env_check());
+    
     env_mutex_signal(mutex);
     printf("timedwait 5 second\n");
-    ret = env_mutex_timedwait(mutex, (__uint64)(5 * NANO_SECONDS));
-    printf("timedwait retcode=%llu %s\n", env_time(), env_parser(ret));
+    ret = env_mutex_timedwait(mutex, 5 * NANO_SECONDS);
+    n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    buf[n] = '\0';
+    printf("timedwait retcode=%s %s\n", buf, env_check());
     env_mutex_unlock(mutex);
 
     printf("tid %llx exit\n", env_thread_self());
@@ -59,7 +69,7 @@ void thread_test()
 
     __atom_lock(testatom);
 
-    // printf("join tid %llx\n", env_thread_self());
+    printf("join tid %llx\n", env_thread_self());
     // env_thread_destroy(tid);
     // env_mutex_destroy(&mutex);
 

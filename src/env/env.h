@@ -7,7 +7,7 @@
 #   define OS_APPLE
 #elif defined(__ANDROID__) && defined(__PL64__)
 #   define OS_ANDROID
-#elif defined(__LINUX__) && defined(__PL64__)
+#elif defined(__linux__) && defined(__PL64__)
 #   define OS_LINUX
 #else
 #error Not yet adapted to the environment
@@ -32,7 +32,7 @@
 ///////////////////////////////////////////////////////
 #define __false                 0
 #define __true                  1
-typedef unsigned char           __1bit;
+typedef unsigned char           __bool_;
 
 ///////////////////////////////////////////////////////
 ///// 256进制符号
@@ -50,16 +50,26 @@ typedef void*                   __ptr;
 ///////////////////////////////////////////////////////
 typedef unsigned char           __uint8;
 typedef unsigned short          __uint16;
+#ifdef __ENV_LONG_64__
+typedef unsigned int            __uint32;
+typedef unsigned long           __uint64;
+#else
 typedef unsigned long           __uint32;
 typedef unsigned long long      __uint64;
+#endif
 
 ///////////////////////////////////////////////////////
 ///// 整数集
 ///////////////////////////////////////////////////////
 typedef char                    __sint8;
 typedef short                   __sint16;
+#ifdef __ENV_LONG_64__
+typedef int                     __sint32;
+typedef long                    __sint64;
+#else
 typedef long                    __sint32;
 typedef long long               __sint64;
+#endif
 
 ///////////////////////////////////////////////////////
 ///// 实数集
@@ -95,19 +105,19 @@ __env_export __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 millisecon
 typedef void*   __fp;
 
 __env_export __fp env_fopen(const __symptr path, const __symptr mode);
-__env_export __1bit env_fclose(__fp fp);
+__env_export __bool_ env_fclose(__fp fp);
 __env_export __sint64 env_ftell(__fp fp);
 __env_export __sint64 env_fflush(__fp fp);
 __env_export __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
 __env_export __sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
 __env_export __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
 
-__env_export __1bit env_make_path(const __symptr path);
-__env_export __1bit env_find_path(const __symptr path);
-__env_export __1bit env_find_file(const __symptr path);
-__env_export __1bit env_remove_path(const __symptr path);
-__env_export __1bit env_remove_file(const __symptr path);
-__env_export __1bit env_move_path(const __symptr from, const __symptr to);
+__env_export __bool_ env_make_path(const __symptr path);
+__env_export __bool_ env_find_path(const __symptr path);
+__env_export __bool_ env_find_file(const __symptr path);
+__env_export __bool_ env_remove_path(const __symptr path);
+__env_export __bool_ env_remove_file(const __symptr path);
+__env_export __bool_ env_move_path(const __symptr from, const __symptr to);
 
 ///////////////////////////////////////////////////////
 ///// 线程相关
@@ -128,7 +138,7 @@ __env_export void env_mutex_unlock(env_mutex_t *mutex);
 __env_export void env_mutex_signal(env_mutex_t *mutex);
 __env_export void env_mutex_broadcast(env_mutex_t *mutex);
 __env_export void env_mutex_wait(env_mutex_t *mutex);
-__env_export __result env_mutex_timedwait(env_mutex_t *mutex, __sint64 timeout);
+__env_export __result env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout);
 
 ///////////////////////////////////////////////////////
 ///// 源自操作
@@ -138,7 +148,7 @@ typedef __uint64 __atombool;
 __env_export __uint64 env_atomic_load(volatile __uint64*);
 __env_export void env_atomic_store(volatile __uint64*, __uint64);
 __env_export __uint64 env_atomic_exchange(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_compare_exchange(volatile __uint64*, __uint64*, __uint64);
+__env_export __bool_ env_atomic_compare_exchange(volatile __uint64*, __uint64*, __uint64);
 __env_export __uint64 env_atomic_increment(volatile __uint64*);
 __env_export __uint64 env_atomic_decrement(volatile __uint64*);
 __env_export __uint64 env_atomic_add(volatile __uint64*, __uint64);
