@@ -67,24 +67,20 @@ set(kzx_defines "")
 set(kzx_cflags "")
 set(kzx_ldflags "")
 
-if(ENV_CHECK_BACKTRACE)
-    list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-endif()
-
 if (UNIX)
+    list(APPEND kzx_sources src/env/unix/unix.c)
     set(kzx_cflags "-Wno-format")
     # set(kzx_cflags "-Wformat")
     list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND kzx_ldflags pthread dl)
     endif()
-
-    list(APPEND kzx_sources src/env/unix/unix.c src/env/unix/backtrace.c)
-
+    if(ENV_CHECK_BACKTRACE)
+        list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
+        list(APPEND kzx_sources src/env/unix/backtrace.c)
+    endif()
 else()
-
     list(APPEND kzx_sources src/env/win/win.c)
-
 endif()
 
 add_executable(kang ${kzx_sources})

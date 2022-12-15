@@ -351,7 +351,7 @@ static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 
         memcpy( pipe->_buf + ( pipe->writer & ( pipe->len - 1 ) ), data, len);
     }else{
         memcpy( pipe->_buf + ( pipe->writer & ( pipe->len - 1 ) ), data, pipe->leftover);
-        memcpy( pipe->_buf, data + pipe->leftover, len - pipe->leftover);
+        memcpy( pipe->_buf, (__sym*)data + pipe->leftover, len - pipe->leftover);
     }
 
     __atom_add(pipe->writer, len);
@@ -379,7 +379,7 @@ static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 le
         memcpy( buf, pipe->_buf + ( pipe->reader & ( pipe->len - 1 ) ), len);
     }else{
         memcpy( buf, pipe->_buf + ( pipe->reader & ( pipe->len - 1 ) ), pipe->leftover);
-        memcpy( buf + pipe->leftover, pipe->_buf, len - pipe->leftover);
+        memcpy( (__sym*)buf + pipe->leftover, pipe->_buf, len - pipe->leftover);
     }
 
     __atom_add(pipe->reader, len);
@@ -401,7 +401,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 
     __uint64 ret = 0, pos = 0;
     while (pos < len ) {
-        ret = pipe_atomic_write(pipe, data + pos, len - pos);
+        ret = pipe_atomic_write(pipe, (__sym*)data + pos, len - pos);
         pos += ret;
         if (pos != len){
             if (__is_true(pipe->stopped)){
@@ -438,7 +438,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 
     __uint64 pos = 0;
     for(__uint64 ret = 0; pos < len; ){
-        ret = pipe_atomic_read(pipe, buf + pos, len - pos);
+        ret = pipe_atomic_read(pipe, (__sym*)buf + pos, len - pos);
         pos += ret;
         if (pos != len){
             if (__is_true(pipe->stopped)){

@@ -236,7 +236,9 @@ __env_export void env_logger_printf(enum env_log_level level, const __sym *file,
 ///////////////////////////////////////////////////////
 ///// 堆栈回溯
 ///////////////////////////////////////////////////////
+#ifdef ENV_HAVA_BACKTRACE
 __env_export void env_backtrace_setup();
 __env_export __uint64 env_backtrace(__ptr* array, __sint32 depth);
+#endif
 
 #endif //__ENV_ENV_H__
