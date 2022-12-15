@@ -14,14 +14,6 @@
 #define TEST_WRITE_TEXT  "/tmp/test/dir/test1.txt\n"
 #endif
 
-#define __pass(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Check condition failed: %s, %s\n", #condition, env_check()); \
-            goto Reset; \
-        } \
-    } while (__false)
-
 void storage_test()
 {
     __sint64 ret;

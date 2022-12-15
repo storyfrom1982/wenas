@@ -48,10 +48,10 @@ set(kzx_sources src/main.c
     src/env/time.c
     src/env/storage.c
     src/env/thread.c
+    src/env/logger.c
     test/test.c
     test/env/storage_test.c
     test/env/thread_test.c
-    # src/env/logger.c
     # src/env/malloc.c
     # src/env/socket.c
     # src/env/backtrace.c

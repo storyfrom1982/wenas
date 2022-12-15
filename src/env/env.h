@@ -27,6 +27,8 @@
 #endif
 #endif
 
+#define NULL    ((void*)0)
+
 ///////////////////////////////////////////////////////
 ///// 2进制
 ///////////////////////////////////////////////////////
@@ -122,11 +124,11 @@ __env_export __bool_ env_move_path(const __symptr from, const __symptr to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
-typedef __result (*thread_process)(__ptr ctx);
+typedef __result (*env_thread_cb)(__ptr ctx);
 typedef __uint64 env_thread_t;
 typedef struct env_mutex env_mutex_t;
 
-__env_export __result env_thread_create(env_thread_t *tid, __result(*func)(__ptr), __ptr ctx);
+__env_export __result env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx);
 __env_export __result env_thread_destroy(env_thread_t tid);
 __env_export env_thread_t env_thread_self();
 __env_export void env_thread_sleep(__uint64 nano_seconds);
@@ -171,11 +173,58 @@ __env_export __atombool env_atomic_set_false(volatile __atombool*);
 #define __atom_try_lock(x) __set_true(x)
 #define __atom_unlock(x) __set_false(x)
 
-// #define __pass(condition) \
-//     do { \
-//         if (!(condition)) { \
-//             goto Reset; \
-//         } \
-//     } while (__false)
+///////////////////////////////////////////////////////
+///// 状态码
+///////////////////////////////////////////////////////
+#define ENV_TIMEDOUT        1
+
+///////////////////////////////////////////////////////
+///// 日志存储
+///////////////////////////////////////////////////////
+enum env_log_level {
+    ENV_LOG_LEVEL_NONE = 0,
+    ENV_LOG_LEVEL_FATAL,
+    ENV_LOG_LEVEL_ERROR,
+    ENV_LOG_LEVEL_WARN,
+    ENV_LOG_LEVEL_INFO,
+    ENV_LOG_LEVEL_DEBUG,
+    ENV_LOG_LEVEL_TRACE,
+    ENV_LOG_LEVEL_COUNT
+};
+
+typedef void (*env_logger_cb) (int level, const char *log);
+
+int env_logger_start(const char *path, env_logger_cb cb);
+
+void env_logger_stop();
+
+void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...);
+
+#define __logd(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __logi(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_INFO, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __logw(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_WARN, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __loge(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_ERROR, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __logf(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_FATAL, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __logt(__FORMAT__, ...) \
+        env_logger_printf(ENV_LOG_LEVEL_TRACE, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+
+#define __pass(condition) \
+    do { \
+        if (!(condition)) { \
+            __loge("Check condition failed: %s, %s\n", #condition, env_check()); \
+            goto Reset; \
+        } \
+    } while (__false)
+
 
 #endif //__ENV_ENV_H__

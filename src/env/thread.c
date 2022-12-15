@@ -7,6 +7,7 @@
 typedef PCONDITION_VARIABLE env_thread_cond_t;
 typedef CRITICAL_SECTION env_thread_mutex_t;
 #else //!defined(OS_WINDOWS)
+#include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
 typedef pthread_cond_t env_thread_cond_t;
@@ -22,16 +23,17 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-__result env_thread_create(env_thread_t *tid, __result(*func)(__ptr), __ptr ctx)
+__result env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx)
 {
     __result r = 0;
 #if defined(OS_WINDOWS)
 	typedef __result(__stdcall *thread_routine)(__ptr);
-	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)func, ctx, 0, NULL);
+	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)cb, ctx, 0, NULL);
     if (*tid == NULL) r = -1;
 #else
     typedef __ptr (*thread_routine)(__ptr);
-    r = pthread_create((pthread_t *)tid, NULL, (thread_routine)func, ctx);
+    r = pthread_create((pthread_t *)tid, NULL, (thread_routine)cb, ctx);
+    errno = r;
 #endif
     return r;
 }
@@ -65,6 +67,7 @@ __result env_thread_destroy(env_thread_t tid)
         CloseHandle((HANDLE)tid);
 #else
         r = pthread_join((pthread_t)tid, NULL);
+        errno = r;
 #endif
     return r;
 }
@@ -76,6 +79,7 @@ __result env_thread_mutex_init(env_thread_mutex_t *mutex)
 	InitializeCriticalSection(mutex);
 #else
     r = pthread_mutex_init(mutex, NULL);
+    errno = r;
 #endif
     return r;
 }
@@ -114,6 +118,7 @@ __result env_thread_cond_init(env_thread_cond_t *cond)
     InitializeConditionVariable(cond);
 #else    
     r = pthread_cond_init(cond, NULL);
+    errno = r;
 #endif
     return r;
 }
@@ -162,7 +167,7 @@ __result env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *
     if (timeout < 1) timeout = 1;
     BOOL b = SleepConditionVariableCS(cond, mutex, timeout);
     env_thread_mutex_lock(mutex);
-	return b ? 0 : GetLastError();
+	return b ? 0 : GetLastError() == ERROR_TIMEOUT ? ENV_TIMEDOUT : -1;
 #else // !defined(OS_WINDOWS)
 #if defined(CLOCK_REALTIME)
 	__result r = 0;
@@ -179,7 +184,8 @@ __result env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *
     ts.tv_sec = timeout / NANO_SECONDS;
     ts.tv_nsec = timeout % NANO_SECONDS;
 	r = pthread_cond_timedwait(cond, mutex, &ts);
-    return r;
+    errno = r;
+    return r == 0 ? 0 : r == ETIMEDOUT ? ENV_TIMEDOUT : -1;
 #endif // defined(OS_WINDOWS)
 }
 

@@ -20,9 +20,9 @@ enum env_log_level {
     ENV_LOG_LEVEL_COUNT
 };
 
-typedef void (*logger_cb_t) (int level, const char *tag, const char *debug, const char *log);
+typedef void (*env_logger_cb) (int level, const char *tag, const char *debug, const char *log);
 
-int env_logger_start(const char *path, logger_cb_t cb);
+int env_logger_start(const char *path, env_logger_cb cb);
 
 void env_logger_stop();
 
