@@ -13,6 +13,7 @@ __result pipe_write_thread(__ptr p)
 	__sint32 size = 32;
 	__sym *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
+	// env_pipe_t *pipe = 123;
 
 	for (int i = 0; i < 100000; ++i){
 		buf = (__sym*)malloc(size);
@@ -36,6 +37,7 @@ __result pipe_read_thread(__ptr p)
 	__sint32 size = 32;
 	__sym *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
+	// env_pipe_t *pipe = 1234;
 
 
 	while (1){

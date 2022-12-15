@@ -4,7 +4,7 @@ extern void test();
 
 int main(int argc, char *argv[])
 {
-    // env_backtrace_setup();
+    env_backtrace_setup();
 	env_logger_start("/tmp/log", NULL);
 
     __logi("hello world\n");

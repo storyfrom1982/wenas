@@ -1,4 +1,4 @@
-#include "backtrace.h"
+#include "env/env.h"
 
 #include <signal.h>
 #include <string.h>
@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unwind.h>
-
-#include "env/logger.h"
 
 
 struct backtrace_stack {
@@ -29,7 +27,7 @@ static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context*
     return _URC_NO_REASON;
 }
 
-size_t env_backtrace(void** array, int depth)
+__uint64 env_backtrace(__ptr* array, __sint32 depth)
 {
     struct backtrace_stack stack = {0};
     stack.head = &array[0];
@@ -40,10 +38,10 @@ size_t env_backtrace(void** array, int depth)
 
 
 #ifdef __PL64__
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%016X  %s() + %lu\n"
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0X%016lX  %s() + %lu\n"
 #   define ENV_BACKTRACE_ADDRESS_LEN 18 /* 0x + 16 (no NUL) */
 #else
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0x%08X  %s() + %lu"
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0X%08lX  %s() + %lu"
 #   define ENV_BACKTRACE_ADDRESS_LEN 10 /* 0x + 8 (no NUL) */
 #endif
 
@@ -77,8 +75,7 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 		symbol_offset = addr - info->dli_saddr;
 	}
 
-	LOGE("Backtrace",
-			ENV_BACKTRACE_FORMAT,
+	__loge(ENV_BACKTRACE_FORMAT,
 			frame,
 			image,
 			addr,
@@ -92,7 +89,7 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 
 static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
 {
-    LOGE("CRASH", "****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
+    __loge("****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
     const ucontext_t* signal_ucontext = (const ucontext_t*)ucontext;
     void *stacks[ENV_BACKTRACE_STACK_DEPTH];
     size_t stack_depth = env_backtrace(stacks, ENV_BACKTRACE_STACK_DEPTH);
