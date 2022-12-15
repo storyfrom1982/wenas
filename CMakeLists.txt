@@ -52,6 +52,7 @@ set(kzx_sources src/main.c
     test/test.c
     test/env/storage_test.c
     test/env/thread_test.c
+    test/env/logger_test.c
     # src/env/malloc.c
     # src/env/socket.c
     # src/env/backtrace.c
@@ -61,7 +62,6 @@ set(kzx_sources src/main.c
     # test/sys/struct/lineardb_pipe_test.c
     # test/env/task/task_queue_test.c
     # test/env/malloc/malloc_test.c
-    # test/env/logger_test.c
 )
 
 set(kzx_defines "")
