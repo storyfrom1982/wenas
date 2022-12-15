@@ -1,20 +1,12 @@
 #include "env/env.h"
-#include "stdio.h"
 
 extern void test();
 
-static void log_print(int level, const char *tag, const char *debug, const char *log)
-{
-	printf("%s", debug);
-}
-
 int main(int argc, char *argv[])
 {
-    // env_init();
     // env_backtrace_setup();
-	// env_logger_start("/tmp/log", log_print);
+	env_logger_start("/tmp/log", NULL);
 
-	// LOGD("TEST", "hello world\n");
     __logi("hello world\n");
     __logi("time %llu clock %llu\n", env_time(), env_clock());
     __sym buf[1024] = {0};
@@ -44,6 +36,8 @@ int main(int argc, char *argv[])
 #endif
 
     test();
+
+    env_logger_stop();
 
 	return 0;
 }

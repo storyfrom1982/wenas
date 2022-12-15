@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
@@ -22,112 +23,103 @@ typedef struct env_logger {
     char *path;
     env_thread_t tid;
     env_logger_cb printer;
-    env_mutex_t *mutex;
-    // linedb_pipe_t *lpipe;
+    env_pipe_t *pipe;
 }env_logger_t;
 
 static env_logger_t g_logger = {0};
 
-static void* env_logger_write_loop(void *p)
+static __result env_logger_write_loop(__ptr ctx)
 {
-    // int fd;
-    // ssize_t n;
+    __fp fp = NULL;
+    __sint64 n;
+    __uint64 res;
+    __sym *buf = (__sym *)malloc(env_pipe_writable(g_logger.pipe));
+    __pass(buf != NULL);
 
-    // if (!env_fs_dir_exists(g_logger.path)){
-    //     env_fs_mkpath(g_logger.path);
-    // }
+    if (!env_find_path(g_logger.path)){
+        __pass(env_make_path(g_logger.path));
+    }
 
-    // {
-    //     char log_path[1024];
-    //     n = snprintf(log_path, 1024, "%s/%s", g_logger.path, "0.log");
-    //     log_path[n] = '\0';
-    //     fd = env_open(log_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
-    //     n = env_write(fd, (void*)"\n\n\nLogger start >>>>-------------->\n\n\n", strlen("\n\n\nLogger start >>>>-------------->\n\n\n"));
-    // }
+    {
+        __sym filename[1024];
+        n = snprintf(filename, 1024, "%s/%s", g_logger.path, "0.log");
+        filename[n] = '\0';
+        fp = env_fopen(filename, "a+t");
+        __pass(fp != NULL);
+        n = env_fwrite(fp, (void*)"\n\n\nLogger start >>>>-------------->\n\n\n", strlen("\n\n\nLogger start >>>>-------------->\n\n\n"));
+        __pass(n > 0);
+    }
 
-    // linedb_t *ldb;
+    while (1)
+    {
+        if ((res = env_pipe_read(g_logger.pipe, buf, 1)) == 1){
+            res += env_pipe_read(g_logger.pipe, buf + 1, env_pipe_readable(g_logger.pipe));
+        }
 
-    // while (1)
-    // {
-    //     env_mutex_lock(&g_logger.mutex);
+        if (res > 0){
+            n = env_fwrite(fp, buf, res);
+            __pass(n==res);
+            if (env_ftell(fp) > __log_file_size){
+                env_fclose(fp);
+                __sym log0[1024];
+                n = snprintf(log0, 1024, "%s/0.log", g_logger.path);
+                log0[n] = '\0';
+                __sym log1[1024];
+                n = snprintf(log1, 1024, "%s/1.log", g_logger.path);
+                log1[n] = '\0';
+                __pass(env_move_path(log0, log1));
+                fp = env_fopen(log0, "a+t");
+                __pass(fp != NULL);
+            }
+        }else {
+            if (__is_false(g_logger.running)){
+                break;
+            }
+        }
+    }
 
-    //     ldb = linedb_pipe_hold_block(g_logger.lpipe);
-
-    //     if (ldb){
-    //         n = env_write(fd, __dataof_linedb(ldb), __sizeof_data(ldb));
-    //         linedb_pipe_free_block(g_logger.lpipe, ldb);
-    //         env_mutex_signal(&g_logger.mutex);
-    //         env_mutex_unlock(&g_logger.mutex);
-
-    //         if (env_fs_ltell(fd) > __log_file_size){
-    //             env_close(fd);
-    //             char log_path[1024];
-    //             n = snprintf(log_path, 1024, "%s/0.log", g_logger.path);
-    //             log_path[n] = '\0';
-    //             char tmp_path[1024];
-    //             n = snprintf(tmp_path, 1024, "%s/1.log", g_logger.path);
-    //             tmp_path[n] = '\0';
-    //             env_rename_path(log_path, tmp_path);
-    //             fd = env_open(log_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
-    //             if (fd < 0){
-    //                 return 0;
-    //             }
-    //         }
-
-    //     }else {
-
-    //         if (__is_false(g_logger.running)){
-    //             env_mutex_unlock(&g_logger.mutex);
-    //             break;
-    //         }
-    //         env_mutex_wait(&g_logger.mutex);
-    //         env_mutex_unlock(&g_logger.mutex);
-    //     }
-    // }
-
-    // env_close(fd);
-
+Reset:
+    if (fp){
+        env_fclose(fp);
+    }
+    if (buf){
+        free(buf);
+    }
     return 0;
 }
 
-int env_logger_start(const char *path, env_logger_cb cb)
+int env_logger_start(const __sym *path, env_logger_cb cb)
 {
-    // if (__set_true(g_logger.running)){
-    //     g_logger.running = 1;
-    //     g_logger.printer = cb;
-    //     g_logger.path = strdup(path);
-    //     if (g_logger.path){
-    //         env_mutex_init(&g_logger.mutex);
-    //         g_logger.lpipe = linedb_pipe_create(1 << 15);
-    //         if (!g_logger.lpipe){
-    //             return -1;
-    //         }
-    //         if (env_thread_create(&g_logger.tid, env_logger_write_loop, &g_logger) != 0){
-    //             linedb_pipe_destroy(&g_logger.lpipe);
-    //             return -1;
-    //         }
-    //     }
-    // }
+    if (__set_true(g_logger.running)){
+        g_logger.running = 1;
+        g_logger.printer = cb;
+        g_logger.path = strdup(path);
+        if (g_logger.path){
+            g_logger.pipe = env_pipe_create(1 << 15);
+            __pass(g_logger.pipe != NULL);
+            __pass(env_thread_create(&g_logger.tid, env_logger_write_loop, &g_logger) == 0);
+        }
+    }
     return 0;
+Reset:
+    env_pipe_destroy(&g_logger.pipe);
+    return -1;
 }
 
 void env_logger_stop()
 {
-    // if (__set_false(g_logger.running)){
-    //     env_mutex_lock(&g_logger.mutex);
-    //     env_mutex_signal(&g_logger.mutex);
-    //     env_mutex_unlock(&g_logger.mutex);
-    //     env_thread_join(g_logger.tid);
-    //     env_mutex_destroy(&g_logger.mutex);
-    //     linedb_pipe_destroy(&g_logger.lpipe);
-    //     if (g_logger.path){
-    //         free(g_logger.path);
-    //     }
-    //     memset(&g_logger, 0, sizeof(g_logger));
-    // }
+    if (__set_false(g_logger.running)){
+        env_pipe_stop(g_logger.pipe);
+        env_thread_destroy(g_logger.tid);
+        env_pipe_destroy(&g_logger.pipe);
+        if (g_logger.path){
+            free(g_logger.path);
+        }
+        memset(&g_logger, 0, sizeof(g_logger));
+    }
 }
 
-void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
+void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 line, const __sym *fmt, ...)
 {
     __uint64 n = 0;
     __sym text[__log_text_size];
@@ -135,8 +127,8 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     __uint64 millisecond = env_time() / MICRO_SECONDS;
     n = env_strtime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] [%s] % 4d %21-s [#] ", (unsigned int)(millisecond % 1000),
-                  env_thread_self(), s_log_level_strings[level], line, file != NULL ? __path_clear(file) : "<*>");
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] % 4d %21-s [%s] ", (unsigned int)(millisecond % 1000),
+                  env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
     va_start (args, fmt);
@@ -151,15 +143,9 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
         text[__log_text_size-1] = '\0';
     }
 
-    // if (g_logger.lpipe != NULL){
-    //     env_mutex_lock(&g_logger.mutex);
-    //     while (linedb_pipe_writable(g_logger.lpipe) < n){
-    //         env_mutex_wait(&g_logger.mutex);
-    //     }
-    //     linedb_pipe_write(g_logger.lpipe, text, n - 1); //去掉'\0'
-    //     env_mutex_signal(&g_logger.mutex);
-    //     env_mutex_unlock(&g_logger.mutex);
-    // }
+    if (g_logger.pipe != NULL){
+        env_pipe_write(g_logger.pipe, text, n - 1);
+    }
 
     if (g_logger.printer != NULL){
         g_logger.printer(level, text);

@@ -142,6 +142,16 @@ __env_export void env_mutex_broadcast(env_mutex_t *mutex);
 __env_export void env_mutex_wait(env_mutex_t *mutex);
 __env_export __result env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout);
 
+typedef struct env_pipe env_pipe_t;
+__env_export env_pipe_t* env_pipe_create(__uint64 len);
+__env_export void env_pipe_destroy(env_pipe_t **pp_pipe);
+__env_export __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len);
+__env_export __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len);
+__env_export __uint64 env_pipe_readable(env_pipe_t *pipe);
+__env_export __uint64 env_pipe_writable(env_pipe_t *pipe);
+__env_export void env_pipe_stop(env_pipe_t *pipe);
+__env_export void env_pipe_clear(env_pipe_t *pipe);
+
 ///////////////////////////////////////////////////////
 ///// 源自操作
 ///////////////////////////////////////////////////////
@@ -192,13 +202,10 @@ enum env_log_level {
     ENV_LOG_LEVEL_COUNT
 };
 
-typedef void (*env_logger_cb) (int level, const char *log);
-
-int env_logger_start(const char *path, env_logger_cb cb);
-
-void env_logger_stop();
-
-void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...);
+typedef void (*env_logger_cb) (__sint32 level, const __sym *log);
+__env_export __result env_logger_start(const __sym *path, env_logger_cb cb);
+__env_export void env_logger_stop();
+__env_export void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 line, const __sym *fmt, ...);
 
 #define __logd(__FORMAT__, ...) \
         env_logger_printf(ENV_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
