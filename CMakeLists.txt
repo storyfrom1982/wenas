@@ -49,7 +49,6 @@ set(kzx_sources src/main.c
     src/env/storage.c
     src/env/thread.c
     src/env/logger.c
-    src/env/backtrace.c
     test/test.c
     test/env/storage_test.c
     test/env/thread_test.c
@@ -80,7 +79,7 @@ if (UNIX)
         list(APPEND kzx_ldflags pthread dl)
     endif()
 
-    list(APPEND kzx_sources src/env/unix/unix.c)
+    list(APPEND kzx_sources src/env/unix/unix.c src/env/unix/backtrace.c)
 
 else()
 

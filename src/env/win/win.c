@@ -103,3 +103,9 @@ inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
     __atombool exchange = __false, compared = __true;
     return InterlockedCompareExchange64(pAtomic, exchange, compared) == compared;
 }
+
+void env_backtrace_setup(){}
+__uint64 env_backtrace(__ptr* array, __sint32 depth)
+{
+    return 0;
+}
