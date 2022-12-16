@@ -34,7 +34,9 @@
 ///////////////////////////////////////////////////////
 #define __false                 0
 #define __true                  1
-typedef unsigned char           __bool_;
+#ifndef OS_WINDOWS
+typedef unsigned char           __bool;
+#endif
 
 ///////////////////////////////////////////////////////
 ///// 256进制符号
@@ -107,19 +109,19 @@ __env_export __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 millisecon
 typedef void*   __fp;
 
 __env_export __fp env_fopen(const __symptr path, const __symptr mode);
-__env_export __bool_ env_fclose(__fp fp);
+__env_export __bool env_fclose(__fp fp);
 __env_export __sint64 env_ftell(__fp fp);
 __env_export __sint64 env_fflush(__fp fp);
 __env_export __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
 __env_export __sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
 __env_export __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
 
-__env_export __bool_ env_make_path(const __symptr path);
-__env_export __bool_ env_find_path(const __symptr path);
-__env_export __bool_ env_find_file(const __symptr path);
-__env_export __bool_ env_remove_path(const __symptr path);
-__env_export __bool_ env_remove_file(const __symptr path);
-__env_export __bool_ env_move_path(const __symptr from, const __symptr to);
+__env_export __bool env_make_path(const __symptr path);
+__env_export __bool env_find_path(const __symptr path);
+__env_export __bool env_find_file(const __symptr path);
+__env_export __bool env_remove_path(const __symptr path);
+__env_export __bool env_remove_file(const __symptr path);
+__env_export __bool env_move_path(const __symptr from, const __symptr to);
 
 ///////////////////////////////////////////////////////
 ///// 线程相关
@@ -160,7 +162,7 @@ typedef __uint64 __atombool;
 __env_export __uint64 env_atomic_load(volatile __uint64*);
 __env_export void env_atomic_store(volatile __uint64*, __uint64);
 __env_export __uint64 env_atomic_exchange(volatile __uint64*, __uint64);
-__env_export __bool_ env_atomic_compare_exchange(volatile __uint64*, __uint64*, __uint64);
+__env_export __bool env_atomic_compare_exchange(volatile __uint64*, __uint64*, __uint64);
 __env_export __uint64 env_atomic_increment(volatile __uint64*);
 __env_export __uint64 env_atomic_decrement(volatile __uint64*);
 __env_export __uint64 env_atomic_add(volatile __uint64*, __uint64);
@@ -240,5 +242,21 @@ __env_export void env_logger_printf(enum env_log_level level, const __sym *file,
 __env_export void env_backtrace_setup();
 __env_export __uint64 env_backtrace(__ptr* array, __sint32 depth);
 #endif
+
+
+///////////////////////////////////////////////////////
+///// 内存安全
+///////////////////////////////////////////////////////
+__env_export __ptr malloc(__uint64 size);
+__env_export __ptr calloc(__uint64 number, __uint64 size);
+__env_export __ptr realloc(void *address, __uint64 size);
+__env_export __ptr memalign(__uint64 boundary, __uint64 size);
+__env_export __ptr aligned_alloc(__uint64 alignment, __uint64 size);
+__env_export __ptr _aligned_alloc(__uint64 alignment, __uint64 size);
+__env_export __sym* strdup(const __sym *s);
+__env_export __sym* strndup(const __sym *s, __uint64 n);
+__env_export __result posix_memalign(void **ptr, __uint64 align, __uint64 size);
+__env_export void free(void *address);
+__env_export void env_malloc_debug(void (*cb)(const char *fmt));
 
 #endif //__ENV_ENV_H__

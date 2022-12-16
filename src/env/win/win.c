@@ -33,7 +33,7 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
     return INTERLOCKED_OP(Exchange)(pAtomic, var);
 }
 
-inline __bool_ env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
 {
     __uint64 oldval = INTERLOCKED_OP(CompareExchange)(pAtomic, desired, *pExpected);
     return (oldval == *pExpected);

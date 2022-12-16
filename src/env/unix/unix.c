@@ -28,7 +28,7 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
     return __atomic_exchange_n(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __bool_ env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
 {
     return __atomic_compare_exchange_n(pAtomic, pExpected, desired, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
@@ -149,7 +149,7 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
     return oldval;
 }
 
-inline __bool_ env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
 {
     return __sync_bool_compare_and_swap(pAtomic, *pExpected, desired);
 }

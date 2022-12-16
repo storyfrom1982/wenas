@@ -35,6 +35,10 @@ int main(int argc, char *argv[])
     __logi("ENV_HAVA_BACKTRACE\n");
 #endif
 
+    __logi("__uint64 size: %d\n", sizeof(__uint64));
+    __logi("__sint32 size: %d\n", sizeof(__sint32));
+    __logi("__bool size: %d\n", sizeof(__bool));
+
     test();
 
     env_logger_stop();

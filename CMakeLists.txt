@@ -53,7 +53,6 @@ set(kzx_sources src/main.c
     test/env/storage_test.c
     test/env/thread_test.c
     test/env/logger_test.c
-    # src/env/malloc.c
     # src/env/socket.c
     # test/sys/struct/heap_test.c
     # test/sys/struct/lineardb_test.c
@@ -68,7 +67,7 @@ set(kzx_cflags "")
 set(kzx_ldflags "")
 
 if (UNIX)
-    list(APPEND kzx_sources src/env/unix/unix.c)
+    list(APPEND kzx_sources src/env/unix/unix.c src/env/unix/malloc.c)
     set(kzx_cflags "-Wno-format")
     # set(kzx_cflags "-Wformat")
     list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA00000 -DENV_MALLOC_MAX_POOL=16)
@@ -76,7 +75,7 @@ if (UNIX)
         list(APPEND kzx_ldflags pthread dl)
     endif()
     if(ENV_CHECK_BACKTRACE)
-        list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
+        list(APPEND kzx_defines -DENV_HAVA_BACKTRACE -DENV_MALLOC_BACKTRACE)
         list(APPEND kzx_sources src/env/unix/backtrace.c)
     endif()
 else()
