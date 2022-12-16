@@ -339,6 +339,11 @@ inline static void free_pointer(pointer_t *pointer, env_memory_page_t *page, env
 			pointer->prev = page->head;
 			pointer->next->prev = pointer;
 			pointer->prev->next = pointer;
+		}else if (page->head->next->next != NULL && pointer->size >= page->head->next->next->size){
+			pointer->next = page->head->next->next;
+			pointer->prev = page->head->next;
+			pointer->next->prev = pointer;
+			pointer->prev->next = pointer;
 		}else{
 			pointer->next = page->end;
 			pointer->prev = page->end->prev;
