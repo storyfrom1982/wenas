@@ -1,7 +1,7 @@
 #include <env/env.h>
 
 
-void malloc_debug_cb(const __sym *debug)
+static void malloc_debug_cb(const __sym *debug)
 {
     __logw("%s\n", debug);
 }
@@ -18,5 +18,6 @@ void test()
     logger_test();
 
     env_logger_stop();
+    
     env_malloc_debug(malloc_debug_cb);
 }

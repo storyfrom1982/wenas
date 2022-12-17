@@ -63,7 +63,7 @@ void thread_test()
     __atom_lock(testatom);
 
     __logd("join tid %llx\n", env_thread_self());
-    // env_thread_destroy(tid);
+    env_thread_destroy(tid);
     // env_mutex_destroy(&mutex);
 
     env_mutex_destroy(&mutex);

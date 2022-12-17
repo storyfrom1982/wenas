@@ -41,7 +41,5 @@ int main(int argc, char *argv[])
 
     test();
 
-    env_logger_stop();
-
 	return 0;
 }

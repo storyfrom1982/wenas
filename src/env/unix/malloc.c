@@ -390,7 +390,7 @@ static void flush_cache()
 }
 
 
-void free(void *address)
+void free(__ptr address)
 {
 	__uint64 page_id = 0;
 	__uint64 pool_id = 0;
@@ -598,7 +598,7 @@ __ptr calloc(__uint64 number, __uint64 size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__ptr realloc(void *address, __uint64 size)
+__ptr realloc(__ptr address, __uint64 size)
 {
 	void *new_address = NULL;
 	pointer_t *old_pointer = __address2pointer(address);
@@ -689,7 +689,7 @@ __ptr _aligned_alloc(__uint64 alignment, __uint64 size)
     return aligned_alloc(alignment, size);
 }
 
-__result posix_memalign(void **ptr, __uint64 align, __uint64 size)
+__result posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
 {
     *ptr = aligned_alloc(align, size);
     if (NULL == *ptr){

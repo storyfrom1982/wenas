@@ -91,7 +91,6 @@ Reset:
 int env_logger_start(const __sym *path, env_logger_cb cb)
 {
     if (__set_true(g_logger.running)){
-        g_logger.running = 1;
         g_logger.printer = cb;
         g_logger.path = strdup(path);
         if (g_logger.path){
@@ -127,7 +126,7 @@ void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 lin
     __uint64 millisecond = env_time() / MICRO_SECONDS;
     n = env_strtime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] % 4d %21-s [%s] ", (unsigned int)(millisecond % 1000),
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
                   env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;

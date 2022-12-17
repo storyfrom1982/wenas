@@ -249,14 +249,14 @@ __env_export __uint64 env_backtrace(__ptr* array, __sint32 depth);
 ///////////////////////////////////////////////////////
 __env_export __ptr malloc(__uint64 size);
 __env_export __ptr calloc(__uint64 number, __uint64 size);
-__env_export __ptr realloc(void *address, __uint64 size);
+__env_export __ptr realloc(__ptr address, __uint64 size);
 __env_export __ptr memalign(__uint64 boundary, __uint64 size);
 __env_export __ptr aligned_alloc(__uint64 alignment, __uint64 size);
 __env_export __ptr _aligned_alloc(__uint64 alignment, __uint64 size);
 __env_export __sym* strdup(const __sym *s);
 __env_export __sym* strndup(const __sym *s, __uint64 n);
-__env_export __result posix_memalign(void **ptr, __uint64 align, __uint64 size);
-__env_export void free(void *address);
-__env_export void env_malloc_debug(void (*cb)(const char *fmt));
+__env_export __result posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
+__env_export void free(__ptr address);
+__env_export void env_malloc_debug(void (*cb)(const __sym *debug));
 
 #endif //__ENV_ENV_H__
