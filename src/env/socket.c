@@ -125,17 +125,17 @@ __sint32 env_socket_close(env_socket_t sock)
 #endif
 }
 
-__ret env_socket_connect(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
+__sint32 env_socket_connect(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
 {
 	return connect(sock, (const struct sockaddr*)addr, addrlen);
 }
 
-__ret env_socket_bind(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
+__sint32 env_socket_bind(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
 {
 	return bind(sock, (const struct sockaddr*)addr, addrlen);
 }
 
-__ret env_socket_listen(env_socket_t sock, __sint32 backlog)
+__sint32 env_socket_listen(env_socket_t sock, __sint32 backlog)
 {
 	return listen(sock, backlog);
 }
@@ -145,7 +145,7 @@ env_socket_t env_socket_accept(env_socket_t sock, env_sockaddr_ptr addr, env_soc
 	return accept(sock, (struct sockaddr*)addr, (socklen_t*)addrlen);
 }
 
-__ret env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags)
+__sint32 env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags)
 {
 #if defined(OS_WINDOWS)
 	return send(sock, (const char*)buf, (int)len, flags);
@@ -154,7 +154,7 @@ __ret env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32
 #endif
 }
 
-__ret env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags)
+__sint32 env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags)
 {
 #if defined(OS_WINDOWS)
 	return recv(sock, (char*)buf, (int)len, flags);
@@ -163,7 +163,7 @@ __ret env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags
 #endif
 }
 
-__ret env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr to, env_socklen_t tolen)
+__sint32 env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr to, env_socklen_t tolen)
 {
 #if defined(OS_WINDOWS)
 	return sendto(sock, (const char*)buf, (int)len, flags, to, tolen);
@@ -172,7 +172,7 @@ __ret env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint
 #endif    
 }
 
-__ret env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr from, env_socklen_t* fromlen)
+__sint32 env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr from, env_socklen_t* fromlen)
 {
     #if defined(OS_WINDOWS)
 	return recvfrom(sock, (char*)buf, (int)len, flags, from, fromlen);
@@ -181,58 +181,39 @@ __ret env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 f
 #endif
 }
 
-__ret env_socket_ip2addr(env_sockaddr_ptr sockaddr, const __sym* ip, __uint16 port)
+__sint32 env_socket_ip2addr(env_sockaddr_ptr *sockaddr, const __sym* ip, __uint16 port)
 {
-	int r;
-	char portstr[16];
-	struct addrinfo hints, *addr;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;
-//	hints.ai_flags = AI_ADDRCONFIG;
-	snprintf(portstr, sizeof(portstr), "%hu", port);
-	r = getaddrinfo(ip, portstr, &hints, &addr);
-	if (0 != r)
-		return r;
-
-	// fixed ios getaddrinfo don't set port if node is ipv4 address
-	env_socket_addr_set_port(addr->ai_addr, (socklen_t)addr->ai_addrlen, port);
-	assert(sizeof(struct sockaddr_in) == addr->ai_addrlen);
-	memcpy(sockaddr, addr->ai_addr, addr->ai_addrlen);
-	freeaddrinfo(addr);
+    struct sockaddr *sa = (struct sockaddr *)malloc(sizeof(struct sockaddr));
+	__pass(sa != NULL);
+	memset(sa, 0, sizeof(struct sockaddr));
+	struct sockaddr_in* in = (struct sockaddr_in*)sa;
+	in->sin_family = AF_INET;
+	in->sin_port = htons(port);
+	__pass(inet_aton(ip, &in->sin_addr) != 0);
+    *sockaddr = sa;
 	return 0;
+Reset:
+    return -1;
 }
 
-__ret env_socket_addr2ip(env_sockaddr_ptr sa, env_socklen_t salen, __sym ip[ENV_SOCKET_ADDRLEN], __uint16* port)
+__sint32 env_socket_addr2ip(env_sockaddr_ptr sa, __sym ip[ENV_SOCKET_ADDRLEN], __uint16* port)
 {
-	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
-	{
+	if (AF_INET == ((struct sockaddr*)sa)->sa_family){
 		struct sockaddr_in* in = (struct sockaddr_in*)sa;
-		assert(sizeof(struct sockaddr_in) == salen);
-		inet_ntop(AF_INET, &in->sin_addr, ip, ENV_SOCKET_ADDRLEN);
+		__pass(inet_ntop(AF_INET, &in->sin_addr, ip, ENV_SOCKET_ADDRLEN) != NULL);
 		if(port) *port = ntohs(in->sin_port);
+		return 0;
 	}
-	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
-	{
-		struct sockaddr_in6* in6 = (struct sockaddr_in6*)sa;
-		assert(sizeof(struct sockaddr_in6) == salen);
-		inet_ntop(AF_INET6, &in6->sin6_addr, ip, ENV_SOCKET_ADDRLEN);
-		if (port) *port = ntohs(in6->sin6_port);
-	}
-	else
-	{
-		return -1; // unknown address family
-	}
-
-	(void)salen;
-	return 0;
+Reset:
+	return -1; // unknown address family
 }
 
-__ret env_socket_addr_name(env_sockaddr_ptr sa, env_socklen_t salen, __sym* host, env_socklen_t hostlen)
+__sint32 env_socket_addr_name(env_sockaddr_ptr sa, env_socklen_t salen, __sym* host, env_socklen_t hostlen)
 {
     return getnameinfo(sa, salen, host, hostlen, NULL, 0, 0);
 }
 
-__ret env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint16 port)
+__sint32 env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint16 port)
 {
 	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
 	{
@@ -256,7 +237,7 @@ __ret env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint1
 	return 0;
 }
 
-__ret env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen)
+__sint32 env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen)
 {
 	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
 	{
@@ -292,7 +273,7 @@ __ret env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen)
 	return 0;    
 }
 
-__ret env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen)
+__sint32 env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen)
 {
 	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
 	{
@@ -319,7 +300,7 @@ __ret env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen)
 	return 0;
 }
 
-__ret env_socket_addr_compare(env_sockaddr_ptr sa, env_sockaddr_ptr sb)
+__sint32 env_socket_addr_compare(env_sockaddr_ptr sa, env_sockaddr_ptr sb)
 {
 	if(((struct sockaddr*)sa)->sa_family != ((struct sockaddr*)sb)->sa_family)
 		return ((struct sockaddr*)sa)->sa_family - ((struct sockaddr*)sb)->sa_family;
@@ -344,24 +325,17 @@ __ret env_socket_addr_compare(env_sockaddr_ptr sa, env_sockaddr_ptr sb)
 	default:		return -1;
 	}
 }
-__ret env_socket_addr_len(env_sockaddr_ptr addr)
+__sint32 env_socket_addr_len(env_sockaddr_ptr addr)
 {
 	switch (((struct sockaddr*)addr)->sa_family)
 	{
 	case AF_INET:	return sizeof(struct sockaddr_in);
 	case AF_INET6:	return sizeof(struct sockaddr_in6);
-#if defined(OS_LINUX) || defined(OS_MAC)// Windows build 17061
-		// https://blogs.msdn.microsoft.com/commandline/2017/12/19/af_unix-comes-to-windows/
-	case AF_UNIX:	return sizeof(struct sockaddr_un);
-#endif
-#if defined(AF_NETLINK)
-	//case AF_NETLINK:return sizeof(struct sockaddr_nl);
-#endif
 	default: return 0;
 	}
 }
 
-__ret env_socket_multicast_join(env_socket_t sock, const __sym* group, const __sym* local)
+__sint32 env_socket_multicast_join(env_socket_t sock, const __sym* group, const __sym* local)
 {
 	struct ip_mreq imr;
 	memset(&imr, 0, sizeof(imr));
@@ -370,7 +344,7 @@ __ret env_socket_multicast_join(env_socket_t sock, const __sym* group, const __s
 	return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&imr, sizeof(imr));
 }
 
-__ret env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __sym* local)
+__sint32 env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __sym* local)
 {
 	struct ip_mreq imr;
 	memset(&imr, 0, sizeof(imr));
@@ -379,7 +353,7 @@ __ret env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __
 	return setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&imr, sizeof(imr));
 }
 
-__ret env_socket_multicast_join_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
+__sint32 env_socket_multicast_join_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
 {
 	struct ip_mreq_source imr;
 	memset(&imr, 0, sizeof(imr));
@@ -389,7 +363,7 @@ __ret env_socket_multicast_join_source(env_socket_t sock, const __sym* group, co
 	return setsockopt(sock, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, (char *) &imr, sizeof(imr));
 }
 
-__ret env_socket_multicast_leave_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
+__sint32 env_socket_multicast_leave_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
 {
 	struct ip_mreq_source imr;
 	memset(&imr, 0, sizeof(imr));

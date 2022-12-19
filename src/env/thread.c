@@ -24,9 +24,9 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-__ret env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx)
+__sint32 env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx)
 {
-    __ret r = 0;
+    __sint32 r = 0;
 #if defined(OS_WINDOWS)
 	typedef __result(__stdcall *thread_routine)(__ptr);
 	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)cb, ctx, 0, NULL);
@@ -61,9 +61,9 @@ void env_thread_sleep(__uint64 nano_seconds)
 #endif
 }
 
-__ret env_thread_destroy(env_thread_t tid)
+__sint32 env_thread_destroy(env_thread_t tid)
 {
-    __ret r = 0;
+    __sint32 r = 0;
 #if defined(OS_WINDOWS)
         CloseHandle((HANDLE)tid);
 #else
@@ -73,9 +73,9 @@ __ret env_thread_destroy(env_thread_t tid)
     return r;
 }
 
-__ret env_thread_mutex_init(env_thread_mutex_t *mutex)
+__sint32 env_thread_mutex_init(env_thread_mutex_t *mutex)
 {
-    __ret r = 0;
+    __sint32 r = 0;
 #if defined(OS_WINDOWS)
 	InitializeCriticalSection(mutex);
 #else
@@ -112,9 +112,9 @@ void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
 #endif    
 }
 
-__ret env_thread_cond_init(env_thread_cond_t *cond)
+__sint32 env_thread_cond_init(env_thread_cond_t *cond)
 {
-    __ret r = 0;
+    __sint32 r = 0;
 #if defined(OS_WINDOWS)
     InitializeConditionVariable(cond);
 #else    
@@ -160,7 +160,7 @@ void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
 #endif
 }
 
-__ret env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, __uint64 timeout)
+__sint32 env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, __uint64 timeout)
 {
 #if defined(OS_WINDOWS)
     env_thread_mutex_unlock(mutex);
@@ -171,7 +171,7 @@ __ret env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mut
 	return b ? 0 : GetLastError() == ERROR_TIMEOUT ? ENV_TIMEDOUT : -1;
 #else // !defined(OS_WINDOWS)
 #if defined(CLOCK_REALTIME)
-	__ret r = 0;
+	__sint32 r = 0;
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
     timeout += (__uint64)ts.tv_sec * NANO_SECONDS + ts.tv_nsec;
@@ -190,9 +190,9 @@ __ret env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mut
 #endif // defined(OS_WINDOWS)
 }
 
-static inline __ret env_mutex_init(env_mutex_t *mutex)
+static inline __sint32 env_mutex_init(env_mutex_t *mutex)
 {
-    __ret r;
+    __sint32 r;
     r = env_thread_mutex_init(mutex->mutex);
     if (r == 0){
         r = env_thread_cond_init(mutex->cond);
@@ -261,7 +261,7 @@ void env_mutex_wait(env_mutex_t *mutex)
     env_thread_cond_wait(mutex->cond, mutex->mutex);
 }
 
-__ret env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout)
+__sint32 env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout)
 {
     return env_thread_cond_timedwait(mutex->cond, mutex->mutex, timeout);
 }

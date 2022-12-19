@@ -688,7 +688,7 @@ __ptr _aligned_alloc(__uint64 alignment, __uint64 size)
     return aligned_alloc(alignment, size);
 }
 
-__ret posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
+__sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
 {
     *ptr = aligned_alloc(align, size);
     if (NULL == *ptr){
