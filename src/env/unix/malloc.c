@@ -9,7 +9,6 @@
 #	define __USE_GNU
 #	include <dlfcn.h>
 #	include <stdio.h>
-#	include "env/backtrace.h"
 #	define ENV_MALLOC_BACKTRACE_DEPTH	    256
 #endif
 
@@ -689,7 +688,7 @@ __ptr _aligned_alloc(__uint64 alignment, __uint64 size)
     return aligned_alloc(alignment, size);
 }
 
-__result posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
+__ret posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
 {
     *ptr = aligned_alloc(align, size);
     if (NULL == *ptr){

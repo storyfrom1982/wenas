@@ -112,7 +112,7 @@ __bool env_find_path(const __symptr path)
 static __bool env_mkdir(const __symptr path)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = CreateDirectoryA(path, NULL);
+	__bool r = CreateDirectoryA(path, NULL);
 	return r ? __true : __false;
 #else
 	int r = mkdir(path, 0777);
@@ -123,7 +123,7 @@ static __bool env_mkdir(const __symptr path)
 __bool env_remove_path(const __symptr path)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = RemoveDirectoryA(path);
+	__bool r = RemoveDirectoryA(path);
 	return r ? __true : __false;
 #else
 	int r = rmdir(path);
@@ -147,7 +147,7 @@ __bool env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 __bool env_remove_file(const __symptr path)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = DeleteFileA(path);
+	__bool r = DeleteFileA(path);
 	return r ? __true : __false;
 #else
 	int r = remove(path);
@@ -160,7 +160,7 @@ __bool env_remove_file(const __symptr path)
 __bool env_move_path(const __symptr from, const __symptr to)
 {
 #if defined(OS_WINDOWS)
-	BOOL r = MoveFileA(from, to);
+	__bool r = MoveFileA(from, to);
 	return r ? __true : __false;
 #else
 	int r = rename(from, to);

@@ -84,13 +84,13 @@ typedef double                  __real64;
 ///////////////////////////////////////////////////////
 ///// 返回值类型
 ///////////////////////////////////////////////////////
-typedef int                     __result;
+typedef int                     __ret;
 
 ///////////////////////////////////////////////////////
 ///// 当前状态
 ///////////////////////////////////////////////////////
 __env_export const __sym* env_check(void);
-__env_export const __sym* env_parser(__result error);
+__env_export const __sym* env_parser(__ret error);
 
 ///////////////////////////////////////////////////////
 ///// 时间相关
@@ -126,12 +126,12 @@ __env_export __bool env_move_path(const __symptr from, const __symptr to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
-typedef __result (*env_thread_cb)(__ptr ctx);
+typedef __ret (*env_thread_cb)(__ptr ctx);
 typedef __uint64 env_thread_t;
 typedef struct env_mutex env_mutex_t;
 
-__env_export __result env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx);
-__env_export __result env_thread_destroy(env_thread_t tid);
+__env_export __ret env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx);
+__env_export __ret env_thread_destroy(env_thread_t tid);
 __env_export env_thread_t env_thread_self();
 __env_export void env_thread_sleep(__uint64 nano_seconds);
 
@@ -142,7 +142,7 @@ __env_export void env_mutex_unlock(env_mutex_t *mutex);
 __env_export void env_mutex_signal(env_mutex_t *mutex);
 __env_export void env_mutex_broadcast(env_mutex_t *mutex);
 __env_export void env_mutex_wait(env_mutex_t *mutex);
-__env_export __result env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout);
+__env_export __ret env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout);
 
 typedef struct env_pipe env_pipe_t;
 __env_export env_pipe_t* env_pipe_create(__uint64 len);
@@ -155,7 +155,7 @@ __env_export void env_pipe_stop(env_pipe_t *pipe);
 __env_export void env_pipe_clear(env_pipe_t *pipe);
 
 ///////////////////////////////////////////////////////
-///// 源自操作
+///// 原子操作
 ///////////////////////////////////////////////////////
 typedef __uint64 __atombool;
 
@@ -205,7 +205,7 @@ enum env_log_level {
 };
 
 typedef void (*env_logger_cb) (__sint32 level, const __sym *log);
-__env_export __result env_logger_start(const __sym *path, env_logger_cb cb);
+__env_export __ret env_logger_start(const __sym *path, env_logger_cb cb);
 __env_export void env_logger_stop();
 __env_export void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 line, const __sym *fmt, ...);
 
@@ -255,8 +255,50 @@ __env_export __ptr aligned_alloc(__uint64 alignment, __uint64 size);
 __env_export __ptr _aligned_alloc(__uint64 alignment, __uint64 size);
 __env_export __sym* strdup(const __sym *s);
 __env_export __sym* strndup(const __sym *s, __uint64 n);
-__env_export __result posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
+__env_export __ret posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
 __env_export void free(__ptr address);
 __env_export void env_malloc_debug(void (*cb)(const __sym *debug));
+
+///////////////////////////////////////////////////////
+///// 网络插口
+///////////////////////////////////////////////////////
+typedef __sint32 env_socket_t;
+typedef __uint32 env_socklen_t;
+typedef void* env_sockaddr_ptr;
+
+#define ENV_SOCKET_ADDRLEN      46
+
+__env_export __ret env_socket_init(void);
+__env_export __ret env_socket_cleanup(void);
+__env_export __ret env_socket_geterror(void);
+
+__env_export env_socket_t env_socket_tcp(void);
+__env_export env_socket_t env_socket_udp(void);
+__env_export __ret env_socket_shutdown(env_socket_t sock, __sint32 flag); // SHUT_RD/SHUT_WR/SHUT_RDWR
+__env_export __ret env_socket_close(env_socket_t sock);
+
+__env_export __ret env_socket_connect(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen);
+__env_export __ret env_socket_bind(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen);
+__env_export __ret env_socket_listen(env_socket_t sock, __sint32 backlog);
+__env_export env_socket_t env_socket_accept(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t* addrlen);
+
+__env_export __ret env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags);
+__env_export __ret env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags);
+__env_export __ret env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr to, env_socklen_t tolen);
+__env_export __ret env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr from, env_socklen_t* fromlen);
+
+__env_export __ret env_socket_ip2addr(env_sockaddr_ptr addr, const __sym* ip, __uint16 port);
+__env_export __ret env_socket_addr2ip(env_sockaddr_ptr sa, env_socklen_t salen, __sym ip[ENV_SOCKET_ADDRLEN], __uint16* port);
+__env_export __ret env_socket_addr_name(env_sockaddr_ptr sa, env_socklen_t salen, __sym* host, env_socklen_t hostlen);
+__env_export __ret env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint16 port);
+__env_export __ret env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen);
+__env_export __ret env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen);
+__env_export __ret env_socket_addr_compare(env_sockaddr_ptr first, env_sockaddr_ptr second); // 0-equal, other-don't equal
+__env_export __ret env_socket_addr_len(env_sockaddr_ptr addr);
+
+__env_export __ret env_socket_multicast_join(env_socket_t sock, const __sym* group, const __sym* local);
+__env_export __ret env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __sym* local);
+__env_export __ret env_socket_multicast_join_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local);
+__env_export __ret env_socket_multicast_leave_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local);
 
 #endif //__ENV_ENV_H__

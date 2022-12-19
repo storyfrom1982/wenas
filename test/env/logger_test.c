@@ -6,9 +6,9 @@
 static __atombool running = __false;
 __sym sym[26] = {'a', 'b', 'c', 'd', 'e', 'f'};
 
-__result pipe_write_thread(__ptr p)
+__ret pipe_write_thread(__ptr p)
 {
-    __result result = 0;
+    __ret result = 0;
 	__sym s = 0;
 	__sint32 size = 32;
 	__sym *buf = NULL;
@@ -31,9 +31,9 @@ Reset:
 	return 0;
 }
 
-__result pipe_read_thread(__ptr p)
+__ret pipe_read_thread(__ptr p)
 {
-	__result result = 0, count = 0;
+	__ret result = 0, count = 0;
 	__sint32 size = 32;
 	__sym *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;

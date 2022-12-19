@@ -49,11 +49,12 @@ set(kzx_sources src/main.c
     src/env/storage.c
     src/env/thread.c
     src/env/logger.c
+    src/env/socket.c
     test/test.c
     test/env/storage_test.c
     test/env/thread_test.c
     test/env/logger_test.c
-    # src/env/socket.c
+
     # test/sys/struct/heap_test.c
     # test/sys/struct/lineardb_test.c
     # test/sys/struct/linearkv_test.c

@@ -1,549 +1,400 @@
 /**
  * Kinesis Video Producer Host Info
  */
-
-//antenna
-#define LOG_CLASS "Network"
-#include "socket.h"
 #include "env/env.h"
 
-//#include <ifaddrs.h>
-//#include <sys/socket.h>
-//#include <net/if.h>
-//#include <netinet/in.h>
-//#include <netinet/tcp.h>
-//#include <netdb.h>
+#ifdef OS_WINDOWS
 
-#if !defined __WINDOWS_BUILD__
+#include <Winsock2.h>
+#include <WS2tcpip.h>
+#include <ws2ipdef.h>
 
-#include <signal.h>
-#include <ifaddrs.h>
+#define socket_invalid	INVALID_SOCKET
+#define socket_error	SOCKET_ERROR
+
+#if defined(_MSC_VER)
+#pragma comment(lib, "Ws2_32.lib")
+#pragma warning(push)
+#pragma warning(disable: 6031) // warning C6031: Return value ignored: 'snprintf'
+#endif
+
+#define SHUT_RD SD_RECEIVE
+#define SHUT_WR SD_SEND
+#define SHUT_RDWR SD_BOTH
+
+#ifndef ETIMEDOUT
+	#define ETIMEDOUT 138
+#endif
+
+// IPv6 MTU
+#ifndef IPV6_MTU_DISCOVER
+	#define IPV6_MTU_DISCOVER	71
+	#define IP_PMTUDISC_DO		1
+	#define IP_PMTUDISC_DONT	2
+#endif
+
+#ifndef AI_V4MAPPED
+	#define AI_V4MAPPED	0x00000800
+#endif
+#ifndef AI_NUMERICSERV
+	#define AI_NUMERICSERV	0x00000008
+#endif
+
+#else
+
+#include <sys/time.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <net/if.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
+#include <sys/un.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <errno.h>
+#include <unistd.h>
+#include <string.h>
+#include <fcntl.h>
+#include <poll.h>
 
-#else //!defined __WINDOWS_BUILD__
+#define socket_invalid	-1
+#define socket_error	-1
 
-#include <winsock2.h>
-#include <iphlpapi.h>
-#include <ws2tcpip.h>
-
-#ifndef MSG_NOSIGNAL
-#define MSG_NOSIGNAL 0
 #endif
 
-#endif //!defined __WINDOWS_BUILD__
-
-#define MEMCMP        memcmp
-#define MEMCPY        memcpy
-#define MEMSET        memset
-#define MEMMOVE       memmove
-
-#define SNPRINTF   snprintf
-
-#ifndef SIZEOF
-#define SIZEOF(x) (sizeof(x))
-#endif
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(array) (sizeof(array) / sizeof *(array))
-#endif
-
-#define EMPTY_STRING ((__byte*) "")
-
-#define STATUS_BASE                                     0x00000000
-#define STATUS_NULL_ARG                                 STATUS_BASE + 0x00000001
-#define STATUS_INVALID_ARG                              STATUS_BASE + 0x00000002
-#define STATUS_BUFFER_TOO_SMALL                         STATUS_BASE + 0x00000005
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
 
 
-#define STATUS_NETWORKING_BASE                     STATUS_BASE + 0x01000000
-#define STATUS_GET_LOCAL_IP_ADDRESSES_FAILED       STATUS_NETWORKING_BASE + 0x00000016
-#define STATUS_CREATE_UDP_SOCKET_FAILED            STATUS_NETWORKING_BASE + 0x00000017
-#define STATUS_BINDING_SOCKET_FAILED               STATUS_NETWORKING_BASE + 0x00000018
-#define STATUS_GET_PORT_NUMBER_FAILED              STATUS_NETWORKING_BASE + 0x00000019
-#define STATUS_RESOLVE_HOSTNAME_FAILED             STATUS_NETWORKING_BASE + 0x0000001b
-#define STATUS_HOSTNAME_NOT_FOUND                  STATUS_NETWORKING_BASE + 0x0000001c
-#define STATUS_SOCKET_CONNECT_FAILED               STATUS_NETWORKING_BASE + 0x0000001d
-#define STATUS_SOCKET_SET_SEND_BUFFER_SIZE_FAILED  STATUS_NETWORKING_BASE + 0x00000023
-#define STATUS_GET_SOCKET_FLAG_FAILED              STATUS_NETWORKING_BASE + 0x00000024
-#define STATUS_SET_SOCKET_FLAG_FAILED              STATUS_NETWORKING_BASE + 0x00000025
-#define STATUS_CLOSE_SOCKET_FAILED                 STATUS_NETWORKING_BASE + 0x00000026
-
-#ifndef ENTERS
-#define ENTERS() LOGD("Network", "Enter")
-#endif
-#ifndef LEAVES
-#define LEAVES() LOGD("Network", "Leave")
-#endif
-
-#define CHK_ERR(condition, errRet, errorMessage, ...)                                                                                                \
-    do {                                                                                                                                             \
-        if (!(condition)) {                                                                                                                          \
-            retStatus = (errRet);                                                                                                                    \
-            LOGE("Network", ##__VA_ARGS__);                                                                                                      \
-            goto Reset;                                                                                                                            \
-        }                                                                                                                                            \
-    } while (__false)
-
-#define CHK_STATUS(condition)                                                                                                                        \
-    do {                                                                                                                                             \
-        __res __status = condition;                                                                                                                 \
-        if (__failed(__status)) {                                                                                                               \
-            retStatus = (__status);                                                                                                                  \
-            goto Reset;                                                                                                                            \
-        }                                                                                                                                            \
-    } while (__false)
-
-__res getLocalhostIpAddresses(PKvsIpAddress destIpList, __uint32* pDestIpListLen, IceSetInterfaceFilterFunc filter, __uint64 customData)
+__sint32 env_socket_init(void)
 {
-    ENTERS();
-    __res retStatus = 0;
-    __uint32 ipCount = 0, destIpListLen;
-    __bool filterSet = __true;
-
-#ifdef _WIN32
-    DWORD retWinStatus, sizeAAPointer;
-    PIP_ADAPTER_ADDRESSES adapterAddresses, aa = NULL;
-    PIP_ADAPTER_UNICAST_ADDRESS ua;
+#if defined(OS_WINDOWS)
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	
+	wVersionRequested = MAKEWORD(2, 2);
+	return WSAStartup(wVersionRequested, &wsaData);
 #else
-    struct ifaddrs *ifaddr = NULL, *ifa = NULL;
+	return 0;
 #endif
-    struct sockaddr_in* pIpv4Addr = NULL;
-    struct sockaddr_in6* pIpv6Addr = NULL;
+}
 
-    __check(destIpList != NULL && pDestIpListLen != NULL, STATUS_NULL_ARG);
-    __check(*pDestIpListLen != 0, STATUS_INVALID_ARG);
-
-    destIpListLen = *pDestIpListLen;
-#ifdef _WIN32
-    retWinStatus = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, NULL, &sizeAAPointer);
-    __check(retWinStatus == ERROR_BUFFER_OVERFLOW, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
-
-    adapterAddresses = (PIP_ADAPTER_ADDRESSES) MEMALLOC(sizeAAPointer);
-
-    retWinStatus = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, adapterAddresses, &sizeAAPointer);
-    __check(retWinStatus == ERROR_SUCCESS, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
-
-    for (aa = adapterAddresses; aa != NULL && ipCount < destIpListLen; aa = aa->Next) {
-        char ifa_name[BUFSIZ];
-        memset(ifa_name, 0, BUFSIZ);
-        WideCharToMultiByte(CP_ACP, 0, aa->FriendlyName, wcslen(aa->FriendlyName), ifa_name, BUFSIZ, NULL, NULL);
-
-        for (ua = aa->FirstUnicastAddress; ua != NULL; ua = ua->Next) {
-            if (filter != NULL) {
-                DLOGI("Callback set to allow network interface filtering");
-                // The callback evaluates to a FALSE if the application is interested in black listing an interface
-                if (filter(customData, ifa_name) == FALSE) {
-                    filterSet = FALSE;
-                } else {
-                    filterSet = __true;
-                }
-            }
-
-            // If filter is set, ensure the details are collected for the interface
-            if (filterSet == __true) {
-                int family = ua->Address.lpSockaddr->sa_family;
-
-                if (family == AF_INET) {
-                    destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV4;
-                    destIpList[ipCount].port = 0;
-
-                    pIpv4Addr = (struct sockaddr_in*) (ua->Address.lpSockaddr);
-                    MEMCPY(destIpList[ipCount].address, &pIpv4Addr->sin_addr, IPV4_ADDRESS_LENGTH);
-                } else {
-                    destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV6;
-                    destIpList[ipCount].port = 0;
-
-                    pIpv6Addr = (struct sockaddr_in6*) (ua->Address.lpSockaddr);
-                    // Ignore unspecified addres: the other peer can't use this address
-                    // Ignore link local: not very useful and will add work unnecessarily
-                    // Ignore site local: https://tools.ietf.org/html/rfc8445#section-5.1.1.1
-                    if (IN6_IS_ADDR_UNSPECIFIED(&pIpv6Addr->sin6_addr) || IN6_IS_ADDR_LINKLOCAL(&pIpv6Addr->sin6_addr) ||
-                        IN6_IS_ADDR_SITELOCAL(&pIpv6Addr->sin6_addr)) {
-                        continue;
-                    }
-                    MEMCPY(destIpList[ipCount].address, &pIpv6Addr->sin6_addr, IPV6_ADDRESS_LENGTH);
-                }
-
-                // in case of overfilling destIpList
-                ipCount++;
-            }
-        }
-    }
+__sint32 env_socket_cleanup(void)
+{
+#if defined(OS_WINDOWS)
+	return WSACleanup();
 #else
-    __check(getifaddrs(&ifaddr) != -1, STATUS_GET_LOCAL_IP_ADDRESSES_FAILED);
-    for (ifa = ifaddr; ifa != NULL && ipCount < destIpListLen; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr != NULL && (ifa->ifa_flags & IFF_LOOPBACK) == 0 && // ignore loopback interface
-            (ifa->ifa_flags & IFF_RUNNING) > 0 &&                            // interface has to be allocated
-            (ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6)) {
-            // mark vpn interface
-            destIpList[ipCount].isPointToPoint = ((ifa->ifa_flags & IFF_POINTOPOINT) != 0);
-
-            if (filter != NULL) {
-                // The callback evaluates to a FALSE if the application is interested in black listing an interface
-                if (filter(customData, ifa->ifa_name) == __false) {
-                    filterSet = __false;
-                } else {
-                    filterSet = __true;
-                }
-            }
-
-            // If filter is set, ensure the details are collected for the interface
-            if (filterSet == __true) {
-                if (ifa->ifa_addr->sa_family == AF_INET) {
-                    destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV4;
-                    destIpList[ipCount].port = 0;
-                    pIpv4Addr = (struct sockaddr_in*) ifa->ifa_addr;
-                    MEMCPY(destIpList[ipCount].address, &pIpv4Addr->sin_addr, IPV4_ADDRESS_LENGTH);
-
-                } else {
-                    destIpList[ipCount].family = KVS_IP_FAMILY_TYPE_IPV6;
-                    destIpList[ipCount].port = 0;
-                    pIpv6Addr = (struct sockaddr_in6*) ifa->ifa_addr;
-                    // Ignore unspecified addres: the other peer can't use this address
-                    // Ignore link local: not very useful and will add work unnecessarily
-                    // Ignore site local: https://tools.ietf.org/html/rfc8445#section-5.1.1.1
-                    if (IN6_IS_ADDR_UNSPECIFIED(&pIpv6Addr->sin6_addr) || IN6_IS_ADDR_LINKLOCAL(&pIpv6Addr->sin6_addr) ||
-                        IN6_IS_ADDR_SITELOCAL(&pIpv6Addr->sin6_addr)) {
-                        continue;
-                    }
-                    MEMCPY(destIpList[ipCount].address, &pIpv6Addr->sin6_addr, IPV6_ADDRESS_LENGTH);
-                }
-
-                // in case of overfilling destIpList
-                ipCount++;
-            }
-        }
-    }
+	return 0;
 #endif
+}
 
-Reset:
-
-#ifdef _WIN32
-    if (adapterAddresses != NULL) {
-        SAFE_MEMFREE(adapterAddresses);
-    }
+__sint32 env_socket_geterror(void)
+{
+#if defined(OS_WINDOWS)
+	return WSAGetLastError();
 #else
-    if (ifaddr != NULL) {
-        freeifaddrs(ifaddr);
-    }
+	return errno;
 #endif
-
-    if (pDestIpListLen != NULL) {
-        *pDestIpListLen = ipCount;
-    }
-
-    LEAVES();
-    return retStatus;
 }
 
-__res createSocket(KVS_IP_FAMILY_TYPE familyType, KVS_SOCKET_PROTOCOL protocol, __uint32 sendBufSize, __sint32* pOutSockFd)
+env_socket_t env_socket_tcp(void)
 {
-    __res retStatus = 0;
+	return socket(PF_INET, SOCK_STREAM, 0);
+}
 
-    __sint32 sockfd, sockType, flags;
-    __sint32 optionValue;
+env_socket_t env_socket_udp(void)
+{
+	return socket(PF_INET, SOCK_DGRAM, 0);
+}
 
-    __check(pOutSockFd != NULL, STATUS_NULL_ARG);
+__sint32 env_socket_shutdown(env_socket_t sock, __sint32 flag)
+{
+	return shutdown(sock, flag);
+}
 
-    sockType = protocol == KVS_SOCKET_PROTOCOL_UDP ? SOCK_DGRAM : SOCK_STREAM;
-
-    sockfd = socket(familyType == KVS_IP_FAMILY_TYPE_IPV4 ? AF_INET : AF_INET6, sockType, 0);
-    if (sockfd == -1) {
-        LOGW("Network", "socket() failed to create socket with errno %s", getErrorString(getErrorCode()));
-        __check(__false, STATUS_CREATE_UDP_SOCKET_FAILED);
-    }
-
-    optionValue = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, NO_SIGNAL, &optionValue, SIZEOF(optionValue)) < 0) {
-        LOGW("Network", "setsockopt() NO_SIGNAL failed with errno %s", getErrorString(getErrorCode()));
-    }
-
-    if (sendBufSize > 0 && setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendBufSize, SIZEOF(sendBufSize)) < 0) {
-        LOGW("Network", "setsockopt() SO_SNDBUF failed with errno %s", getErrorString(getErrorCode()));
-        __check(__false, STATUS_SOCKET_SET_SEND_BUFFER_SIZE_FAILED);
-    }
-
-    *pOutSockFd = (__sint32) sockfd;
-
-#ifdef _WIN32
-    UINT32 nonblock = 1;
-    ioctlsocket(sockfd, FIONBIO, &nonblock);
+__sint32 env_socket_close(env_socket_t sock)
+{
+#if defined(OS_WINDOWS)
+	// MSDN:
+	// If closesocket fails with WSAEWOULDBLOCK the socket handle is still valid, 
+	// and a disconnect is not initiated. The application must call closesocket again to close the socket. 
+	return closesocket(sock);
 #else
-    // Set the non-blocking mode for the socket
-    flags = fcntl(sockfd, F_GETFL, 0);
-    CHK_ERR(flags >= 0, STATUS_GET_SOCKET_FLAG_FAILED, "Failed to get the socket flags with system error %s", strerror(errno));
-    CHK_ERR(0 <= fcntl(sockfd, F_SETFL, flags | O_NONBLOCK), STATUS_SET_SOCKET_FLAG_FAILED, "Failed to Set the socket flags with system error %s",
-            strerror(errno));
+	return close(sock);
 #endif
-
-    // done at this point for UDP
-    __check(protocol == KVS_SOCKET_PROTOCOL_TCP, retStatus);
-
-    /* disable Nagle algorithm to not delay sending packets. We should have enough density to justify using it. */
-    optionValue = 1;
-    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &optionValue, SIZEOF(optionValue)) < 0) {
-        LOGW("Network", "setsockopt() TCP_NODELAY failed with errno %s", getErrorString(getErrorCode()));
-    }
-
-Reset:
-
-    return retStatus;
 }
 
-__res closeSocket(__sint32 sockfd)
+__ret env_socket_connect(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
 {
-    __res retStatus = 0;
+	return connect(sock, (const struct sockaddr*)addr, addrlen);
+}
 
-#ifdef _WIN32
-    CHK_ERR(closesocket(sockfd) == 0, STATUS_CLOSE_SOCKET_FAILED, "Failed to close the socket %s", getErrorString(getErrorCode()));
+__ret env_socket_bind(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
+{
+	return bind(sock, (const struct sockaddr*)addr, addrlen);
+}
+
+__ret env_socket_listen(env_socket_t sock, __sint32 backlog)
+{
+	return listen(sock, backlog);
+}
+
+env_socket_t env_socket_accept(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t* addrlen)
+{
+	return accept(sock, (struct sockaddr*)addr, (socklen_t*)addrlen);
+}
+
+__ret env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags)
+{
+#if defined(OS_WINDOWS)
+	return send(sock, (const char*)buf, (int)len, flags);
 #else
-    CHK_ERR(close(sockfd) == 0, STATUS_CLOSE_SOCKET_FAILED, "Failed to close the socket %s", strerror(errno));
+	return (int)send(sock, buf, len, flags);
 #endif
-
-Reset:
-
-    return retStatus;
 }
 
-__res socketBind(PKvsIpAddress pHostIpAddress, __sint32 sockfd)
+__ret env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags)
 {
-    __res retStatus = 0;
-    struct sockaddr_in ipv4Addr;
-    struct sockaddr_in6 ipv6Addr;
-    struct sockaddr* sockAddr = NULL;
-    socklen_t addrLen;
-
-    __sym ipAddrStr[KVS_IP_ADDRESS_STRING_BUFFER_LEN];
-
-    __check(pHostIpAddress != NULL, STATUS_NULL_ARG);
-
-    if (pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4) {
-        MEMSET(&ipv4Addr, 0x00, SIZEOF(ipv4Addr));
-        ipv4Addr.sin_family = AF_INET;
-        ipv4Addr.sin_port = 0; // use next available port
-        MEMCPY(&ipv4Addr.sin_addr, pHostIpAddress->address, IPV4_ADDRESS_LENGTH);
-        // TODO: Properly handle the non-portable sin_len field if needed per https://issues.amazon.com/KinesisVideo-4952
-        // ipv4Addr.sin_len = SIZEOF(ipv4Addr);
-        sockAddr = (struct sockaddr*) &ipv4Addr;
-        addrLen = SIZEOF(struct sockaddr_in);
-
-    } else {
-        MEMSET(&ipv6Addr, 0x00, SIZEOF(ipv6Addr));
-        ipv6Addr.sin6_family = AF_INET6;
-        ipv6Addr.sin6_port = 0; // use next available port
-        MEMCPY(&ipv6Addr.sin6_addr, pHostIpAddress->address, IPV6_ADDRESS_LENGTH);
-        // TODO: Properly handle the non-portable sin6_len field if needed per https://issues.amazon.com/KinesisVideo-4952
-        // ipv6Addr.sin6_len = SIZEOF(ipv6Addr);
-        sockAddr = (struct sockaddr*) &ipv6Addr;
-        addrLen = SIZEOF(struct sockaddr_in6);
-    }
-
-    if (bind(sockfd, sockAddr, addrLen) < 0) {
-        CHK_STATUS(getIpAddrStr(pHostIpAddress, ipAddrStr, ARRAY_SIZE(ipAddrStr)));
-//        LOGW("Network", "bind() failed for ip%s address: %s, port %u with errno %s", IS_IPV4_ADDR(pHostIpAddress) ? EMPTY_STRING : "V6", ipAddrStr,
-//              (UINT16) getInt16(pHostIpAddress->port), getErrorString(getErrorCode()));
-        __check(__false, STATUS_BINDING_SOCKET_FAILED);
-    }
-
-    if (getsockname(sockfd, sockAddr, &addrLen) < 0) {
-        LOGW("Network", "getsockname() failed with errno %s", getErrorString(getErrorCode()));
-        __check(__false, STATUS_GET_PORT_NUMBER_FAILED);
-    }
-
-    pHostIpAddress->port = (__uint16) pHostIpAddress->family == KVS_IP_FAMILY_TYPE_IPV4 ? ipv4Addr.sin_port : ipv6Addr.sin6_port;
-
-Reset:
-    return retStatus;
-}
-
-__res socketConnect(PKvsIpAddress pPeerAddress, __sint32 sockfd)
-{
-    __res retStatus = 0;
-    struct sockaddr_in ipv4PeerAddr;
-    struct sockaddr_in6 ipv6PeerAddr;
-    struct sockaddr* peerSockAddr = NULL;
-    socklen_t addrLen;
-    __sint32 retVal;
-
-    __check(pPeerAddress != NULL, STATUS_NULL_ARG);
-
-    if (pPeerAddress->family == KVS_IP_FAMILY_TYPE_IPV4) {
-        MEMSET(&ipv4PeerAddr, 0x00, SIZEOF(ipv4PeerAddr));
-        ipv4PeerAddr.sin_family = AF_INET;
-        ipv4PeerAddr.sin_port = pPeerAddress->port;
-        MEMCPY(&ipv4PeerAddr.sin_addr, pPeerAddress->address, IPV4_ADDRESS_LENGTH);
-        peerSockAddr = (struct sockaddr*) &ipv4PeerAddr;
-        addrLen = SIZEOF(struct sockaddr_in);
-    } else {
-        MEMSET(&ipv6PeerAddr, 0x00, SIZEOF(ipv6PeerAddr));
-        ipv6PeerAddr.sin6_family = AF_INET6;
-        ipv6PeerAddr.sin6_port = pPeerAddress->port;
-        MEMCPY(&ipv6PeerAddr.sin6_addr, pPeerAddress->address, IPV6_ADDRESS_LENGTH);
-        peerSockAddr = (struct sockaddr*) &ipv6PeerAddr;
-        addrLen = SIZEOF(struct sockaddr_in6);
-    }
-
-    retVal = connect(sockfd, peerSockAddr, addrLen);
-    CHK_ERR(retVal >= 0 || getErrorCode() == KVS_SOCKET_IN_PROGRESS, STATUS_SOCKET_CONNECT_FAILED, "connect() failed with errno %s",
-            getErrorString(getErrorCode()));
-
-Reset:
-    return retStatus;
-}
-
-__res getIpWithHostName(__sym* hostname, PKvsIpAddress destIp)
-{
-    __res retStatus = 0;
-    __sint32 errCode;
-    __sym* errStr;
-    struct addrinfo *res, *rp;
-    __bool resolved = __false;
-    struct sockaddr_in* ipv4Addr;
-    struct sockaddr_in6* ipv6Addr;
-
-    __check(hostname != NULL, STATUS_NULL_ARG);
-
-    errCode = getaddrinfo(hostname, NULL, NULL, &res);
-    if (errCode != 0) {
-        errStr = errCode == EAI_SYSTEM ? strerror(errno) : (__sym*) gai_strerror(errCode);
-        CHK_ERR(__false, STATUS_RESOLVE_HOSTNAME_FAILED, "getaddrinfo() with errno %s", errStr);
-    }
-
-    for (rp = res; rp != NULL && !resolved; rp = rp->ai_next) {
-        if (rp->ai_family == AF_INET) {
-            ipv4Addr = (struct sockaddr_in*) rp->ai_addr;
-            destIp->family = KVS_IP_FAMILY_TYPE_IPV4;
-            MEMCPY(destIp->address, &ipv4Addr->sin_addr, IPV4_ADDRESS_LENGTH);
-            resolved = __true;
-        } else if (rp->ai_family == AF_INET6) {
-            ipv6Addr = (struct sockaddr_in6*) rp->ai_addr;
-            destIp->family = KVS_IP_FAMILY_TYPE_IPV6;
-            MEMCPY(destIp->address, &ipv6Addr->sin6_addr, IPV6_ADDRESS_LENGTH);
-            resolved = __true;
-        }
-    }
-
-    freeaddrinfo(res);
-    CHK_ERR(resolved, STATUS_HOSTNAME_NOT_FOUND, "could not find network address of %s", hostname);
-
-Reset:
-
-//    CHK_LOG_ERR(retStatus);
-
-    return retStatus;
-}
-
-__res getIpAddrStr(PKvsIpAddress pKvsIpAddress, __sym* pBuffer, __uint32 bufferLen)
-{
-    __res retStatus = 0;
-    __uint32 generatedStrLen = 0; // number of characters written if buffer is large enough not counting the null terminator
-
-    __check(pKvsIpAddress != NULL, STATUS_NULL_ARG);
-    __check(pBuffer != NULL && bufferLen > 0, STATUS_INVALID_ARG);
-
-    if (IS_IPV4_ADDR(pKvsIpAddress)) {
-        generatedStrLen = SNPRINTF(pBuffer, bufferLen, "%u.%u.%u.%u", pKvsIpAddress->address[0], pKvsIpAddress->address[1], pKvsIpAddress->address[2],
-                                   pKvsIpAddress->address[3]);
-    } else {
-        generatedStrLen = SNPRINTF(pBuffer, bufferLen, "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-                                   pKvsIpAddress->address[0], pKvsIpAddress->address[1], pKvsIpAddress->address[2], pKvsIpAddress->address[3],
-                                   pKvsIpAddress->address[4], pKvsIpAddress->address[5], pKvsIpAddress->address[6], pKvsIpAddress->address[7],
-                                   pKvsIpAddress->address[8], pKvsIpAddress->address[9], pKvsIpAddress->address[10], pKvsIpAddress->address[11],
-                                   pKvsIpAddress->address[12], pKvsIpAddress->address[13], pKvsIpAddress->address[14], pKvsIpAddress->address[15]);
-    }
-
-    // bufferLen should be strictly larger than generatedStrLen because bufferLen includes null terminator
-    __check(generatedStrLen < bufferLen, STATUS_BUFFER_TOO_SMALL);
-
-Reset:
-
-    return retStatus;
-}
-
-__bool isSameIpAddress(PKvsIpAddress pAddr1, PKvsIpAddress pAddr2, __bool checkPort)
-{
-    __bool ret;
-    __uint32 addrLen;
-
-    if (pAddr1 == NULL || pAddr2 == NULL) {
-        return __false;
-    }
-
-    addrLen = IS_IPV4_ADDR(pAddr1) ? IPV4_ADDRESS_LENGTH : IPV6_ADDRESS_LENGTH;
-
-    ret =
-        (pAddr1->family == pAddr2->family && MEMCMP(pAddr1->address, pAddr2->address, addrLen) == 0 && (!checkPort || pAddr1->port == pAddr2->port));
-
-    return ret;
-}
-
-#ifdef _WIN32
-INT32 getErrorCode(VOID)
-{
-    INT32 error = WSAGetLastError();
-    switch (error) {
-        case WSAEWOULDBLOCK:
-            error = EWOULDBLOCK;
-            break;
-        case WSAEINPROGRESS:
-            error = EINPROGRESS;
-            break;
-        case WSAEISCONN:
-            error = EISCONN;
-            break;
-        case WSAEINTR:
-            error = EINTR;
-            break;
-        default:
-            /* leave unchanged */
-            break;
-    }
-    return error;
-}
+#if defined(OS_WINDOWS)
+	return recv(sock, (char*)buf, (int)len, flags);
 #else
-__sint32 getErrorCode(__void)
-{
-    return errno;
-}
+	return recv(sock, buf, len, flags);
 #endif
-
-#ifdef _WIN32
-__sym* getErrorString(INT32 error)
-{
-    static __sym buffer[1024];
-    switch (error) {
-        case EWOULDBLOCK:
-            error = WSAEWOULDBLOCK;
-            break;
-        case EINPROGRESS:
-            error = WSAEINPROGRESS;
-            break;
-        case EISCONN:
-            error = WSAEISCONN;
-            break;
-        case EINTR:
-            error = WSAEINTR;
-            break;
-        default:
-            /* leave unchanged */
-            break;
-    }
-    if (FormatMessage((FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS), NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buffer,
-                      SIZEOF(buffer), NULL) == 0) {
-        SNPRINTF(buffer, SIZEOF(buffer), "error code %d", error);
-    }
-
-    return buffer;
 }
+
+__ret env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr to, env_socklen_t tolen)
+{
+#if defined(OS_WINDOWS)
+	return sendto(sock, (const char*)buf, (int)len, flags, to, tolen);
 #else
-__sym* getErrorString(__sint32 error)
-{
-    return strerror(error);
+	return sendto(sock, buf, len, flags, (struct sockaddr *)to, (socklen_t)tolen);
+#endif    
 }
+
+__ret env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr from, env_socklen_t* fromlen)
+{
+    #if defined(OS_WINDOWS)
+	return recvfrom(sock, (char*)buf, (int)len, flags, from, fromlen);
+#else
+	return recvfrom(sock, buf, len, flags, (struct sockaddr *)from, (socklen_t*)fromlen);
 #endif
+}
+
+__ret env_socket_ip2addr(env_sockaddr_ptr sockaddr, const __sym* ip, __uint16 port)
+{
+	int r;
+	char portstr[16];
+	struct addrinfo hints, *addr;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+//	hints.ai_flags = AI_ADDRCONFIG;
+	snprintf(portstr, sizeof(portstr), "%hu", port);
+	r = getaddrinfo(ip, portstr, &hints, &addr);
+	if (0 != r)
+		return r;
+
+	// fixed ios getaddrinfo don't set port if node is ipv4 address
+	env_socket_addr_set_port(addr->ai_addr, (socklen_t)addr->ai_addrlen, port);
+	assert(sizeof(struct sockaddr_in) == addr->ai_addrlen);
+	memcpy(sockaddr, addr->ai_addr, addr->ai_addrlen);
+	freeaddrinfo(addr);
+	return 0;
+}
+
+__ret env_socket_addr2ip(env_sockaddr_ptr sa, env_socklen_t salen, __sym ip[ENV_SOCKET_ADDRLEN], __uint16* port)
+{
+	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
+	{
+		struct sockaddr_in* in = (struct sockaddr_in*)sa;
+		assert(sizeof(struct sockaddr_in) == salen);
+		inet_ntop(AF_INET, &in->sin_addr, ip, ENV_SOCKET_ADDRLEN);
+		if(port) *port = ntohs(in->sin_port);
+	}
+	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
+	{
+		struct sockaddr_in6* in6 = (struct sockaddr_in6*)sa;
+		assert(sizeof(struct sockaddr_in6) == salen);
+		inet_ntop(AF_INET6, &in6->sin6_addr, ip, ENV_SOCKET_ADDRLEN);
+		if (port) *port = ntohs(in6->sin6_port);
+	}
+	else
+	{
+		return -1; // unknown address family
+	}
+
+	(void)salen;
+	return 0;
+}
+
+__ret env_socket_addr_name(env_sockaddr_ptr sa, env_socklen_t salen, __sym* host, env_socklen_t hostlen)
+{
+    return getnameinfo(sa, salen, host, hostlen, NULL, 0, 0);
+}
+
+__ret env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint16 port)
+{
+	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
+	{
+		struct sockaddr_in* in = (struct sockaddr_in*)sa;
+		assert(sizeof(struct sockaddr_in) == salen);
+		in->sin_port = htons(port);
+	}
+	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
+	{
+		struct sockaddr_in6* in6 = (struct sockaddr_in6*)sa;
+		assert(sizeof(struct sockaddr_in6) == salen);
+		in6->sin6_port = htons(port);
+	}
+	else
+	{
+		assert(0);
+		return -1;
+	}
+
+	(void)salen;
+	return 0;
+}
+
+__ret env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen)
+{
+	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
+	{
+		// unspecified: 0.0.0.0
+		// loopback: 127.x.x.x
+		// link-local unicast: 169.254.x.x
+		const struct sockaddr_in* in = (const struct sockaddr_in*)sa;
+		assert(sizeof(struct sockaddr_in) == salen);
+		return 0 == in->sin_addr.s_addr || 127 == (htonl(in->sin_addr.s_addr) >> 24) || (0xA9FE == (htonl(in->sin_addr.s_addr) >> 16)) ? 1 : 0;
+	}
+	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
+	{		
+		// unspecified: ::
+		// loopback: ::1
+		// link-local unicast: 0xFE 0x80
+		// link-local multicast: 0xFF 0x01/0x02
+		static const unsigned char ipv6_unspecified[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // IN6ADDR_ANY_INIT
+		static const unsigned char ipv6_loopback[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+		const struct sockaddr_in6* in6 = (const struct sockaddr_in6*)sa;
+		assert(sizeof(struct sockaddr_in6) == salen);
+		return 0 == memcmp(ipv6_unspecified, in6->sin6_addr.s6_addr, sizeof(ipv6_unspecified)) // IN6_IS_ADDR_UNSPECIFIED
+			|| 0 == memcmp(ipv6_loopback, in6->sin6_addr.s6_addr, sizeof(ipv6_loopback)) // IN6_IS_ADDR_LOOPBACK
+			|| (in6->sin6_addr.s6_addr[0] == 0xfe && (in6->sin6_addr.s6_addr[1] & 0xc0) == 0x80) // IN6_IS_ADDR_LINKLOCAL
+			|| (in6->sin6_addr.s6_addr[0] == 0xff && ((in6->sin6_addr.s6_addr[1] & 0x0f) == 0x01 || (in6->sin6_addr.s6_addr[1] & 0x0f) == 0x02)) // IN6_IS_ADDR_MULTICAST
+			? 1 : 0;
+	}
+	else
+	{
+		assert(0);
+	}
+
+	(void)salen;
+	return 0;    
+}
+
+__ret env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen)
+{
+	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
+	{
+		// IN_MULTICAST
+		// 224.x.x.x ~ 239.x.x.x
+		// b1110xxxx xxxxxxxx xxxxxxxx xxxxxxxx
+		const struct sockaddr_in* in = (const struct sockaddr_in*)sa;
+		assert(sizeof(struct sockaddr_in) == salen);
+		return (ntohl(in->sin_addr.s_addr) & 0xf0000000) == 0xe0000000 ? 1 : 0;
+	}
+	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
+	{
+		// FFxx::/8
+		const struct sockaddr_in6* in6 = (const struct sockaddr_in6*)sa;
+		assert(sizeof(struct sockaddr_in6) == salen);
+		return in6->sin6_addr.s6_addr[0] == 0xff ? 1 : 0;
+	}
+	else
+	{
+		assert(0);
+	}
+
+	(void)salen;
+	return 0;
+}
+
+__ret env_socket_addr_compare(env_sockaddr_ptr sa, env_sockaddr_ptr sb)
+{
+	if(((struct sockaddr*)sa)->sa_family != ((struct sockaddr*)sb)->sa_family)
+		return ((struct sockaddr*)sa)->sa_family - ((struct sockaddr*)sb)->sa_family;
+
+	// https://opensource.apple.com/source/postfix/postfix-197/postfix/src/util/sock_addr.c
+	switch (((struct sockaddr*)sa)->sa_family)
+	{
+	case AF_INET:
+		return ((struct sockaddr_in*)sa)->sin_port != ((struct sockaddr_in*)sb)->sin_port ? 
+			((struct sockaddr_in*)sa)->sin_port - ((struct sockaddr_in*)sb)->sin_port : 
+			memcmp(&((struct sockaddr_in*)sa)->sin_addr, &((struct sockaddr_in*)sb)->sin_addr, sizeof(struct in_addr));
+
+	case AF_INET6:
+		return ((struct sockaddr_in6*)sa)->sin6_port != ((struct sockaddr_in6*)sb)->sin6_port ?
+			((struct sockaddr_in6*)sa)->sin6_port - ((struct sockaddr_in6*)sb)->sin6_port :
+			memcmp(&((struct sockaddr_in6*)sa)->sin6_addr, &((struct sockaddr_in6*)sb)->sin6_addr, sizeof(struct in6_addr));
+
+#if defined(OS_LINUX) || defined(OS_MAC) // Windows build 17061
+	// https://blogs.msdn.microsoft.com/commandline/2017/12/19/af_unix-comes-to-windows/
+	case AF_UNIX:	return memcmp(sa, sb, sizeof(struct sockaddr_un));
+#endif
+	default:		return -1;
+	}
+}
+__ret env_socket_addr_len(env_sockaddr_ptr addr)
+{
+	switch (((struct sockaddr*)addr)->sa_family)
+	{
+	case AF_INET:	return sizeof(struct sockaddr_in);
+	case AF_INET6:	return sizeof(struct sockaddr_in6);
+#if defined(OS_LINUX) || defined(OS_MAC)// Windows build 17061
+		// https://blogs.msdn.microsoft.com/commandline/2017/12/19/af_unix-comes-to-windows/
+	case AF_UNIX:	return sizeof(struct sockaddr_un);
+#endif
+#if defined(AF_NETLINK)
+	//case AF_NETLINK:return sizeof(struct sockaddr_nl);
+#endif
+	default: return 0;
+	}
+}
+
+__ret env_socket_multicast_join(env_socket_t sock, const __sym* group, const __sym* local)
+{
+	struct ip_mreq imr;
+	memset(&imr, 0, sizeof(imr));
+	inet_pton(AF_INET, group, &imr.imr_multiaddr);
+	inet_pton(AF_INET, local, &imr.imr_interface);
+	return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&imr, sizeof(imr));
+}
+
+__ret env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __sym* local)
+{
+	struct ip_mreq imr;
+	memset(&imr, 0, sizeof(imr));
+	inet_pton(AF_INET, group, &imr.imr_multiaddr);
+	inet_pton(AF_INET, local, &imr.imr_interface);
+	return setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&imr, sizeof(imr));
+}
+
+__ret env_socket_multicast_join_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
+{
+	struct ip_mreq_source imr;
+	memset(&imr, 0, sizeof(imr));
+	inet_pton(AF_INET, source, &imr.imr_sourceaddr);
+	inet_pton(AF_INET, group, &imr.imr_multiaddr);
+	inet_pton(AF_INET, local, &imr.imr_interface);
+	return setsockopt(sock, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, (char *) &imr, sizeof(imr));
+}
+
+__ret env_socket_multicast_leave_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
+{
+	struct ip_mreq_source imr;
+	memset(&imr, 0, sizeof(imr));
+	inet_pton(AF_INET, source, &imr.imr_sourceaddr);
+	inet_pton(AF_INET, group, &imr.imr_multiaddr);
+	inet_pton(AF_INET, local, &imr.imr_interface);
+	return setsockopt(sock, IPPROTO_IP, IP_DROP_SOURCE_MEMBERSHIP, (char *)&imr, sizeof(imr));
+}

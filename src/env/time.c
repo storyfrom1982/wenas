@@ -21,7 +21,7 @@ inline const __sym* env_check(void)
 #endif
 }
 
-inline const __sym* env_parser(__result error)
+inline const __sym* env_parser(__ret error)
 {
 #if defined(OS_WINDOWS)
 	return strerror(error);
