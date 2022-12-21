@@ -1,6 +1,3 @@
-/**
- * Kinesis Video Producer Host Info
- */
 #include "env/env.h"
 
 #ifdef OS_WINDOWS
@@ -9,8 +6,8 @@
 #include <WS2tcpip.h>
 #include <ws2ipdef.h>
 
-#define socket_invalid	INVALID_SOCKET
-#define socket_error	SOCKET_ERROR
+#define socket_invalid  INVALID_SOCKET
+#define socket_error    SOCKET_ERROR
 
 #if defined(_MSC_VER)
 #pragma comment(lib, "Ws2_32.lib")
@@ -23,21 +20,21 @@
 #define SHUT_RDWR SD_BOTH
 
 #ifndef ETIMEDOUT
-	#define ETIMEDOUT 138
+    #define ETIMEDOUT 138
 #endif
 
 // IPv6 MTU
 #ifndef IPV6_MTU_DISCOVER
-	#define IPV6_MTU_DISCOVER	71
-	#define IP_PMTUDISC_DO		1
-	#define IP_PMTUDISC_DONT	2
+    #define IPV6_MTU_DISCOVER   71
+    #define IP_PMTUDISC_DO      1
+    #define IP_PMTUDISC_DONT    2                                                                                                                                                                                 
 #endif
 
 #ifndef AI_V4MAPPED
-	#define AI_V4MAPPED	0x00000800
+    #define AI_V4MAPPED 0x00000800
 #endif
 #ifndef AI_NUMERICSERV
-	#define AI_NUMERICSERV	0x00000008
+    #define AI_NUMERICSERV  0x00000008
 #endif
 
 #else
@@ -57,8 +54,8 @@
 #include <fcntl.h>
 #include <poll.h>
 
-#define socket_invalid	-1
-#define socket_error	-1
+#define socket_invalid  -1
+#define socket_error    -1
 
 #endif
 
@@ -66,309 +63,143 @@
 #include <stdint.h>
 #include <stdio.h>
 
+struct __socket{
+    __sint32 connected;
+    __sint32 sock;
+    struct sockaddr local;
+    struct sockaddr remote;
+};
 
 __sint32 env_socket_init(void)
 {
 #if defined(OS_WINDOWS)
-	WORD wVersionRequested;
-	WSADATA wsaData;
-	
-	wVersionRequested = MAKEWORD(2, 2);
-	return WSAStartup(wVersionRequested, &wsaData);
+    WORD wVersionRequested;
+    WSADATA wsaData;
+
+    wVersionRequested = MAKEWORD(2, 2);
+    return WSAStartup(wVersionRequested, &wsaData);
 #else
-	return 0;
+    return 0;
 #endif
 }
 
 __sint32 env_socket_cleanup(void)
 {
 #if defined(OS_WINDOWS)
-	return WSACleanup();
+    return WSACleanup();
 #else
-	return 0;
+    return 0;
 #endif
 }
 
-__sint32 env_socket_geterror(void)
+static inline int socket_setopt(__sint32 sock, int optname, int enable)
 {
 #if defined(OS_WINDOWS)
-	return WSAGetLastError();
+    BOOL v = enable ? TRUE : FALSE;
+    return setsockopt(sock, SOL_SOCKET, optname, (const char*)&v, sizeof(v));
 #else
-	return errno;
+    return setsockopt(sock, SOL_SOCKET, optname, &enable, sizeof(enable));
 #endif
 }
 
-env_socket_t env_socket_tcp(void)
+__socket_ptr env_socket_creatre(__symptr host, __uint16 port)
 {
-	return socket(PF_INET, SOCK_STREAM, 0);
+    __socket_ptr sock = malloc(sizeof(struct __socket));
+    __pass(sock != NULL);
+    memset(sock, 0, sizeof(struct __socket));
+    struct sockaddr_in* local = (struct sockaddr_in*)&sock->local;
+    struct sockaddr_in* remote = (struct sockaddr_in*)&sock->remote;
+
+    __pass((sock->sock = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
+    __pass(socket_setopt(sock->sock, SO_REUSEADDR, 1) == 0);
+    __pass(socket_setopt(sock->sock, SO_REUSEPORT, 1) == 0);
+
+    local->sin_family = AF_INET;
+    local->sin_port = htons(port);
+    local->sin_addr.s_addr = INADDR_ANY;
+
+    __logd("inet_aton %s\n", host);
+    remote->sin_family = AF_INET;
+    remote->sin_port = htons(port);
+    __pass(inet_aton(host, &remote->sin_addr) == 1);
+
+    // __pass(socket_addr_from_ipv4(remote, host, port) == 0);
+
+
+    // __pass(inet_pton(AF_INET, host, &remote->sin_addr) == 1);
+    inet_ntop(AF_INET, &remote->sin_addr, host, 46);
+    __logd("inet_ntop %s\n", host);
+    return sock;
+
+Reset:
+    return NULL;
 }
 
-env_socket_t env_socket_udp(void)
+void env_socket_destroy(__socket_ptr *pp_sock)
 {
-	return socket(PF_INET, SOCK_DGRAM, 0);
-}
-
-__sint32 env_socket_shutdown(env_socket_t sock, __sint32 flag)
-{
-	return shutdown(sock, flag);
-}
-
-__sint32 env_socket_close(env_socket_t sock)
-{
+if (pp_sock && *pp_sock){
+    __socket_ptr sock = *pp_sock;
+    *pp_sock = NULL;
+    shutdown(sock->sock, 0);
 #if defined(OS_WINDOWS)
-	// MSDN:
-	// If closesocket fails with WSAEWOULDBLOCK the socket handle is still valid, 
-	// and a disconnect is not initiated. The application must call closesocket again to close the socket. 
-	return closesocket(sock);
+    // MSDN:
+    // If closesocket fails with WSAEWOULDBLOCK the socket handle is still valid,
+    // and a disconnect is not initiated. The application must call closesocket again to close the socket.
+    closesocket(sock->sock);
 #else
-	return close(sock);
+    close(sock->sock);
 #endif
+    free(sock);
+}
 }
 
-__sint32 env_socket_connect(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
+__sint32 env_socket_connect(__socket_ptr sock)
 {
-	return connect(sock, (const struct sockaddr*)addr, addrlen);
-}
-
-__sint32 env_socket_bind(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t addrlen)
-{
-	return bind(sock, (const struct sockaddr*)addr, addrlen);
-}
-
-__sint32 env_socket_listen(env_socket_t sock, __sint32 backlog)
-{
-	return listen(sock, backlog);
-}
-
-env_socket_t env_socket_accept(env_socket_t sock, env_sockaddr_ptr addr, env_socklen_t* addrlen)
-{
-	return accept(sock, (struct sockaddr*)addr, (socklen_t*)addrlen);
-}
-
-__sint32 env_socket_send(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags)
-{
-#if defined(OS_WINDOWS)
-	return send(sock, (const char*)buf, (int)len, flags);
-#else
-	return (int)send(sock, buf, len, flags);
-#endif
-}
-
-__sint32 env_socket_recv(env_socket_t sock, void* buf, __uint64 len, __sint32 flags)
-{
-#if defined(OS_WINDOWS)
-	return recv(sock, (char*)buf, (int)len, flags);
-#else
-	return recv(sock, buf, len, flags);
-#endif
-}
-
-__sint32 env_socket_sendto(env_socket_t sock, const void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr to, env_socklen_t tolen)
-{
-#if defined(OS_WINDOWS)
-	return sendto(sock, (const char*)buf, (int)len, flags, to, tolen);
-#else
-	return sendto(sock, buf, len, flags, (struct sockaddr *)to, (socklen_t)tolen);
-#endif    
-}
-
-__sint32 env_socket_recvfrom(env_socket_t sock, void* buf, __uint64 len, __sint32 flags, env_sockaddr_ptr from, env_socklen_t* fromlen)
-{
-    #if defined(OS_WINDOWS)
-	return recvfrom(sock, (char*)buf, (int)len, flags, from, fromlen);
-#else
-	return recvfrom(sock, buf, len, flags, (struct sockaddr *)from, (socklen_t*)fromlen);
-#endif
-}
-
-__sint32 env_socket_ip2addr(env_sockaddr_ptr *sockaddr, const __sym* ip, __uint16 port)
-{
-    struct sockaddr *sa = (struct sockaddr *)malloc(sizeof(struct sockaddr));
-	__pass(sa != NULL);
-	memset(sa, 0, sizeof(struct sockaddr));
-	struct sockaddr_in* in = (struct sockaddr_in*)sa;
-	in->sin_family = AF_INET;
-	in->sin_port = htons(port);
-	__pass(inet_aton(ip, &in->sin_addr) != 0);
-    *sockaddr = sa;
-	return 0;
+    __pass(connect(sock->sock, (const struct sockaddr*)&sock->remote, (socklen_t)sizeof(struct sockaddr_in)) == 0);
+    sock->connected = 1;
+    return 0;
 Reset:
     return -1;
 }
 
-__sint32 env_socket_addr2ip(env_sockaddr_ptr sa, __sym ip[ENV_SOCKET_ADDRLEN], __uint16* port)
+__sint32 env_socket_bind(__socket_ptr sock)
 {
-	if (AF_INET == ((struct sockaddr*)sa)->sa_family){
-		struct sockaddr_in* in = (struct sockaddr_in*)sa;
-		__pass(inet_ntop(AF_INET, &in->sin_addr, ip, ENV_SOCKET_ADDRLEN) != NULL);
-		if(port) *port = ntohs(in->sin_port);
-		return 0;
-	}
-Reset:
-	return -1; // unknown address family
+    return bind(sock->sock, (const struct sockaddr*)&sock->local, (socklen_t)sizeof(struct sockaddr_in));
 }
 
-__sint32 env_socket_addr_name(env_sockaddr_ptr sa, env_socklen_t salen, __sym* host, env_socklen_t hostlen)
+__sint32 env_socket_send(__socket_ptr sock, const void* buf, __uint64 size)
 {
-    return getnameinfo(sa, salen, host, hostlen, NULL, 0, 0);
-}
-
-__sint32 env_socket_addr_set_port(env_sockaddr_ptr sa, env_socklen_t salen, __uint16 port)
-{
-	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
-	{
-		struct sockaddr_in* in = (struct sockaddr_in*)sa;
-		assert(sizeof(struct sockaddr_in) == salen);
-		in->sin_port = htons(port);
-	}
-	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
-	{
-		struct sockaddr_in6* in6 = (struct sockaddr_in6*)sa;
-		assert(sizeof(struct sockaddr_in6) == salen);
-		in6->sin6_port = htons(port);
-	}
-	else
-	{
-		assert(0);
-		return -1;
-	}
-
-	(void)salen;
-	return 0;
-}
-
-__sint32 env_socket_addr_is_local(env_sockaddr_ptr sa, env_socklen_t salen)
-{
-	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
-	{
-		// unspecified: 0.0.0.0
-		// loopback: 127.x.x.x
-		// link-local unicast: 169.254.x.x
-		const struct sockaddr_in* in = (const struct sockaddr_in*)sa;
-		assert(sizeof(struct sockaddr_in) == salen);
-		return 0 == in->sin_addr.s_addr || 127 == (htonl(in->sin_addr.s_addr) >> 24) || (0xA9FE == (htonl(in->sin_addr.s_addr) >> 16)) ? 1 : 0;
-	}
-	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
-	{		
-		// unspecified: ::
-		// loopback: ::1
-		// link-local unicast: 0xFE 0x80
-		// link-local multicast: 0xFF 0x01/0x02
-		static const unsigned char ipv6_unspecified[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }; // IN6ADDR_ANY_INIT
-		static const unsigned char ipv6_loopback[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
-		const struct sockaddr_in6* in6 = (const struct sockaddr_in6*)sa;
-		assert(sizeof(struct sockaddr_in6) == salen);
-		return 0 == memcmp(ipv6_unspecified, in6->sin6_addr.s6_addr, sizeof(ipv6_unspecified)) // IN6_IS_ADDR_UNSPECIFIED
-			|| 0 == memcmp(ipv6_loopback, in6->sin6_addr.s6_addr, sizeof(ipv6_loopback)) // IN6_IS_ADDR_LOOPBACK
-			|| (in6->sin6_addr.s6_addr[0] == 0xfe && (in6->sin6_addr.s6_addr[1] & 0xc0) == 0x80) // IN6_IS_ADDR_LINKLOCAL
-			|| (in6->sin6_addr.s6_addr[0] == 0xff && ((in6->sin6_addr.s6_addr[1] & 0x0f) == 0x01 || (in6->sin6_addr.s6_addr[1] & 0x0f) == 0x02)) // IN6_IS_ADDR_MULTICAST
-			? 1 : 0;
-	}
-	else
-	{
-		assert(0);
-	}
-
-	(void)salen;
-	return 0;    
-}
-
-__sint32 env_socket_addr_is_multicast(env_sockaddr_ptr sa, env_socklen_t salen)
-{
-	if (AF_INET == ((struct sockaddr*)sa)->sa_family)
-	{
-		// IN_MULTICAST
-		// 224.x.x.x ~ 239.x.x.x
-		// b1110xxxx xxxxxxxx xxxxxxxx xxxxxxxx
-		const struct sockaddr_in* in = (const struct sockaddr_in*)sa;
-		assert(sizeof(struct sockaddr_in) == salen);
-		return (ntohl(in->sin_addr.s_addr) & 0xf0000000) == 0xe0000000 ? 1 : 0;
-	}
-	else if (AF_INET6 == ((struct sockaddr*)sa)->sa_family)
-	{
-		// FFxx::/8
-		const struct sockaddr_in6* in6 = (const struct sockaddr_in6*)sa;
-		assert(sizeof(struct sockaddr_in6) == salen);
-		return in6->sin6_addr.s6_addr[0] == 0xff ? 1 : 0;
-	}
-	else
-	{
-		assert(0);
-	}
-
-	(void)salen;
-	return 0;
-}
-
-__sint32 env_socket_addr_compare(env_sockaddr_ptr sa, env_sockaddr_ptr sb)
-{
-	if(((struct sockaddr*)sa)->sa_family != ((struct sockaddr*)sb)->sa_family)
-		return ((struct sockaddr*)sa)->sa_family - ((struct sockaddr*)sb)->sa_family;
-
-	// https://opensource.apple.com/source/postfix/postfix-197/postfix/src/util/sock_addr.c
-	switch (((struct sockaddr*)sa)->sa_family)
-	{
-	case AF_INET:
-		return ((struct sockaddr_in*)sa)->sin_port != ((struct sockaddr_in*)sb)->sin_port ? 
-			((struct sockaddr_in*)sa)->sin_port - ((struct sockaddr_in*)sb)->sin_port : 
-			memcmp(&((struct sockaddr_in*)sa)->sin_addr, &((struct sockaddr_in*)sb)->sin_addr, sizeof(struct in_addr));
-
-	case AF_INET6:
-		return ((struct sockaddr_in6*)sa)->sin6_port != ((struct sockaddr_in6*)sb)->sin6_port ?
-			((struct sockaddr_in6*)sa)->sin6_port - ((struct sockaddr_in6*)sb)->sin6_port :
-			memcmp(&((struct sockaddr_in6*)sa)->sin6_addr, &((struct sockaddr_in6*)sb)->sin6_addr, sizeof(struct in6_addr));
-
-#if defined(OS_LINUX) || defined(OS_MAC) // Windows build 17061
-	// https://blogs.msdn.microsoft.com/commandline/2017/12/19/af_unix-comes-to-windows/
-	case AF_UNIX:	return memcmp(sa, sb, sizeof(struct sockaddr_un));
+#if defined(OS_WINDOWS)
+    return send(sock->sock, (const char*)buf, (int)size, 0);
+#else
+    return send(sock->sock, buf, size, 0);
 #endif
-	default:		return -1;
-	}
-}
-__sint32 env_socket_addr_len(env_sockaddr_ptr addr)
-{
-	switch (((struct sockaddr*)addr)->sa_family)
-	{
-	case AF_INET:	return sizeof(struct sockaddr_in);
-	case AF_INET6:	return sizeof(struct sockaddr_in6);
-	default: return 0;
-	}
 }
 
-__sint32 env_socket_multicast_join(env_socket_t sock, const __sym* group, const __sym* local)
+__sint32 env_socket_recv(__socket_ptr sock, void* buf, __uint64 size)
 {
-	struct ip_mreq imr;
-	memset(&imr, 0, sizeof(imr));
-	inet_pton(AF_INET, group, &imr.imr_multiaddr);
-	inet_pton(AF_INET, local, &imr.imr_interface);
-	return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&imr, sizeof(imr));
+#if defined(OS_WINDOWS)
+    return recv(sock->sock, (char*)buf, (int)size, 0);
+#else
+    return recv(sock->sock, buf, size, 0);
+#endif
 }
 
-__sint32 env_socket_multicast_leave(env_socket_t sock, const __sym* group, const __sym* local)
+__sint32 env_socket_sendto(__socket_ptr sock, const void* buf, __uint64 size)
 {
-	struct ip_mreq imr;
-	memset(&imr, 0, sizeof(imr));
-	inet_pton(AF_INET, group, &imr.imr_multiaddr);
-	inet_pton(AF_INET, local, &imr.imr_interface);
-	return setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&imr, sizeof(imr));
+#if defined(OS_WINDOWS)
+    return sendto(sock->sock, (const char*)buf, (int)size, 0, (struct sockaddr *)&sock->remote, (socklen_t)sizeof(struct sockaddr_in));
+#else
+    return sendto(sock->sock, buf, size, 0, (struct sockaddr *)&sock->remote, (socklen_t)sizeof(struct sockaddr_in));
+#endif
 }
 
-__sint32 env_socket_multicast_join_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
+__sint32 env_socket_recvfrom(__socket_ptr sock, void* buf, __uint64 size)
 {
-	struct ip_mreq_source imr;
-	memset(&imr, 0, sizeof(imr));
-	inet_pton(AF_INET, source, &imr.imr_sourceaddr);
-	inet_pton(AF_INET, group, &imr.imr_multiaddr);
-	inet_pton(AF_INET, local, &imr.imr_interface);
-	return setsockopt(sock, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, (char *) &imr, sizeof(imr));
-}
-
-__sint32 env_socket_multicast_leave_source(env_socket_t sock, const __sym* group, const __sym* source, const __sym* local)
-{
-	struct ip_mreq_source imr;
-	memset(&imr, 0, sizeof(imr));
-	inet_pton(AF_INET, source, &imr.imr_sourceaddr);
-	inet_pton(AF_INET, group, &imr.imr_multiaddr);
-	inet_pton(AF_INET, local, &imr.imr_interface);
-	return setsockopt(sock, IPPROTO_IP, IP_DROP_SOURCE_MEMBERSHIP, (char *)&imr, sizeof(imr));
+    socklen_t addrlen;
+#if defined(OS_WINDOWS)
+    return recvfrom(sock->sock, (char*)buf, (int)size, 0, (struct sockaddr *)&sock->remote, (socklen_t*)&sock->remote.sa_len);
+#else
+    return recvfrom(sock->sock, buf, size, 0, (struct sockaddr *)&sock->remote, (socklen_t*)&sock->remote.sa_len);
+#endif
 }

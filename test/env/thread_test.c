@@ -17,7 +17,6 @@ static __sint32 thread_func(__ptr ctx)
 
     n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
-    __logi("timedwait retcode=%s %s\n", buf, env_parser(ret));
     
     env_mutex_signal(mutex);
     __logi("timedwait 1 second\n");
