@@ -122,13 +122,13 @@ __env_export __bool env_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
-typedef __sint32 (*env_thread_cb)(__ptr ctx);
-typedef __uint64 env_thread_t;
+typedef __ptr(*env_thread_cb)(__ptr ctx);
+typedef struct pthread_t* env_thread_ptr;
 typedef struct env_mutex env_mutex_t;
 
-__env_export __sint32 env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx);
-__env_export __sint32 env_thread_destroy(env_thread_t tid);
-__env_export env_thread_t env_thread_self();
+__env_export __sint32 env_thread_create(env_thread_ptr *tid, env_thread_cb cb, __ptr ctx);
+__env_export void env_thread_destroy(env_thread_ptr tid);
+__env_export env_thread_ptr env_thread_self();
 __env_export void env_thread_sleep(__uint64 nano_seconds);
 
 __env_export env_mutex_t* env_mutex_create(void);

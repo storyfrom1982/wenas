@@ -21,7 +21,7 @@ static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E",
 typedef struct env_logger {
     __atombool running;
     char *path;
-    env_thread_t tid;
+    env_thread_ptr tid;
     env_logger_cb printer;
     env_pipe_t *pipe;
 }env_logger_t;

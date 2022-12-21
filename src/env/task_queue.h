@@ -10,7 +10,7 @@ typedef struct env_task_queue {
     uint8_t running;
     uint8_t write_waiting;
     uint8_t read_waiting;
-    env_thread_t tid;
+    env_thread_ptr tid;
     env_mutex_t mutex;
     heap_t *timed_task;
     linedb_pipe_t *immediate_task;

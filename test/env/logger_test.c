@@ -24,6 +24,9 @@ __sint32 pipe_write_thread(__ptr p)
         buf[result] = ' ';
         result = env_pipe_write(pipe, buf, size);
 		free(buf);
+		if (result != size) {
+			break;
+		}
 	}
 
 Reset:
@@ -48,7 +51,7 @@ __sint32 pipe_read_thread(__ptr p)
             break;
         }
 		buf[size - 1] = '\0';
-		//__logd("%d=%s\n", result, buf);
+		__logd("%d=%s\n", result, buf);
 		free(buf);
 	}
 
@@ -60,10 +63,10 @@ Reset:
 void logger_test()
 {
 	int result = 0;
-	env_thread_t write_tid = 0;
-	env_thread_t read_tid = 0;
-    env_thread_t write_tid_1 = 0;
-	env_thread_t read_tid_1 = 0;
+	env_thread_ptr write_tid = 0;
+	env_thread_ptr read_tid = 0;
+    env_thread_ptr write_tid_1 = 0;
+	env_thread_ptr read_tid_1 = 0;
 	env_pipe_t *pipe = NULL;
 	env_pipe_t *pipe_1 = NULL;
 
@@ -78,10 +81,12 @@ void logger_test()
     env_thread_create(&read_tid_1, pipe_read_thread, pipe_1);
 	env_thread_create(&write_tid_1, pipe_write_thread, pipe_1);
 
-	__logd("phtread join write thread\n");
+	__logd("phtread join write =============================== thread\n");
 
-	env_thread_destroy(write_tid);
-    env_thread_destroy(write_tid_1);
+	//env_thread_destroy(write_tid);
+    //env_thread_destroy(write_tid_1);
+
+	env_thread_sleep(3000000000);
 
 	__logd("phtread stopping read thread\n");
 
@@ -94,8 +99,8 @@ void logger_test()
 	env_pipe_stop(pipe_1);
 	__logd("env_pipe_stop =============================== 3\n");
 
-	// env_thread_destroy(write_tid);
-    // env_thread_destroy(write_tid_1);
+	 env_thread_destroy(write_tid);
+     env_thread_destroy(write_tid_1);
 
 	__logd("phtread join read thread\n");
 

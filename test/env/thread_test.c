@@ -52,7 +52,7 @@ void thread_test()
 
     // env_mutex_lock(mutex);
 
-    env_thread_t tid;
+    env_thread_ptr tid;
     __sint32 r = env_thread_create(&tid, thread_func, mutex);
     __pass(r == 0);
 

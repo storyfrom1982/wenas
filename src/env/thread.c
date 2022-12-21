@@ -2,10 +2,10 @@
 
 
 #if defined(OS_WINDOWS)
-
 #include <Windows.h>
-typedef PCONDITION_VARIABLE env_thread_cond_t;
-typedef CRITICAL_SECTION env_thread_mutex_t;
+#include <pthread.h>
+typedef pthread_cond_t env_thread_cond_t;
+typedef pthread_mutex_t env_thread_mutex_t;
 #else //!defined(OS_WINDOWS)
 #include <errno.h>
 #include <unistd.h>
@@ -24,27 +24,35 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-__sint32 env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx)
+__sint32 env_thread_create(env_thread_ptr *pp_tid, env_thread_cb cb, __ptr ctx)
 {
-    __sint32 r = 0;
 #if defined(OS_WINDOWS)
-	typedef __sint32(__stdcall *thread_routine)(__ptr);
-	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)cb, ctx, 0, NULL);
-    if (*tid == NULL) r = -1;
+    env_thread_ptr tid = (env_thread_ptr)malloc(sizeof(pthread_t));
+    if (tid == NULL) {
+        return -1;
+    }
+    if (pthread_create(tid, NULL, cb, ctx) != 0) {
+        free(tid);
+    }
+    *pp_tid = tid;
 #else
-    typedef __ptr (*thread_routine)(__ptr);
-    r = pthread_create((pthread_t *)tid, NULL, (thread_routine)cb, ctx);
-    errno = r;
+    phtread_t tid;
+    if (pthread_create(&tid, NULL, cb, ctx) != 0) {
+        free(tid);
+}   }
+    *pp_tid = (void*)tid;
 #endif
-    return r;
+
+    return 0;
 }
 
-env_thread_t env_thread_self()
+env_thread_ptr env_thread_self()
 {
+    pthread_t tid = pthread_self();
 #if defined(OS_WINDOWS)
-	return (env_thread_t)GetCurrentThread();
+    return (env_thread_ptr)tid.p;
 #else
-	return (env_thread_t)pthread_self();
+    return (env_thread_ptr)(void*)tid;
 #endif
 }
 
@@ -61,133 +69,71 @@ void env_thread_sleep(__uint64 nano_seconds)
 #endif
 }
 
-__sint32 env_thread_destroy(env_thread_t tid)
+void env_thread_destroy(env_thread_ptr tid)
 {
-    __sint32 r = 0;
 #if defined(OS_WINDOWS)
-        CloseHandle((HANDLE)tid);
+    pthread_join(*(pthread_t*)tid, NULL);
+    free(tid);
 #else
-        r = pthread_join((pthread_t)tid, NULL);
-        errno = r;
+    pthread_join((pthread_t)(void*)tid, NULL);
 #endif
-    return r;
 }
 
 __sint32 env_thread_mutex_init(env_thread_mutex_t *mutex)
 {
-    __sint32 r = 0;
-#if defined(OS_WINDOWS)
-	InitializeCriticalSection(mutex);
-#else
-    r = pthread_mutex_init(mutex, NULL);
-    errno = r;
-#endif
-    return r;
+    return pthread_mutex_init(mutex, NULL);
 }
 
 void env_thread_mutex_destroy(env_thread_mutex_t *mutex)
 {
-#if defined(OS_WINDOWS)
-	DeleteCriticalSection(mutex);
-#else
     pthread_mutex_destroy(mutex);
-#endif
 }
 
 void env_thread_mutex_lock(env_thread_mutex_t *mutex)
 {
-#if defined(OS_WINDOWS)
-	EnterCriticalSection(mutex);
-#else
     pthread_mutex_lock(mutex);
-#endif    
 }
 
 void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
 {
-#if defined(OS_WINDOWS)
-	LeaveCriticalSection(mutex);
-#else
     pthread_mutex_unlock(mutex);
-#endif    
 }
 
 __sint32 env_thread_cond_init(env_thread_cond_t *cond)
 {
-    __sint32 r = 0;
-#if defined(OS_WINDOWS)
-    InitializeConditionVariable(cond);
-#else    
-    r = pthread_cond_init(cond, NULL);
-    errno = r;
-#endif
-    return r;
+    return pthread_cond_init(cond, NULL);
 }
 
 void env_thread_cond_destroy(env_thread_cond_t *cond)
 {
-#if !defined(OS_WINDOWS)
     pthread_cond_destroy(cond);
-#endif     
 }
 
 void env_thread_cond_signal(env_thread_cond_t *cond)
 {
-#if defined(OS_WINDOWS)
-	WakeConditionVariable(cond);
-#else
     pthread_cond_signal(cond);
-#endif
 }
 
 void env_thread_cond_broadcast(env_thread_cond_t *cond)
 {
-#if defined(OS_WINDOWS)
-    WakeAllConditionVariable(cond);
-#else
     pthread_cond_broadcast(cond);
-#endif
 }
 
 void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
 {
-#if defined(OS_WINDOWS)
-    env_thread_mutex_unlock(mutex);
-    SleepConditionVariableCS(cond, mutex, INFINITE);
-    env_thread_mutex_lock(mutex);
-#else
     pthread_cond_wait(cond, mutex);
-#endif
 }
 
 __sint32 env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, __uint64 timeout)
 {
-#if defined(OS_WINDOWS)
-    env_thread_mutex_unlock(mutex);
-    timeout /= 1000000ULL;
-    if (timeout < 1) timeout = 1;
-    __bool b = SleepConditionVariableCS(cond, mutex, timeout);
-    env_thread_mutex_lock(mutex);
-	return b ? 0 : GetLastError() == ERROR_TIMEOUT ? ENV_TIMEDOUT : -1;
-#else // !defined(OS_WINDOWS)
-#if defined(CLOCK_REALTIME)
-	__sint32 r = 0;
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-    timeout += (__uint64)ts.tv_sec * NANO_SECONDS + ts.tv_nsec;
-#else // !defined(CLOCK_REALTIME)
-	__result r = 0;
-	struct timeval tv;
-	struct timespec ts;
-	gettimeofday(&tv, NULL);
-    timeout += (__uint64)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
-#endif // defined(CLOCK_REALTIME)
+    __sint32 r = 0;
+    struct timespec ts;
+    timeout += env_time();
     ts.tv_sec = timeout / NANO_SECONDS;
     ts.tv_nsec = timeout % NANO_SECONDS;
-	r = pthread_cond_timedwait(cond, mutex, &ts);
+    r = pthread_cond_timedwait(cond, mutex, &ts);
     errno = r;
     return r == 0 ? 0 : r == ETIMEDOUT ? ENV_TIMEDOUT : -1;
-#endif // defined(OS_WINDOWS)
 }
 
 static inline __sint32 env_mutex_init(env_mutex_t *mutex)
@@ -388,9 +334,11 @@ static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 si
     return size;
 }
 
-
+#include <stdio.h>
 __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 {
+    printf("env_pipe_write =========== enter\n");
+
     if (pipe->buf == NULL || data == NULL || len == 0){
         return 0;
     }
@@ -407,28 +355,33 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->read_waiting > 0){
-                env_mutex_signal(&pipe->mutex);
+                env_mutex_broadcast(&pipe->mutex);
             }
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
                 return pos;
             }
             __atom_add(pipe->write_waiting, 1);
+            printf("env_pipe_write wait %lu ==============------------- enter\n", pipe->read_waiting);
             env_mutex_wait(&pipe->mutex);
+            printf("env_pipe_write wait %lu ==============------------- exit\n", pipe->read_waiting);
             __atom_sub(pipe->write_waiting, 1);
         }
     }
 
     if (pipe->read_waiting > 0){
-        env_mutex_signal(&pipe->mutex);
+        env_mutex_broadcast(&pipe->mutex);
     }
     env_mutex_unlock(&pipe->mutex);
+
+    //__logd("env_pipe_write =========== exit\n");
 
     return pos;
 }
 
 __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 {
+    printf("env_pipe_read =========== enter\n");
     if (pipe->buf == NULL || buf == NULL || len == 0){
         return 0;
     }
@@ -441,22 +394,26 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->write_waiting > 0){
-                env_mutex_signal(&pipe->mutex);
+                env_mutex_broadcast(&pipe->mutex);
             }
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
                 return pos;
             }
             __atom_add(pipe->read_waiting, 1);
+            printf("env_pipe_read wait %lu  ============== enter\n", pipe->write_waiting);
             env_mutex_wait(&pipe->mutex);
+            printf("env_pipe_read wait %lu ============== exit\n", pipe->write_waiting);
             __atom_sub(pipe->read_waiting, 1);
         }
     }
 
     if (pipe->write_waiting > 0){
-        env_mutex_signal(&pipe->mutex);
+        env_mutex_broadcast(&pipe->mutex);
     }
     env_mutex_unlock(&pipe->mutex);
+
+    printf("env_pipe_read =========== exit\n");
 
     return pos;
 }
@@ -472,16 +429,16 @@ __uint64 env_pipe_writable(env_pipe_t *pipe){
 void env_pipe_stop(env_pipe_t *pipe){
     if (__set_true(pipe->stopped)){
         while (pipe->write_waiting > 0 || pipe->read_waiting > 0) {
-            //__logd("env_pipe_stop lock %lu    %lu ============== 1\n", pipe->write_waiting, pipe->read_waiting);
+            __logd("env_pipe_stop lock %lu    %lu ============== 1\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_lock(&pipe->mutex);
-            //__logd("env_pipe_stop lock %lu    %lu ============== 2\n", pipe->write_waiting, pipe->read_waiting);
+            __logd("env_pipe_stop lock %lu    %lu ============== 2\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_broadcast(&pipe->mutex);
-            //__logd("env_pipe_stop lock %lu    %lu ============== 3\n", pipe->write_waiting, pipe->read_waiting);
-            env_mutex_timedwait(&pipe->mutex, 10);
-            //__logd("env_pipe_stop lock %lu    %lu ============== 4\n", pipe->write_waiting, pipe->read_waiting);
+            __logd("env_pipe_stop lock %lu    %lu ============== 3\n", pipe->write_waiting, pipe->read_waiting);
+            env_mutex_timedwait(&pipe->mutex, 1000);
+            __logd("env_pipe_stop lock %lu    %lu ============== 4\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_unlock(&pipe->mutex);
-            //__logd("env_pipe_stop lock %lu    %lu ============== 5\n", pipe->write_waiting, pipe->read_waiting);
-            env_thread_sleep(1000);
+            __logd("env_pipe_stop lock %lu    %lu ============== 5\n", pipe->write_waiting, pipe->read_waiting);
+            //env_thread_sleep(1000);
         }
     }
 }
