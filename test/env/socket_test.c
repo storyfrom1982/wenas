@@ -5,7 +5,7 @@
 void socket_test()
 {
     __uint16 port = 37213;
-    __fp fp = env_fopen("/tmp/ip.txt", "r+t");
+    __fp fp = env_fopen("./tmp/ip.txt", "r+t");
     __pass(fp != NULL);
     char host[ENV_SOCKET_ADDRLEN] = {0};
     __sint64 ret = env_fread(fp, host, ENV_SOCKET_ADDRLEN);

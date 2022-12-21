@@ -34,9 +34,9 @@
 ///////////////////////////////////////////////////////
 #define __false                 0
 #define __true                  1
-#ifndef OS_WINDOWS
+//#ifndef OS_WINDOWS
 typedef unsigned char           __bool;
-#endif
+//#endif
 
 ///////////////////////////////////////////////////////
 ///// 256进制符号

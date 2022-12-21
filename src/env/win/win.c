@@ -95,13 +95,13 @@ inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
 inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
 {
     __atombool exchange = __true, compared = __false;
-    return InterlockedCompareExchange64(pAtomic, exchange, compared) == compared;
+    return INTERLOCKED_OP(CompareExchange)(pAtomic, exchange, compared) == compared;
 }
 
 inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
 {
     __atombool exchange = __false, compared = __true;
-    return InterlockedCompareExchange64(pAtomic, exchange, compared) == compared;
+    return INTERLOCKED_OP(CompareExchange)(pAtomic, exchange, compared) == compared;
 }
 
 void env_backtrace_setup(){}

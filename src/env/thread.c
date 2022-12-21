@@ -28,7 +28,7 @@ __sint32 env_thread_create(env_thread_t *tid, env_thread_cb cb, __ptr ctx)
 {
     __sint32 r = 0;
 #if defined(OS_WINDOWS)
-	typedef __result(__stdcall *thread_routine)(__ptr);
+	typedef __sint32(__stdcall *thread_routine)(__ptr);
 	*tid = (__uint64)_beginthreadex(NULL, 0, (thread_routine)cb, ctx, 0, NULL);
     if (*tid == NULL) r = -1;
 #else
@@ -472,10 +472,16 @@ __uint64 env_pipe_writable(env_pipe_t *pipe){
 void env_pipe_stop(env_pipe_t *pipe){
     if (__set_true(pipe->stopped)){
         while (pipe->write_waiting > 0 || pipe->read_waiting > 0) {
+            //__logd("env_pipe_stop lock %lu    %lu ============== 1\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_lock(&pipe->mutex);
+            //__logd("env_pipe_stop lock %lu    %lu ============== 2\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_broadcast(&pipe->mutex);
+            //__logd("env_pipe_stop lock %lu    %lu ============== 3\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_timedwait(&pipe->mutex, 10);
+            //__logd("env_pipe_stop lock %lu    %lu ============== 4\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_unlock(&pipe->mutex);
+            //__logd("env_pipe_stop lock %lu    %lu ============== 5\n", pipe->write_waiting, pipe->read_waiting);
+            env_thread_sleep(1000);
         }
     }
 }

@@ -9,11 +9,11 @@
 #define socket_invalid  INVALID_SOCKET
 #define socket_error    SOCKET_ERROR
 
-#if defined(_MSC_VER)
+//#if defined(_MSC_VER)
 #pragma comment(lib, "Ws2_32.lib")
 #pragma warning(push)
 #pragma warning(disable: 6031) // warning C6031: Return value ignored: 'snprintf'
-#endif
+//#endif
 
 #define SHUT_RD SD_RECEIVE
 #define SHUT_WR SD_SEND
@@ -128,7 +128,9 @@ __socket env_socket_open()
 	env_socket_init();
     __pass((sock = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
     __pass(socket_setopt(sock, SO_REUSEADDR, 1) == 0);
+#ifdef SO_REUSEPORT
     __pass(socket_setopt(sock, SO_REUSEPORT, 1) == 0);
+#endif
     return sock;
 Reset:
     return -1;
@@ -156,7 +158,11 @@ __sockaddr_ptr env_socket_addr_create(char* host, __uint16 port)
     in->sin_family = AF_INET;
     in->sin_port = htons(port);
 	if (host != NULL){
+#if defined(OS_WINDOWS)
+		in->sin_addr.s_addr = inet_addr(host);
+#else
 		__pass(inet_aton(host, &in->sin_addr) == 1);
+#endif
 	}else {
 		in->sin_addr.s_addr = INADDR_ANY;
 	}
@@ -213,7 +219,7 @@ __sint32 env_socket_bind(__socket sock, __sockaddr_ptr addr)
 __sint32 env_socket_send(__socket sock, const void* buf, __uint64 size)
 {
 #if defined(OS_WINDOWS)
-    return send(sock->sock, (const char*)buf, (int)size, 0);
+    return send(sock, (const char*)buf, (int)size, 0);
 #else
     return send(sock, buf, size, 0);
 #endif
@@ -222,7 +228,7 @@ __sint32 env_socket_send(__socket sock, const void* buf, __uint64 size)
 __sint32 env_socket_recv(__socket sock, void* buf, __uint64 size)
 {
 #if defined(OS_WINDOWS)
-    return recv(sock->sock, (char*)buf, (int)size, 0);
+    return recv(sock, (char*)buf, (int)size, 0);
 #else
     return recv(sock, buf, size, 0);
 #endif

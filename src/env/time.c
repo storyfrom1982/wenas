@@ -15,7 +15,7 @@
 inline const char* env_check(void)
 {
 #if defined(OS_WINDOWS)
-	return strerror((__result)GetLastError());
+	return strerror((__sint32)GetLastError());
 #else
 	return strerror(errno);
 #endif

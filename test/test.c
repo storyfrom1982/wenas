@@ -14,13 +14,15 @@ extern void socket_test();
 
 void test()
 {
-    // storage_test();
-    // thread_test();
-    // logger_test();
+    storage_test();
+    thread_test();
+    logger_test();
 
     socket_test();
 
     env_logger_stop();
     
+#if !defined(OS_WINDOWS)
     env_malloc_debug(malloc_debug_cb);
+#endif
 }

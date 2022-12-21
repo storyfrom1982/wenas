@@ -27,7 +27,7 @@ __sint32 pipe_write_thread(__ptr p)
 	}
 
 Reset:
-	__logd("pipe_write_thread exit\n");
+	__logd("pipe_write_thread exit ================== 0x%X\n", env_thread_self());
 	return 0;
 }
 
@@ -48,12 +48,12 @@ __sint32 pipe_read_thread(__ptr p)
             break;
         }
 		buf[size - 1] = '\0';
-		__logd("%d=%s\n", result, buf);
+		//__logd("%d=%s\n", result, buf);
 		free(buf);
 	}
 
 Reset:
-	__logd("pipe_read_thread exit\n");
+	__logd("pipe_read_thread exit --------------------- 0x%X\n", env_thread_self());
 	return 0;
 }
 
@@ -88,8 +88,11 @@ void logger_test()
     __set_false(running);
     env_pipe_clear(pipe);
 	env_pipe_clear(pipe_1);
+	__logd("env_pipe_stop =============================== 1\n");
     env_pipe_stop(pipe);
+	__logd("env_pipe_stop =============================== 2\n");
 	env_pipe_stop(pipe_1);
+	__logd("env_pipe_stop =============================== 3\n");
 
 	// env_thread_destroy(write_tid);
     // env_thread_destroy(write_tid_1);
