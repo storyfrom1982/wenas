@@ -12,7 +12,7 @@
 #endif
 
 
-inline const __sym* env_check(void)
+inline const char* env_check(void)
 {
 #if defined(OS_WINDOWS)
 	return strerror((__result)GetLastError());
@@ -21,7 +21,7 @@ inline const __sym* env_check(void)
 #endif
 }
 
-inline const __sym* env_parser(__sint32 error)
+inline const char* env_parser(__sint32 error)
 {
 #if defined(OS_WINDOWS)
 	return strerror(error);
@@ -77,7 +77,7 @@ inline __uint64 env_clock(void)
 #endif
 }
 
-inline __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 seconds)
+inline __uint64 env_strftime(char *buf, __uint64 size, __uint64 seconds)
 {
 	time_t sec = (time_t)seconds;
     return strftime(buf, size, "%Y-%m-%d %H:%M:%S", localtime(&sec));

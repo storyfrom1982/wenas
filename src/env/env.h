@@ -41,8 +41,8 @@ typedef unsigned char           __bool;
 ///////////////////////////////////////////////////////
 ///// 256进制符号
 ///////////////////////////////////////////////////////
-typedef char                    __sym;
-typedef char*                   __symptr;
+// typedef char                    __sym;
+// typedef char*                   __symptr;
 
 ///////////////////////////////////////////////////////
 ///// 可变类型指针
@@ -82,15 +82,11 @@ typedef float                   __real32;
 typedef double                  __real64;
 
 typedef __uint64                __atombool;
-///////////////////////////////////////////////////////
-///// 返回值类型
-///////////////////////////////////////////////////////
-// typedef int                     __sint32;
 
 ///////////////////////////////////////////////////////
 ///// 当前状态
 ///////////////////////////////////////////////////////
-__env_export const __sym* env_check(void);
+__env_export const char* env_check(void);
 
 ///////////////////////////////////////////////////////
 ///// 时间相关
@@ -101,14 +97,14 @@ __env_export const __sym* env_check(void);
 
 __env_export __uint64 env_time(void);
 __env_export __uint64 env_clock(void);
-__env_export __uint64 env_strtime(__sym *buf, __uint64 size, __uint64 millisecond);
+__env_export __uint64 env_strftime(char *buf, __uint64 size, __uint64 millisecond);
 
 ///////////////////////////////////////////////////////
 ///// 存储相关
 ///////////////////////////////////////////////////////
 typedef void*   __fp;
 
-__env_export __fp env_fopen(const __symptr path, const __symptr mode);
+__env_export __fp env_fopen(const char* path, const char* mode);
 __env_export __bool env_fclose(__fp fp);
 __env_export __sint64 env_ftell(__fp fp);
 __env_export __sint64 env_fflush(__fp fp);
@@ -116,12 +112,12 @@ __env_export __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
 __env_export __sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
 __env_export __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
 
-__env_export __bool env_make_path(const __symptr path);
-__env_export __bool env_find_path(const __symptr path);
-__env_export __bool env_find_file(const __symptr path);
-__env_export __bool env_remove_path(const __symptr path);
-__env_export __bool env_remove_file(const __symptr path);
-__env_export __bool env_move_path(const __symptr from, const __symptr to);
+__env_export __bool env_make_path(const char* path);
+__env_export __bool env_find_path(const char* path);
+__env_export __bool env_find_file(const char* path);
+__env_export __bool env_remove_path(const char* path);
+__env_export __bool env_remove_file(const char* path);
+__env_export __bool env_move_path(const char* from, const char* to);
 
 ///////////////////////////////////////////////////////
 ///// 线程相关
@@ -203,10 +199,10 @@ enum env_log_level {
     ENV_LOG_LEVEL_COUNT
 };
 
-typedef void (*env_logger_cb) (__sint32 level, const __sym *log);
-__env_export __sint32 env_logger_start(const __sym *path, env_logger_cb cb);
+typedef void (*env_logger_cb) (__sint32 level, const char *log);
+__env_export __sint32 env_logger_start(const char *path, env_logger_cb cb);
 __env_export void env_logger_stop();
-__env_export void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 line, const __sym *fmt, ...);
+__env_export void env_logger_printf(enum env_log_level level, const char *file, __sint32 line, const char *fmt, ...);
 
 #define __logd(__FORMAT__, ...) \
         env_logger_printf(ENV_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
@@ -252,26 +248,15 @@ __env_export __ptr realloc(__ptr address, __uint64 size);
 __env_export __ptr memalign(__uint64 boundary, __uint64 size);
 __env_export __ptr aligned_alloc(__uint64 alignment, __uint64 size);
 __env_export __ptr _aligned_alloc(__uint64 alignment, __uint64 size);
-__env_export __sym* strdup(const __sym *s);
-__env_export __sym* strndup(const __sym *s, __uint64 n);
+__env_export char* strdup(const char *s);
+__env_export char* strndup(const char *s, __uint64 n);
 __env_export __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
 __env_export void free(__ptr address);
-__env_export void env_malloc_debug(void (*cb)(const __sym *debug));
+__env_export void env_malloc_debug(void (*cb)(const char *debug));
 
 ///////////////////////////////////////////////////////
 ///// 网络插口
 ///////////////////////////////////////////////////////
-// typedef struct env_ipaddr{
-//         __uint8 len;
-//         __uint8 sin_family;
-//         __uint32 sin_addr;
-//         __uint16 sin_port;
-//         __uint8 zero[8];
-// }__ipaddr, *__sockaddr_ptr;
-// #include <netinet/in.h>
-
-
-// typedef struct sockaddr_in __ipaddr;
 typedef __sint32 __socket;
 typedef struct sockaddr* __sockaddr_ptr;
 
@@ -290,9 +275,9 @@ __env_export __socket env_socket_open();
 __env_export void env_socket_close(__socket sock);
 __env_export __sint32 env_socket_connect(__socket sock, __sockaddr_ptr addr);
 __env_export __sint32 env_socket_bind(__socket sock, __sockaddr_ptr addr);
-__env_export int env_socket_set_nonblock(__socket sock, int noblock);
+__env_export __sint32 env_socket_set_nonblock(__socket sock, int noblock);
 
-__env_export __sockaddr_ptr env_socket_addr_create(__symptr ip, __uint16 port);
+__env_export __sockaddr_ptr env_socket_addr_create(char* ip, __uint16 port);
 __env_export void env_socket_addr_copy(__sockaddr_ptr src, __sockaddr_ptr dst);
 __env_export __bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b);
 __env_export void env_socket_addr_get_ip(__sockaddr_ptr addr, __ipaddr *ip);

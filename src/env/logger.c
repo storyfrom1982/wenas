@@ -33,7 +33,7 @@ static __sint32 env_logger_write_loop(__ptr ctx)
     __fp fp = NULL;
     __sint64 n;
     __uint64 res;
-    __sym *buf = (__sym *)malloc(env_pipe_writable(g_logger.pipe));
+    char *buf = (char *)malloc(env_pipe_writable(g_logger.pipe));
     __pass(buf != NULL);
 
     if (!env_find_path(g_logger.path)){
@@ -41,7 +41,7 @@ static __sint32 env_logger_write_loop(__ptr ctx)
     }
 
     {
-        __sym filename[1024];
+        char filename[1024];
         n = snprintf(filename, 1024, "%s/%s", g_logger.path, "0.log");
         filename[n] = '\0';
         fp = env_fopen(filename, "a+t");
@@ -61,10 +61,10 @@ static __sint32 env_logger_write_loop(__ptr ctx)
             __pass(n==res);
             if (env_ftell(fp) > __log_file_size){
                 env_fclose(fp);
-                __sym log0[1024];
+                char log0[1024];
                 n = snprintf(log0, 1024, "%s/0.log", g_logger.path);
                 log0[n] = '\0';
-                __sym log1[1024];
+                char log1[1024];
                 n = snprintf(log1, 1024, "%s/1.log", g_logger.path);
                 log1[n] = '\0';
                 __pass(env_move_path(log0, log1));
@@ -88,7 +88,7 @@ Reset:
     return 0;
 }
 
-int env_logger_start(const __sym *path, env_logger_cb cb)
+int env_logger_start(const char *path, env_logger_cb cb)
 {
     if (__set_true(g_logger.running)){
         g_logger.printer = cb;
@@ -101,6 +101,7 @@ int env_logger_start(const __sym *path, env_logger_cb cb)
     }
     return 0;
 Reset:
+    if (g_logger.path) free(g_logger.path);
     env_pipe_destroy(&g_logger.pipe);
     return -1;
 }
@@ -118,13 +119,13 @@ void env_logger_stop()
     }
 }
 
-void env_logger_printf(enum env_log_level level, const __sym *file, __sint32 line, const __sym *fmt, ...)
+void env_logger_printf(enum env_log_level level, const char *file, __sint32 line, const char *fmt, ...)
 {
     __uint64 n = 0;
-    __sym text[__log_text_size];
+    char text[__log_text_size];
 
     __uint64 millisecond = env_time() / MICRO_SECONDS;
-    n = env_strtime(text, __log_text_size, millisecond / MILLI_SECONDS);
+    n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
                   env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);

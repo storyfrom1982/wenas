@@ -8,21 +8,21 @@ static __sint32 thread_func(__ptr ctx)
     env_mutex_t *mutex = (env_mutex_t *)ctx;
     env_mutex_lock(mutex);
     __logi("timedwait 1 second\n");
-    __sym buf[1024] = {0};
-    __uint64 n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    char buf[1024] = {0};
+    __uint64 n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("timedwait retcode=%s\n", buf);
     ret = env_mutex_timedwait(mutex, 1 * NANO_SECONDS);
     __pass(ret == 0 || ret == ENV_TIMEDOUT);
 
-    n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     
     env_mutex_signal(mutex);
     __logi("timedwait 1 second\n");
     ret = env_mutex_timedwait(mutex, 1 * NANO_SECONDS);
     __pass(ret == 0 || ret == ENV_TIMEDOUT);
-    n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("timedwait retcode=%s\n", buf);
     env_mutex_unlock(mutex);

@@ -4,19 +4,19 @@
 #include <stdio.h>
 
 static __atombool running = __false;
-__sym sym[26] = {'a', 'b', 'c', 'd', 'e', 'f'};
+char sym[26] = {'a', 'b', 'c', 'd', 'e', 'f'};
 
 __sint32 pipe_write_thread(__ptr p)
 {
     __sint32 result = 0;
-	__sym s = 0;
+	char s = 0;
 	__sint32 size = 32;
-	__sym *buf = NULL;
+	char *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
 	// pipe = 123;
 
 	for (int i = 0; i < 100000; ++i){
-		buf = (__sym*)malloc(size);
+		buf = (char*)malloc(size);
 		__pass(buf != NULL);
         s = i % 6;
 		memset(buf, sym[s], size);
@@ -35,12 +35,12 @@ __sint32 pipe_read_thread(__ptr p)
 {
 	__sint32 result = 0, count = 0;
 	__sint32 size = 32;
-	__sym *buf = NULL;
+	char *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
 
 	while (1){
 		
-		buf = (__sym*)malloc(size);
+		buf = (char*)malloc(size);
         __pass(buf != NULL);
         result = env_pipe_read(pipe, buf, size);
         if (result != size && __is_false(running)){

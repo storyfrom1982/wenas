@@ -96,7 +96,7 @@ typedef struct pointer {
 	 */
 
 #ifdef	ENV_MALLOC_BACKTRACE
-	__sym debug_msg[__debug_msg_size];
+	char debug_msg[__debug_msg_size];
 #endif
 
 	/**
@@ -109,15 +109,15 @@ typedef struct pointer {
 }pointer_t;
 
 
-#define	__pointer2address(p)		( (void *)((__sym *)( p ) + __work_pointer_size ) )
-#define	__address2pointer(a)		( (pointer_t *)( (__sym *)( a ) - __work_pointer_size ) )
+#define	__pointer2address(p)		( (void *)((char *)( p ) + __work_pointer_size ) )
+#define	__address2pointer(a)		( (pointer_t *)( (char *)( a ) - __work_pointer_size ) )
 
 #define	__inuse						0x01
 #define	__mergeable(p)				( ! ( ( p )->flag & __inuse ) )
 
-#define	__prev_pointer(p)			( (pointer_t *)( (__sym *)( p ) - ( p )->flag ) )
-#define	__next_pointer(p)			( (pointer_t *)( (__sym *)( p ) + ( p )->size ) )
-#define	__assign_pointer(p, s)		( (pointer_t *)( (__sym *)( p ) + ( s ) ) )
+#define	__prev_pointer(p)			( (pointer_t *)( (char *)( p ) - ( p )->flag ) )
+#define	__next_pointer(p)			( (pointer_t *)( (char *)( p ) + ( p )->size ) )
+#define	__assign_pointer(p, s)		( (pointer_t *)( (char *)( p ) + ( s ) ) )
 
 
 typedef struct pointer_queue{
@@ -399,6 +399,7 @@ void free(__ptr address)
 
 	if (address){
 		pointer = __address2pointer(address);
+
 		if (pointer->size == 0 || pointer->flag == 0){
 			//TODO
 			return;
@@ -701,13 +702,13 @@ __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__sym* strdup(const __sym *s)
+char* strdup(const char *s)
 {
-	__sym *result = NULL;
+	char *result = NULL;
 	if (s){
 		__uint64 len = strlen(s);
 
-		result = (__sym *)malloc(len + 1);
+		result = (char *)malloc(len + 1);
 
 		if (result != NULL){
 		    memcpy(result, s, len);
@@ -718,12 +719,12 @@ __sym* strdup(const __sym *s)
 	return result;
 }
 
-__sym* strndup(const __sym *s, __uint64 n)
+char* strndup(const char *s, __uint64 n)
 {
-	__sym *result = NULL;
+	char *result = NULL;
 	if (s && n > 0){
 
-		result = (__sym *)malloc(n + 1);
+		result = (char *)malloc(n + 1);
 
 		if (result != NULL){
 			memcpy(result, s, n);
@@ -757,7 +758,7 @@ void env_malloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void env_malloc_debug(void (*cb)(const __sym *debug))
+void env_malloc_debug(void (*cb)(const char *debug))
 {
 	env_memory_pool_t *pool = NULL;
 	pointer_t *pointer = NULL;
@@ -767,7 +768,7 @@ void env_malloc_debug(void (*cb)(const __sym *debug))
 	}
 
 	__uint64 buf_size = 10240;
-	__sym buf[10240];
+	char buf[10240];
 
 	flush_cache();
 

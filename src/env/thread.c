@@ -273,7 +273,7 @@ typedef struct env_pipe {
     __atombool writer;
     __atombool reader;
 
-    __sym *buf;
+    char *buf;
     __atombool write_waiting;
     __atombool read_waiting;
 
@@ -302,7 +302,7 @@ env_pipe_t* env_pipe_create(__uint64 len)
 
     pipe->leftover = pipe->len;
 
-    pipe->buf = (__sym *)malloc(pipe->len);
+    pipe->buf = (char *)malloc(pipe->len);
     __pass(pipe->buf != NULL);
 
     __pass(env_mutex_init(&pipe->mutex) == 0);
@@ -352,7 +352,7 @@ static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 
         memcpy( pipe->buf + ( pipe->writer & ( pipe->len - 1 ) ), data, size);
     }else{
         memcpy( pipe->buf + ( pipe->writer & ( pipe->len - 1 ) ), data, pipe->leftover);
-        memcpy( pipe->buf, (__sym*)data + pipe->leftover, size - pipe->leftover);
+        memcpy( pipe->buf, (char*)data + pipe->leftover, size - pipe->leftover);
     }
 
     __atom_add(pipe->writer, size);
@@ -380,7 +380,7 @@ static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 si
         memcpy( buf, pipe->buf + ( pipe->reader & ( pipe->len - 1 ) ), size);
     }else{
         memcpy( buf, pipe->buf + ( pipe->reader & ( pipe->len - 1 ) ), pipe->leftover);
-        memcpy( (__sym*)buf + pipe->leftover, pipe->buf, size - pipe->leftover);
+        memcpy( (char*)buf + pipe->leftover, pipe->buf, size - pipe->leftover);
     }
 
     __atom_add(pipe->reader, size);
@@ -403,7 +403,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 
     __uint64 ret = 0, pos = 0;
     while (pos < len ) {
-        ret = pipe_atomic_write(pipe, (__sym*)data + pos, len - pos);
+        ret = pipe_atomic_write(pipe, (char*)data + pos, len - pos);
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->read_waiting > 0){
@@ -437,7 +437,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 
     __uint64 pos = 0;
     for(__uint64 ret = 0; pos < len; ){
-        ret = pipe_atomic_read(pipe, (__sym*)buf + pos, len - pos);
+        ret = pipe_atomic_read(pipe, (char*)buf + pos, len - pos);
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->write_waiting > 0){

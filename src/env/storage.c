@@ -22,7 +22,7 @@
 #include <sys/stat.h>
 
 
-__fp env_fopen(const __symptr path, const __symptr mode)
+__fp env_fopen(const char* path, const char* mode)
 {
 	return fopen(path, mode);
 }
@@ -68,7 +68,7 @@ __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence)
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-__bool env_find_file(const __symptr path)
+__bool env_find_file(const char* path)
 {
 #if defined(OS_WINDOWS)
 	// we must use GetFileAttributes() instead of the ANSI C functions because
@@ -83,7 +83,7 @@ __bool env_find_file(const __symptr path)
 
 /// get file size in bytes
 /// return file size
-__uint64 env_file_size(const __symptr filename)
+__uint64 env_file_size(const char* filename)
 {
 #if defined(OS_WINDOWS)
 	struct _stat64 st;
@@ -98,7 +98,7 @@ __uint64 env_file_size(const __symptr filename)
 #endif
 }
 
-__bool env_find_path(const __symptr path)
+__bool env_find_path(const char* path)
 {
 #if defined(OS_WINDOWS)
 	DWORD ret = GetFileAttributesA(path);
@@ -109,7 +109,7 @@ __bool env_find_path(const __symptr path)
 #endif
 }
 
-static __bool env_mkdir(const __symptr path)
+static __bool env_mkdir(const char* path)
 {
 #if defined(OS_WINDOWS)
 	__bool r = CreateDirectoryA(path, NULL);
@@ -120,7 +120,7 @@ static __bool env_mkdir(const __symptr path)
 #endif
 }
 
-__bool env_remove_path(const __symptr path)
+__bool env_remove_path(const char* path)
 {
 #if defined(OS_WINDOWS)
 	__bool r = RemoveDirectoryA(path);
@@ -131,7 +131,7 @@ __bool env_remove_path(const __symptr path)
 #endif
 }
 
-__bool env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
+__bool env_realpath(const char* path, char resolved_path[PATH_MAX])
 {
 #if defined(OS_WINDOWS)
 	DWORD r = GetFullPathNameA(path, PATH_MAX, resolved_path, NULL);
@@ -144,7 +144,7 @@ __bool env_realpath(const __symptr path, __sym resolved_path[PATH_MAX])
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-__bool env_remove_file(const __symptr path)
+__bool env_remove_file(const char* path)
 {
 #if defined(OS_WINDOWS)
 	__bool r = DeleteFileA(path);
@@ -157,7 +157,7 @@ __bool env_remove_file(const __symptr path)
 
 /// change the name or location of a file
 /// 0-ok, other-error
-__bool env_move_path(const __symptr from, const __symptr to)
+__bool env_move_path(const char* from, const char* to)
 {
 #if defined(OS_WINDOWS)
 	__bool r = MoveFileA(from, to);
@@ -168,7 +168,7 @@ __bool env_move_path(const __symptr from, const __symptr to)
 #endif
 }
 
-__bool env_make_path(const __symptr path)
+__bool env_make_path(const char* path)
 {
     if (path == NULL || path[0] == '\0'){
         return __false;

@@ -106,7 +106,7 @@ static inline int socket_setopt(__sint32 sock, int optname, int enable)
 #endif
 }
 
-int env_socket_set_nonblock(__socket sock, int noblock)
+__sint32 env_socket_set_nonblock(__socket sock, int noblock)
 {
 	// 0-block, 1-no-block
 #if defined(OS_WINDOWS)
@@ -147,7 +147,7 @@ void env_socket_close(__socket sock)
 #endif
 }
 
-__sockaddr_ptr env_socket_addr_create(__symptr host, __uint16 port)
+__sockaddr_ptr env_socket_addr_create(char* host, __uint16 port)
 {
 	__sockaddr_ptr addr = (__sockaddr_ptr)malloc(sizeof(struct sockaddr_in));
 	__pass(addr != NULL);

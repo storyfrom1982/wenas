@@ -7,7 +7,7 @@ void socket_test()
     __uint16 port = 37213;
     __fp fp = env_fopen("/tmp/ip.txt", "r+t");
     __pass(fp != NULL);
-    __sym host[ENV_SOCKET_ADDRLEN] = {0};
+    char host[ENV_SOCKET_ADDRLEN] = {0};
     __sint64 ret = env_fread(fp, host, ENV_SOCKET_ADDRLEN);
     env_fclose(fp);
     __pass(ret > 0); 
@@ -26,7 +26,7 @@ void socket_test()
     // __pass(env_socket_bind(sock, laddr) == 0); 
     // __pass(env_socket_connect(sock) == 0); 
 
-    __sym buf[ENV_SOCKET_ADDRLEN] = {0};
+    char buf[ENV_SOCKET_ADDRLEN] = {0};
     while (1){
         __pass((ret = env_socket_sendto(sock, "123\n", 4, raddr)) > 0); 
         __logd("env_socket_sendto ret: %d\n", ret);

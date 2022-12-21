@@ -9,12 +9,12 @@ int main(int argc, char *argv[])
 
     __logi("hello world\n");
     __logi("time %llu clock %llu\n", env_time(), env_clock());
-    __sym buf[1024] = {0};
-    __uint64 n = env_strtime(buf, 1024, env_time() / NANO_SECONDS);
+    char buf[1024] = {0};
+    __uint64 n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("time %s\n", buf);
 
-    n = env_strtime(buf, 1024, env_clock() / NANO_SECONDS);
+    n = env_strftime(buf, 1024, env_clock() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("clock %s\n", buf);
 
