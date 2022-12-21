@@ -267,27 +267,40 @@ __env_export void env_malloc_debug(void (*cb)(const __sym *debug));
 //         __uint32 sin_addr;
 //         __uint16 sin_port;
 //         __uint8 zero[8];
-// }__ipaddr, *__ipaddr_ptr;
+// }__ipaddr, *__sockaddr_ptr;
 // #include <netinet/in.h>
 
 
 // typedef struct sockaddr_in __ipaddr;
-typedef struct __socket* __socket_ptr;
-typedef struct sockaddr* __ipaddr_ptr;
+typedef __sint32 __socket;
+typedef struct sockaddr* __sockaddr_ptr;
 
-__env_export __sint32 env_socket_init(void);
-__env_export __sint32 env_socket_cleanup(void);
-__env_export __sint32 env_socket_geterror(void);
+typedef struct {
+	union{
+		struct{
+			__uint32 ip;
+			__uint16 port;
+		};
+		__uint8 addr[6];
+	};
+	// __sockaddr_ptr sa;
+} __ipaddr;
 
-__env_export __socket_ptr env_socket_creatre(__symptr ip, __uint16 port);
-__env_export void env_socket_destroy(__socket_ptr *sock);
-__env_export __sint32 env_socket_connect(__socket_ptr sock);
-__env_export __sint32 env_socket_bind(__socket_ptr sock);
+__env_export __socket env_socket_open();
+__env_export void env_socket_close(__socket sock);
+__env_export __sint32 env_socket_connect(__socket sock, __sockaddr_ptr addr);
+__env_export __sint32 env_socket_bind(__socket sock, __sockaddr_ptr addr);
+__env_export int env_socket_set_nonblock(__socket sock, int noblock);
 
-__env_export __sint32 env_socket_send(__socket_ptr sock, const void* buf, __uint64 size);
-__env_export __sint32 env_socket_recv(__socket_ptr sock, void* buf, __uint64 size);
-__env_export __sint32 env_socket_sendto(__socket_ptr sock, const void* buf, __uint64 size);
-__env_export __sint32 env_socket_recvfrom(__socket_ptr sock, void* buf, __uint64 size);
+__env_export __sockaddr_ptr env_socket_addr_create(__symptr ip, __uint16 port);
+__env_export void env_socket_addr_copy(__sockaddr_ptr src, __sockaddr_ptr dst);
+__env_export __bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b);
+__env_export void env_socket_addr_get_ip(__sockaddr_ptr addr, __ipaddr *ip);
+
+__env_export __sint32 env_socket_send(__socket sock, const void* buf, __uint64 size);
+__env_export __sint32 env_socket_recv(__socket sock, void* buf, __uint64 size);
+__env_export __sint32 env_socket_sendto(__socket sock, const void* buf, __uint64 size, __sockaddr_ptr addr);
+__env_export __sint32 env_socket_recvfrom(__socket sock, void* buf, __uint64 size, __sockaddr_ptr addr);
 
 
 #endif //__ENV_ENV_H__
