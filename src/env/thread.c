@@ -24,36 +24,47 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-__sint32 env_thread_create(env_thread_ptr *pp_tid, env_thread_cb cb, __ptr ctx)
+__sint32 env_thread_create(env_thread_ptr *p_ptr, env_thread_cb cb, __ptr ctx)
 {
-#if defined(OS_WINDOWS)
-    env_thread_ptr tid = (env_thread_ptr)malloc(sizeof(pthread_t));
-    if (tid == NULL) {
+    env_thread_ptr ptr = malloc(sizeof(pthread_t));
+    if (ptr == NULL) {
         return -1;
     }
-    if (pthread_create(tid, NULL, cb, ctx) != 0) {
-        free(tid);
+    if (pthread_create((pthread_t*)ptr, NULL, cb, ctx) != 0) {
+        free(ptr);
+        return -1;
     }
-    *pp_tid = tid;
-#else
-    phtread_t tid;
-    if (pthread_create(&tid, NULL, cb, ctx) != 0) {
-        free(tid);
-}   }
-    *pp_tid = (void*)tid;
-#endif
-
+    *p_ptr = ptr;
     return 0;
 }
 
-env_thread_ptr env_thread_self()
+__uint64 env_thread_self()
 {
-    pthread_t tid = pthread_self();
 #if defined(OS_WINDOWS)
-    return (env_thread_ptr)tid.p;
+    return (__uint64)pthread_self().p;
 #else
-    return (env_thread_ptr)(void*)tid;
+    return (__uint64)pthread_self();
 #endif
+}
+
+__uint64 env_thread_id(env_thread_ptr thread_ptr)
+{
+#if defined(OS_WINDOWS)
+    return (__uint64)((pthread_t*)thread_ptr)->p;
+#else
+    return (__uint64)*((pthread_t*)thread_ptr);
+#endif
+}
+
+void env_thread_destroy(env_thread_ptr *p_ptr)
+{
+    if (p_ptr && *p_ptr) {
+        env_thread_ptr ptr = (pthread_t*)*p_ptr;
+        *p_ptr = NULL;
+        pthread_join(*(pthread_t*)ptr, NULL);
+        free(ptr);
+    }
+    
 }
 
 void env_thread_sleep(__uint64 nano_seconds)
@@ -66,16 +77,6 @@ void env_thread_sleep(__uint64 nano_seconds)
     nano_seconds /= 1000ULL;
     if (nano_seconds < 1) nano_seconds = 1;
 	usleep(nano_seconds);
-#endif
-}
-
-void env_thread_destroy(env_thread_ptr tid)
-{
-#if defined(OS_WINDOWS)
-    pthread_join(*(pthread_t*)tid, NULL);
-    free(tid);
-#else
-    pthread_join((pthread_t)(void*)tid, NULL);
 #endif
 }
 
@@ -355,7 +356,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->read_waiting > 0){
-                env_mutex_broadcast(&pipe->mutex);
+                env_mutex_signal(&pipe->mutex);
             }
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
@@ -370,7 +371,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
     }
 
     if (pipe->read_waiting > 0){
-        env_mutex_broadcast(&pipe->mutex);
+        env_mutex_signal(&pipe->mutex);
     }
     env_mutex_unlock(&pipe->mutex);
 
@@ -394,7 +395,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
         pos += ret;
         if (pos != len){
             if (ret > 0 && pipe->write_waiting > 0){
-                env_mutex_broadcast(&pipe->mutex);
+                env_mutex_signal(&pipe->mutex);
             }
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
@@ -409,7 +410,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
     }
 
     if (pipe->write_waiting > 0){
-        env_mutex_broadcast(&pipe->mutex);
+        env_mutex_signal(&pipe->mutex);
     }
     env_mutex_unlock(&pipe->mutex);
 

@@ -63,10 +63,10 @@ Reset:
 void logger_test()
 {
 	int result = 0;
-	env_thread_ptr write_tid = 0;
-	env_thread_ptr read_tid = 0;
-    env_thread_ptr write_tid_1 = 0;
-	env_thread_ptr read_tid_1 = 0;
+	env_thread_ptr write_tid;
+	env_thread_ptr read_tid;
+    env_thread_ptr write_tid_1;
+	env_thread_ptr read_tid_1;
 	env_pipe_t *pipe = NULL;
 	env_pipe_t *pipe_1 = NULL;
 
@@ -83,29 +83,29 @@ void logger_test()
 
 	__logd("phtread join write =============================== thread\n");
 
-	//env_thread_destroy(write_tid);
-    //env_thread_destroy(write_tid_1);
+	//env_thread_destroy(&write_tid);
+    //env_thread_destroy(&write_tid_1);
 
 	env_thread_sleep(3000000000);
 
 	__logd("phtread stopping read thread\n");
 
     __set_false(running);
-    env_pipe_clear(pipe);
-	env_pipe_clear(pipe_1);
+ //   env_pipe_clear(pipe);
+	//env_pipe_clear(pipe_1);
 	__logd("env_pipe_stop =============================== 1\n");
     env_pipe_stop(pipe);
 	__logd("env_pipe_stop =============================== 2\n");
 	env_pipe_stop(pipe_1);
 	__logd("env_pipe_stop =============================== 3\n");
 
-	 env_thread_destroy(write_tid);
-     env_thread_destroy(write_tid_1);
+	 env_thread_destroy(&write_tid);
+     env_thread_destroy(&write_tid_1);
 
 	__logd("phtread join read thread\n");
 
-	env_thread_destroy(read_tid);
-    env_thread_destroy(read_tid_1);
+	env_thread_destroy(&read_tid);
+    env_thread_destroy(&read_tid_1);
 
 	env_pipe_destroy(&pipe);
 	env_pipe_destroy(&pipe_1);

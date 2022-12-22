@@ -34,9 +34,7 @@
 ///////////////////////////////////////////////////////
 #define __false                 0
 #define __true                  1
-//#ifndef OS_WINDOWS
 typedef unsigned char           __bool;
-//#endif
 
 ///////////////////////////////////////////////////////
 ///// 256进制符号
@@ -122,13 +120,14 @@ __env_export __bool env_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
-typedef __ptr(*env_thread_cb)(__ptr ctx);
-typedef struct pthread_t* env_thread_ptr;
+typedef void* env_thread_ptr;
 typedef struct env_mutex env_mutex_t;
+typedef __ptr(*env_thread_cb)(__ptr ctx);
 
 __env_export __sint32 env_thread_create(env_thread_ptr *tid, env_thread_cb cb, __ptr ctx);
-__env_export void env_thread_destroy(env_thread_ptr tid);
-__env_export env_thread_ptr env_thread_self();
+__env_export void env_thread_destroy(env_thread_ptr *tid);
+__env_export __uint64 env_thread_self();
+__env_export __uint64 env_thread_id(env_thread_ptr thread_ptr);
 __env_export void env_thread_sleep(__uint64 nano_seconds);
 
 __env_export env_mutex_t* env_mutex_create(void);
@@ -242,6 +241,8 @@ __env_export __uint64 env_backtrace(__ptr* array, __sint32 depth);
 ///////////////////////////////////////////////////////
 ///// 内存安全
 ///////////////////////////////////////////////////////
+
+#ifndef OS_WINDOWS
 __env_export __ptr malloc(__uint64 size);
 __env_export __ptr calloc(__uint64 number, __uint64 size);
 __env_export __ptr realloc(__ptr address, __uint64 size);
@@ -253,6 +254,7 @@ __env_export char* strndup(const char *s, __uint64 n);
 __env_export __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
 __env_export void free(__ptr address);
 __env_export void env_malloc_debug(void (*cb)(const char *debug));
+#endif
 
 ///////////////////////////////////////////////////////
 ///// 网络插口

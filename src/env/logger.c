@@ -12,8 +12,13 @@
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
 
-#define __path_clear(path) \
-    ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
+#if defined(OS_WINDOWS)
+    #define __path_clear(path) \
+        ( strrchr( path, '\\' ) ? strrchr( path, '\\' ) + 1 : path )
+#else
+    #define __path_clear(path) \
+        ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
+#endif
 
 static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E", "W", "I", "D", "T"};
 
@@ -110,7 +115,7 @@ void env_logger_stop()
 {
     if (__set_false(g_logger.running)){
         env_pipe_stop(g_logger.pipe);
-        env_thread_destroy(g_logger.tid);
+        env_thread_destroy(&g_logger.tid);
         env_pipe_destroy(&g_logger.pipe);
         if (g_logger.path){
             free(g_logger.path);
@@ -127,7 +132,7 @@ void env_logger_printf(enum env_log_level level, const char *file, __sint32 line
     __uint64 millisecond = env_time() / MICRO_SECONDS;
     n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4ld %-21s [%s] ", (unsigned int)(millisecond % 1000),
                   env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;

@@ -52,8 +52,8 @@ void thread_test()
 
     // env_mutex_lock(mutex);
 
-    env_thread_ptr tid;
-    __sint32 r = env_thread_create(&tid, thread_func, mutex);
+    env_thread_ptr thread;
+    __sint32 r = env_thread_create(&thread, thread_func, mutex);
     __pass(r == 0);
 
     // env_mutex_wait(mutex);
@@ -61,8 +61,8 @@ void thread_test()
 
     __atom_lock(testatom);
 
-    __logd("join tid %llx\n", env_thread_self());
-    env_thread_destroy(tid);
+    __logd("join tid %llx\n", env_thread_id(thread));
+    env_thread_destroy(&thread);
     // env_mutex_destroy(&mutex);
 
     env_mutex_destroy(&mutex);
