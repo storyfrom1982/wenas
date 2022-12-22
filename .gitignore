@@ -72,10 +72,8 @@ cmake-build-debug/
 *.xcodeproj
 *.xcworkspace
 
-# make dist output
-libuv-*.tar.*
-
 /src/env/dep
 .vscode/
 /test/business/Android/.idea/
 /out
+/tmp

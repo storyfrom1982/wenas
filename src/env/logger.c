@@ -33,7 +33,7 @@ typedef struct env_logger {
 
 static env_logger_t g_logger = {0};
 
-static __sint32 env_logger_write_loop(__ptr ctx)
+static __ptr env_logger_write_loop(__ptr ctx)
 {
     __fp fp = NULL;
     __sint64 n;
@@ -90,7 +90,7 @@ Reset:
     if (buf){
         free(buf);
     }
-    return 0;
+    return NULL;
 }
 
 int env_logger_start(const char *path, env_logger_cb cb)

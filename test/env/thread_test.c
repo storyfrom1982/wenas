@@ -2,7 +2,7 @@
 
 static __atombool testatom = __true;
 
-static __sint32 thread_func(__ptr ctx)
+static __ptr thread_func(__ptr ctx)
 {
     int ret;
     env_mutex_t *mutex = (env_mutex_t *)ctx;
@@ -33,7 +33,7 @@ static __sint32 thread_func(__ptr ctx)
 
 Reset:
 
-    return 0;
+    return NULL;
 }
 
 void thread_test()

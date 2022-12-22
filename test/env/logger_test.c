@@ -6,7 +6,7 @@
 static __atombool running = __false;
 char sym[26] = {'a', 'b', 'c', 'd', 'e', 'f'};
 
-__sint32 pipe_write_thread(__ptr p)
+__ptr pipe_write_thread(__ptr p)
 {
     __sint32 result = 0;
 	char s = 0;
@@ -31,10 +31,10 @@ __sint32 pipe_write_thread(__ptr p)
 
 Reset:
 	__logd("pipe_write_thread exit ================== 0x%X\n", env_thread_self());
-	return 0;
+	return NULL;
 }
 
-__sint32 pipe_read_thread(__ptr p)
+__ptr pipe_read_thread(__ptr p)
 {
 	__sint32 result = 0, count = 0;
 	__sint32 size = 32;
@@ -57,7 +57,7 @@ __sint32 pipe_read_thread(__ptr p)
 
 Reset:
 	__logd("pipe_read_thread exit --------------------- 0x%X\n", env_thread_self());
-	return 0;
+	return NULL;
 }
 
 void logger_test()
@@ -83,10 +83,10 @@ void logger_test()
 
 	__logd("phtread join write =============================== thread\n");
 
-	//env_thread_destroy(&write_tid);
-    //env_thread_destroy(&write_tid_1);
+	env_thread_destroy(&write_tid);
+    env_thread_destroy(&write_tid_1);
 
-	env_thread_sleep(3000000000);
+	// env_thread_sleep(3000000000);
 
 	__logd("phtread stopping read thread\n");
 
