@@ -39,8 +39,8 @@ static __ptr env_logger_write_loop(__ptr ctx)
 {
     __fp fp = NULL;
     __sint64 n;
-    __uint64 res;
-    char *buf = (char *)malloc(__log_pipe_size);
+    __uint64 res, buf_size = __log_pipe_size;
+    unsigned char *buf = (unsigned char *)malloc(buf_size);
     __pass(buf != NULL);
 
     if (!env_find_path(g_logger.path)){
@@ -53,12 +53,17 @@ static __ptr env_logger_write_loop(__ptr ctx)
         filename[n] = '\0';
         fp = env_fopen(filename, "a+t");
         __pass(fp != NULL);
+        __uint64 *a = (__uint64*)(buf - 16);
+        __uint64 *b = (__uint64*)(buf - 8);
+        n = snprintf(filename, 1024, "./build/%llu.%llu", *a, *b);
+        env_make_path(filename);
     }
 
     while (1)
     {
         if ((res = env_pipe_read(g_logger.pipe, buf, 1)) == 1){
-            res += env_pipe_read(g_logger.pipe, buf + 1, env_pipe_readable(g_logger.pipe));
+            n = env_pipe_readable(g_logger.pipe);
+            res += env_pipe_read(g_logger.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
         }
 
         if (res > 0){
@@ -87,12 +92,14 @@ Reset:
     __set_false(g_logger.writing);
 
     if (fp){
-        printf("close log file\n");
         env_fclose(fp);
     }
     if (buf){
-        printf("free log buf\n");
+        __uint64 *a = (__uint64*)(buf - 16);
+        __uint64 *b = (__uint64*)(buf - 8);
+        printf("buf addr: %llu.%llu\n", *a, *b);
         free(buf);
+        printf("buf addr: %llu.%llu\n", *a, *b);
     }
     return NULL;
 }
@@ -149,14 +156,14 @@ void env_logger_printf(enum env_log_level level, const char *file, __sint32 line
 
     if (n < __log_text_size - 1){
         text[n++] = '\n';
-        text[n++] = '\0';
+        text[n] = '\0';
     }else{
         text[__log_text_size-2] = '\n';
         text[__log_text_size-1] = '\0';
     }
 
     if (__is_true(g_logger.writing) && g_logger.pipe != NULL){
-        env_pipe_write(g_logger.pipe, text, n - 1);
+        env_pipe_write(g_logger.pipe, text, n);
     }
 
     if (g_logger.printer != NULL){

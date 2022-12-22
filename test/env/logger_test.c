@@ -72,7 +72,7 @@ void logger_test()
 
 	for (int i = 0; i < 10; ++i) {
 		pipe = env_pipe_create(1<<4);
-		pipe_1 = env_pipe_create(1<<19);
+		pipe_1 = env_pipe_create(1<<16);
 
 		__pass(pipe != NULL);
 
@@ -108,8 +108,8 @@ void logger_test()
 		env_thread_destroy(&read_tid);
 		env_thread_destroy(&read_tid_1);
 
-		// env_pipe_destroy(&pipe);
-		// env_pipe_destroy(&pipe_1);
+		env_pipe_destroy(&pipe);
+		env_pipe_destroy(&pipe_1);
 		
 	}
 

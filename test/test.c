@@ -14,8 +14,8 @@ extern void socket_test();
 
 void test()
 {
-    storage_test();
-    thread_test();
+    // storage_test();
+    // thread_test();
     logger_test();
 
     // socket_test();

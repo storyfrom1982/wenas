@@ -200,7 +200,7 @@ static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, __uint6
 		page->start_address = mmap(pool->aligned_address,
 				page->size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (page->start_address == MAP_FAILED){
-			return -1;
+			abort();
 		}else{
 			if (((__uint64)(page->start_address) & __align_mask) != 0){
 				pool->aligned_address = (void *)(((__uint64)(page->start_address) + __align_mask) & ~__align_mask);
@@ -211,7 +211,7 @@ static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, __uint6
 			}
 		}
 	}while ( __true );
-
+	// printf(">>>>-------------------------------------------> %lu\n", page->id);
 	page->head = (pointer_t*)(page->start_address);
 	page->head->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
 	page->head->size = __free_pointer_size;
@@ -401,17 +401,20 @@ void free(__ptr address)
 		pointer = __address2pointer(address);
 
 		if (pointer->size == 0 || pointer->flag == 0){
+			__loge("pointer->size == 0 || pointer->flag == 0");
 			abort();
 		}
 
 		pool_id = ((__next_pointer(pointer)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
+			__loge("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 			abort();
 		}
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(pointer)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
+			__loge("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
 			abort();
 		}
 

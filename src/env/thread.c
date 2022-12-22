@@ -59,12 +59,11 @@ __uint64 env_thread_id(env_thread_ptr thread_ptr)
 void env_thread_destroy(env_thread_ptr *p_ptr)
 {
     if (p_ptr && *p_ptr) {
-        env_thread_ptr ptr = (pthread_t*)*p_ptr;
+        env_thread_ptr ptr = *p_ptr;
         *p_ptr = NULL;
         pthread_join(*(pthread_t*)ptr, NULL);
         free(ptr);
     }
-    
 }
 
 void env_thread_sleep(__uint64 nano_seconds)
@@ -280,54 +279,6 @@ void env_pipe_destroy(env_pipe_t **pp_pipe)
     }
 }
 
-static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 size)
-{
-    __uint64 writable = pipe->len - pipe->writer + pipe->reader;
-    pipe->leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
-
-    if ( writable == 0 ){
-        return 0;
-    }
-
-    size = writable < size ? writable : size;
-
-    if ( pipe->leftover >= size ){
-        memcpy( pipe->buf + ( pipe->writer & ( pipe->len - 1 ) ), data, size);
-    }else{
-        memcpy( pipe->buf + ( pipe->writer & ( pipe->len - 1 ) ), data, pipe->leftover);
-        memcpy( pipe->buf, (char*)data + pipe->leftover, size - pipe->leftover);
-    }
-
-    __atom_add(pipe->writer, size);
-
-    return size;
-}
-
-
-static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 size)
-{
-
-    __uint64 readable = pipe->writer - pipe->reader;
-    pipe->leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
-
-    if ( readable == 0 ){
-        return 0;
-    }
-
-    size = readable < size ? readable : size;
-
-    if ( pipe->leftover >= size ){
-        memcpy( buf, pipe->buf + ( pipe->reader & ( pipe->len - 1 ) ), size);
-    }else{
-        memcpy( buf, pipe->buf + ( pipe->reader & ( pipe->len - 1 ) ), pipe->leftover);
-        memcpy( (char*)buf + pipe->leftover, pipe->buf, size - pipe->leftover);
-    }
-
-    __atom_add(pipe->reader, size);
-
-    return size;
-}
-
 __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 {
     if (pipe->buf == NULL || data == NULL || len == 0){
@@ -340,21 +291,46 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 
     env_mutex_lock(&pipe->mutex);
 
-    __uint64 ret = 0, pos = 0;
-    while (pos < len ) {
-        ret = pipe_atomic_write(pipe, (char*)data + pos, len - pos);
-        pos += ret;
-        if (pos != len){
-            if (ret > 0 && pipe->read_waiting > 0){
+    __uint64 writable, pos = 0;
+
+    while (pos < len) {
+
+        writable = pipe->len - pipe->writer + pipe->reader;
+        if (writable > len - pos){
+            writable = len - pos;
+        }
+
+        if (writable > 0){
+
+            pipe->leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
+            if (pipe->leftover >= writable){
+                memcpy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((char*)data) + pos, writable);
+            }else {
+                memcpy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((char*)data) + pos, pipe->leftover);
+                memcpy(pipe->buf, ((char*)data) + (pos + pipe->leftover), writable - pipe->leftover);
+            }
+            __atom_add(pipe->writer, writable);
+            pos += writable;
+
+            if (pipe->read_waiting > 0){
                 env_mutex_signal(&pipe->mutex);
             }
+
+        }else {
+
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
                 return pos;
             }
+
             __atom_add(pipe->write_waiting, 1);
             env_mutex_wait(&pipe->mutex);
             __atom_sub(pipe->write_waiting, 1);
+
+            if (__is_true(pipe->stopped)){
+                env_mutex_unlock(&pipe->mutex);
+                return pos;
+            }  
         }
     }
 
@@ -374,21 +350,46 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 
     env_mutex_lock(&pipe->mutex);
 
-    __uint64 pos = 0;
-    for(__uint64 ret = 0; pos < len; ){
-        ret = pipe_atomic_read(pipe, (char*)buf + pos, len - pos);
-        pos += ret;
-        if (pos != len){
-            if (ret > 0 && pipe->write_waiting > 0){
+    __uint64 readable, pos = 0;
+
+    while (pos < len) {
+
+        readable = pipe->writer - pipe->reader;
+        if (readable > len - pos){
+            readable = len - pos;
+        }
+
+        if (readable > 0){
+
+            pipe->leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
+            if (pipe->leftover >= readable){
+                memcpy(((char*)buf) + pos, pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
+            }else {
+                memcpy(((char*)buf) + pos, pipe->buf + (pipe->reader & (pipe->len - 1)), pipe->leftover);
+                memcpy(((char*)buf) + (pos + pipe->leftover), pipe->buf, readable - pipe->leftover);
+            }
+            __atom_add(pipe->reader, readable);
+            pos += readable;
+
+            if (pipe->write_waiting > 0){
                 env_mutex_signal(&pipe->mutex);
             }
+
+        }else {
+
             if (__is_true(pipe->stopped)){
                 env_mutex_unlock(&pipe->mutex);
                 return pos;
             }
+            
             __atom_add(pipe->read_waiting, 1);
             env_mutex_wait(&pipe->mutex);
             __atom_sub(pipe->read_waiting, 1);
+
+            if (__is_true(pipe->stopped)){
+                env_mutex_unlock(&pipe->mutex);
+                return pos;
+            } 
         }
     }
 
