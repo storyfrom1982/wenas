@@ -11,6 +11,7 @@
 
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
+#define __log_pipe_size			1 << 14
 
 #if defined(OS_WINDOWS)
     #define __path_clear(path) \
@@ -24,7 +25,8 @@ static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E",
 
 
 typedef struct env_logger {
-    __atombool running;
+    __atombool inited;
+    __atombool writing;
     char *path;
     env_thread_ptr tid;
     env_logger_cb printer;
@@ -38,7 +40,7 @@ static __ptr env_logger_write_loop(__ptr ctx)
     __fp fp = NULL;
     __sint64 n;
     __uint64 res;
-    char *buf = (char *)malloc(env_pipe_writable(g_logger.pipe));
+    char *buf = (char *)malloc(__log_pipe_size);
     __pass(buf != NULL);
 
     if (!env_find_path(g_logger.path)){
@@ -51,8 +53,6 @@ static __ptr env_logger_write_loop(__ptr ctx)
         filename[n] = '\0';
         fp = env_fopen(filename, "a+t");
         __pass(fp != NULL);
-        n = env_fwrite(fp, (void*)"\n\n\nLogger start >>>>-------------->\n\n\n", strlen("\n\n\nLogger start >>>>-------------->\n\n\n"));
-        __pass(n > 0);
     }
 
     while (1)
@@ -77,31 +77,37 @@ static __ptr env_logger_write_loop(__ptr ctx)
                 __pass(fp != NULL);
             }
         }else {
-            if (__is_false(g_logger.running)){
+            if (__is_false(g_logger.inited)){
                 break;
             }
         }
     }
 
 Reset:
+    __set_false(g_logger.writing);
+
     if (fp){
+        printf("close log file\n");
         env_fclose(fp);
     }
     if (buf){
+        printf("free log buf\n");
         free(buf);
     }
     return NULL;
 }
 
-int env_logger_start(const char *path, env_logger_cb cb)
+__sint32 env_logger_start(const char *path, env_logger_cb cb)
 {
-    if (__set_true(g_logger.running)){
+    if (__set_true(g_logger.inited)){
         g_logger.printer = cb;
-        g_logger.path = strdup(path);
-        if (g_logger.path){
-            g_logger.pipe = env_pipe_create(1 << 15);
+        if (path){
+            g_logger.path = strdup(path);
+            g_logger.pipe = env_pipe_create(__log_pipe_size);
             __pass(g_logger.pipe != NULL);
+            __set_true(g_logger.writing);
             __pass(env_thread_create(&g_logger.tid, env_logger_write_loop, &g_logger) == 0);
+            __logi("\n\n\nLogger start >>>>-------------->\n\n\n");
         }
     }
     return 0;
@@ -113,7 +119,8 @@ Reset:
 
 void env_logger_stop()
 {
-    if (__set_false(g_logger.running)){
+    if (__set_false(g_logger.inited) 
+        && __set_false(g_logger.writing)){
         env_pipe_stop(g_logger.pipe);
         env_thread_destroy(&g_logger.tid);
         env_pipe_destroy(&g_logger.pipe);
@@ -132,7 +139,7 @@ void env_logger_printf(enum env_log_level level, const char *file, __sint32 line
     __uint64 millisecond = env_time() / MICRO_SECONDS;
     n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4ld %-21s [%s] ", (unsigned int)(millisecond % 1000),
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
                   env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
@@ -148,7 +155,7 @@ void env_logger_printf(enum env_log_level level, const char *file, __sint32 line
         text[__log_text_size-1] = '\0';
     }
 
-    if (g_logger.pipe != NULL){
+    if (__is_true(g_logger.writing) && g_logger.pipe != NULL){
         env_pipe_write(g_logger.pipe, text, n - 1);
     }
 

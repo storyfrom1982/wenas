@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #ifdef ENV_MALLOC_BACKTRACE
 #	define __USE_GNU
@@ -192,8 +193,7 @@ static env_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
 
 static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, __uint64 page_size)
 {
-	page->size = (page_size + mm->page_aligned_mask) & (~mm->page_aligned_mask);
-
+	page->size = (page_size + (__free_pointer_size * 4) + mm->page_aligned_mask) & (~mm->page_aligned_mask);
 	pool->aligned_address = NULL;
 
 	do{
@@ -246,7 +246,7 @@ static int malloc_pool()
 
     mm->page_size = __page_size;
     mm->preloading_page = 2;
-    mm->page_aligned_mask = (__uint64) sysconf(_SC_PAGESIZE) - 1;
+    mm->page_aligned_mask = sysconf(_SC_PAGESIZE) - 1;
 
     for (mm->pool_number = 0; mm->pool_number < __max_pool_number; ++mm->pool_number){
         mm->pool[mm->pool_number].id = mm->pool_number;
@@ -401,21 +401,18 @@ void free(__ptr address)
 		pointer = __address2pointer(address);
 
 		if (pointer->size == 0 || pointer->flag == 0){
-			//TODO
-			return;
+			abort();
 		}
 
 		pool_id = ((__next_pointer(pointer)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			//TODO
-			return;
+			abort();
 		}
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(pointer)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			//TODO
-			return;
+			abort();
 		}
 
 		page = &(pool->page[page_id]);
@@ -535,25 +532,18 @@ __ptr malloc(__uint64 size)
 
 	if (pool->page_number >= __max_page_number){
 		__atom_unlock(page->lock);
-		return NULL;
+		abort();
 	}
 
-	if (size >= mm->page_size >> 2){
-		if (size >= mm->page_size){
-			if (malloc_page(pool, page, size << 1) != 0){
-				__atom_unlock(page->lock);
-				return NULL;
-			}
-		}else{
-			if (malloc_page(pool, page, mm->page_size << 1) != 0){
-				__atom_unlock(page->lock);
-				return NULL;
-			}
+	if (size > mm->page_size){
+		if (malloc_page(pool, page, size) != 0){
+			__atom_unlock(page->lock);
+			abort();
 		}
 	}else{
 		if (malloc_page(pool, page, mm->page_size) != 0){
 			__atom_unlock(page->lock);
-			return NULL;
+			abort();
 		}
 	}
 

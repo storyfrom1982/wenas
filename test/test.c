@@ -18,7 +18,7 @@ void test()
     thread_test();
     logger_test();
 
-    socket_test();
+    // socket_test();
 
     env_logger_stop();
     

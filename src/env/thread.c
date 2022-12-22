@@ -280,12 +280,8 @@ void env_pipe_destroy(env_pipe_t **pp_pipe)
     }
 }
 
-static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 size) {
-
-    if (pipe->buf == NULL || data == NULL || size == 0){
-        return 0;
-    }
-
+static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 size)
+{
     __uint64 writable = pipe->len - pipe->writer + pipe->reader;
     pipe->leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
 
@@ -308,11 +304,8 @@ static inline __uint64 pipe_atomic_write(env_pipe_t *pipe, __ptr data, __uint64 
 }
 
 
-static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 size) {
-
-    if (pipe->buf == NULL || buf == NULL || size == 0){
-        return 0;
-    }
+static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 size)
+{
 
     __uint64 readable = pipe->writer - pipe->reader;
     pipe->leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
@@ -335,11 +328,8 @@ static inline __uint64 pipe_atomic_read(env_pipe_t *pipe, __ptr buf, __uint64 si
     return size;
 }
 
-#include <stdio.h>
 __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 {
-    printf("env_pipe_write =========== enter\n");
-
     if (pipe->buf == NULL || data == NULL || len == 0){
         return 0;
     }
@@ -363,9 +353,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
                 return pos;
             }
             __atom_add(pipe->write_waiting, 1);
-            printf("env_pipe_write wait %lu ==============------------- enter\n", pipe->read_waiting);
             env_mutex_wait(&pipe->mutex);
-            printf("env_pipe_write wait %lu ==============------------- exit\n", pipe->read_waiting);
             __atom_sub(pipe->write_waiting, 1);
         }
     }
@@ -375,14 +363,11 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
     }
     env_mutex_unlock(&pipe->mutex);
 
-    //__logd("env_pipe_write =========== exit\n");
-
     return pos;
 }
 
 __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 {
-    printf("env_pipe_read =========== enter\n");
     if (pipe->buf == NULL || buf == NULL || len == 0){
         return 0;
     }
@@ -402,9 +387,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
                 return pos;
             }
             __atom_add(pipe->read_waiting, 1);
-            printf("env_pipe_read wait %lu  ============== enter\n", pipe->write_waiting);
             env_mutex_wait(&pipe->mutex);
-            printf("env_pipe_read wait %lu ============== exit\n", pipe->write_waiting);
             __atom_sub(pipe->read_waiting, 1);
         }
     }
@@ -413,8 +396,6 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
         env_mutex_signal(&pipe->mutex);
     }
     env_mutex_unlock(&pipe->mutex);
-
-    printf("env_pipe_read =========== exit\n");
 
     return pos;
 }
@@ -430,23 +411,15 @@ __uint64 env_pipe_writable(env_pipe_t *pipe){
 void env_pipe_stop(env_pipe_t *pipe){
     if (__set_true(pipe->stopped)){
         while (pipe->write_waiting > 0 || pipe->read_waiting > 0) {
-            __logd("env_pipe_stop lock %lu    %lu ============== 1\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_lock(&pipe->mutex);
-            __logd("env_pipe_stop lock %lu    %lu ============== 2\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_broadcast(&pipe->mutex);
-            __logd("env_pipe_stop lock %lu    %lu ============== 3\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_timedwait(&pipe->mutex, 1000);
-            __logd("env_pipe_stop lock %lu    %lu ============== 4\n", pipe->write_waiting, pipe->read_waiting);
             env_mutex_unlock(&pipe->mutex);
-            __logd("env_pipe_stop lock %lu    %lu ============== 5\n", pipe->write_waiting, pipe->read_waiting);
-            //env_thread_sleep(1000);
         }
     }
 }
 
 void env_pipe_clear(env_pipe_t *pipe){
-    // env_atomic_store(&pipe->reader, 0);
-    // env_atomic_store(&pipe->writer, 0);
     __atom_sub(pipe->reader, pipe->reader);
     __atom_sub(pipe->writer, pipe->writer);
 }

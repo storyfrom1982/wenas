@@ -254,6 +254,8 @@ __env_export char* strndup(const char *s, __uint64 n);
 __env_export __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
 __env_export void free(__ptr address);
 __env_export void env_malloc_debug(void (*cb)(const char *debug));
+#else
+#include <stdlib.h>
 #endif
 
 ///////////////////////////////////////////////////////

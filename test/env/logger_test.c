@@ -20,7 +20,7 @@ __ptr pipe_write_thread(__ptr p)
 		__pass(buf != NULL);
         s = i % 6;
 		memset(buf, sym[s], size);
-        result = snprintf(buf, 32, "%d 0x%X", i, env_thread_self());
+        result = snprintf(buf, 32, "%d 0x%lX", i, env_thread_self());
         buf[result] = ' ';
         result = env_pipe_write(pipe, buf, size);
 		free(buf);
@@ -30,7 +30,7 @@ __ptr pipe_write_thread(__ptr p)
 	}
 
 Reset:
-	__logd("pipe_write_thread exit ================== 0x%X\n", env_thread_self());
+	__logd("pipe_write_thread exit ================== 0x%lX\n", env_thread_self());
 	return NULL;
 }
 
@@ -56,7 +56,7 @@ __ptr pipe_read_thread(__ptr p)
 	}
 
 Reset:
-	__logd("pipe_read_thread exit --------------------- 0x%X\n", env_thread_self());
+	__logd("pipe_read_thread exit --------------------- 0x%lX\n", env_thread_self());
 	return NULL;
 }
 
@@ -70,45 +70,48 @@ void logger_test()
 	env_pipe_t *pipe = NULL;
 	env_pipe_t *pipe_1 = NULL;
 
-	pipe = env_pipe_create(1<<4);
-	pipe_1 = env_pipe_create(1<<19);
+	for (int i = 0; i < 10; ++i) {
+		pipe = env_pipe_create(1<<4);
+		pipe_1 = env_pipe_create(1<<19);
 
-	__pass(pipe != NULL);
+		__pass(pipe != NULL);
 
-	running = __true;
-	env_thread_create(&read_tid, pipe_read_thread, pipe);
-	env_thread_create(&write_tid, pipe_write_thread, pipe);
-    env_thread_create(&read_tid_1, pipe_read_thread, pipe_1);
-	env_thread_create(&write_tid_1, pipe_write_thread, pipe_1);
+		running = __true;
+		env_thread_create(&read_tid, pipe_read_thread, pipe);
+		env_thread_create(&write_tid, pipe_write_thread, pipe);
+		env_thread_create(&read_tid_1, pipe_read_thread, pipe_1);
+		env_thread_create(&write_tid_1, pipe_write_thread, pipe_1);
 
-	__logd("phtread join write =============================== thread\n");
+		__logd("phtread join write =============================== thread\n");
 
-	env_thread_destroy(&write_tid);
-    env_thread_destroy(&write_tid_1);
+		// env_thread_destroy(&write_tid);
+		// env_thread_destroy(&write_tid_1);
 
-	// env_thread_sleep(3000000000);
+		env_thread_sleep(3000000000);
 
-	__logd("phtread stopping read thread\n");
+		__logd("phtread stopping read thread\n");
 
-    __set_false(running);
- //   env_pipe_clear(pipe);
-	//env_pipe_clear(pipe_1);
-	__logd("env_pipe_stop =============================== 1\n");
-    env_pipe_stop(pipe);
-	__logd("env_pipe_stop =============================== 2\n");
-	env_pipe_stop(pipe_1);
-	__logd("env_pipe_stop =============================== 3\n");
+		__set_false(running);
+	//   env_pipe_clear(pipe);
+		//env_pipe_clear(pipe_1);
+		__logd("env_pipe_stop =============================== 1\n");
+		env_pipe_stop(pipe);
+		__logd("env_pipe_stop =============================== 2\n");
+		env_pipe_stop(pipe_1);
+		__logd("env_pipe_stop =============================== 3\n");
 
-	 env_thread_destroy(&write_tid);
-     env_thread_destroy(&write_tid_1);
+		env_thread_destroy(&write_tid);
+		env_thread_destroy(&write_tid_1);
 
-	__logd("phtread join read thread\n");
+		__logd("phtread join read thread\n");
 
-	env_thread_destroy(&read_tid);
-    env_thread_destroy(&read_tid_1);
+		env_thread_destroy(&read_tid);
+		env_thread_destroy(&read_tid_1);
 
-	env_pipe_destroy(&pipe);
-	env_pipe_destroy(&pipe_1);
+		// env_pipe_destroy(&pipe);
+		// env_pipe_destroy(&pipe_1);
+		
+	}
 
 Reset:
 
