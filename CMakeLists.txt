@@ -56,10 +56,9 @@ set(kzx_sources src/main.c
     test/env/logger_test.c
     test/env/socket_test.c
     test/sys/struct/heap_test.c
-    test/sys/struct/lineardb_test.c
-    # test/sys/struct/linearkv_test.c
-    # test/sys/struct/lineardb_pipe_test.c
-    # test/env/task/task_queue_test.c
+    test/sys/struct/linedb_test.c
+    test/sys/struct/linekv_test.c
+    test/env/task_queue_test.c
 )
 
 set(kzx_defines "")

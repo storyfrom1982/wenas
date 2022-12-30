@@ -12,6 +12,8 @@ extern void logger_test();
 extern void socket_test();
 extern void heap_test();
 extern void lineardb_test();
+extern void linearkv_test();
+extern void task_queue_test();
 
 
 void test()
@@ -22,7 +24,9 @@ void test()
     // socket_test();
 
     // heap_test();
-    lineardb_test();
+    // lineardb_test();
+    // linearkv_test();
+    task_queue_test();
 
     env_logger_stop();
     

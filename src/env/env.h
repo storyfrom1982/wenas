@@ -149,6 +149,19 @@ __env_export __uint64 env_pipe_writable(env_pipe_t *pipe);
 __env_export void env_pipe_stop(env_pipe_t *pipe);
 __env_export void env_pipe_clear(env_pipe_t *pipe);
 
+typedef struct linear_key_value_pair linekv_t;
+typedef struct env_task_queue env_taskqueue_t;
+typedef void (*env_task_ptr)(linekv_t* ctx);
+typedef __uint64 (*env_timed_task_ptr)(linekv_t* ctx);
+typedef linekv_t* (*env_sync_task_ptr)(linekv_t* ctx);
+
+__env_export env_taskqueue_t* env_taskqueue_create();
+__env_export void env_taskqueue_exit(env_taskqueue_t *tq);
+__env_export void env_taskqueue_destroy(env_taskqueue_t **pp_tq);
+__env_export void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv);
+__env_export void env_taskqueue_insert_timed_task(env_taskqueue_t *tq, linekv_t *lkv);
+__env_export linekv_t* env_taskqueue_run_sync_task(env_taskqueue_t *tq, linekv_t *lkv);
+
 ///////////////////////////////////////////////////////
 ///// 原子操作
 ///////////////////////////////////////////////////////

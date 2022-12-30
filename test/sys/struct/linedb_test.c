@@ -1,4 +1,4 @@
-#include "sys/struct/lineardb.h"
+#include "sys/struct/linedb.h"
 
 
 static void test_byte_order()

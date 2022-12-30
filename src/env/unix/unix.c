@@ -38,11 +38,11 @@ __sint32 memcmp(const void *s1, const void *s2, __uint64 n){
     if (!n){
         return 0;
     }
-    while (--n &&*(char*) s1 == *(char *)s2){
-        s1 = (char *)s1 + 1;
-        s2 = (char *)s2 + 1;
+    while (--n && *(char*)s1 == *(char*)s2){
+        s1 = (char*)s1 + 1;
+        s2 = (char*)s2 + 1;
     }
-    return ((unsigned char*) s1 - (unsigned char*)s2);
+    return (*(char*)s1 - *(char*)s2);
 }
 
 #if defined(__ATOMIC_RELAXED)

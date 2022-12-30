@@ -1,5 +1,5 @@
-#ifndef __LINEARDB_H__
-#define __LINEARDB_H__
+#ifndef __LINEDB_H__
+#define __LINEDB_H__
 
 
 #include <env/env.h>
@@ -554,4 +554,4 @@ static inline __uint64 linedb_pipe_block_count(linedb_pipe_t *lp)
 }
 
 
-#endif //__LINEARDB_H__
+#endif //__LINEDB_H__

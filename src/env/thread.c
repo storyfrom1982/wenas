@@ -424,3 +424,223 @@ void env_pipe_clear(env_pipe_t *pipe){
     __atom_sub(pipe->reader, pipe->reader);
     __atom_sub(pipe->writer, pipe->writer);
 }
+
+
+#include "sys/struct/heap.h"
+#include "sys/struct/linekv.h"
+
+
+struct env_task_queue {
+    __atombool running;
+    __uint8 write_waiting;
+    __uint8 read_waiting;
+    env_thread_ptr tid;
+    env_mutex_t mutex;
+    heap_t *timed_task;
+    linedb_pipe_t *immediate_task;
+};
+
+
+static inline void* env_taskqueue_loop(void *ctx)
+{
+    __uint64 timer = 0;
+    linedb_t *ldb;
+    env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
+    __pass(tq != NULL);
+    linekv_t* task_ctx = linekv_create(10240);
+    __pass(task_ctx != NULL);
+
+    while (1) {
+
+        env_mutex_lock(&tq->mutex);
+
+        while (tq->timed_task->pos > 0 && tq->timed_task->array[1].key <= env_time()){
+            heapment_t element = min_heapify_pop(tq->timed_task);
+            linekv_t* ctx = (linekv_t*) element.value;
+            ldb = linekv_find(ctx, "func");
+            element.key = ((env_timed_task_ptr)__b2n64(ldb))(ctx); 
+            if (element.key != 0){
+                element.key += env_time();
+                min_heapify_push(tq->timed_task, element);
+            }
+        }
+
+        ldb = linedb_pipe_hold_block(tq->immediate_task);
+        
+        if (ldb){
+
+            linekv_load_object(task_ctx, ldb);
+            linedb_pipe_free_block(tq->immediate_task, ldb);
+            if (tq->write_waiting){
+                env_mutex_signal(&tq->mutex);
+            }
+            env_mutex_unlock(&tq->mutex);
+
+            ldb = linekv_find(task_ctx, "func");
+            __pass(ldb != NULL);
+            
+            env_mutex_t *join = (env_mutex_t *)linekv_find_ptr(task_ctx, "join");
+            if (join){
+                linekv_t **result = (linekv_t **)linekv_find_ptr(task_ctx, "result");
+                *result = ((env_sync_task_ptr)__b2n64(ldb))(task_ctx);
+                env_mutex_lock(join);
+                env_mutex_signal(join);
+                env_mutex_unlock(join);
+            }else {
+                ((env_task_ptr)__b2n64(ldb))(task_ctx);
+            }
+
+        }else {
+
+            if (__is_false(tq->running)){
+                env_mutex_unlock(&tq->mutex);
+                break;
+            }
+
+            if (tq->timed_task->pos > 0){
+                timer = tq->timed_task->array[1].key - env_time();
+            }else {
+                timer = 0;
+            }
+
+            tq->read_waiting = 1;
+            if (timer){
+                env_mutex_timedwait(&tq->mutex, timer);
+            }else {
+                env_mutex_wait(&tq->mutex);
+            }
+            tq->read_waiting = 0;
+
+            env_mutex_unlock(&tq->mutex);
+        }
+    }
+
+Reset:
+
+    linekv_destroy(&task_ctx);
+
+    __logi("env_taskqueue_loop(0x%X) exit\n", env_thread_self());
+
+    return NULL;
+}
+
+
+env_taskqueue_t* env_taskqueue_create()
+{
+    int ret;
+
+    env_taskqueue_t *tq = (env_taskqueue_t *)calloc(1, sizeof(env_taskqueue_t));
+
+    __pass(tq != NULL);
+
+    __pass(
+        (tq->immediate_task = linedb_pipe_create(1 << 14)) != NULL
+    );
+
+    __pass(
+        (tq->timed_task = heap_create(1 << 8)) != NULL
+    );
+
+    __pass(
+        (ret = env_mutex_init(&tq->mutex)) == 0
+    );
+
+    tq->running = 1;
+
+    __pass(
+        (ret = env_thread_create(&tq->tid, env_taskqueue_loop, tq)) == 0
+    );
+
+    return tq;
+
+Reset:
+    if (tq->immediate_task) linedb_pipe_destroy(&tq->immediate_task);
+    if (tq->timed_task) heap_destroy(&tq->timed_task);
+    if (tq) free(tq);
+    return NULL;
+}
+
+void env_taskqueue_exit(env_taskqueue_t *tq)
+{
+    if (__set_false(tq->running)){
+        env_mutex_lock(&tq->mutex);
+        tq->running = 0;
+        env_mutex_broadcast(&tq->mutex);
+        env_mutex_unlock(&tq->mutex);
+        env_thread_destroy(&tq->tid);
+    }
+}
+
+void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
+{
+    if (pp_tq && *pp_tq){
+        env_taskqueue_t *tq = *pp_tq;
+        *pp_tq = NULL;
+        env_taskqueue_exit(tq);
+        env_mutex_uninit(&tq->mutex);
+        while (tq->timed_task->pos > 0){
+            heapment_t element = min_heapify_pop(tq->timed_task);
+            if (element.value){
+                linekv_destroy((linekv_t**)&(element.value));
+            }
+        }
+        heap_destroy(&tq->timed_task);
+        linedb_pipe_destroy(&tq->immediate_task); 
+        free(tq);
+    }
+}
+
+void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv)
+{
+    env_mutex_lock(&tq->mutex);
+    while (linedb_pipe_write(tq->immediate_task, lkv->head, lkv->pos) == 0) {
+        tq->write_waiting = 1;
+        env_mutex_wait(&tq->mutex);
+        tq->write_waiting = 0;
+    }
+    if (tq->read_waiting){
+        env_mutex_signal(&tq->mutex);
+    }
+    env_mutex_unlock(&tq->mutex);
+}
+
+void env_taskqueue_insert_timed_task(env_taskqueue_t *tq, linekv_t *lkv)
+{
+    env_mutex_lock(&tq->mutex);
+    linekv_t *task = linekv_create(lkv->pos);
+    task->pos = lkv->pos;
+    memcpy(task->head, lkv->head, lkv->pos);
+    heapment_t t;
+    t.key = env_time() + linekv_find_uint64(task, "time");
+    t.value = task;
+    min_heapify_push(tq->timed_task, t);
+    env_mutex_signal(&tq->mutex);
+    env_mutex_unlock(&tq->mutex);
+}
+
+linekv_t* env_taskqueue_run_sync_task(env_taskqueue_t *tq, linekv_t *lkv)
+{
+    linekv_t *result = NULL;
+    env_mutex_t mutex;
+    env_mutex_init(&mutex);
+    env_mutex_lock(&mutex);
+    linekv_add_ptr(lkv, "join", &mutex);
+    linekv_add_ptr(lkv, "result", &result);
+
+    env_mutex_lock(&tq->mutex);
+    while (linedb_pipe_write(tq->immediate_task, lkv->head, lkv->pos) == 0) {
+        tq->write_waiting = 1;
+        env_mutex_wait(&tq->mutex);
+        tq->write_waiting = 0;
+    }
+    if (tq->read_waiting){
+        env_mutex_signal(&tq->mutex);
+    }
+    env_mutex_unlock(&tq->mutex);
+
+    env_mutex_wait(&mutex);
+    env_mutex_unlock(&mutex);
+    env_mutex_uninit(&mutex);
+
+    return result;
+}
