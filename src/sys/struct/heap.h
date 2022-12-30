@@ -1,18 +1,18 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
 
-#include <stdlib.h>
-#include <stdint.h>
+
+#include <env/env.h>
 
 
 typedef struct heap_element {
-    uint64_t key;
+    __uint64 key;
     void *value;
 }heapment_t;
 
 
 typedef struct heap {
-    uint32_t pos, len;
+    __uint32 pos, len;
     heapment_t array[1];
 }heap_t;
 
@@ -23,7 +23,7 @@ typedef struct heap {
 
 
 
-static inline heap_t* heap_create(uint32_t size)
+static inline heap_t* heap_create(__uint32 size)
 {
     heap_t *heap = (heap_t *) malloc(sizeof(heap_t) + sizeof(heapment_t) * size);
     heap->len = size;
@@ -41,11 +41,11 @@ static inline void heap_destroy(heap_t **pp_heap)
 }
 
 //ascending/descending 升序/降序 最小堆/最大堆
-static inline int min_heapify_push(heap_t *h, heapment_t m)
+static inline __sint32 min_heapify_push(heap_t *h, heapment_t m)
 {
     if(h->pos < h->len){
         h->pos++;
-        int i = h->pos;
+        __sint32 i = h->pos;
         while (__heap_top(i) && h->array[__heap_top(i)].key > m.key) {
             h->array[i] = h->array[__heap_top(i)];
             i = __heap_top(i);
@@ -62,7 +62,7 @@ static inline heapment_t min_heapify_pop(heap_t *h)
     heapment_t tmp;
     h->array[0] = h->array[1];
     h->array[1] = h->array[h->pos];
-    uint32_t left, right, index, smallest = 1;
+    __uint32 left, right, index, smallest = 1;
 
     do {
         index = smallest;

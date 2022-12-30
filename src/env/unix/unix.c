@@ -2,6 +2,48 @@
 #if defined(__GNUC__) || defined(__clang__)
 
 #include <env/env.h>
+#include <assert.h>
+
+__uint64 strlen(const char *s)
+{
+    assert(s);
+    __uint64 l = 0;
+    while (s[l] != '\0')
+    {
+        l++;
+    }
+    return l;
+}
+
+void *memcpy(void *dest, const void *src, __uint64 n)
+{
+    assert(dest);
+    assert(src);
+    if (!n){
+        return dest;
+    }
+    __uint64 l = n / 8;
+    for (__uint64 i = 0; i < l; ++i){
+        *(((__uint64*)dest) + i) = *(((__uint64*)src) + i);
+    }
+    for (__uint64 r = n % 8; r > 0; r--){
+        *(((char*)dest) + (n - r)) = *(((char*)src) + (n - r));
+    }
+    return dest;
+}
+
+__sint32 memcmp(const void *s1, const void *s2, __uint64 n){
+    assert(s1);
+    assert(s2);
+    if (!n){
+        return 0;
+    }
+    while (--n &&*(char*) s1 == *(char *)s2){
+        s1 = (char *)s1 + 1;
+        s2 = (char *)s2 + 1;
+    }
+    return ((unsigned char*) s1 - (unsigned char*)s2);
+}
 
 #if defined(__ATOMIC_RELAXED)
 

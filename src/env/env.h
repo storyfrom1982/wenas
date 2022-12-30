@@ -76,8 +76,8 @@ typedef long long               __sint64;
 ///////////////////////////////////////////////////////
 ///// 实数集
 ///////////////////////////////////////////////////////
-typedef float                   __real32;
-typedef double                  __real64;
+// typedef float                   __real32;
+// typedef double                  __real64;
 
 typedef __uint64                __atombool;
 
@@ -254,6 +254,11 @@ __env_export char* strndup(const char *s, __uint64 n);
 __env_export __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
 __env_export void free(__ptr address);
 __env_export void env_malloc_debug(void (*cb)(const char *debug));
+
+__env_export __uint64 strlen(const char *s);
+__env_export void *memcpy(void *dest, const void *src, __uint64 n);
+__env_export __sint32 memcmp(const void *s1, const void *s2, __uint64 n);
+
 #else
 #include <stdlib.h>
 #endif

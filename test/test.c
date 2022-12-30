@@ -10,15 +10,19 @@ extern void storage_test();
 extern void thread_test();
 extern void logger_test();
 extern void socket_test();
+extern void heap_test();
+extern void lineardb_test();
 
 
 void test()
 {
     // storage_test();
     // thread_test();
-    logger_test();
-
+    // logger_test();
     // socket_test();
+
+    // heap_test();
+    lineardb_test();
 
     env_logger_stop();
     
