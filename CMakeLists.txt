@@ -58,6 +58,7 @@ set(kzx_sources src/main.c
     test/sys/struct/heap_test.c
     test/sys/struct/linedb_test.c
     test/sys/struct/linekv_test.c
+    test/sys/struct/tree_test.c
     test/env/task_queue_test.c
 )
 
