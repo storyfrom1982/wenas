@@ -5,79 +5,144 @@
 #include <sys/struct/linekv.h>
 
 
-#define TREE_NODE_RED       1
-#define TREE_NODE_BLACK     0
+#define TREE_WIDTH              21
+#define TREE_COUNT_INDEX        16
+#define TREE_VALUE_INDEX        17
 
+typedef struct __tree_val {
+    __ptr val;
+    struct __tree_val *prev;
+    struct __tree_val *next;
+    struct __tree_val *child;
+}__tree_val;
 
 typedef struct __tree_node {
-    __ptr index[17];
+    __ptr index[TREE_WIDTH];
 }__tree_node;
 
 
 void tree_inseart(__tree_node *tree, linekey_t *key, __ptr val)
 {
-    __uint64 len = key->byte[0];
     __ptr *index = tree->index;
-    char *p = &key->byte[1];
+    __tree_val *prev, val_node = {.val = val, .next = NULL};
+    
+    ((__uint64*)index)[TREE_COUNT_INDEX] ++;
+    unsigned char *p = &key->byte[1], *end = p + key->byte[0];
     __uint8 i = 0;
-    while (len > 0)
+
+    while (p != end)
     {
-        // __logd("inseart len %u key = %c\n", len, *p);
+        if (((__tree_val*)&index[TREE_VALUE_INDEX])->val != NULL){
+            prev = ((__tree_val*)&index[TREE_VALUE_INDEX]);
+            // __logd("prev key = %s\n", (char *)prev->val);
+        }
+
         i = *p & 0x0F;
-        // __logd("inseart index = %u\n", i);
         if (index[i] == NULL){
-            index[i] = calloc(17, sizeof(__ptr));
+            index[i] = calloc(TREE_WIDTH, sizeof(__ptr));
         }
         index = (__ptr*)index[i];
+        ((__uint64*)index)[TREE_COUNT_INDEX] ++;
 
         i = (*p) >> 4;
-        // __logd("inseart index = %u\n", i);
         if (index[i] == NULL){
-            index[i] = calloc(17, sizeof(__ptr));
+            index[i] = calloc(TREE_WIDTH, sizeof(__ptr));
         }
         index = (__ptr*)index[i];
+        ((__uint64*)index)[TREE_COUNT_INDEX] ++;
 
         p++;
-        len--;
-
-        if (len == 0){
-            index[16] = val;
-            // __logd("inseart val = %s addr = %p\n", (char*)index[16], index[16]);
-        }
     }
+
+    *(__tree_val*)&index[TREE_VALUE_INDEX] = val_node;
+    
+    // while (prev && *p < prev->key)
+    // {
+    //     prev = prev->next;
+    // }
+    
+    ((__tree_val*)&index[TREE_VALUE_INDEX])->next = prev->next;
+    if (((__tree_val*)&index[TREE_VALUE_INDEX])->next){
+        ((__tree_val*)&index[TREE_VALUE_INDEX])->next->prev = ((__tree_val*)&index[TREE_VALUE_INDEX]);
+    }
+    prev->next = ((__tree_val*)&index[TREE_VALUE_INDEX]);
+    ((__tree_val*)&index[TREE_VALUE_INDEX])->prev = prev;
 }
 
 __ptr tree_find(__tree_node *tree, linekey_t *key)
 {
-    __uint64 len = key->byte[0];
     __ptr *index = tree->index;
-    char *p = &key->byte[1];
+    unsigned char *p = &key->byte[1], *end = p + key->byte[0];
     __uint8 i = 0;
-    while (len > 0)
+    while (p != end)
     {
-        // __logd("find len %u key = %c\n", len, *p);
         i = *p & 0x0F;
         if (index != NULL){
-            // __logd("find index = %u\n", i);
             index = (__ptr*)index[i];
+        }else {
+            break;
         }
         
         i = (*p) >> 4;
         if (index != NULL){
-            // __logd("find index = %u\n", i);
             index = (__ptr*)index[i];
+        }else {
+            break;
         }
     
         p++;
-        len--;
+    }
 
-        if (len == 0){
-            // __logd("find val = %s addr %p\n", (char*)index[16], index[16]);
-            return index[16];
-        }
+    if (index != NULL){
+        return ((__tree_val*)&index[TREE_VALUE_INDEX])->val;
     }
 
     return NULL;
+}
+
+
+void tree_delete(__tree_node *tree, linekey_t *key)
+{
+    __ptr *index = tree->index;
+    __ptr *tmp = index;
+    unsigned char *p = &key->byte[1], *end = p + key->byte[0];
+    __uint8 i = 0;
+    while (p != end)
+    {
+        i = *p & 0x0F;
+        if (index != NULL){
+            (((__uint64*)index)[TREE_COUNT_INDEX])--;
+            index = (__ptr*)index[i];
+            if ((((__uint64*)tmp)[TREE_COUNT_INDEX]) == 0){
+                free(tmp);
+            }
+            tmp = index;
+        }else {
+            return;
+        }
+        
+        i = (*p) >> 4;
+        if (index != NULL){
+            (((__uint64*)index)[TREE_COUNT_INDEX])--;
+            index = (__ptr*)index[i];
+            if ((((__uint64*)tmp)[TREE_COUNT_INDEX]) == 0){
+                free(tmp);
+            }
+            tmp = index;
+        }else {
+            return;
+        }
+
+        p++;
+    }
+
+    if (--(((__uint64*)tmp)[TREE_COUNT_INDEX]) == 0){
+        ((__tree_val*)&tmp[TREE_VALUE_INDEX])->prev->next = ((__tree_val*)&tmp[TREE_VALUE_INDEX])->next;
+        if (((__tree_val*)&tmp[TREE_VALUE_INDEX])->next){
+            ((__tree_val*)&tmp[TREE_VALUE_INDEX])->next->prev = ((__tree_val*)&tmp[TREE_VALUE_INDEX])->prev;
+        }
+        free(tmp);
+    }
 }
 
 
