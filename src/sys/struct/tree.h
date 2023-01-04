@@ -4,85 +4,93 @@
 #include <env/env.h>
 #include <sys/struct/linekv.h>
 
+#define NODE_DIMENSION          6
+#define TREE_DIMENSION          16
+#define TREE_NODE_DIMENSION     (TREE_DIMENSION + NODE_DIMENSION)
 
-#define TREE_WIDTH              22
-#define TREE_VALUE              16
+#define __treenode(node)        ((__tree_node*)&node[TREE_DIMENSION])
 
-#define __tree_val(node)   ((__tree_val*)&node[TREE_VALUE])
-
-typedef struct __tree_val {
+typedef struct __tree_node {
     __ptr val;
     __uint64 count;
     __ptr *parent;
-    struct __tree_val *prev;
-    struct __tree_val *next;
-    struct __tree_val *child;
-}__tree_val;
-
-typedef struct __tree_node {
-    __ptr index[TREE_WIDTH];
+    struct __tree_node *child;
+    struct __tree_node *prev;
+    struct __tree_node *next;
 }__tree_node;
 
+typedef __ptr* __tree;
 
-void tree_inseart(__tree_node *tree, linekey_t *key, __ptr val)
+
+__tree tree_create()
 {
-    __ptr *index = tree->index, *parent;
-    __tree_val *prev = __tree_val(index);
+    return (__tree)calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
+}
+
+void tree_destroy(__tree *pp_tree)
+{
+    if (pp_tree && *pp_tree){
+        __tree tree = *pp_tree;
+        *pp_tree = (__tree)NULL;
+        free(tree);
+    }
+}
+
+void tree_inseart(__tree tree, linekey_t *key, __ptr val)
+{
+    __uint64 i;
+    __tree parent;
+    __tree_node *prev = __treenode(tree);
     
-    __tree_val(index)->count ++;
+    __treenode(tree)->count ++;
     unsigned char *p = &key->byte[1], *end = p + key->byte[0];
-    __uint8 i = 0;
 
     while (p != end)
     {
-        parent = index;
+        parent = tree;
         i = (*p) >> 4;
-        if (index[i] == NULL){
-            index[i] = calloc(TREE_WIDTH, sizeof(__ptr));
+        if (tree[i] == NULL){
+            tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
         }
-        index = (__ptr*)index[i];
-        __tree_val(index)->count ++;
-        __tree_val(index)->parent = parent;
+        tree = (__tree)tree[i];
+        __treenode(tree)->count ++;
+        __treenode(tree)->parent = parent;
 
-        parent = index;
+        parent = tree;
         i = *p & 0x0F;
-        if (index[i] == NULL){
-            index[i] = calloc(TREE_WIDTH, sizeof(__ptr));
+        if (tree[i] == NULL){
+            tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
         }
-        index = (__ptr*)index[i];
-        __tree_val(index)->count ++;
-        __tree_val(index)->parent = parent;
+        tree = (__tree)tree[i];
+        __treenode(tree)->count ++;
+        __treenode(tree)->parent = parent;
 
         p++;
     }
 
-    __tree_val(index)->val = val;
+    __treenode(tree)->val = val;
     
-    __tree_val(index)->next = prev->next;
-    if (__tree_val(index)->next){
-        __tree_val(index)->next->prev = __tree_val(index);
+    __treenode(tree)->next = prev->next;
+    if (__treenode(tree)->next){
+        __treenode(tree)->next->prev = __treenode(tree);
     }
-    prev->next = __tree_val(index);
-    __tree_val(index)->prev = prev;
+    prev->next = __treenode(tree);
+    __treenode(tree)->prev = prev;
 }
 
-__ptr tree_find(__tree_node *tree, linekey_t *key)
+__ptr tree_find(__tree tree, linekey_t *key)
 {
-    __ptr *index = tree->index;
     unsigned char *p = &key->byte[1], *end = p + key->byte[0];
-    __uint8 i = 0;
     while (p != end)
     {
-        i = (*p) >> 4;
-        if (index != NULL){
-            index = (__ptr*)index[i];
+        if (tree != NULL){
+            tree = (__tree)tree[((*p) >> 4)];
         }else {
             break;
         }
         
-        i = *p & 0x0F;
-        if (index != NULL){
-            index = (__ptr*)index[i];
+        if (tree != NULL){
+            tree = (__tree)tree[((*p) & 0x0F)];
         }else {
             break;
         }
@@ -90,29 +98,28 @@ __ptr tree_find(__tree_node *tree, linekey_t *key)
         p++;
     }
 
-    if (index != NULL){
-        return __tree_val(index)->val;
+    if (tree != NULL){
+        return __treenode(tree)->val;
     }
 
     return NULL;
 }
 
 
-void tree_delete(__tree_node *tree, linekey_t *key)
+void tree_delete(__tree tree, linekey_t *key)
 {
-    // __logd(">>>>------------------------------------------------> enter %s\n", &key->byte[1]);
-    __ptr *parent, *index = tree->index;
+    __tree parent, node = tree;
     unsigned char *p = &key->byte[1], *end = p + key->byte[0];
 
     while (p != end)
     {
-        if (index != NULL){
-            index = (__ptr*)index[((*p) >> 4)];
+        if (node != NULL){
+            node = (__tree)node[((*p) >> 4)];
         }else {
             return;
         }
-        if (index != NULL){
-            index = (__ptr*)index[((*p) & 0x0F)];
+        if (node != NULL){
+            node = (__tree)node[((*p) & 0x0F)];
         }else {
             return;
         }
@@ -120,47 +127,36 @@ void tree_delete(__tree_node *tree, linekey_t *key)
         p++;
     }
 
-    __tree_val(index)->prev->next = __tree_val(index)->next;
-    if (__tree_val(index)->next){
-        __tree_val(index)->next->prev = __tree_val(index)->prev;
+    __treenode(tree)->count--;
+    __treenode(node)->prev->next = __treenode(node)->next;
+    if (__treenode(node)->next){
+        __treenode(node)->next->prev = __treenode(node)->prev;
     }
 
     p--;
     end = &key->byte[0];
     while (p != end)
     {
-        parent = __tree_val(index)->parent;
-        if (index != NULL){
-            // __logd(">>>>---------------------> %lu\n", __tree_val(index)->count);
-            if ((--(__tree_val(index)->count)) == 0){
-                // __logd(">>>>---------------------> free\n");
-                free(index);
+        parent = __treenode(node)->parent;
+        if (node != NULL){
+            if ((--(__treenode(node)->count)) == 0){
+                free(node);
                 parent[((*p) & 0x0F)] = NULL;
             }
-            index = parent;
+            node = parent;
         }
         
-        parent = __tree_val(index)->parent;
-        if (index != NULL){
-            // __logd(">>>>--------------------->>> %lu\n", __tree_val(index)->count);
-            if ((--(__tree_val(index)->count)) == 0){
-                // __logd(">>>>---------------------> free 1\n");
-                free(index);
+        parent = __treenode(node)->parent;
+        if (node != NULL){
+            if ((--(__treenode(node)->count)) == 0){
+                free(node);
                 parent[((*p) >> 4)] = NULL;
             }
-            index = parent;
+            node = parent;
         }
 
         p--;
     }
-
-    if (index != NULL){
-        if ((__tree_val(index)->count--) == 0){
-            // free(index);
-        }
-    }
-
-    // __logd(">>>>------------------------------------------------> exit %s\n", &key->byte[1]);
 }
 
 
