@@ -5,7 +5,7 @@ void tree_test()
 {
 
     // const char *root = "a";
-    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "bacd", "cacd", "ccdc", "dacd"};
+    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "zzzzzxyz", "cacd", "ccdc", "aaaabcd"};
 
     __tree tree = tree_create();
     // __tree_node(tree)->val = root;
@@ -20,6 +20,12 @@ void tree_test()
         tree_inseart(tree, key, (__ptr)keys[i]);
         free(key);
     }
+
+    __ptr min = tree_min(tree);
+    __logd("min >>>>------------> %s\n", min);
+
+    __ptr max = tree_max(tree);
+    __logd("max >>>>------------> %s\n", max);
     
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);

@@ -14,9 +14,9 @@ typedef struct __tree_node {
     __ptr val;
     __uint64 count;
     __ptr *parent;
-    struct __tree_node *child;
     struct __tree_node *prev;
     struct __tree_node *next;
+    struct __tree_node *order;
 }__tree_node;
 
 typedef __ptr* __tree;
@@ -116,15 +116,19 @@ void tree_delete(__tree tree, linekey_t *key)
         if (node != NULL){
             node = (__tree)node[((*p) >> 4)];
         }else {
-            return;
+            break;
         }
         if (node != NULL){
             node = (__tree)node[((*p) & 0x0F)];
         }else {
-            return;
+            break;
         }
 
         p++;
+    }
+
+    if (node == NULL){
+        return;
     }
 
     __treenode(tree)->count--;
@@ -159,6 +163,59 @@ void tree_delete(__tree tree, linekey_t *key)
     }
 }
 
+
+__ptr tree_min(__tree tree)
+{
+    if (__treenode(tree)->count > 0){
+
+        __tree node = tree;
+
+        int i = 0;
+        while (1)
+        {
+            while (node[i] == NULL){
+                i++;
+            }
+
+            node = (__tree)node[i];
+
+            if (__treenode(node)->val != NULL){
+                return __treenode(node)->val;
+            }
+            
+            i = 0;
+        }
+    }
+
+    return NULL;
+}
+
+
+__ptr tree_max(__tree tree)
+{
+    if (__treenode(tree)->count > 0){
+
+        __tree node = tree;
+
+        int i = TREE_DIMENSION -1;
+        while (1)
+        {
+            while (node[i] == NULL){
+                i--;
+            }
+
+            node = (__tree)node[i];
+
+            if (__treenode(node)->val != NULL){
+                return __treenode(node)->val;
+            }
+            
+            i = TREE_DIMENSION -1;
+        }
+    }
+
+    return NULL;
+}
 
 
 #endif
