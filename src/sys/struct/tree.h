@@ -206,7 +206,7 @@ __ptr tree_max(__tree tree)
 
             node = (__tree)node[i];
 
-            if (__treenode(node)->val != NULL){
+            if (__treenode(node)->count == 1 && __treenode(node)->val != NULL){
                 return __treenode(node)->val;
             }
             

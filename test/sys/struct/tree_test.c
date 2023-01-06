@@ -5,7 +5,7 @@ void tree_test()
 {
 
     // const char *root = "a";
-    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "zzzzzxyz", "cacd", "ccdc", "aaaabcd"};
+    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "zzzzzxyz", "zzzzzxy", "cacd", "ccdc", "aaaabcd", "aaaabc"};
 
     __tree tree = tree_create();
     // __tree_node(tree)->val = root;
