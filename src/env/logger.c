@@ -38,8 +38,8 @@ static env_logger_t g_logger = {0};
 static __ptr env_logger_write_loop(__ptr ctx)
 {
     __fp fp = NULL;
-    __sint64 n;
-    __uint64 res, buf_size = __log_pipe_size;
+    int64_t n;
+    uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
     __pass(buf != NULL);
 
@@ -53,8 +53,8 @@ static __ptr env_logger_write_loop(__ptr ctx)
         filename[n] = '\0';
         fp = env_fopen(filename, "a+t");
         __pass(fp != NULL);
-        __uint64 *a = (__uint64*)(buf - 16);
-        __uint64 *b = (__uint64*)(buf - 8);
+        uint64_t *a = (uint64_t*)(buf - 16);
+        uint64_t *b = (uint64_t*)(buf - 8);
         n = snprintf(filename, 1024, "./build/%llu.%llu", *a, *b);
         env_make_path(filename);
     }
@@ -95,8 +95,8 @@ Reset:
         env_fclose(fp);
     }
     if (buf){
-        __uint64 *a = (__uint64*)(buf - 16);
-        __uint64 *b = (__uint64*)(buf - 8);
+        uint64_t *a = (uint64_t*)(buf - 16);
+        uint64_t *b = (uint64_t*)(buf - 8);
         printf("buf addr: %llu.%llu\n", *a, *b);
         free(buf);
         printf("buf addr: %llu.%llu\n", *a, *b);
@@ -104,7 +104,7 @@ Reset:
     return NULL;
 }
 
-__sint32 env_logger_start(const char *path, env_logger_cb cb)
+int env_logger_start(const char *path, env_logger_cb cb)
 {
     if (__set_true(g_logger.inited)){
         g_logger.printer = cb;
@@ -138,12 +138,12 @@ void env_logger_stop()
     }
 }
 
-void env_logger_printf(enum env_log_level level, const char *file, __sint32 line, const char *fmt, ...)
+void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
 {
-    __uint64 n = 0;
+    uint64_t n = 0;
     char text[__log_text_size];
 
-    __uint64 millisecond = env_time() / MICRO_SECONDS;
+    uint64_t millisecond = env_time() / MICRO_SECONDS;
     n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),

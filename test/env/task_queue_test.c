@@ -16,7 +16,7 @@ static void test_task_func(linekv_t* parser)
     __logd("string: %s\n", linekv_find_str(parser, "string"));
 }
 
-static __uint64 test_timedtask_func(linekv_t* parser)
+static uint64_t test_timedtask_func(linekv_t* parser)
 {
     __logd("================= time: %lu\n", (char*)linekv_find_ptr(parser, "time"));
     __logd("func: 0x%x\n", linekv_find_int64(parser, "func"));
@@ -24,7 +24,7 @@ static __uint64 test_timedtask_func(linekv_t* parser)
     return 3000000000ULL;
 }
 
-static __uint64 test_timedtask_func1(linekv_t* parser)
+static uint64_t test_timedtask_func1(linekv_t* parser)
 {
     __logd(">>>>------------> time: %lu\n", (char*)linekv_find_ptr(parser, "time"));
     __logd("func: 0x%x\n", linekv_find_int64(parser, "func"));

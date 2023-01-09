@@ -1,6 +1,6 @@
 #include <env/env.h>
 
-static __atombool testatom = __true;
+static __atombool testatom = true;
 
 static __ptr thread_func(__ptr ctx)
 {
@@ -9,7 +9,7 @@ static __ptr thread_func(__ptr ctx)
     env_mutex_lock(mutex);
     __logi("timedwait 1 second\n");
     char buf[1024] = {0};
-    __uint64 n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
+    uint64_t n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("timedwait retcode=%s\n", buf);
     ret = env_mutex_timedwait(mutex, 1 * NANO_SECONDS);
@@ -38,7 +38,7 @@ Reset:
 
 void thread_test()
 {
-    __uint64 running = __false;
+    uint64_t running = false;
     if (__is_false(running) && __set_true(running)){
         __logd("running is %u\n", running);
     }
@@ -53,7 +53,7 @@ void thread_test()
     // env_mutex_lock(mutex);
 
     env_thread_ptr thread;
-    __sint32 r = env_thread_create(&thread, thread_func, mutex);
+    int32_t r = env_thread_create(&thread, thread_func, mutex);
     __pass(r == 0);
 
     // env_mutex_wait(mutex);

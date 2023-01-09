@@ -64,16 +64,16 @@
 #include <stdio.h>
 
 struct __socket{
-    __sint32 connected;
-    __sint32 sock;
+    int32_t connected;
+    int32_t sock;
     struct sockaddr local;
     struct sockaddr remote;
 };
 
 
-static __atombool __init_socket = __false;
+static __atombool __init_socket = false;
 
-static inline __sint32 env_socket_init(void)
+static inline int32_t env_socket_init(void)
 {
 	if (__atom_try_lock(__init_socket)){
 #if defined(OS_WINDOWS)
@@ -86,7 +86,7 @@ static inline __sint32 env_socket_init(void)
 	return 0;
 }
 
-static inline __sint32 env_socket_cleanup(void)
+static inline int32_t env_socket_cleanup(void)
 {
 	if (__atom_unlock(__init_socket)){
 #if defined(OS_WINDOWS)
@@ -96,7 +96,7 @@ static inline __sint32 env_socket_cleanup(void)
 	return 0;
 }
 
-static inline int socket_setopt(__sint32 sock, int optname, int enable)
+static inline int socket_setopt(int32_t sock, int optname, int enable)
 {
 #if defined(OS_WINDOWS)
     BOOL v = enable ? TRUE : FALSE;
@@ -106,7 +106,7 @@ static inline int socket_setopt(__sint32 sock, int optname, int enable)
 #endif
 }
 
-__sint32 env_socket_set_nonblock(__socket sock, int noblock)
+int32_t env_socket_set_nonblock(__socket sock, int noblock)
 {
 	// 0-block, 1-no-block
 #if defined(OS_WINDOWS)
@@ -149,7 +149,7 @@ void env_socket_close(__socket sock)
 #endif
 }
 
-__sockaddr_ptr env_socket_addr_create(char* host, __uint16 port)
+__sockaddr_ptr env_socket_addr_create(char* host, uint16_t port)
 {
 	__sockaddr_ptr addr = (__sockaddr_ptr)malloc(sizeof(struct sockaddr_in));
 	__pass(addr != NULL);
@@ -187,7 +187,7 @@ void env_socket_addr_copy(__sockaddr_ptr src, __sockaddr_ptr dst)
 	memcpy(dst, src, sizeof(struct sockaddr_in));
 }
 
-__bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b)
+bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b)
 {
 	assert(a != NULL && b != NULL);
 	return ((struct sockaddr_in*)a)->sin_addr.s_addr == ((struct sockaddr_in*)b)->sin_addr.s_addr;
@@ -206,17 +206,17 @@ void env_socket_addr_get_ip(__sockaddr_ptr addr, __ipaddr *ip)
 	}
 }
 
-__sint32 env_socket_connect(__socket sock, __sockaddr_ptr addr)
+int32_t env_socket_connect(__socket sock, __sockaddr_ptr addr)
 {
     return connect(sock, (const struct sockaddr*)addr, (socklen_t)sizeof(struct sockaddr_in));
 }
 
-__sint32 env_socket_bind(__socket sock, __sockaddr_ptr addr)
+int32_t env_socket_bind(__socket sock, __sockaddr_ptr addr)
 {
     return bind(sock, (const struct sockaddr*)addr, (socklen_t)sizeof(struct sockaddr_in));
 }
 
-__sint32 env_socket_send(__socket sock, const void* buf, __uint64 size)
+int32_t env_socket_send(__socket sock, const void* buf, uint64_t size)
 {
 #if defined(OS_WINDOWS)
     return send(sock, (const char*)buf, (int)size, 0);
@@ -225,7 +225,7 @@ __sint32 env_socket_send(__socket sock, const void* buf, __uint64 size)
 #endif
 }
 
-__sint32 env_socket_recv(__socket sock, void* buf, __uint64 size)
+int32_t env_socket_recv(__socket sock, void* buf, uint64_t size)
 {
 #if defined(OS_WINDOWS)
     return recv(sock, (char*)buf, (int)size, 0);
@@ -234,7 +234,7 @@ __sint32 env_socket_recv(__socket sock, void* buf, __uint64 size)
 #endif
 }
 
-__sint32 env_socket_sendto(__socket sock, const void* buf, __uint64 size, __sockaddr_ptr addr)
+int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr)
 {
 	static socklen_t len = sizeof(struct sockaddr_in);
 #if defined(OS_WINDOWS)
@@ -244,7 +244,7 @@ __sint32 env_socket_sendto(__socket sock, const void* buf, __uint64 size, __sock
 #endif
 }
 
-__sint32 env_socket_recvfrom(__socket sock, void* buf, __uint64 size, __sockaddr_ptr addr)
+int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr)
 {
 	static socklen_t len = sizeof(struct sockaddr_in);
 #if defined(OS_WINDOWS)

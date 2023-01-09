@@ -84,5 +84,5 @@ void tree_test()
     }
 
     __logd("tree node count %lu\n", __treenode(tree)->count);
-    tree_destroy(&tree);
+    // tree_destroy(&tree);
 }

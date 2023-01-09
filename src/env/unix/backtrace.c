@@ -27,7 +27,7 @@ static _Unwind_Reason_Code env_unwind_backtrace_callback(struct _Unwind_Context*
     return _URC_NO_REASON;
 }
 
-__uint64 env_backtrace(__ptr* array, __sint32 depth)
+uint64_t env_backtrace(void** array, int32_t depth)
 {
     struct backtrace_stack stack = {0};
     stack.head = &array[0];

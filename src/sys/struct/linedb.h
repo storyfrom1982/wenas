@@ -233,7 +233,7 @@ typedef union {
 #define __n2b32(n)       __number2block32bit(n, LINEDB_NUMBER_INTEGER)
 #define __b2n32(b)       __block2number32bit(b)
 #define __n2b64(n)       __number2block64bit(n, LINEDB_NUMBER_INTEGER)
-#define __b2n64(b)       __block2number64bit(b, __sint64)
+#define __b2n64(b)       __block2number64bit(b, int64_t)
 
 #define __u2b8(n)        __number2block8bit(n, LINEDB_NUMBER_UNSIGNED)
 #define __b2u8(b)        __block2number8bit(b)
@@ -242,7 +242,7 @@ typedef union {
 #define __u2b32(n)       __number2block32bit(n, LINEDB_NUMBER_UNSIGNED)
 #define __b2u32(b)       __block2number32bit(b)
 #define __u2b64(n)       __number2block64bit(n, LINEDB_NUMBER_UNSIGNED)
-#define __b2u64(b)       __block2number64bit(b, __uint64)
+#define __b2u64(b)       __block2number64bit(b, uint64_t)
 
 #define __f2b32(f)       __number2block32bit(f, LINEDB_NUMBER_FLOAT)
 #define __b2f32(b)       __block2float32bit(b)
@@ -292,7 +292,7 @@ static inline void linedb_reset_type(linedb_t *ldb, char type)
     ldb->byte[0] |= type;
 }
 
-static inline __uint64 linedb_bind_buffer(linedb_t **ldb, const void *b, __uint64 s)
+static inline uint64_t linedb_bind_buffer(linedb_t **ldb, const void *b, uint64_t s)
 {
     *ldb = (linedb_t*)b;
     if (s < 0x100){
@@ -333,7 +333,7 @@ static inline __uint64 linedb_bind_buffer(linedb_t **ldb, const void *b, __uint6
     return 0;
 }
 
-static inline linedb_t* linedb_load_binary(linedb_t *db, const void *b, __uint64  s)
+static inline linedb_t* linedb_load_binary(linedb_t *db, const void *b, uint64_t  s)
 {
     if (s < 0x100){
 #ifdef __LITTLE_ENDIAN__
@@ -371,7 +371,7 @@ static inline linedb_t* linedb_load_binary(linedb_t *db, const void *b, __uint64
 
 static inline linedb_t* linedb_load_string(linedb_t *db, const char *s)
 {
-    __uint64 l = strlen(s);
+    uint64_t l = strlen(s);
     linedb_load_binary(db, (const char *)s, l + 1);
     db->byte[0] |= LINEDB_OBJECT_STRING;
     db->byte[(1 + (((db)->byte[0]) & LINEDB_HEAD_MASK)) + l] = '\0';
@@ -382,7 +382,7 @@ static inline linedb_t* string2inedb(const char *s)
 {
     // fprintf(stdout, "strlen=%lu\n", strlen("1\n\0"));
     // output strlen=2
-    __uint64 l = strlen(s);
+    uint64_t l = strlen(s);
     linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + l + 1);
     linedb_load_binary(db, (const char *)s, l + 1);
     db->byte[0] |= LINEDB_OBJECT_STRING;
@@ -390,7 +390,7 @@ static inline linedb_t* string2inedb(const char *s)
     return db;
 }
 
-static inline linedb_t* linedb_create(const void *data, __uint64 size)
+static inline linedb_t* linedb_create(const void *data, uint64_t size)
 {
     linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + size);
     if (data){
@@ -416,18 +416,18 @@ static inline void linedb_destroy(linedb_t **pp_ldb)
 ////////////////////////////////////////////////////////
 
 typedef struct linear_data_block_pipeline {
-    __uint64 len;
-    __uint64 read_pos;
-    __uint64 write_pos;
-    __uint64 leftover;
-    __uint64 block_count;
+    uint64_t len;
+    uint64_t read_pos;
+    uint64_t write_pos;
+    uint64_t leftover;
+    uint64_t block_count;
     linedb_t *read_block;
     linedb_t *write_block;
     unsigned char *buf;
 }linedb_pipe_t;
 
 
-static inline linedb_pipe_t* linedb_pipe_create(__uint64 len)
+static inline linedb_pipe_t* linedb_pipe_create(uint64_t len)
 {
     linedb_pipe_t *lp = (linedb_pipe_t *)malloc(sizeof(linedb_pipe_t));
     if (lp == NULL){
@@ -449,7 +449,7 @@ static inline linedb_pipe_t* linedb_pipe_create(__uint64 len)
 
     lp->leftover = lp->len;
 
-    lp->buf = (char *)malloc(lp->len);
+    lp->buf = (unsigned char *)malloc(lp->len);
     if (lp->buf == NULL){
         free(lp);
         return NULL;
@@ -471,10 +471,10 @@ static inline void linedb_pipe_destroy(linedb_pipe_t **pp_lp)
     }
 }
 
-static inline __uint64 linedb_pipe_write(linedb_pipe_t *lp, void *data, __uint64 size)
+static inline uint64_t linedb_pipe_write(linedb_pipe_t *lp, void *data, uint64_t size)
 {
-    __uint64 ldb_size = __plan_sizeof_linedb(size); 
-    while ((__uint64)(lp->len - lp->write_pos + lp->read_pos) >= ldb_size) {
+    uint64_t ldb_size = __plan_sizeof_linedb(size); 
+    while ((uint64_t)(lp->len - lp->write_pos + lp->read_pos) >= ldb_size) {
 
         if (lp->leftover < ldb_size){
             ldb_size = linedb_bind_buffer(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
@@ -494,14 +494,14 @@ static inline __uint64 linedb_pipe_write(linedb_pipe_t *lp, void *data, __uint64
     return 0;
 }
 
-static inline __uint64 linedb_pipe_read(linedb_pipe_t *lp, char *buf, __uint64 size)
+static inline uint64_t linedb_pipe_read(linedb_pipe_t *lp, char *buf, uint64_t size)
 {
-    while (((__uint64)(lp->write_pos - lp->read_pos)) > 0) {
+    while (((uint64_t)(lp->write_pos - lp->read_pos)) > 0) {
         if (lp->read_block->byte[0] == 0){
             lp->read_pos += ((lp->buf + lp->len) - lp->read_block->byte);
             lp->read_block = (linedb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
         }else {
-            __uint64 data_size = __sizeof_data(lp->read_block);
+            uint64_t data_size = __sizeof_data(lp->read_block);
             if (size >= data_size){
                 memcpy(buf, __dataof_linedb(lp->read_block), data_size);
                 lp->read_pos += (data_size + __sizeof_head(lp->read_block));
@@ -517,7 +517,7 @@ static inline __uint64 linedb_pipe_read(linedb_pipe_t *lp, char *buf, __uint64 s
 
 static inline linedb_t* linedb_pipe_hold_block(linedb_pipe_t *lp)
 {
-    while (((__uint64)(lp->write_pos - lp->read_pos)) > 0) {
+    while (((uint64_t)(lp->write_pos - lp->read_pos)) > 0) {
         if (lp->read_block->byte[0] == 0){
             lp->read_pos += ((lp->buf + lp->len) - lp->read_block->byte);
             lp->read_block = (linedb_t *)(lp->buf + (lp->read_pos & (lp->len - 1)));
@@ -538,17 +538,17 @@ static inline void linedb_pipe_free_block(linedb_pipe_t *lp, linedb_t *ldb)
     }
 }
 
-static inline __uint64 linedb_pipe_readable(linedb_pipe_t *lp)
+static inline uint64_t linedb_pipe_readable(linedb_pipe_t *lp)
 {
-    return ((__uint64)(lp->write_pos - lp->read_pos));
+    return ((uint64_t)(lp->write_pos - lp->read_pos));
 }
 
-static inline __uint64 linedb_pipe_writable(linedb_pipe_t *lp)
+static inline uint64_t linedb_pipe_writable(linedb_pipe_t *lp)
 {
-    return ((__uint64)(lp->len - lp->write_pos + lp->read_pos));
+    return ((uint64_t)(lp->len - lp->write_pos + lp->read_pos));
 }
 
-static inline __uint64 linedb_pipe_block_count(linedb_pipe_t *lp)
+static inline uint64_t linedb_pipe_block_count(linedb_pipe_t *lp)
 {
     return lp->block_count;
 }

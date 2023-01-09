@@ -13,7 +13,7 @@ static void test_byte_order()
     //  0x0D	0x0C	0x0B	0x0A
     //  最低位字节是0x0D 存储在最低的内存地址处。后面字节依次存在后面的地址处。
 
-    __uint32 little_number=0x1a1b1c1d, big_number, swap_number;
+    uint32_t little_number=0x1a1b1c1d, big_number, swap_number;
     char byte[4], swap_byte[4];
 
     byte[0] = little_number & 0xff;
@@ -84,56 +84,56 @@ static void test_byte_order()
 
 static void number16_to_ldb()
 {
-    __sint16 n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
+    int16_t n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
     linedb_t ldb = __n2b16(i16);
     n16 = __b2n16(&ldb);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    __uint32 size = __sizeof_linedb(&ldb);
-    __logd("__sint16 %d to linear block %d sizeof(block)=%u\n", i16, n16, size);
+    uint32_t size = __sizeof_linedb(&ldb);
+    __logd("int16_t %d to linear block %d sizeof(block)=%u\n", i16, n16, size);
 
-    __uint16 u16, iu16 = 12345;
+    uint16_t u16, iu16 = 12345;
     ldb = __n2b16(iu16);
     u16 = __b2n16(&ldb);
     size = __sizeof_linedb(&ldb);
-    __logd("__uint16 %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
+    __logd("uint16_t %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
 
     __logd(">>>>------------>\n");
 }
 
 static void number32_to_ldb()
 {
-    __sint32 n32, i32 = -12345;
+    int32_t n32, i32 = -12345;
     linedb_t ldb = __n2b32(i32);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    __uint32 size = __sizeof_linedb(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n32 = __b2n32(&ldb);
     __logd("__sint32 %d to linear block %d sizeof(block)=%u\n", i32, n32, size);
 
-    __uint32 u32, iu32 = 12345;
+    uint32_t u32, iu32 = 12345;
     ldb = __n2b32(iu32);
     size = __sizeof_linedb(&ldb);
     u32 = __b2n32(&ldb);
-    __logd("__uint32 %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
+    __logd("uint32_t %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
 
     __logd(">>>>------------>\n");
 }
 
 static void number64_to_ldb()
 {
-    __sint64 n64, i64 = -12345;
+    int64_t n64, i64 = -12345;
     linedb_t ldb = __n2b64(i64);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    __uint32 size = __sizeof_linedb(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n64 = __b2n64(&ldb);
-    __logd("__sint64 %ld to linear block %ld sizeof(block)=%u\n", i64, n64, size);
+    __logd("int64_t %ld to linear block %ld sizeof(block)=%u\n", i64, n64, size);
 
-    __uint64 u64, iu64 = 12345;
+    uint64_t u64, iu64 = 12345;
     ldb = __n2b64(iu64);
     size = __sizeof_linedb(&ldb);
     u64 = __b2n64(&ldb);
@@ -168,7 +168,7 @@ static void string_to_ldb()
 
     __logd(">>>>------------>\n");
 
-    __uint32 len = 0xabcdef;
+    uint32_t len = 0xabcdef;
     ldb = linedb_create(NULL, len);
     char *data = malloc(len);
     linedb_load_binary(ldb, data, len);

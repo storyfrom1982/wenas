@@ -1,4 +1,5 @@
 #include <env/env.h>
+#include <env/unix/malloc.h>
 
 
 static void malloc_debug_cb(const char *debug)
@@ -19,21 +20,21 @@ extern void tree_test();
 
 void test()
 {
-    // storage_test();
-    // thread_test();
-    // logger_test();
+    storage_test();
+    thread_test();
+    logger_test();
     // socket_test();
 
-    // heap_test();
-    // lineardb_test();
-    // linearkv_test();
-    // task_queue_test();
+    heap_test();
+    lineardb_test();
+    linearkv_test();
+    task_queue_test();
 
     tree_test();
 
     env_logger_stop();
     
-#if !defined(OS_WINDOWS)
+#if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
 }

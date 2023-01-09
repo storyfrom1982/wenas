@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     __logi("hello world\n");
     __logi("time %llu clock %llu\n", env_time(), env_clock());
     char buf[1024] = {0};
-    __uint64 n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
+    uint64_t n = env_strftime(buf, 1024, env_time() / NANO_SECONDS);
     buf[n] = '\0';
     __logi("time %s\n", buf);
 
@@ -41,9 +41,9 @@ int main(int argc, char *argv[])
     __logi("ENV_HAVA_BACKTRACE\n");
 #endif
 
-    __logi("__uint64 size: %d\n", sizeof(__uint64));
-    __logi("__sint32 size: %d\n", sizeof(__sint32));
-    __logi("__bool size: %d\n", sizeof(__bool));
+    __logi("__uint64 size: %d\n", sizeof(uint64_t));
+    __logi("int32_t size: %d\n", sizeof(int32_t));
+    __logi("bool size: %d\n", sizeof(bool));
 
     test();
 

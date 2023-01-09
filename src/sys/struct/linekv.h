@@ -10,11 +10,11 @@ typedef struct linear_key {
 }linekey_t;
 
 typedef struct linear_key_value_pair {
-    __uint64 pos, len;
+    uint64_t pos, len;
     linekey_t *key;
     lineval_t *val;
     unsigned char *head;
-}linekv_t, *linekv_parser_t;
+}linekv_t, *linekv_ptr;
 
 enum {
     LINEDB_OBJECT_ARRAY = LINEDB_OBJECT_CUSTOM,
@@ -25,7 +25,7 @@ enum {
 #define __objectis_linekv(b)        (__typeof_linedb(b) == LINEDB_OBJECT_LINEKV)
 
 
-static inline linekv_t* linekv_create(__uint64 size)
+static inline linekv_t* linekv_create(uint64_t size)
 {
     linekv_t *lkv = (linekv_t *)malloc(sizeof(linekv_t));
     lkv->head = (unsigned char*) malloc(size);
@@ -58,7 +58,7 @@ static inline void linekv_bind_object(linekv_t *lkv, lineval_t *val)
 
 static inline void linekv_load_object(linekv_t *lkv, lineval_t *val)
 {
-    __uint64 size = __sizeof_data(val);
+    uint64_t size = __sizeof_data(val);
     if (size > lkv->len){
         linekv_destroy(&lkv);
         lkv = linekv_create(size);
@@ -78,7 +78,7 @@ static inline void linekv_clear(linekv_t *lkv)
     }
 }
 
-static inline void linekv_add_binary(linekv_t *lkv, const char *key, const void *value, __uint64 size)
+static inline void linekv_add_binary(linekv_t *lkv, const char *key, const void *value, uint64_t size)
 {
     lkv->key = (linekey_t *)(lkv->head + lkv->pos);
     lkv->key->byte[0] = strlen(key);
@@ -127,42 +127,42 @@ static inline void linekv_add_number(linekv_t *lkv, const char *key, lineval_t v
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 
-static inline void linekv_add_int8(linekv_t *lkv, const char *key, __sint8 n8)
+static inline void linekv_add_int8(linekv_t *lkv, const char *key, int8_t n8)
 {
     linekv_add_number(lkv, key, __n2b8(n8));
 }
 
-static inline void linekv_add_int16(linekv_t *lkv, const char *key, __sint16 n16)
+static inline void linekv_add_int16(linekv_t *lkv, const char *key, int16_t n16)
 {
     linekv_add_number(lkv, key, __n2b16(n16));
 }
 
-static inline void linekv_add_int32(linekv_t *lkv, const char *key, __sint32 n32)
+static inline void linekv_add_int32(linekv_t *lkv, const char *key, int32_t n32)
 {
     linekv_add_number(lkv, key, __n2b32(n32));
 }
 
-static inline void linekv_add_int64(linekv_t *lkv, const char *key, __sint64 n64)
+static inline void linekv_add_int64(linekv_t *lkv, const char *key, int64_t n64)
 {
     linekv_add_number(lkv, key, __n2b64(n64));
 }
 
-static inline void linekv_add_uint8(linekv_t *lkv, const char *key, __uint8 u8)
+static inline void linekv_add_uint8(linekv_t *lkv, const char *key, uint8_t u8)
 {
     linekv_add_number(lkv, key, __u2b8(u8));
 }
 
-static inline void linekv_add_uint16(linekv_t *lkv, const char *key, __uint16 u16)
+static inline void linekv_add_uint16(linekv_t *lkv, const char *key, uint16_t u16)
 {
     linekv_add_number(lkv, key, __u2b16(u16));
 }
 
-static inline void linekv_add_uint32(linekv_t *lkv, const char *key, __uint32 u32)
+static inline void linekv_add_uint32(linekv_t *lkv, const char *key, uint32_t u32)
 {
     linekv_add_number(lkv, key, __u2b32(u32));
 }
 
-static inline void linekv_add_uint64(linekv_t *lkv, const char *key, __uint64 u64)
+static inline void linekv_add_uint64(linekv_t *lkv, const char *key, uint64_t u64)
 {
     linekv_add_number(lkv, key, __u2b64(u64));
 }
@@ -179,27 +179,27 @@ static inline void linekv_add_float64(linekv_t *lkv, const char *key, double f64
 
 static inline void linekv_add_ptr(linekv_t *lkv, const char *key, __ptr p)
 {
-    __sint64 n = (__sint64)(p);
+    int64_t n = (int64_t)(p);
     linekv_add_number(lkv, key, __n2b64(n));
 }
 
-static inline void linekv_add_bool(linekv_t *lkv, const char *key, __bool b)
+static inline void linekv_add_bool(linekv_t *lkv, const char *key, bool b)
 {
     linekv_add_number(lkv, key, __boolean2block(b));
 }
 
-static inline lineval_t* linekv_head(linekv_parser_t parser)
+static inline lineval_t* linekv_head(linekv_ptr parser)
 {
     parser->key = (linekey_t *)(parser->head);
     parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
     return parser->val;
 }
 
-static inline lineval_t* linekv_next(linekv_parser_t parser)
+static inline lineval_t* linekv_next(linekv_ptr parser)
 {
     if (parser->val){
         lineval_t *start_val = parser->val;
-        __uint64 find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
+        uint64_t find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
         if (find_pos < parser->pos){
             parser->key = (linekey_t *)(parser->head + find_pos);
             parser->val = (lineval_t *)(parser->key->byte + (parser->key->byte[0] + 2));
@@ -209,7 +209,7 @@ static inline lineval_t* linekv_next(linekv_parser_t parser)
     return NULL;
 }
 
-static inline const char* linekv_current_key(linekv_parser_t parser)
+static inline const char* linekv_current_key(linekv_ptr parser)
 {
     if (parser->key){
         return (const char *)&(parser->key->byte[1]);
@@ -217,9 +217,9 @@ static inline const char* linekv_current_key(linekv_parser_t parser)
     return "";
 }
 
-static inline lineval_t* linekv_find(linekv_parser_t parser, const char *key)
+static inline lineval_t* linekv_find(linekv_ptr parser, const char *key)
 {
-    __uint64 find_pos = 0;
+    uint64_t find_pos = 0;
     while (find_pos < parser->pos) {
         parser->key = (linekey_t *)(parser->head + find_pos);
         find_pos += (parser->key->byte[0] + 2);
@@ -233,12 +233,12 @@ static inline lineval_t* linekv_find(linekv_parser_t parser, const char *key)
     return NULL;
 }
 
-static inline lineval_t* linekv_after(linekv_parser_t parser, const char *key)
+static inline lineval_t* linekv_after(linekv_ptr parser, const char *key)
 {
     if (parser->val){
 
         lineval_t *start_val = parser->val;
-        __uint64 find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
+        uint64_t find_pos = ((start_val->byte) - (parser->head) + __sizeof_linedb(parser->val));
 
         while (find_pos < parser->pos) {
             parser->key = (linekey_t *)(parser->head + find_pos);
@@ -268,7 +268,7 @@ static inline lineval_t* linekv_after(linekv_parser_t parser, const char *key)
     return NULL;
 }
 
-static inline __bool linekv_find_bool(linekv_parser_t parser, const char *key)
+static inline bool linekv_find_bool(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -280,7 +280,7 @@ static inline __bool linekv_find_bool(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline __sint8 linekv_find_int8(linekv_parser_t parser, const char *key)
+static inline int8_t linekv_find_int8(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -292,7 +292,7 @@ static inline __sint8 linekv_find_int8(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline __sint16 linekv_find_int16(linekv_parser_t parser, const char *key)
+static inline int16_t linekv_find_int16(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -304,7 +304,7 @@ static inline __sint16 linekv_find_int16(linekv_parser_t parser, const char *key
     return 0;
 }
 
-static inline __sint32 linekv_find_int32(linekv_parser_t parser, const char *key)
+static inline int32_t linekv_find_int32(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -316,7 +316,7 @@ static inline __sint32 linekv_find_int32(linekv_parser_t parser, const char *key
     return 0;
 }
 
-static inline __sint64 linekv_find_int64(linekv_parser_t parser, const char *key)
+static inline int64_t linekv_find_int64(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -328,7 +328,7 @@ static inline __sint64 linekv_find_int64(linekv_parser_t parser, const char *key
     return 0;
 }
 
-static inline __uint8 linekv_find_uint8(linekv_parser_t parser, const char *key)
+static inline uint8_t linekv_find_uint8(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -340,7 +340,7 @@ static inline __uint8 linekv_find_uint8(linekv_parser_t parser, const char *key)
     return 0;
 }
 
-static inline __uint16 linekv_find_uint16(linekv_parser_t parser, const char *key)
+static inline uint16_t linekv_find_uint16(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -352,7 +352,7 @@ static inline __uint16 linekv_find_uint16(linekv_parser_t parser, const char *ke
     return 0;
 }
 
-static inline __uint32 linekv_find_uint32(linekv_parser_t parser, const char *key)
+static inline uint32_t linekv_find_uint32(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -364,7 +364,7 @@ static inline __uint32 linekv_find_uint32(linekv_parser_t parser, const char *ke
     return 0;
 }
 
-static inline __uint64 linekv_find_uint64(linekv_parser_t parser, const char *key)
+static inline uint64_t linekv_find_uint64(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -376,7 +376,7 @@ static inline __uint64 linekv_find_uint64(linekv_parser_t parser, const char *ke
     return 0;
 }
 
-static inline float linekv_find_float32(linekv_parser_t parser, const char *key)
+static inline float linekv_find_float32(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -388,7 +388,7 @@ static inline float linekv_find_float32(linekv_parser_t parser, const char *key)
     return 0.0f;
 }
 
-static inline double linekv_find_float64(linekv_parser_t parser, const char *key)
+static inline double linekv_find_float64(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -400,7 +400,7 @@ static inline double linekv_find_float64(linekv_parser_t parser, const char *key
     return 0.0f;
 }
 
-static inline void* linekv_find_ptr(linekv_parser_t parser, const char *key)
+static inline void* linekv_find_ptr(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){
@@ -412,7 +412,7 @@ static inline void* linekv_find_ptr(linekv_parser_t parser, const char *key)
     return NULL;
 }
 
-static inline const char* linekv_find_str(linekv_parser_t parser, const char *key)
+static inline const char* linekv_find_str(linekv_ptr parser, const char *key)
 {
     lineval_t *val = linekv_after(parser, key);
     if (val == NULL){

@@ -11,9 +11,9 @@
 #define INTERLOCKED_OP(x) _Interlocked##x##64
 #endif
 
-inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_load(volatile uint64_t* pAtomic)
 {
-    __uint64 atomic;
+    uint64_t atomic;
     _ReadWriteBarrier();
     atomic = *pAtomic;
     _ReadWriteBarrier();
@@ -21,55 +21,55 @@ inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
     return atomic;
 }
 
-inline void env_atomic_store(volatile __uint64* pAtomic, __uint64 var)
+inline void env_atomic_store(volatile uint64_t* pAtomic, uint64_t var)
 {
     _ReadWriteBarrier();
     *pAtomic = var;
     _ReadWriteBarrier();
 }
 
-inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_exchange(volatile uint64_t* pAtomic, uint64_t var)
 {
     return INTERLOCKED_OP(Exchange)(pAtomic, var);
 }
 
-inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline bool env_atomic_compare_exchange(volatile uint64_t* pAtomic, uint64_t* pExpected, uint64_t desired)
 {
-    __uint64 oldval = INTERLOCKED_OP(CompareExchange)(pAtomic, desired, *pExpected);
+    uint64_t oldval = INTERLOCKED_OP(CompareExchange)(pAtomic, desired, *pExpected);
     return (oldval == *pExpected);
 }
 
-inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_increment(volatile uint64_t* pAtomic)
 {
     return INTERLOCKED_OP(Increment)(pAtomic) - 1;
 }
 
-inline __uint64 env_atomic_decrement(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_decrement(volatile uint64_t* pAtomic)
 {
     return INTERLOCKED_OP(Decrement)(pAtomic) + 1;
 }
 
-inline __uint64 env_atomic_add(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_add(volatile uint64_t* pAtomic, uint64_t var)
 {
     return INTERLOCKED_OP(ExchangeAdd)(pAtomic, var);
 }
 
-inline __uint64 env_atomic_subtract(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_subtract(volatile uint64_t* pAtomic, uint64_t var)
 {
-    return INTERLOCKED_OP(ExchangeAdd)(pAtomic, -(__sint64) var);
+    return INTERLOCKED_OP(ExchangeAdd)(pAtomic, -(int64_t) var);
 }
 
-inline __uint64 env_atomic_and(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_and(volatile uint64_t* pAtomic, uint64_t var)
 {
     return INTERLOCKED_OP(And)(pAtomic, var);
 }
 
-inline __uint64 env_atomic_or(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_or(volatile uint64_t* pAtomic, uint64_t var)
 {
     return INTERLOCKED_OP(Or)(pAtomic, var);
 }
 
-inline __uint64 env_atomic_xor(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_xor(volatile uint64_t* pAtomic, uint64_t var)
 {
     return INTERLOCKED_OP(Xor)(pAtomic, var);
 }
@@ -80,7 +80,7 @@ inline __atombool env_atomic_is_true(volatile __atombool* pAtomic)
     _ReadWriteBarrier();
     atomic = *pAtomic;
     _ReadWriteBarrier();
-    return atomic == __true;
+    return atomic == true;
 }
 
 inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
@@ -89,23 +89,23 @@ inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
     _ReadWriteBarrier();
     atomic = *pAtomic;
     _ReadWriteBarrier();
-    return atomic == __false;
+    return atomic == false;
 }
 
 inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
 {
-    __atombool exchange = __true, compared = __false;
+    __atombool exchange = true, compared = false;
     return INTERLOCKED_OP(CompareExchange)(pAtomic, exchange, compared) == compared;
 }
 
 inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
 {
-    __atombool exchange = __false, compared = __true;
+    __atombool exchange = false, compared = true;
     return INTERLOCKED_OP(CompareExchange)(pAtomic, exchange, compared) == compared;
 }
 
 void env_backtrace_setup(){}
-__uint64 env_backtrace(__ptr* array, __sint32 depth)
+uint64_t env_backtrace(__ptr* array, int32_t depth)
 {
     return 0;
 }

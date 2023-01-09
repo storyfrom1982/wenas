@@ -27,59 +27,15 @@
 #endif
 #endif
 
-#define NULL    ((void*)0)
-
-///////////////////////////////////////////////////////
-///// 2进制
-///////////////////////////////////////////////////////
-#define __false                 0
-#define __true                  1
-typedef unsigned char           __bool;
-
-///////////////////////////////////////////////////////
-///// 256进制符号
-///////////////////////////////////////////////////////
-// typedef char                    __sym;
-// typedef char*                   __symptr;
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 ///////////////////////////////////////////////////////
 ///// 可变类型指针
 ///////////////////////////////////////////////////////
 typedef void*                   __ptr;
-
-///////////////////////////////////////////////////////
-///// 自然数集
-///////////////////////////////////////////////////////
-typedef unsigned char           __uint8;
-typedef unsigned short          __uint16;
-#ifdef __ENV_LONG_64__
-typedef unsigned int            __uint32;
-typedef unsigned long           __uint64;
-#else
-typedef unsigned long           __uint32;
-typedef unsigned long long      __uint64;
-#endif
-
-///////////////////////////////////////////////////////
-///// 整数集
-///////////////////////////////////////////////////////
-typedef char                    __sint8;
-typedef short                   __sint16;
-#ifdef __ENV_LONG_64__
-typedef int                     __sint32;
-typedef long                    __sint64;
-#else
-typedef long                    __sint32;
-typedef long long               __sint64;
-#endif
-
-///////////////////////////////////////////////////////
-///// 实数集
-///////////////////////////////////////////////////////
-// typedef float                   __real32;
-// typedef double                  __real64;
-
-typedef __uint64                __atombool;
 
 ///////////////////////////////////////////////////////
 ///// 当前状态
@@ -93,9 +49,9 @@ __env_export const char* env_check(void);
 #define MICRO_SECONDS    1000000ULL
 #define NANO_SECONDS     1000000000ULL
 
-__env_export __uint64 env_time(void);
-__env_export __uint64 env_clock(void);
-__env_export __uint64 env_strftime(char *buf, __uint64 size, __uint64 millisecond);
+__env_export uint64_t env_time(void);
+__env_export uint64_t env_clock(void);
+__env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecond);
 
 ///////////////////////////////////////////////////////
 ///// 存储相关
@@ -103,19 +59,19 @@ __env_export __uint64 env_strftime(char *buf, __uint64 size, __uint64 millisecon
 typedef void*   __fp;
 
 __env_export __fp env_fopen(const char* path, const char* mode);
-__env_export __bool env_fclose(__fp fp);
-__env_export __sint64 env_ftell(__fp fp);
-__env_export __sint64 env_fflush(__fp fp);
-__env_export __sint64 env_fwrite(__fp fp, __ptr data, __uint64 size);
-__env_export __sint64 env_fread(__fp fp, __ptr buf, __uint64 size);
-__env_export __sint64 env_fseek(__fp fp, __sint64 offset, __sint32 whence);
+__env_export bool env_fclose(__fp fp);
+__env_export int64_t env_ftell(__fp fp);
+__env_export int64_t env_fflush(__fp fp);
+__env_export int64_t env_fwrite(__fp fp, __ptr data, uint64_t size);
+__env_export int64_t env_fread(__fp fp, __ptr buf, uint64_t size);
+__env_export int64_t env_fseek(__fp fp, int64_t offset, int32_t whence);
 
-__env_export __bool env_make_path(const char* path);
-__env_export __bool env_find_path(const char* path);
-__env_export __bool env_find_file(const char* path);
-__env_export __bool env_remove_path(const char* path);
-__env_export __bool env_remove_file(const char* path);
-__env_export __bool env_move_path(const char* from, const char* to);
+__env_export bool env_make_path(const char* path);
+__env_export bool env_find_path(const char* path);
+__env_export bool env_find_file(const char* path);
+__env_export bool env_remove_path(const char* path);
+__env_export bool env_remove_file(const char* path);
+__env_export bool env_move_path(const char* from, const char* to);
 
 ///////////////////////////////////////////////////////
 ///// 线程相关
@@ -124,11 +80,11 @@ typedef void* env_thread_ptr;
 typedef struct env_mutex env_mutex_t;
 typedef __ptr(*env_thread_cb)(__ptr ctx);
 
-__env_export __sint32 env_thread_create(env_thread_ptr *tid, env_thread_cb cb, __ptr ctx);
+__env_export int32_t env_thread_create(env_thread_ptr *tid, env_thread_cb cb, __ptr ctx);
 __env_export void env_thread_destroy(env_thread_ptr *tid);
-__env_export __uint64 env_thread_self();
-__env_export __uint64 env_thread_id(env_thread_ptr thread_ptr);
-__env_export void env_thread_sleep(__uint64 nano_seconds);
+__env_export uint64_t env_thread_self();
+__env_export uint64_t env_thread_id(env_thread_ptr thread_ptr);
+__env_export void env_thread_sleep(uint64_t nano_seconds);
 
 __env_export env_mutex_t* env_mutex_create(void);
 __env_export void env_mutex_destroy(env_mutex_t **pp_mutex);
@@ -137,22 +93,22 @@ __env_export void env_mutex_unlock(env_mutex_t *mutex);
 __env_export void env_mutex_signal(env_mutex_t *mutex);
 __env_export void env_mutex_broadcast(env_mutex_t *mutex);
 __env_export void env_mutex_wait(env_mutex_t *mutex);
-__env_export __sint32 env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout);
+__env_export int32_t env_mutex_timedwait(env_mutex_t *mutex, uint64_t timeout);
 
 typedef struct env_pipe env_pipe_t;
-__env_export env_pipe_t* env_pipe_create(__uint64 len);
+__env_export env_pipe_t* env_pipe_create(uint64_t len);
 __env_export void env_pipe_destroy(env_pipe_t **pp_pipe);
-__env_export __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len);
-__env_export __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len);
-__env_export __uint64 env_pipe_readable(env_pipe_t *pipe);
-__env_export __uint64 env_pipe_writable(env_pipe_t *pipe);
+__env_export uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len);
+__env_export uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len);
+__env_export uint64_t env_pipe_readable(env_pipe_t *pipe);
+__env_export uint64_t env_pipe_writable(env_pipe_t *pipe);
 __env_export void env_pipe_stop(env_pipe_t *pipe);
 __env_export void env_pipe_clear(env_pipe_t *pipe);
 
 typedef struct linear_key_value_pair linekv_t;
 typedef struct env_task_queue env_taskqueue_t;
 typedef void (*env_task_ptr)(linekv_t* ctx);
-typedef __uint64 (*env_timed_task_ptr)(linekv_t* ctx);
+typedef uint64_t (*env_timed_task_ptr)(linekv_t* ctx);
 typedef linekv_t* (*env_sync_task_ptr)(linekv_t* ctx);
 
 __env_export env_taskqueue_t* env_taskqueue_create();
@@ -165,17 +121,18 @@ __env_export linekv_t* env_taskqueue_run_sync_task(env_taskqueue_t *tq, linekv_t
 ///////////////////////////////////////////////////////
 ///// 原子操作
 ///////////////////////////////////////////////////////
-__env_export __uint64 env_atomic_load(volatile __uint64*);
-__env_export void env_atomic_store(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_exchange(volatile __uint64*, __uint64);
-__env_export __bool env_atomic_compare_exchange(volatile __uint64*, __uint64*, __uint64);
-__env_export __uint64 env_atomic_increment(volatile __uint64*);
-__env_export __uint64 env_atomic_decrement(volatile __uint64*);
-__env_export __uint64 env_atomic_add(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_subtract(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_and(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_or(volatile __uint64*, __uint64);
-__env_export __uint64 env_atomic_xor(volatile __uint64*, __uint64);
+typedef uint64_t    __atombool;
+__env_export uint64_t env_atomic_load(volatile uint64_t*);
+__env_export void env_atomic_store(volatile uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_exchange(volatile uint64_t*, uint64_t);
+__env_export bool env_atomic_compare_exchange(volatile uint64_t*, uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_increment(volatile uint64_t*);
+__env_export uint64_t env_atomic_decrement(volatile uint64_t*);
+__env_export uint64_t env_atomic_add(volatile uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_subtract(volatile uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_and(volatile uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_or(volatile uint64_t*, uint64_t);
+__env_export uint64_t env_atomic_xor(volatile uint64_t*, uint64_t);
 __env_export __atombool env_atomic_is_true(volatile __atombool*);
 __env_export __atombool env_atomic_is_false(volatile __atombool*);
 __env_export __atombool env_atomic_set_true(volatile __atombool*);
@@ -211,10 +168,10 @@ enum env_log_level {
     ENV_LOG_LEVEL_COUNT
 };
 
-typedef void (*env_logger_cb) (__sint32 level, const char *log);
-__env_export __sint32 env_logger_start(const char *path, env_logger_cb cb);
+typedef void (*env_logger_cb) (int32_t level, const char *log);
+__env_export int env_logger_start(const char *path, env_logger_cb cb);
 __env_export void env_logger_stop();
-__env_export void env_logger_printf(enum env_log_level level, const char *file, __sint32 line, const char *fmt, ...);
+__env_export void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...);
 
 #define __logd(__FORMAT__, ...) \
         env_logger_printf(ENV_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
@@ -240,74 +197,48 @@ __env_export void env_logger_printf(enum env_log_level level, const char *file, 
             __loge("Check condition failed: %s, %s\n", #condition, env_check()); \
             goto Reset; \
         } \
-    } while (__false)
+    } while (false)
 
 ///////////////////////////////////////////////////////
 ///// 堆栈回溯
 ///////////////////////////////////////////////////////
 #ifdef ENV_HAVA_BACKTRACE
 __env_export void env_backtrace_setup();
-__env_export __uint64 env_backtrace(__ptr* array, __sint32 depth);
-#endif
-
-
-///////////////////////////////////////////////////////
-///// 内存安全
-///////////////////////////////////////////////////////
-
-#ifndef OS_WINDOWS
-__env_export __ptr malloc(__uint64 size);
-__env_export __ptr calloc(__uint64 number, __uint64 size);
-__env_export __ptr realloc(__ptr address, __uint64 size);
-__env_export __ptr memalign(__uint64 boundary, __uint64 size);
-__env_export __ptr aligned_alloc(__uint64 alignment, __uint64 size);
-__env_export __ptr _aligned_alloc(__uint64 alignment, __uint64 size);
-__env_export char* strdup(const char *s);
-__env_export char* strndup(const char *s, __uint64 n);
-__env_export __sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size);
-__env_export void free(__ptr address);
-__env_export void env_malloc_debug(void (*cb)(const char *debug));
-
-__env_export __uint64 strlen(const char *s);
-__env_export void *memcpy(void *dest, const void *src, __uint64 n);
-__env_export __sint32 memcmp(const void *s1, const void *s2, __uint64 n);
-
-#else
-#include <stdlib.h>
+__env_export uint64_t env_backtrace(void** array, int32_t depth);
 #endif
 
 ///////////////////////////////////////////////////////
 ///// 网络插口
 ///////////////////////////////////////////////////////
-typedef __sint32 __socket;
+typedef int32_t __socket;
 typedef struct sockaddr* __sockaddr_ptr;
 
 typedef struct {
-	union{
-		struct{
-			__uint32 ip;
-			__uint16 port;
-		};
-		__uint8 addr[6];
-	};
+    union{
+        struct{
+            uint32_t ip;
+            uint16_t port;
+        };
+        uint8_t addr[6];
+    };
 	// __sockaddr_ptr sa;
 } __ipaddr;
 
 __env_export __socket env_socket_open();
 __env_export void env_socket_close(__socket sock);
-__env_export __sint32 env_socket_connect(__socket sock, __sockaddr_ptr addr);
-__env_export __sint32 env_socket_bind(__socket sock, __sockaddr_ptr addr);
-__env_export __sint32 env_socket_set_nonblock(__socket sock, int noblock);
+__env_export int32_t env_socket_connect(__socket sock, __sockaddr_ptr addr);
+__env_export int32_t env_socket_bind(__socket sock, __sockaddr_ptr addr);
+__env_export int32_t env_socket_set_nonblock(__socket sock, int noblock);
 
-__env_export __sockaddr_ptr env_socket_addr_create(char* ip, __uint16 port);
+__env_export __sockaddr_ptr env_socket_addr_create(char* ip, uint16_t port);
 __env_export void env_socket_addr_copy(__sockaddr_ptr src, __sockaddr_ptr dst);
-__env_export __bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b);
+__env_export bool env_socket_addr_compare(__sockaddr_ptr a, __sockaddr_ptr b);
 __env_export void env_socket_addr_get_ip(__sockaddr_ptr addr, __ipaddr *ip);
 
-__env_export __sint32 env_socket_send(__socket sock, const void* buf, __uint64 size);
-__env_export __sint32 env_socket_recv(__socket sock, void* buf, __uint64 size);
-__env_export __sint32 env_socket_sendto(__socket sock, const void* buf, __uint64 size, __sockaddr_ptr addr);
-__env_export __sint32 env_socket_recvfrom(__socket sock, void* buf, __uint64 size, __sockaddr_ptr addr);
+__env_export int32_t env_socket_send(__socket sock, const void* buf, uint64_t size);
+__env_export int32_t env_socket_recv(__socket sock, void* buf, uint64_t size);
+__env_export int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr);
+__env_export int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr);
 
 
 #endif //__ENV_ENV_H__

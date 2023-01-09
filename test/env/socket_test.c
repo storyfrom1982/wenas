@@ -4,11 +4,11 @@
 #define ENV_SOCKET_ADDRLEN 1024
 void socket_test()
 {
-    __uint16 port = 37213;
+    uint16_t port = 37213;
     __fp fp = env_fopen("./tmp/ip.txt", "r+t");
     __pass(fp != NULL);
     char host[ENV_SOCKET_ADDRLEN] = {0};
-    __sint64 ret = env_fread(fp, host, ENV_SOCKET_ADDRLEN);
+    int64_t ret = env_fread(fp, host, ENV_SOCKET_ADDRLEN);
     env_fclose(fp);
     __pass(ret > 0); 
     host[ret] = '\0';

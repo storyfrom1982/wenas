@@ -1,17 +1,66 @@
-#include "env/env.h"
+#include "malloc.h"
 
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <time.h>
+#include <assert.h>
 
 #ifdef ENV_MALLOC_BACKTRACE
-#	define __USE_GNU
-#	include <dlfcn.h>
-#	include <stdio.h>
-#	define ENV_MALLOC_BACKTRACE_DEPTH	    256
-#endif
+
+#define __USE_GNU
+#include <dlfcn.h>
+#include <stdio.h>
+#include <unwind.h>
+#define ENV_MALLOC_BACKTRACE_DEPTH	    256
+
+struct backtrace_stack {
+    void** head;
+    void** end;
+};
+
+static inline _Unwind_Reason_Code __unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* vp)
+{
+    struct backtrace_stack* stack = (struct backtrace_stack*)vp;
+    if (stack->head == stack->end) {
+        return _URC_END_OF_STACK;
+    }
+    *stack->head = (void*)_Unwind_GetIP(unwind_context);
+    if (*stack->head == NULL) {
+        return _URC_END_OF_STACK;
+    }
+    ++stack->head;
+    return _URC_NO_REASON;
+}
+
+static inline int64_t __backtrace(void** array, int depth)
+{
+    struct backtrace_stack stack = {0};
+    stack.head = &array[0];
+    stack.end = &array[0] + (depth - 2);
+    _Unwind_Backtrace(__unwind_backtrace_callback, &stack);
+    return stack.head - &array[0];
+}
+
+#endif //#ifdef ENV_MALLOC_BACKTRACE
+
+typedef size_t	__atombool;
+
+#define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
+#define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
+#define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
+#define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
+
+#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
+#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
+
+#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
+#define __atom_try_lock(x)		__set_true(x)
+#define __atom_unlock(x)		__set_false(x)
 
 /////////////////////////////////////////////////////////////////////////////
 ////
@@ -33,7 +82,7 @@
 
 #define	__max_recycle_bin_number	7
 
-#define	__align_size				( sizeof(__uint64) )
+#define	__align_size				( sizeof(size_t) )
 #define	__align_mask				( __align_size - 1 )
 
 
@@ -43,7 +92,7 @@
 
 
 #ifdef ENV_MALLOC_BACKTRACE
-# define __debug_msg_size			((sizeof(__ptr) * ENV_MALLOC_BACKTRACE_DEPTH) - (__align_size << 2))
+# define __debug_msg_size			((sizeof(void*) * ENV_MALLOC_BACKTRACE_DEPTH) - (__align_size << 2))
 #else
 # define __debug_msg_size			0
 #endif //ENV_MALLOC_BACKTRACE
@@ -70,7 +119,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-typedef struct pointer {
+typedef struct __ptr {
 
 	/**
 	 * 已分配状态：
@@ -82,14 +131,14 @@ typedef struct pointer {
 	 * 前一个指针的大小
 	 */
 
-	__uint64 flag;
+	size_t flag;
 
 
 	/**
 	 * 当前指针的大小
 	 */
 
-	__uint64 size;
+	size_t size;
 
 
 	/**
@@ -104,43 +153,39 @@ typedef struct pointer {
 	 * 指针队列索引
 	 */
 
-	struct pointer *prev;
-	struct pointer *next;
+	struct __ptr *prev;
+	struct __ptr *next;
 
-}pointer_t;
+}__ptr;
 
 
 #define	__pointer2address(p)		( (void *)((char *)( p ) + __work_pointer_size ) )
-#define	__address2pointer(a)		( (pointer_t *)( (char *)( a ) - __work_pointer_size ) )
+#define	__address2pointer(a)		( (__ptr *)( (char *)( a ) - __work_pointer_size ) )
 
 #define	__inuse						0x01
 #define	__mergeable(p)				( ! ( ( p )->flag & __inuse ) )
 
-#define	__prev_pointer(p)			( (pointer_t *)( (char *)( p ) - ( p )->flag ) )
-#define	__next_pointer(p)			( (pointer_t *)( (char *)( p ) + ( p )->size ) )
-#define	__assign_pointer(p, s)		( (pointer_t *)( (char *)( p ) + ( s ) ) )
+#define	__prev_pointer(p)			( (__ptr *)( (char *)( p ) - ( p )->flag ) )
+#define	__next_pointer(p)			( (__ptr *)( (char *)( p ) + ( p )->size ) )
+#define	__assign_pointer(p, s)		( (__ptr *)( (char *)( p ) + ( s ) ) )
 
 
 typedef struct pointer_queue{
 	__atombool lock;
-	pointer_t *head;
-	__uint64 memory_size;
+	__ptr *head;
+	size_t memory_size;
 }pointer_queue_t;
 
 
 typedef struct env_memory_page{
 
-#if ENV_HAVE_STDATOMIC
-    atomic_bool lock;
-#else
-    __atombool lock;
-#endif
+	__atombool lock;
 
 	//本页的索引
-	__uint64 id;
+	size_t id;
 
 	//本页内存大小
-	__uint64 size;
+	size_t size;
 
 	//本页内存起始地址
 	void *start_address;
@@ -150,12 +195,12 @@ typedef struct env_memory_page{
 	 * 每个新指针从这个指针中分裂出来
 	 * 每个释放的指针都与这个指针合并
 	 */
-	pointer_t *pointer;
+	__ptr *ptr;
 
 	/**
 	 * 已释放但未合并的指针队列
 	 */
-	pointer_t *head, *end;
+	__ptr *head, *end;
 
 	/**
 	 * 为快速释放指针设计的回收池
@@ -167,8 +212,8 @@ typedef struct env_memory_page{
 
 typedef struct env_memory_pool{
     __atombool lock;
-    __uint64 page_number;
-    __uint64 id;
+    size_t page_number;
+    size_t id;
 	void *aligned_address;
 	env_memory_page_t page[__max_page_number + 1];
 }env_memory_pool_t;
@@ -178,11 +223,11 @@ typedef struct env_memory_manager{
 
     __atombool lock;
     __atombool init;
-    __uint64 pool_index;
-	__uint64 page_size;
-	__uint64 pool_number;
-	__uint64 preloading_page;
-	__uint64 page_aligned_mask;
+    size_t pool_index;
+	size_t page_size;
+	size_t pool_number;
+	size_t preloading_page;
+	size_t page_aligned_mask;
 	env_memory_pool_t pool[__max_pool_number + 1];
 
 }env_memory_manager_t;
@@ -191,7 +236,7 @@ typedef struct env_memory_manager{
 static env_memory_manager_t memory_manager = {0}, *mm = &memory_manager;
 
 
-static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, __uint64 page_size)
+static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, size_t page_size)
 {
 	page->size = (page_size + (__free_pointer_size * 4) + mm->page_aligned_mask) & (~mm->page_aligned_mask);
 	pool->aligned_address = NULL;
@@ -202,26 +247,26 @@ static int malloc_page(env_memory_pool_t *pool, env_memory_page_t *page, __uint6
 		if (page->start_address == MAP_FAILED){
 			abort();
 		}else{
-			if (((__uint64)(page->start_address) & __align_mask) != 0){
-				pool->aligned_address = (void *)(((__uint64)(page->start_address) + __align_mask) & ~__align_mask);
+			if (((size_t)(page->start_address) & __align_mask) != 0){
+				pool->aligned_address = (void *)(((size_t)(page->start_address) + __align_mask) & ~__align_mask);
 				munmap(page->start_address, page->size);
 			}else{
 				pool->aligned_address = page->start_address + page->size;
 				break;
 			}
 		}
-	}while ( __true );
+	}while ( 1 );
 	// printf(">>>>-------------------------------------------> %lu\n", page->id);
-	page->head = (pointer_t*)(page->start_address);
+	page->head = (__ptr*)(page->start_address);
 	page->head->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
 	page->head->size = __free_pointer_size;
 
-	page->pointer = __next_pointer(page->head);
-	page->pointer->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
-	page->pointer->size = page->size - (__free_pointer_size << 1);
+	page->ptr = __next_pointer(page->head);
+	page->ptr->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
+	page->ptr->size = page->size - (__free_pointer_size << 1);
 
-	page->end = __next_pointer(page->pointer);
-	page->end->flag = page->pointer->size;
+	page->end = __next_pointer(page->ptr);
+	page->end->flag = page->ptr->size;
 	page->end->size = __free_pointer_size;
 
 	page->head->prev = NULL;
@@ -250,7 +295,7 @@ static int malloc_pool()
 
     for (mm->pool_number = 0; mm->pool_number < __max_pool_number; ++mm->pool_number){
         mm->pool[mm->pool_number].id = mm->pool_number;
-        for (__uint64 page_id = 0; page_id < mm->preloading_page; ++page_id){
+        for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
             mm->pool[mm->pool_number].page[page_id].id = page_id;
             mm->pool[mm->pool_number].page_number ++;
             if (malloc_page(&(mm->pool[mm->pool_number]),
@@ -276,102 +321,91 @@ static void free_page(env_memory_page_t *page, env_memory_pool_t *pool)
 }
 
 
-inline static void free_pointer(pointer_t *pointer, env_memory_page_t *page, env_memory_pool_t *pool)
+inline static void free_pointer(__ptr *ptr, env_memory_page_t *page, env_memory_pool_t *pool)
 {
 
-	if (__next_pointer(pointer) == page->pointer){
+	if (__next_pointer(ptr) == page->ptr){
 
 		//合并左边指针
-		if (__mergeable(pointer)){
+		if (__mergeable(ptr)){
 			//如果指针已经释放就进行合并
 			//把合并的指针从释放队列中移除
-			__prev_pointer(pointer)->size += pointer->size;
-			pointer = __prev_pointer(pointer);
-			pointer->next->prev = pointer->prev;
-			pointer->prev->next = pointer->next;
+			__prev_pointer(ptr)->size += ptr->size;
+			ptr = __prev_pointer(ptr);
+			ptr->next->prev = ptr->prev;
+			ptr->prev->next = ptr->next;
 		}
 
 		//更新空闲指针大小
-		pointer->size += page->pointer->size;
+		ptr->size += page->ptr->size;
 		//合并指针
-		__next_pointer(pointer)->flag = pointer->size;
-		page->pointer = pointer;
+		__next_pointer(ptr)->flag = ptr->size;
+		page->ptr = ptr;
 
-	}else if (__next_pointer(page->pointer) == pointer){
+	}else if (__next_pointer(page->ptr) == ptr){
 
 		//合并右边指针
-		if (__mergeable(__next_pointer(__next_pointer(pointer)))){
+		if (__mergeable(__next_pointer(__next_pointer(ptr)))){
 			//如果指针已经释放就进行合并
 			//把合并的指针从释放队列中移除
-			__next_pointer(pointer)->prev->next = __next_pointer(pointer)->next;
-			__next_pointer(pointer)->next->prev = __next_pointer(pointer)->prev;
-			pointer->size += __next_pointer(pointer)->size;
+			__next_pointer(ptr)->prev->next = __next_pointer(ptr)->next;
+			__next_pointer(ptr)->next->prev = __next_pointer(ptr)->prev;
+			ptr->size += __next_pointer(ptr)->size;
 		}
 
 		//合并指针
-		page->pointer->size += pointer->size;
-		__next_pointer(page->pointer)->flag = page->pointer->size;
+		page->ptr->size += ptr->size;
+		__next_pointer(page->ptr)->flag = page->ptr->size;
 
 	}else{
 		/**
 		 * 不能与主指针合并的指针就先尝试与左右两边的指针合并
 		 */
-		if (__mergeable(pointer)){
-			__prev_pointer(pointer)->size += pointer->size;
-			pointer = __prev_pointer(pointer);
-			__next_pointer(pointer)->flag = pointer->size;
-			pointer->next->prev = pointer->prev;
-			pointer->prev->next = pointer->next;
+		if (__mergeable(ptr)){
+			__prev_pointer(ptr)->size += ptr->size;
+			ptr = __prev_pointer(ptr);
+			__next_pointer(ptr)->flag = ptr->size;
+			ptr->next->prev = ptr->prev;
+			ptr->prev->next = ptr->next;
 		}
 
-		if (__mergeable(__next_pointer(__next_pointer(pointer)))){
-			__next_pointer(pointer)->prev->next = __next_pointer(pointer)->next;
-			__next_pointer(pointer)->next->prev = __next_pointer(pointer)->prev;
-			pointer->size += __next_pointer(pointer)->size;
+		if (__mergeable(__next_pointer(__next_pointer(ptr)))){
+			__next_pointer(ptr)->prev->next = __next_pointer(ptr)->next;
+			__next_pointer(ptr)->next->prev = __next_pointer(ptr)->prev;
+			ptr->size += __next_pointer(ptr)->size;
 		}
 
 		//设置释放状态
-		__next_pointer(pointer)->flag = pointer->size;
+		__next_pointer(ptr)->flag = ptr->size;
 		//把最大指针放入队列首
-		if (pointer->size >= page->head->next->size){
-			pointer->next = page->head->next;
-			pointer->prev = page->head;
-			pointer->next->prev = pointer;
-			pointer->prev->next = pointer;
-		}else if (page->head->next->next != NULL && pointer->size >= page->head->next->next->size){
-			pointer->next = page->head->next->next;
-			pointer->prev = page->head->next;
-			pointer->next->prev = pointer;
-			pointer->prev->next = pointer;
+		if (ptr->size >= page->head->next->size){
+			ptr->next = page->head->next;
+			ptr->prev = page->head;
+			ptr->next->prev = ptr;
+			ptr->prev->next = ptr;
+		}else if (page->head->next->next != NULL && ptr->size >= page->head->next->next->size){
+			ptr->next = page->head->next->next;
+			ptr->prev = page->head->next;
+			ptr->next->prev = ptr;
+			ptr->prev->next = ptr;
 		}else{
-			pointer->next = page->end;
-			pointer->prev = page->end->prev;
-			pointer->next->prev = pointer;
-			pointer->prev->next = pointer;
+			ptr->next = page->end;
+			ptr->prev = page->end->prev;
+			ptr->next->prev = ptr;
+			ptr->prev->next = ptr;
 		}
 	}
-#if 0
-	if (page->pointer->size
-			+ page->recycle_bin[0].memory_size
-			+ page->recycle_bin[1].memory_size
-			+ page->recycle_bin[2].memory_size
-			== mm->page_size
-			- __free_pointer_size
-			- __free_pointer_size){
-		free_page(page, pool);
-	}
-#endif
 }
 
 
 static void flush_page(env_memory_page_t *page, env_memory_pool_t *pool)
 {
-	pointer_t *pointer = NULL;
-	for (__uint64 i = 0; i < __max_recycle_bin_number; ++i){
+	__ptr *ptr = NULL;
+	for (size_t i = 0; i < __max_recycle_bin_number; ++i){
 		while(page->recycle_bin[i].head){
-			pointer = page->recycle_bin[i].head;
+			ptr = page->recycle_bin[i].head;
 			page->recycle_bin[i].head = page->recycle_bin[i].head->next;
-			free_pointer(pointer, page, pool);
+			free_pointer(ptr, page, pool);
 		}
 	}
 }
@@ -379,8 +413,8 @@ static void flush_page(env_memory_page_t *page, env_memory_pool_t *pool)
 
 static void flush_cache()
 {
-	for (__uint64 pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-		for (__uint64 page_id = 0; page_id < mm->pool[pool_id].page_number; ++page_id){
+	for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+		for (size_t page_id = 0; page_id < mm->pool[pool_id].page_number; ++page_id){
 			if (mm->pool[pool_id].page[page_id].start_address != NULL){
 				flush_page(&(mm->pool[pool_id].page[page_id]), &(mm->pool[pool_id]));
 			}
@@ -389,51 +423,51 @@ static void flush_cache()
 }
 
 
-void free(__ptr address)
+void free(void* address)
 {
-	__uint64 page_id = 0;
-	__uint64 pool_id = 0;
-	pointer_t *pointer = NULL;
+	size_t page_id = 0;
+	size_t pool_id = 0;
+	__ptr *ptr = NULL;
 	env_memory_page_t *page = NULL;
 	env_memory_pool_t *pool = NULL;
 
 	if (address){
-		pointer = __address2pointer(address);
+		ptr = __address2pointer(address);
 
-		if (pointer->size == 0 || pointer->flag == 0){
-			__loge("pointer->size == 0 || pointer->flag == 0");
+		if (ptr->size == 0 || ptr->flag == 0){
+			// __loge("ptr->size == 0 || ptr->flag == 0");
 			abort();
 		}
 
-		pool_id = ((__next_pointer(pointer)->flag >> 11) & 0x3FF);
+		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			__loge("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
+			// __loge("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 			abort();
 		}
 
 		pool = &(mm->pool[pool_id]);
-		page_id = ((__next_pointer(pointer)->flag >> 1) & 0x3FF);
+		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			__loge("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
+			// __loge("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
 			abort();
 		}
 
 		page = &(pool->page[page_id]);
 		if (__atom_try_lock(page->lock)){
-			free_pointer(pointer, page, pool);
+			free_pointer(ptr, page, pool);
 			__atom_unlock(page->lock);
 		}else{
-			for (__uint64 i = 0; ; i = (i + 1) % __max_recycle_bin_number){
+			for (size_t i = 0; ; i = (i + 1) % __max_recycle_bin_number){
 				if (__atom_try_lock(page->recycle_bin[i].lock)){
-					pointer->next = page->recycle_bin[i].head;
-					page->recycle_bin[i].head = pointer;
-					page->recycle_bin[i].memory_size += pointer->size;
+					ptr->next = page->recycle_bin[i].head;
+					page->recycle_bin[i].head = ptr;
+					page->recycle_bin[i].memory_size += ptr->size;
 					if (__atom_try_lock(page->lock)){
 						while(page->recycle_bin[i].head){
-							pointer = page->recycle_bin[i].head;
+							ptr = page->recycle_bin[i].head;
 							page->recycle_bin[i].head = page->recycle_bin[i].head->next;
-							page->recycle_bin[i].memory_size -= pointer->size;
-							free_pointer(pointer, page, pool);
+							page->recycle_bin[i].memory_size -= ptr->size;
+							free_pointer(ptr, page, pool);
 						}
 						__atom_unlock(page->lock);
 					}
@@ -449,10 +483,10 @@ void free(__ptr address)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__ptr malloc(__uint64 size)
+void* malloc(size_t size)
 {
-	__uint64 reserved_size = 0;
-	pointer_t *pointer = NULL;
+	__ptr *ptr = NULL;
+	size_t reserved_size = 0;
 
 	if (__is_false(mm->init)){
         if (malloc_pool() != 0){
@@ -468,25 +502,25 @@ __ptr malloc(__uint64 size)
 	reserved_size = size + __free_pointer_size;
 
 
-	for(__uint64 i = 0; i < pool->page_number; ++i){
+	for(size_t i = 0; i < pool->page_number; ++i){
 
 		if (!__atom_try_lock(pool->page[i].lock)){
 			continue;
 		}
 
-		if (reserved_size > pool->page[i].pointer->size){
+		if (reserved_size > pool->page[i].ptr->size){
 
 			if (pool->page[i].head->next->size > reserved_size){
 
 				//把当前指针加入到释放队列尾
-				pool->page[i].pointer->next = pool->page[i].end;
-				pool->page[i].pointer->prev = pool->page[i].end->prev;
-				pool->page[i].pointer->next->prev = pool->page[i].pointer;
-				pool->page[i].pointer->prev->next = pool->page[i].pointer;
+				pool->page[i].ptr->next = pool->page[i].end;
+				pool->page[i].ptr->prev = pool->page[i].end->prev;
+				pool->page[i].ptr->next->prev = pool->page[i].ptr;
+				pool->page[i].ptr->prev->next = pool->page[i].ptr;
 				//设置当前指针为释放状态
-				__next_pointer(pool->page[i].pointer)->flag = pool->page[i].pointer->size;
+				__next_pointer(pool->page[i].ptr)->flag = pool->page[i].ptr->size;
 				//使用空闲队列中最大的指针作为当前指针
-				pool->page[i].pointer = pool->page[i].head->next;
+				pool->page[i].ptr = pool->page[i].head->next;
 				//从空闲队列中移除
 				pool->page[i].head->next = pool->page[i].head->next->next;
 				pool->page[i].head->next->prev = pool->page[i].head;
@@ -499,22 +533,22 @@ __ptr malloc(__uint64 size)
 		}
 
 		//分配一个新的指针
-		pointer = __assign_pointer(pool->page[i].pointer, size);
-		pointer->flag = ((pool->id << 11) | (i << 1) | __inuse);
-		pointer->size = pool->page[i].pointer->size - size;
-		__next_pointer(pointer)->flag = pointer->size;
-		pointer->prev = pool->page[i].pointer;
-		pool->page[i].pointer = pointer;
-		pointer = pool->page[i].pointer->prev;
-		pointer->size = size;
+		ptr = __assign_pointer(pool->page[i].ptr, size);
+		ptr->flag = ((pool->id << 11) | (i << 1) | __inuse);
+		ptr->size = pool->page[i].ptr->size - size;
+		__next_pointer(ptr)->flag = ptr->size;
+		ptr->prev = pool->page[i].ptr;
+		pool->page[i].ptr = ptr;
+		ptr = pool->page[i].ptr->prev;
+		ptr->size = size;
 
 		__atom_unlock(pool->page[i].lock);
 
 #ifdef ENV_MALLOC_BACKTRACE
-		*((__sint64*)pointer->debug_msg) = env_backtrace(((__ptr*)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
+		*((int64_t*)ptr->debug_msg) = __backtrace(((void**)ptr->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
-		return __pointer2address(pointer);
+		return __pointer2address(ptr);
 	}
 
 
@@ -522,7 +556,7 @@ __ptr malloc(__uint64 size)
 	env_memory_page_t *page = NULL;
 
 	while(pool->page_number < __max_page_number){
-		__uint64 page_id = pool->page_number;
+		size_t page_id = pool->page_number;
 		if (__atom_try_lock(pool->page[page_id].lock)){
 			if (pool->page[page_id].id == 0){
 				pool->page[page_id].id = page_id;
@@ -551,30 +585,30 @@ __ptr malloc(__uint64 size)
 	}
 
 	//分配一个新的指针
-	pointer = __assign_pointer(page->pointer, size);
-	pointer->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
-	pointer->size = page->pointer->size - size;
-	__next_pointer(pointer)->flag = pointer->size;
-	pointer->prev = page->pointer;
-	page->pointer = pointer;
-	pointer = page->pointer->prev;
-	pointer->size = size;
+	ptr = __assign_pointer(page->ptr, size);
+	ptr->flag = ((pool->id << 11) | (page->id << 1) | __inuse);
+	ptr->size = page->ptr->size - size;
+	__next_pointer(ptr)->flag = ptr->size;
+	ptr->prev = page->ptr;
+	page->ptr = ptr;
+	ptr = page->ptr->prev;
+	ptr->size = size;
 
 	__atom_add(pool->page_number, 1);
 	__atom_unlock(page->lock);
 
 #ifdef ENV_MALLOC_BACKTRACE
-    *((__sint64*)pointer->debug_msg) = env_backtrace(((__ptr*)pointer->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
+    *((int64_t*)ptr->debug_msg) = __backtrace(((void**)ptr->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
-	return __pointer2address(pointer);
+	return __pointer2address(ptr);
 }
 
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__ptr calloc(__uint64 number, __uint64 size)
+void* calloc(size_t number, size_t size)
 {
 	size *= number;
 	void *pointer = malloc(size);
@@ -591,10 +625,10 @@ __ptr calloc(__uint64 number, __uint64 size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__ptr realloc(__ptr address, __uint64 size)
+void* realloc(void* address, size_t size)
 {
 	void *new_address = NULL;
-	pointer_t *old_pointer = __address2pointer(address);
+	__ptr *old_pointer = __address2pointer(address);
 
 	if (size > 0){
 
@@ -628,14 +662,14 @@ __ptr realloc(__ptr address, __uint64 size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-__ptr aligned_alloc(__uint64 alignment, __uint64 size)
+void* aligned_alloc(size_t alignment, size_t size)
 {
     if (alignment == __align_size){
         return malloc(size);
     }
 
 	void *address = NULL, *aligned_address = NULL;
-	pointer_t *pointer = NULL, *aligned_pointer = NULL;
+	__ptr *pointer = NULL, *aligned_pointer = NULL;
 
 	if (size == 0 || alignment == 0
 			|| (alignment & (sizeof (void *) - 1)) != 0
@@ -647,13 +681,13 @@ __ptr aligned_alloc(__uint64 alignment, __uint64 size)
 	address = malloc(size + alignment + __free_pointer_size);
 
 	if (address != NULL){
-		if (((__uint64)( address ) & ~(alignment - 1)) == ((__uint64)( address ))){
+		if (((size_t)( address ) & ~(alignment - 1)) == ((size_t)( address ))){
 			return address;
 		}
-		aligned_address = (__ptr)(((__uint64)(address) + alignment + __free_pointer_size) & ~(alignment - 1));
+		aligned_address = (void*)(((size_t)(address) + alignment + __free_pointer_size) & ~(alignment - 1));
 		aligned_pointer = __address2pointer(aligned_address);
 		pointer = __address2pointer(address);
-		__uint64 free_size = (__uint64)aligned_pointer - (__uint64)pointer;
+		size_t free_size = (size_t)aligned_pointer - (size_t)pointer;
 
 		aligned_pointer->size = pointer->size - free_size;
 		aligned_pointer->flag = __next_pointer(pointer)->flag;
@@ -672,17 +706,17 @@ __ptr aligned_alloc(__uint64 alignment, __uint64 size)
 	return NULL;
 }
 
-__ptr memalign(__uint64 boundary, __uint64 size)
+void* memalign(size_t boundary, size_t size)
 {
 	return aligned_alloc(boundary, size);
 }
 
-__ptr _aligned_alloc(__uint64 alignment, __uint64 size)
+void* _aligned_alloc(size_t alignment, size_t size)
 {
     return aligned_alloc(alignment, size);
 }
 
-__sint32 posix_memalign(__ptr *ptr, __uint64 align, __uint64 size)
+int posix_memalign(void* *ptr, size_t align, size_t size)
 {
     *ptr = aligned_alloc(align, size);
     if (NULL == *ptr){
@@ -699,7 +733,7 @@ char* strdup(const char *s)
 {
 	char *result = NULL;
 	if (s){
-		__uint64 len = strlen(s);
+		size_t len = strlen(s);
 
 		result = (char *)malloc(len + 1);
 
@@ -712,7 +746,7 @@ char* strdup(const char *s)
 	return result;
 }
 
-char* strndup(const char *s, __uint64 n)
+char* strndup(const char *s, size_t n)
 {
 	char *result = NULL;
 	if (s && n > 0){
@@ -728,6 +762,47 @@ char* strndup(const char *s, __uint64 n)
 	return result;
 }
 
+// size_t strlen(const char *s)
+// {
+//     assert(s);
+//     size_t l = 0;
+//     while (s[l] != '\0')
+//     {
+//         l++;
+//     }
+//     return l;
+// }
+
+// int memcmp(const void *s1, const void *s2, size_t n){
+//     assert(s1);
+//     assert(s2);
+//     if (!n){
+//         return 0;
+//     }
+//     while (--n && *(char*)s1 == *(char*)s2){
+//         s1 = (char*)s1 + 1;
+//         s2 = (char*)s2 + 1;
+//     }
+//     return (*(char*)s1 - *(char*)s2);
+// }
+
+// void* memcpy(void *dest, const void *src, size_t n)
+// {
+//     assert(dest);
+//     assert(src);
+//     if (!n){
+//         return dest;
+//     }
+//     size_t l = n / 8;
+//     for (size_t i = 0; i < l; ++i){
+//         *(((size_t*)dest) + i) = *(((size_t*)src) + i);
+//     }
+//     for (size_t r = n % 8; r > 0; r--){
+//         *(((char*)dest) + (n - r)) = *(((char*)src) + (n - r));
+//     }
+//     return dest;
+// }
+
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
@@ -735,9 +810,9 @@ char* strndup(const char *s, __uint64 n)
 void env_malloc_release()
 {
     __atom_lock(mm->lock);
-    for (__sint32 pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+    for (int pool_id = 0; pool_id < mm->pool_number; ++pool_id){
         env_memory_pool_t *pool = &(mm->pool[pool_id]);
-        for (__sint32 page_id = 0; page_id < pool->page_number; ++page_id){
+        for (int page_id = 0; page_id < pool->page_number; ++page_id){
             if ( pool->page[page_id].start_address != NULL){
                 munmap(pool->page[page_id].start_address, pool->page[page_id].size);
             }
@@ -753,34 +828,34 @@ void env_malloc_release()
 
 void env_malloc_debug(void (*cb)(const char *debug))
 {
+	__ptr *ptr = NULL;
 	env_memory_pool_t *pool = NULL;
-	pointer_t *pointer = NULL;
 
 	if (cb == NULL){
 		return;
 	}
 
-	__uint64 buf_size = 10240;
+	size_t buf_size = 10240;
 	char buf[10240];
 
 	flush_cache();
 
-	for (__uint64 pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+	for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
 		pool = &(mm->pool[pool_id]);
-		for (__uint64 page_id = 0; page_id < pool->page_number; ++page_id){
+		for (size_t page_id = 0; page_id < pool->page_number; ++page_id){
 			if (pool->page[page_id].start_address
-				&& pool->page[page_id].pointer->size
+				&& pool->page[page_id].ptr->size
 				!= pool->page[page_id].size - __free_pointer_size * 2){
 				cb("[!!! Found a memory leak !!!]\n");
-				pointer = (__next_pointer(pool->page[page_id].head));
-				while(pointer != pool->page[page_id].end){
+				ptr = (__next_pointer(pool->page[page_id].head));
+				while(ptr != pool->page[page_id].end){
 #ifdef ENV_MALLOC_BACKTRACE
-					if (!__mergeable(__next_pointer(pointer))){
-						__uint64 n = 0;
-						__sint64 count = *((__sint64*)pointer->debug_msg);
-						__ptr* buffer = ((__ptr*)pointer->debug_msg) + 1;
-						for (__uint64 idx = 0; idx < count; ++idx) {
-							const __ptr addr = buffer[idx];
+					if (!__mergeable(__next_pointer(ptr))){
+						size_t n = 0;
+						int64_t count = *((int64_t*)ptr->debug_msg);
+						void** buffer = ((void**)ptr->debug_msg) + 1;
+						for (size_t idx = 0; idx < count; ++idx) {
+							const void* addr = buffer[idx];
 							Dl_info info= {0};
 							if (dladdr(addr, &info) && info.dli_sname) {
 								if (n + strlen(info.dli_sname) > buf_size - 1){
@@ -793,7 +868,7 @@ void env_malloc_debug(void (*cb)(const char *debug))
 						cb(buf);
 					}
 #endif
-					pointer = __next_pointer(pointer);
+					ptr = __next_pointer(ptr);
 				}
 			}
 		}

@@ -2,48 +2,9 @@
 #if defined(__GNUC__) || defined(__clang__)
 
 #include <env/env.h>
-#include <assert.h>
 
-__uint64 strlen(const char *s)
-{
-    assert(s);
-    __uint64 l = 0;
-    while (s[l] != '\0')
-    {
-        l++;
-    }
-    return l;
-}
 
-void *memcpy(void *dest, const void *src, __uint64 n)
-{
-    assert(dest);
-    assert(src);
-    if (!n){
-        return dest;
-    }
-    __uint64 l = n / 8;
-    for (__uint64 i = 0; i < l; ++i){
-        *(((__uint64*)dest) + i) = *(((__uint64*)src) + i);
-    }
-    for (__uint64 r = n % 8; r > 0; r--){
-        *(((char*)dest) + (n - r)) = *(((char*)src) + (n - r));
-    }
-    return dest;
-}
 
-__sint32 memcmp(const void *s1, const void *s2, __uint64 n){
-    assert(s1);
-    assert(s2);
-    if (!n){
-        return 0;
-    }
-    while (--n && *(char*)s1 == *(char*)s2){
-        s1 = (char*)s1 + 1;
-        s2 = (char*)s2 + 1;
-    }
-    return (*(char*)s1 - *(char*)s2);
-}
 
 #if defined(__ATOMIC_RELAXED)
 
@@ -55,81 +16,81 @@ __sint32 memcmp(const void *s1, const void *s2, __uint64 n){
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 
-inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_load(volatile uint64_t* pAtomic)
 {
     return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST);
 }
 
-inline void env_atomic_store(volatile __uint64* pAtomic, __uint64 var)
+inline void env_atomic_store(volatile uint64_t* pAtomic, uint64_t var)
 {
     __atomic_store_n(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_exchange(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_exchange_n(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline bool env_atomic_compare_exchange(volatile uint64_t* pAtomic, uint64_t* pExpected, uint64_t desired)
 {
-    return __atomic_compare_exchange_n(pAtomic, pExpected, desired, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return __atomic_compare_exchange_n(pAtomic, pExpected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_increment(volatile uint64_t* pAtomic)
 {
     return __atomic_fetch_add(pAtomic, 1, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_decrement(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_decrement(volatile uint64_t* pAtomic)
 {
     return __atomic_fetch_sub(pAtomic, 1, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_add(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_add(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_fetch_add(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_subtract(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_subtract(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_fetch_sub(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_and(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_and(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_fetch_and(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_or(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_or(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_fetch_or(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
-inline __uint64 env_atomic_xor(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_xor(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __atomic_fetch_xor(pAtomic, var, __ATOMIC_SEQ_CST);
 }
 
 inline __atombool env_atomic_is_true(volatile __atombool* pAtomic)
 {
-    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == __true;
+    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == true;
 }
 
 inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
 {
-    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == __false;
+    return __atomic_load_n(pAtomic, __ATOMIC_SEQ_CST) == false;
 }
 
 inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
 {
-    __atombool compare = __false;
-    return __atomic_compare_exchange_n(pAtomic, &compare, __true, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __atombool compare = false;
+    return __atomic_compare_exchange_n(pAtomic, &compare, true, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
 {
-    __atombool compare = __true;
-    return __atomic_compare_exchange_n(pAtomic, &compare, __false, __false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __atombool compare = true;
+    return __atomic_compare_exchange_n(pAtomic, &compare, false, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 #else //!defined(__ATOMIC_RELAXED)
@@ -155,9 +116,9 @@ static inline void atomicFullBarrier()
     __asm__ __volatile__("" : : : "memory");
 }
 
-inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_load(volatile uint64_t* pAtomic)
 {
-    __uint64 atomic;
+    uint64_t atomic;
 
     atomicFullBarrier();
     atomic = *pAtomic;
@@ -166,14 +127,14 @@ inline __uint64 env_atomic_load(volatile __uint64* pAtomic)
     return atomic;
 }
 
-inline void env_atomic_store(volatile __uint64* pAtomic, __uint64 var)
+inline void env_atomic_store(volatile uint64_t* pAtomic, uint64_t var)
 {
     atomicFullBarrier();
     *pAtomic = var;
     atomicFullBarrier();
 }
 
-inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_exchange(volatile uint64_t* pAtomic, uint64_t var)
 {
     /*
      * GCC 4.6 and before have only __sync_lock_test_and_set as an exchange operation,
@@ -181,7 +142,7 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
      * with a CAS instead.
      */
 
-    __uint64 oldval;
+    uint64_t oldval;
     do {
         oldval = *pAtomic;
     } while (!__sync_bool_compare_and_swap(pAtomic, oldval, var));
@@ -191,64 +152,64 @@ inline __uint64 env_atomic_exchange(volatile __uint64* pAtomic, __uint64 var)
     return oldval;
 }
 
-inline __bool env_atomic_compare_exchange(volatile __uint64* pAtomic, __uint64* pExpected, __uint64 desired)
+inline bool env_atomic_compare_exchange(volatile uint64_t* pAtomic, uint64_t* pExpected, uint64_t desired)
 {
     return __sync_bool_compare_and_swap(pAtomic, *pExpected, desired);
 }
 
-inline __uint64 env_atomic_increment(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_increment(volatile uint64_t* pAtomic)
 {
     return __sync_fetch_and_add(pAtomic, 1);
 }
 
-inline __uint64 env_atomic_decrement(volatile __uint64* pAtomic)
+inline uint64_t env_atomic_decrement(volatile uint64_t* pAtomic)
 {
     return __sync_fetch_and_sub(pAtomic, 1);
 }
 
-inline __uint64 env_atomic_add(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_add(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __sync_fetch_and_add(pAtomic, var);
 }
 
-inline __uint64 env_atomic_subtract(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_subtract(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __sync_fetch_and_sub(pAtomic, var);
 }
 
-inline __uint64 env_atomic_and(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_and(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __sync_fetch_and_and(pAtomic, var);
 }
 
-inline __uint64 env_atomic_or(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_or(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __sync_fetch_and_or(pAtomic, var);
 }
 
-inline __uint64 env_atomic_xor(volatile __uint64* pAtomic, __uint64 var)
+inline uint64_t env_atomic_xor(volatile uint64_t* pAtomic, uint64_t var)
 {
     return __sync_fetch_and_xor(pAtomic, var);
 }
 
 inline __atombool env_atomic_is_true(volatile __atombool* pAtomic)
 {
-    return __sync_bool_compare_and_swap(pAtomic, __true, __true);
+    return __sync_bool_compare_and_swap(pAtomic, true, true);
 }
 
 inline __atombool env_atomic_is_false(volatile __atombool* pAtomic)
 {
-    return __sync_bool_compare_and_swap(pAtomic, __false, __false);
+    return __sync_bool_compare_and_swap(pAtomic, false, false);
 }
 
 inline __atombool env_atomic_set_true(volatile __atombool* pAtomic)
 {
-    return __sync_bool_compare_and_swap(pAtomic, __false, __true);
+    return __sync_bool_compare_and_swap(pAtomic, false, true);
 }
 
 inline __atombool env_atomic_set_false(volatile __atombool* pAtomic)
 {
-    return __sync_bool_compare_and_swap(pAtomic, __true, __false);
+    return __sync_bool_compare_and_swap(pAtomic, true, false);
 }
 
 #endif //defined(__ATOMIC_RELAXED)

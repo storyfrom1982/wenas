@@ -12,7 +12,7 @@
 
 typedef struct __tree_node {
     __ptr val;
-    __uint64 count;
+    uint64_t count;
     __ptr *parent;
     struct __tree_node *prev;
     struct __tree_node *next;
@@ -38,7 +38,7 @@ void tree_destroy(__tree *pp_tree)
 
 void tree_inseart(__tree tree, linekey_t *key, __ptr val)
 {
-    __uint64 i;
+    uint64_t i;
     __tree parent;
     __tree_node *prev = __treenode(tree);
     

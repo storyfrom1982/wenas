@@ -8,11 +8,11 @@
 static void test_add_string()
 {
 	linekv_t *lkv = linekv_create(10240);
-	linekv_parser_t parser = lkv;
+	linekv_ptr parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
-	__sint32 n;
+	int32_t n;
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
@@ -40,11 +40,11 @@ static void test_add_string()
 static void test_find_after()
 {
 	linekv_t *lkv = linekv_create(10240);
-	linekv_parser_t parser = lkv;
+	linekv_ptr parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
-	__sint32 n;
+	int32_t n;
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
@@ -73,11 +73,11 @@ static void test_find_after()
 static void test_find_number()
 {
 	linekv_t *lkv = linekv_create(10240);
-	linekv_parser_t parser = lkv;
+	linekv_ptr parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
-	__sint32 n;
+	int32_t n;
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = rand();
@@ -107,11 +107,11 @@ static void test_find_number()
 static void test_find_float()
 {
 	linekv_t *lkv = linekv_create(10240);
-	linekv_parser_t parser = lkv;
+	linekv_ptr parser = lkv;
 	linedb_t *v, value, *b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
-	__sint32 n;
+	int32_t n;
 	double f64;
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);

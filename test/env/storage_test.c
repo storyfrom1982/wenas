@@ -16,22 +16,22 @@
 
 void storage_test()
 {
-    __sint64 ret;
+    int64_t ret;
     __fp fp;
     char buf[1024] = {0};
 
     if (env_find_file(TEST_MOVE_FILE)){
         __logd("del file %s\n", TEST_MOVE_FILE);
-        __pass(env_remove_file(TEST_MOVE_FILE) == __true);
+        __pass(env_remove_file(TEST_MOVE_FILE) == true);
     }
 
     if (env_find_path(TEST_PATH)){
         __logd("rm dir %s\n", TEST_PATH);        
-        __pass(env_remove_path(TEST_PATH) == __true);
+        __pass(env_remove_path(TEST_PATH) == true);
     }
 
     __logd("mkpath %s\n", TEST_PATH);
-    __pass(env_make_path(TEST_PATH) == __true);
+    __pass(env_make_path(TEST_PATH) == true);
 
     __logd("open file %s\n", TEST_FILE);
     fp = env_fopen(TEST_FILE, "a+t");
@@ -55,7 +55,7 @@ void storage_test()
 
     __logd("ret = %llu %s\n", ret, buf);
 
-    __pass(env_fclose(fp) == __true);
+    __pass(env_fclose(fp) == true);
 
 Reset:
     return;

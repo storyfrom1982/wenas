@@ -24,7 +24,7 @@ typedef struct env_mutex {
 }env_mutex_t;
 
 
-__sint32 env_thread_create(env_thread_ptr *p_ptr, env_thread_cb cb, __ptr ctx)
+int32_t env_thread_create(env_thread_ptr *p_ptr, env_thread_cb cb, __ptr ctx)
 {
     env_thread_ptr ptr = malloc(sizeof(pthread_t));
     if (ptr == NULL) {
@@ -38,21 +38,21 @@ __sint32 env_thread_create(env_thread_ptr *p_ptr, env_thread_cb cb, __ptr ctx)
     return 0;
 }
 
-__uint64 env_thread_self()
+uint64_t env_thread_self()
 {
 #if defined(OS_WINDOWS)
-    return (__uint64)pthread_self().p;
+    return (uint64_t)pthread_self().p;
 #else
-    return (__uint64)pthread_self();
+    return (uint64_t)pthread_self();
 #endif
 }
 
-__uint64 env_thread_id(env_thread_ptr thread_ptr)
+uint64_t env_thread_id(env_thread_ptr thread_ptr)
 {
 #if defined(OS_WINDOWS)
-    return (__uint64)((pthread_t*)thread_ptr)->p;
+    return (uint64_t)((pthread_t*)thread_ptr)->p;
 #else
-    return (__uint64)*((pthread_t*)thread_ptr);
+    return (uint64_t)*((pthread_t*)thread_ptr);
 #endif
 }
 
@@ -66,7 +66,7 @@ void env_thread_destroy(env_thread_ptr *p_ptr)
     }
 }
 
-void env_thread_sleep(__uint64 nano_seconds)
+void env_thread_sleep(uint64_t nano_seconds)
 {
 #if defined(OS_WINDOWS)
     nano_seconds /= 1000000ULL;
@@ -79,7 +79,7 @@ void env_thread_sleep(__uint64 nano_seconds)
 #endif
 }
 
-__sint32 env_thread_mutex_init(env_thread_mutex_t *mutex)
+int32_t env_thread_mutex_init(env_thread_mutex_t *mutex)
 {
     return pthread_mutex_init(mutex, NULL);
 }
@@ -99,7 +99,7 @@ void env_thread_mutex_unlock(env_thread_mutex_t *mutex)
     pthread_mutex_unlock(mutex);
 }
 
-__sint32 env_thread_cond_init(env_thread_cond_t *cond)
+int32_t env_thread_cond_init(env_thread_cond_t *cond)
 {
     return pthread_cond_init(cond, NULL);
 }
@@ -124,9 +124,9 @@ void env_thread_cond_wait(env_thread_cond_t *cond, env_thread_mutex_t *mutex)
     pthread_cond_wait(cond, mutex);
 }
 
-__sint32 env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, __uint64 timeout)
+int32_t env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *mutex, uint64_t timeout)
 {
-    __sint32 r = 0;
+    int32_t r = 0;
     struct timespec ts;
     timeout += env_time();
     ts.tv_sec = timeout / NANO_SECONDS;
@@ -136,9 +136,9 @@ __sint32 env_thread_cond_timedwait(env_thread_cond_t *cond, env_thread_mutex_t *
     return r == 0 ? 0 : r == ETIMEDOUT ? ENV_TIMEDOUT : -1;
 }
 
-static inline __sint32 env_mutex_init(env_mutex_t *mutex)
+static inline int32_t env_mutex_init(env_mutex_t *mutex)
 {
-    __sint32 r;
+    int32_t r;
     r = env_thread_mutex_init(mutex->mutex);
     if (r == 0){
         r = env_thread_cond_init(mutex->cond);
@@ -207,15 +207,15 @@ void env_mutex_wait(env_mutex_t *mutex)
     env_thread_cond_wait(mutex->cond, mutex->mutex);
 }
 
-__sint32 env_mutex_timedwait(env_mutex_t *mutex, __uint64 timeout)
+int32_t env_mutex_timedwait(env_mutex_t *mutex, uint64_t timeout)
 {
     return env_thread_cond_timedwait(mutex->cond, mutex->mutex, timeout);
 }
 
 
 typedef struct env_pipe {
-    __uint64 len;
-    __uint64 leftover;
+    uint64_t len;
+    uint64_t leftover;
     __atombool writer;
     __atombool reader;
 
@@ -228,7 +228,7 @@ typedef struct env_pipe {
 }env_pipe_t;
 
 
-env_pipe_t* env_pipe_create(__uint64 len)
+env_pipe_t* env_pipe_create(uint64_t len)
 {
     env_pipe_t *pipe = (env_pipe_t *)malloc(sizeof(env_pipe_t));
     __pass(pipe != NULL);
@@ -255,7 +255,7 @@ env_pipe_t* env_pipe_create(__uint64 len)
 
     pipe->read_waiting = pipe->write_waiting = 0;
     pipe->reader = pipe->writer = 0;
-    pipe->stopped = __false;
+    pipe->stopped = false;
 
     return pipe;
 
@@ -279,7 +279,7 @@ void env_pipe_destroy(env_pipe_t **pp_pipe)
     }
 }
 
-__uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
+uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len)
 {
     if (pipe->buf == NULL || data == NULL || len == 0){
         return 0;
@@ -291,7 +291,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
 
     env_mutex_lock(&pipe->mutex);
 
-    __uint64 writable, pos = 0;
+    uint64_t writable, pos = 0;
 
     while (pos < len) {
 
@@ -342,7 +342,7 @@ __uint64 env_pipe_write(env_pipe_t *pipe, __ptr data, __uint64 len)
     return pos;
 }
 
-__uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
+uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len)
 {
     if (pipe->buf == NULL || buf == NULL || len == 0){
         return 0;
@@ -350,7 +350,7 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
 
     env_mutex_lock(&pipe->mutex);
 
-    __uint64 readable, pos = 0;
+    uint64_t readable, pos = 0;
 
     while (pos < len) {
 
@@ -401,11 +401,11 @@ __uint64 env_pipe_read(env_pipe_t *pipe, __ptr buf, __uint64 len)
     return pos;
 }
 
-__uint64 env_pipe_readable(env_pipe_t *pipe){
+uint64_t env_pipe_readable(env_pipe_t *pipe){
     return pipe->writer - pipe->reader;
 }
 
-__uint64 env_pipe_writable(env_pipe_t *pipe){
+uint64_t env_pipe_writable(env_pipe_t *pipe){
     return pipe->len - pipe->writer + pipe->reader;
 }
 
@@ -432,8 +432,8 @@ void env_pipe_clear(env_pipe_t *pipe){
 
 struct env_task_queue {
     __atombool running;
-    __uint8 write_waiting;
-    __uint8 read_waiting;
+    uint8_t write_waiting;
+    uint8_t read_waiting;
     env_thread_ptr tid;
     env_mutex_t mutex;
     heap_t *timed_task;
@@ -443,7 +443,7 @@ struct env_task_queue {
 
 static inline void* env_taskqueue_loop(void *ctx)
 {
-    __uint64 timer = 0;
+    uint64_t timer = 0;
     linedb_t *ldb;
     env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
     __pass(tq != NULL);

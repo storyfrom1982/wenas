@@ -3,14 +3,14 @@
 #include <string.h>
 #include <stdio.h>
 
-static __atombool running = __false;
+static __atombool running = false;
 char sym[26] = {'a', 'b', 'c', 'd', 'e', 'f'};
 
 __ptr pipe_write_thread(__ptr p)
 {
-    __sint32 result = 0;
+    int32_t result = 0;
 	char s = 0;
-	__sint32 size = 32;
+	int32_t size = 32;
 	char *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
 	// pipe = 123;
@@ -36,8 +36,8 @@ Reset:
 
 __ptr pipe_read_thread(__ptr p)
 {
-	__sint32 result = 0, count = 0;
-	__sint32 size = 32;
+	int32_t result = 0, count = 0;
+	int32_t size = 32;
 	char *buf = NULL;
 	env_pipe_t *pipe = (env_pipe_t *)p;
 
@@ -76,7 +76,7 @@ void logger_test()
 
 		__pass(pipe != NULL);
 
-		running = __true;
+		running = true;
 		env_thread_create(&read_tid, pipe_read_thread, pipe);
 		env_thread_create(&write_tid, pipe_write_thread, pipe);
 		env_thread_create(&read_tid_1, pipe_read_thread, pipe_1);
