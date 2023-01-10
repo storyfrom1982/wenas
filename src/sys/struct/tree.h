@@ -4,19 +4,19 @@
 #include <env/env.h>
 #include <sys/struct/linekv.h>
 
-#define NODE_DIMENSION          6
+#define NODE_DIMENSION          8
 #define TREE_DIMENSION          16
 #define TREE_NODE_DIMENSION     (TREE_DIMENSION + NODE_DIMENSION)
 
-#define __treenode(node)        ((__tree_node*)&node[TREE_DIMENSION])
+#define __treenode(node)        ((__tree_node*)&(node)[TREE_DIMENSION])
 
 typedef struct __tree_node {
     __ptr val;
-    uint64_t count;
     __ptr *parent;
     struct __tree_node *prev;
     struct __tree_node *next;
     struct __tree_node *order;
+    uint64_t index, count;
 }__tree_node;
 
 typedef __ptr* __tree;
@@ -40,7 +40,7 @@ void tree_inseart(__tree tree, linekey_t *key, __ptr val)
 {
     uint64_t i;
     __tree parent;
-    __tree_node *prev = __treenode(tree);
+    __tree_node *node, *prev = __treenode(tree);
     
     __treenode(tree)->count ++;
     unsigned char *p = &key->byte[1], *end = p + key->byte[0];
@@ -53,8 +53,10 @@ void tree_inseart(__tree tree, linekey_t *key, __ptr val)
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
         }
         tree = (__tree)tree[i];
-        __treenode(tree)->count ++;
-        __treenode(tree)->parent = parent;
+        node = __treenode(tree);
+        node->count ++;
+        node->index = i;
+        node->parent = parent;
 
         parent = tree;
         i = *p & 0x0F;
@@ -62,20 +64,22 @@ void tree_inseart(__tree tree, linekey_t *key, __ptr val)
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
         }
         tree = (__tree)tree[i];
-        __treenode(tree)->count ++;
-        __treenode(tree)->parent = parent;
+        node = __treenode(tree);
+        node->count ++;
+        node->index = i;
+        node->parent = parent;
 
         p++;
     }
 
-    __treenode(tree)->val = val;
+    node->val = val;
     
-    __treenode(tree)->next = prev->next;
-    if (__treenode(tree)->next){
-        __treenode(tree)->next->prev = __treenode(tree);
+    node->next = prev->next;
+    if (node->next){
+        node->next->prev = node;
     }
-    prev->next = __treenode(tree);
-    __treenode(tree)->prev = prev;
+    prev->next = node;
+    node->prev = prev;
 }
 
 __ptr tree_find(__tree tree, linekey_t *key)
@@ -215,6 +219,137 @@ __ptr tree_max(__tree tree)
     }
 
     return NULL;
+}
+
+__tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
+{
+    int i = 0;
+    __tree node = tree;
+    __tree_node head = {0}, *next = &head;
+    
+    if (key != NULL)
+    {
+        count ++;
+        unsigned char *p = &key->byte[1], *end = p + key->byte[0];
+        while (p != end)
+        {
+            if (node != NULL){
+                i = ((*p) >> 4);
+                node = (__tree)node[i];
+            }else {
+                break;
+            }
+            
+            if (node != NULL){
+                i = ((*p) & 0x0F);
+                node = (__tree)node[i];
+            }else {
+                break;
+            }
+
+            p++;
+        }
+
+        node = __treenode(node)->parent;
+    }
+
+    while (node && count)
+    {
+        while (i < TREE_DIMENSION)
+        {
+            if (node[i] == NULL){
+                ++i;
+                continue;
+            }
+            
+            node = (__tree)node[i];
+            i = 0;
+
+            if (__treenode(node)->val != NULL){
+                next->order = __treenode(node);
+                next = next->order;
+                count --;
+                if (__treenode(node)->count == 1){
+                    break;
+                }
+            }
+        }
+
+        i = __treenode(node)->index + 1;
+        node = __treenode(node)->parent;
+    }
+
+    if (key != NULL && head.order != NULL){
+        return head.order->order;
+    }
+
+    return head.order;
+}
+
+
+__tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
+{
+    int i = TREE_DIMENSION -1;
+    __tree node = tree;
+    __tree_node head = {0}, *next = &head;
+    
+    if (key != NULL)
+    {
+        count ++;
+        unsigned char *p = &key->byte[1], *end = p + key->byte[0];
+        while (p != end)
+        {
+            if (node != NULL){
+                i = ((*p) >> 4);
+                node = (__tree)node[i];
+            }else {
+                break;
+            }
+            
+            if (node != NULL){
+                i = ((*p) & 0x0F);
+                node = (__tree)node[i];
+            }else {
+                break;
+            }
+
+            p++;
+        }
+
+        node = __treenode(node)->parent;
+    }
+
+    while (node && count)
+    {
+        while (i >= 0)
+        {
+            if (node[i] == NULL){
+                --i;
+                continue;
+            }
+            
+            node = (__tree)node[i];
+            i = TREE_DIMENSION -1;
+
+            if (__treenode(node)->val != NULL){
+                next->order = __treenode(node);
+                next = next->order;
+                count --;
+                if (__treenode(node)->count == 1){
+                    break;
+                }
+            }
+        }
+
+        i = __treenode(node)->index - 1;
+        node = __treenode(node)->parent;
+    }
+
+    if (key != NULL && head.order != NULL){
+        return head.order->order;
+    }
+
+    return head.order;
 }
 
 

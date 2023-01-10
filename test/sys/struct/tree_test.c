@@ -5,7 +5,7 @@ void tree_test()
 {
 
     // const char *root = "a";
-    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "zzzzzxyz", "zzzzzxy", "cacd", "ccdc", "aaaabcd", "aaaabc"};
+    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "bacd", "zzzzzxyz", "zzzzzxy", "cacd", "ccdc", "cbdc", "aaaabcd", "aaaabc"};
 
     __tree tree = tree_create();
     // __tree_node(tree)->val = root;
@@ -20,6 +20,32 @@ void tree_test()
         tree_inseart(tree, key, (__ptr)keys[i]);
         free(key);
     }
+
+    // const char *tmp_key = "adcd";
+    // linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+    // key->byte[0] = strlen(tmp_key);
+    // memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
+    // __tree_node *order = tree_sort_up(tree, key, 5);
+    // free(key);
+    // while (order)
+    // {
+    //     __logd("sort >>>>----------------------------> %s\n", order->val);
+    //     order = order->order;
+    // }
+
+
+    const char *tmp_key = "adcd";
+    linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+    key->byte[0] = strlen(tmp_key);
+    memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
+    __tree_node *order = tree_sort_down(tree, NULL, 14);
+    free(key);
+    while (order)
+    {
+        __logd("sort >>>>----------------------------> %s\n", order->val);
+        order = order->order;
+    }
+    
 
     __ptr min = tree_min(tree);
     __logd("min >>>>------------> %s\n", min);
@@ -84,5 +110,5 @@ void tree_test()
     }
 
     __logd("tree node count %lu\n", __treenode(tree)->count);
-    // tree_destroy(&tree);
+    tree_destroy(&tree);
 }
