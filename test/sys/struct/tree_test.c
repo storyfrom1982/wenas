@@ -5,7 +5,12 @@ void tree_test()
 {
 
     // const char *root = "a";
-    const char *keys[] = {"aecd", "adcd", "abcd", "accd", "aacd", "bbcd", "bacd", "zzzzzxyz", "zzzzzxy", "cacd", "ccdc", "cbdc", "aaaabcd", "aaaabc"};
+    const char *keys[] ={
+                            "aaa",      "aaab",     "az",       "aaabbb",   "aaabbc",   "aaabcc",   "aaabcd",   "aaabcde", 
+                            "bbb",      "bbbb",     "by",       "bbbbbb",   "bbbbbc",   "bbbbcc",   "bbbbcd",   "bbbbcde", 
+                            "ccc",      "cdef",     "cdefa",    "cdefab",   "cdefabc",  "cddefc",   "cabcde",   "cbabdef", 
+                            "zzz",      "zzzx",     "zaaaaaaa", "zzzxxx",   "zzzxxy",   "zzzxyy",   "zzzxyz",   "zzzxyza"
+                        };
 
     __tree tree = tree_create();
     // __tree_node(tree)->val = root;
@@ -21,29 +26,33 @@ void tree_test()
         free(key);
     }
 
-    // const char *tmp_key = "adcd";
-    // linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
-    // key->byte[0] = strlen(tmp_key);
-    // memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-    // __tree_node *order = tree_sort_up(tree, key, 5);
-    // free(key);
-    // while (order)
-    // {
-    //     __logd("sort >>>>----------------------------> %s\n", order->val);
-    //     order = order->order;
-    // }
-
-
-    const char *tmp_key = "adcd";
-    linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
-    key->byte[0] = strlen(tmp_key);
-    memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-    __tree_node *order = tree_sort_down(tree, NULL, 14);
-    free(key);
-    while (order)
     {
-        __logd("sort >>>>----------------------------> %s\n", order->val);
-        order = order->order;
+        const char *tmp_key = "bbb";
+        linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+        key->byte[0] = strlen(tmp_key);
+        memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
+        __tree_node *order = tree_sort_up(tree, key, 32);
+        free(key);
+        while (order)
+        {
+            __logd("sort up >>>>----------------------------> %s\n", order->val);
+            order = order->order;
+        }
+    }
+
+
+    {
+        const char *tmp_key = "bbb";
+        linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+        key->byte[0] = strlen(tmp_key);
+        memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
+        __tree_node *order = tree_sort_down(tree, key, 32);
+        free(key);
+        while (order)
+        {
+            __logd("sort down >>>>----------------------------> %s\n", order->val);
+            order = order->order;
+        }
     }
     
 

@@ -223,16 +223,16 @@ __ptr tree_max(__tree tree)
 
 __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
 {
-    int i = 0;
-    __tree node = tree;
+    int first = 0, i = 0;
+    __tree parent, node = tree;
     __tree_node head = {0}, *next = &head;
     
     if (key != NULL)
     {
-        count ++;
         unsigned char *p = &key->byte[1], *end = p + key->byte[0];
         while (p != end)
         {
+            parent = node;
             if (node != NULL){
                 i = ((*p) >> 4);
                 node = (__tree)node[i];
@@ -240,6 +240,7 @@ __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
                 break;
             }
             
+            parent = node;
             if (node != NULL){
                 i = ((*p) & 0x0F);
                 node = (__tree)node[i];
@@ -250,7 +251,20 @@ __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
             p++;
         }
 
-        node = __treenode(node)->parent;
+        if (node){
+            // 如果索引 key 存在，需要跳过索引节点。
+            i = 0;
+            parent = node;
+        }
+
+        // 因为所有子节点都大于父节点，所以从当前节点的第一个子节点开始遍历。
+        node = parent;
+
+        while (node[i] == NULL)
+        {
+            i++;
+            continue;
+        }
     }
 
     while (node && count)
@@ -268,6 +282,7 @@ __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
             if (__treenode(node)->val != NULL){
                 next->order = __treenode(node);
                 next = next->order;
+                next->order = NULL;
                 count --;
                 if (__treenode(node)->count == 1){
                     break;
@@ -279,10 +294,6 @@ __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
         node = __treenode(node)->parent;
     }
 
-    if (key != NULL && head.order != NULL){
-        return head.order->order;
-    }
-
     return head.order;
 }
 
@@ -290,15 +301,15 @@ __tree_node* tree_sort_up(__tree tree, linekey_t *key, uint64_t count)
 __tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
 {
     int i = TREE_DIMENSION -1;
-    __tree node = tree;
+    __tree parent, node = tree;
     __tree_node head = {0}, *next = &head;
     
     if (key != NULL)
     {
-        count ++;
         unsigned char *p = &key->byte[1], *end = p + key->byte[0];
         while (p != end)
         {
+            parent = node;
             if (node != NULL){
                 i = ((*p) >> 4);
                 node = (__tree)node[i];
@@ -306,6 +317,7 @@ __tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
                 break;
             }
             
+            parent = node;
             if (node != NULL){
                 i = ((*p) & 0x0F);
                 node = (__tree)node[i];
@@ -316,7 +328,14 @@ __tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
             p++;
         }
 
-        node = __treenode(node)->parent;
+        node = parent;
+        i--; // 所有子节点都大于父节点，所以从比当前结点小的兄弟节点开始遍历。
+
+        while (node[i] == NULL)
+        {
+            i--;
+            continue;
+        }
     }
 
     while (node && count)
@@ -331,9 +350,11 @@ __tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
             node = (__tree)node[i];
             i = TREE_DIMENSION -1;
 
-            if (__treenode(node)->val != NULL){
+            if (__treenode(node)->count == 1 && __treenode(node)->val != NULL){
+                // 必须先加入叶子结点。
                 next->order = __treenode(node);
                 next = next->order;
+                next->order = NULL;
                 count --;
                 if (__treenode(node)->count == 1){
                     break;
@@ -343,10 +364,16 @@ __tree_node* tree_sort_down(__tree tree, linekey_t *key, uint64_t count)
 
         i = __treenode(node)->index - 1;
         node = __treenode(node)->parent;
-    }
 
-    if (key != NULL && head.order != NULL){
-        return head.order->order;
+        if (node){
+            // 已经加入了所有子结点，再加入父节点。
+            if (__treenode(node)->val != NULL){
+                next->order = __treenode(node);
+                next = next->order;
+                next->order = NULL;
+                count --;
+            }
+        }
     }
 
     return head.order;
