@@ -1,6 +1,11 @@
 #include "sys/struct/tree.h"
 
 
+static void free_val(void *val)
+{
+    __logd("free tree node val ============================================== %s\n", (char*)val);
+}
+
 void tree_test()
 {
 
@@ -31,12 +36,12 @@ void tree_test()
         linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
         key->byte[0] = strlen(tmp_key);
         memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-        __tree_node *order = tree_sort_up(tree, key, 32);
+        __tree_node *sort = tree_sort_up(tree, key, 32);
         free(key);
-        while (order)
+        while (sort)
         {
-            __logd("sort up >>>>----------------------------> %s\n", order->val);
-            order = order->order;
+            __logd("sort up >>>>----------------------------> %s\n", sort->val);
+            sort = sort->order;
         }
     }
 
@@ -46,12 +51,12 @@ void tree_test()
         linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
         key->byte[0] = strlen(tmp_key);
         memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-        __tree_node *order = tree_sort_down(tree, key, 32);
+        __tree_node *sort = tree_sort_down(tree, key, 32);
         free(key);
-        while (order)
+        while (sort)
         {
-            __logd("sort down >>>>----------------------------> %s\n", order->val);
-            order = order->order;
+            __logd("sort down >>>>----------------------------> %s\n", sort->val);
+            sort = sort->order;
         }
     }
     
@@ -73,7 +78,7 @@ void tree_test()
         free(key);
     }
 
-    __logd("tree node count -- %lu\n", __treenode(tree)->count);
+    __logd("tree node count -- %lu\n", __tree2node(tree)->count);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*) / 2; ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
@@ -81,11 +86,11 @@ void tree_test()
         key->byte[0] = strlen(keys[i]);
         memcpy(&key->byte[1], keys[i], strlen(keys[i]));
         key->byte[key->byte[0]+1] = '\0';
-        tree_delete(tree, key);
+        tree_delete(tree, key, free_val);
         free(key);
     }
 
-    __logd("tree node count ---- %lu\n", __treenode(tree)->count);
+    __logd("tree node count ---- %lu\n", __tree2node(tree)->count);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
@@ -98,7 +103,7 @@ void tree_test()
         free(key);
     }
 
-    __tree_node *next = __treenode(tree)->next;
+    __tree_node *next = __tree2node(tree)->next;
     while (next)
     {
         __logd("tree node val %s\n", (char*)next->val);
@@ -106,18 +111,19 @@ void tree_test()
     }
     
 
-    for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
-        // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
-        key->byte[0] = strlen(keys[i]);
-        memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-        key->byte[key->byte[0]+1] = '\0';
-        // __logd("key = %s node count $$$-------> %lu\n", keys[i], __tree_node(tree->index)->count);
-        tree_delete(tree, key);
-        __logd("key = %s node count -------> %lu\n", keys[i], __treenode(tree)->count);
-        free(key);
-    }
+    // for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
+    //     // __logd("keys[i] ================================= %s\n", keys[i]);
+    //     linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+    //     key->byte[0] = strlen(keys[i]);
+    //     memcpy(&key->byte[1], keys[i], strlen(keys[i]));
+    //     key->byte[key->byte[0]+1] = '\0';
+    //     // __logd("key = %s node count $$$-------> %lu\n", keys[i], __tree_node(tree->index)->count);
+    //     tree_delete(tree, key, free_val);
+    //     __logd("key = %s node count -------> %lu\n", keys[i], __tree2node(tree)->count);
+    //     free(key);
+    // }
 
-    __logd("tree node count %lu\n", __treenode(tree)->count);
+    __logd("tree node count %lu\n", __tree2node(tree)->count);
+    tree_clear(tree, free_val);
     tree_destroy(&tree);
 }
