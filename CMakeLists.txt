@@ -44,7 +44,8 @@ check_c_source_compiles("
         return 0;
     }" ENV_CHECK_BACKTRACE)
 
-set(kzx_sources src/main.c 
+set(kzx_sources
+#    src/main.c
     src/env/time.c
     src/env/storage.c
     src/env/thread.c
@@ -91,7 +92,8 @@ else()
     list(APPEND kzx_directories ${CMAKE_SOURCE_DIR}/src/env/win/lib)
 endif()
 
-add_executable(kang ${kzx_sources})
+#add_executable(kang ${kzx_sources})
+add_library(kang STATIC ${kzx_sources})
 target_compile_definitions(kang PRIVATE ${kzx_defines})
 target_compile_options(kang PRIVATE ${kzx_cflags})
 target_include_directories(kang PRIVATE src ${kzx_inclides})

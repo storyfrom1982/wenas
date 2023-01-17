@@ -1,13 +1,13 @@
 #ifndef __ENV_ENV_H__
 #define __ENV_ENV_H__
 
-#if defined(_WIN64) && defined(__PL64__)
+#if defined(_WIN64)
 #   define OS_WINDOWS
-#elif defined(__APPLE__) && defined(__PL64__)
+#elif defined(__APPLE__)
 #   define OS_APPLE
-#elif defined(__ANDROID__) && defined(__PL64__)
+#elif defined(__ANDROID__)
 #   define OS_ANDROID
-#elif defined(__linux__) && defined(__PL64__)
+#elif defined(__linux__)
 #   define OS_LINUX
 #else
 #error Not yet adapted to the environment

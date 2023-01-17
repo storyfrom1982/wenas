@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
 #define __log_pipe_size			1 << 14
@@ -114,7 +115,9 @@ int env_logger_start(const char *path, env_logger_cb cb)
             __pass(g_logger.pipe != NULL);
             __set_true(g_logger.writing);
             __pass(env_thread_create(&g_logger.tid, env_logger_write_loop, &g_logger) == 0);
-            __logi("\n\n\nLogger start >>>>-------------->\n\n\n");
+            __logi(">>>>-------------->\n");
+            __logi("Logger start >>>>-------------->\n");
+            __logi(">>>>-------------->\n");
         }
     }
     return 0;
@@ -138,6 +141,10 @@ void env_logger_stop()
     }
 }
 
+#if defined( __ANDROID__ )
+# include <android/log.h>
+#endif
+
 void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
 {
     uint64_t n = 0;
@@ -154,12 +161,14 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     n += vsnprintf(text + n, __log_text_size - n, fmt, args);
     va_end (args);
 
-    if (n < __log_text_size - 1){
-        text[n++] = '\n';
-        text[n] = '\0';
-    }else{
-        text[__log_text_size-2] = '\n';
-        text[__log_text_size-1] = '\0';
+    if (text[n-1] != '\n'){
+        if (n < __log_text_size - 1){
+            text[n++] = '\n';
+            text[n] = '\0';
+        }else{
+            text[__log_text_size-2] = '\n';
+            text[__log_text_size-1] = '\0';
+        }
     }
 
     if (__is_true(g_logger.writing) && g_logger.pipe != NULL){
@@ -169,6 +178,18 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     if (g_logger.printer != NULL){
         g_logger.printer(level, text);
     }else {
+#if defined( __ANDROID__ )
+        if (level == ENV_LOG_LEVEL_DEBUG)
+            __android_log_print(ANDROID_LOG_DEBUG, "Gallery", "%s", text);
+        else if (level == ENV_LOG_LEVEL_INFO)
+            __android_log_print(ANDROID_LOG_INFO, "Gallery", "%s", text);
+        else if (level == ENV_LOG_LEVEL_WARN)
+            __android_log_print(ANDROID_LOG_WARN, "Gallery", "%s", text);
+        else if (level == ENV_LOG_LEVEL_ERROR)
+            __android_log_print(ANDROID_LOG_ERROR, "Gallery", "%s", text);
+#else
         fprintf(stdout, "%s", text);
+#endif
     }
+
 }
