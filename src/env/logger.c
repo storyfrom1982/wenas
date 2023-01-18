@@ -142,7 +142,24 @@ void env_logger_stop()
 }
 
 #if defined( __ANDROID__ )
+# include <jni.h>
 # include <android/log.h>
+JNIEXPORT void JNICALL
+Java_cn_kangzixin_Logger_loggerStart(JNIEnv *env, jclass clazz, jstring logDirectoryPath)
+{
+    const char *path = (*env)->GetStringUTFChars(env, logDirectoryPath, 0);
+    env_logger_start(path, NULL);
+    (*env)->ReleaseStringUTFChars(env, logDirectoryPath, path);
+}
+JNIEXPORT void JNICALL
+Java_cn_kangzixin_Logger_loggerPrint(JNIEnv *env, jclass clazz, jint level, jstring file_name, jint line, jstring log)
+{
+    const char *file = (*env)->GetStringUTFChars(env, file_name, 0);
+    const char *text = (*env)->GetStringUTFChars(env, log, 0);
+    env_logger_printf(level, file, line, text);
+    (*env)->ReleaseStringUTFChars(env, file_name, file);
+    (*env)->ReleaseStringUTFChars(env, log, text);
+}
 #endif
 
 void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
@@ -180,13 +197,13 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     }else {
 #if defined( __ANDROID__ )
         if (level == ENV_LOG_LEVEL_DEBUG)
-            __android_log_print(ANDROID_LOG_DEBUG, "Gallery", "%s", text);
+            __android_log_print(ANDROID_LOG_DEBUG, "KANG", "%s", text);
         else if (level == ENV_LOG_LEVEL_INFO)
-            __android_log_print(ANDROID_LOG_INFO, "Gallery", "%s", text);
+            __android_log_print(ANDROID_LOG_INFO, "KANG", "%s", text);
         else if (level == ENV_LOG_LEVEL_WARN)
-            __android_log_print(ANDROID_LOG_WARN, "Gallery", "%s", text);
+            __android_log_print(ANDROID_LOG_WARN, "KANG", "%s", text);
         else if (level == ENV_LOG_LEVEL_ERROR)
-            __android_log_print(ANDROID_LOG_ERROR, "Gallery", "%s", text);
+            __android_log_print(ANDROID_LOG_ERROR, "KANG", "%s", text);
 #else
         fprintf(stdout, "%s", text);
 #endif

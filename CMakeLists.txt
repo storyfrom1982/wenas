@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.4)
 
 project(kangzixin LANGUAGES C)
+set(LIBRARY_NAME "kang")
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
@@ -34,6 +35,7 @@ elseif (${ENV_LONG} EQUAL 8)
     message(STATUS "ENV_LONG EQUAL 8")
     add_definitions(-D__ENV_LONG_64__)
 endif()
+
 
 check_c_source_compiles("
     #include <unwind.h>
@@ -97,7 +99,7 @@ else()
 endif()
 
 if(QT_ENV)
-    add_library(kang STATIC ${kzx_sources})
+    qt_add_library(kang SHARED ${kzx_sources})
 else()
     add_executable(kang ${kzx_sources})
 endif()
@@ -106,4 +108,15 @@ target_compile_definitions(kang PRIVATE ${kzx_defines})
 target_compile_options(kang PRIVATE ${kzx_cflags})
 target_include_directories(kang PRIVATE src ${kzx_inclides})
 target_link_directories(kang PRIVATE ${kzx_directories})
-target_link_libraries(kang ${kzx_ldflags})
+target_link_libraries(kang ${kzx_ldflags} ${log-lib})
+
+if(QT_ENV)
+    if(ANDROID)
+        add_custom_command(TARGET kang
+                           POST_BUILD
+                           DEPENDS kang
+                           COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/plugins/kangzixin/lib${LIBRARY_NAME}_${CMAKE_ANDROID_ARCH_ABI}.so ${CMAKE_BINARY_DIR}/android-build/libs/${CMAKE_ANDROID_ARCH_ABI}/lib${LIBRARY_NAME}_${CMAKE_ANDROID_ARCH_ABI}.so
+                           )
+    endif()
+endif()
+
