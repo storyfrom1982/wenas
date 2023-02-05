@@ -18,7 +18,7 @@ enum {
     LINEDB_TYPE_32BIT = 0x04,
     LINEDB_TYPE_64BIT = 0x08, //启用64bit的长度的对象，为支持 LINEDB_TYPE_LIST
     LINEDB_TYPE_OBJECT = 0x10,
-    //LINEDB_TYPE_LIST //LIST 的长度32bit 条目数32bit 两项组合放在64bit中 LIST 的总容量不大于64bit
+    //LINEDB_TYPE_LIST //LIST 的第一项是一个number linedb，存储 list 的总条目数，之后是第一个条目。//第一个条目的地址 = linedb header + number linedb
     LINEDB_TYPE_BIGENDIAN = 0x20, 
 };
 
