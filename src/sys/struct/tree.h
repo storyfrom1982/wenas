@@ -11,6 +11,14 @@
 #define __tree2node(node)        ((__tree_node*)&(node)[TREE_DIMENSION])
 #define __node2tree(tree)        ((__tree)((char*)tree-(TREE_DIMENSION * sizeof(__ptr))))
 
+
+//写入顺序遍历连表不放在node中存储
+//明确定义 路由数，分支数
+//子孙总数是否等于路由数
+//是否可以用分支数和索引完成排序
+//是否可以不维护 order 连表，而是在排序的时候动态分配
+//是否可以将Value部分压缩到4个指针，将节点大小定位在160bit
+
 typedef struct __tree_node {
     __ptr val;
     __ptr *parent;

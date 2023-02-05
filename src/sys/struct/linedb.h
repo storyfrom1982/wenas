@@ -8,14 +8,18 @@
 #define LINEDB_HEAD_MASK     0x0f
 #define LINEDB_TYPE_MASK     0xc0
 
+//一个 linedb 的长度是从一个已经分配完成的 linedb 中获取的，所以，这个 linedb 中包含的所有子孙的长度的总和不大于64bit，
+//一个子 linedb 的长度必定小于64bit
 
 enum {
+    //LINEDB_TYPE_4BIT
     LINEDB_TYPE_8BIT = 0x01,
     LINEDB_TYPE_16BIT = 0x02,
     LINEDB_TYPE_32BIT = 0x04,
-    LINEDB_TYPE_64BIT = 0x08,
+    LINEDB_TYPE_64BIT = 0x08, //启用64bit的长度的对象，为支持 LINEDB_TYPE_LIST
     LINEDB_TYPE_OBJECT = 0x10,
-    LINEDB_TYPE_BIGENDIAN = 0x20,
+    //LINEDB_TYPE_LIST //LIST 的长度32bit 条目数32bit 两项组合放在64bit中 LIST 的总容量不大于64bit
+    LINEDB_TYPE_BIGENDIAN = 0x20, 
 };
 
 enum {
@@ -137,7 +141,7 @@ typedef union {
                 ).f \
             )
 
-#else //__BIG_ENDIAN__
+#else //__BIG_ENDIAN__ //不再单独适配大端，大端存储需要先交换字节序
 
 #   define __number2block8bit(n, flag) \
             (lineardb_t){ \
@@ -292,6 +296,8 @@ static inline void linedb_reset_type(linedb_t *ldb, char type)
     ldb->byte[0] |= type;
 }
 
+
+//使用宏现实这个函数，长度转字节用 number to byte
 static inline uint64_t linedb_bind_buffer(linedb_t **ldb, const void *b, uint64_t s)
 {
     *ldb = (linedb_t*)b;

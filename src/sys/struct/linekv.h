@@ -6,7 +6,7 @@
 typedef linedb_t lineval_t;
 
 typedef struct linear_key {
-    unsigned char byte[8];
+    unsigned char byte[8]; //直接分配 256 字节长度
 }linekey_t;
 
 typedef struct linear_key_value_pair {

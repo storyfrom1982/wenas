@@ -45,6 +45,8 @@ __env_export const char* env_check(void);
 ///////////////////////////////////////////////////////
 ///// 时间相关
 ///////////////////////////////////////////////////////
+//好想在自己开发版上开发
+
 #define MILLI_SECONDS    1000ULL
 #define MICRO_SECONDS    1000000ULL
 #define NANO_SECONDS     1000000000ULL
@@ -56,6 +58,9 @@ __env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecon
 ///////////////////////////////////////////////////////
 ///// 存储相关
 ///////////////////////////////////////////////////////
+
+//将来不再考虑机械硬盘，树存储将以接近内存的速度进行读写
+
 typedef void*   __fp;
 
 __env_export __fp env_fopen(const char* path, const char* mode);
@@ -76,6 +81,13 @@ __env_export bool env_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
+
+//使用 Message Channel 实现所有多线程并行任务相关的数据交换和线程切换，及异步，阻塞等待，定时器等等功能
+//将任务抽象为一个在 Message 中执行的循环操作 MessageChannelRunTask
+//在通道中实现/支持消息的优先级
+//通道支持阻塞和非阻塞的读写
+//使用消息通道代替互斥锁和条件变量
+
 typedef void* env_thread_ptr;
 typedef struct env_mutex env_mutex_t;
 typedef __ptr(*env_thread_cb)(__ptr ctx);
@@ -121,6 +133,9 @@ __env_export linekv_t* env_taskqueue_run_sync_task(env_taskqueue_t *tq, linekv_t
 ///////////////////////////////////////////////////////
 ///// 原子操作
 ///////////////////////////////////////////////////////
+
+// typedef struct __cpp_atombool __atombool;
+
 typedef uint64_t    __atombool;
 __env_export uint64_t env_atomic_load(volatile uint64_t*);
 __env_export void env_atomic_store(volatile uint64_t*, uint64_t);
@@ -210,6 +225,9 @@ __env_export uint64_t env_backtrace(void** array, int32_t depth);
 ///////////////////////////////////////////////////////
 ///// 网络插口
 ///////////////////////////////////////////////////////
+
+//只实现通信算法，socket 接口由外部注册
+
 typedef int32_t __socket;
 typedef struct sockaddr* __sockaddr_ptr;
 
