@@ -16,13 +16,13 @@ typedef struct linear_key_value_pair {
     unsigned char *head;
 }linekv_t, *linekv_ptr;
 
-enum {
-    LINEDB_OBJECT_ARRAY = LINEDB_OBJECT_CUSTOM,
-    LINEDB_OBJECT_LINEKV = LINEDB_OBJECT_RESERVED
-};
+// enum {
+//     LINEDB_OBJECT_ARRAY = LINEDB_OBJECT_CUSTOM,
+//     LINEDB_OBJECT_LINEKV = LINEDB_OBJECT_RESERVED
+// };
 
-#define __objectis_array(b)         (__typeof_linedb(b) == LINEDB_OBJECT_ARRAY)
-#define __objectis_linekv(b)        (__typeof_linedb(b) == LINEDB_OBJECT_LINEKV)
+// #define __objectis_array(b)         (__typeof_linedb(b) == LINEDB_OBJECT_ARRAY)
+// #define __objectis_linekv(b)        (__typeof_linedb(b) == LINEDB_OBJECT_LINEKV)
 
 
 static inline linekv_t* linekv_create(uint64_t size)
@@ -86,7 +86,8 @@ static inline void linekv_add_binary(linekv_t *lkv, const char *key, const void 
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
     lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    linedb_load_binary(lkv->val, value, size);
+    linedb_load_object(lkv->val, value, size);
+    lkv->val->byte[0] |= LINEDB_OBJECT_BINARY;
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 
@@ -98,7 +99,8 @@ static inline void linekv_add_str(linekv_t *lkv, const char *key, const char *va
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
     lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    linedb_load_string(lkv->val, value);
+    linedb_load_object(lkv->val, value, strlen(value) + 1);
+    lkv->val->byte[0] |= LINEDB_OBJECT_STRING;
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 
@@ -110,8 +112,7 @@ static inline void linekv_add_obj(linekv_t *lkv, const char *key, linekv_t *obj)
     lkv->key->byte[lkv->key->byte[0] + 1] = '\0';
     lkv->pos += (lkv->key->byte[0] + 2);
     lkv->val = (lineval_t *)(lkv->key->byte + (lkv->key->byte[0] + 2));
-    linedb_load_binary(lkv->val, obj->head, obj->pos);
-    lkv->val->byte[0] |= LINEDB_OBJECT_LINEKV;
+    linedb_load_object(lkv->val, obj->head, obj->pos);
     lkv->pos += __sizeof_linedb(lkv->val);
 }
 

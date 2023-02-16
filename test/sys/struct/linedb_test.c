@@ -146,7 +146,7 @@ static void number64_to_ldb()
 static void string_to_ldb()
 {
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    linedb_t *ldb = string2inedb(string8bit);
+    linedb_t *ldb = string2linedb(string8bit);
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string8bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
@@ -160,7 +160,7 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
-    ldb = string2inedb(string16bit);
+    ldb = string2linedb(string16bit);
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
         string16bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
@@ -169,11 +169,11 @@ static void string_to_ldb()
     __logd(">>>>------------>\n");
 
     uint32_t len = 0xabcdef;
-    ldb = linedb_create(NULL, len);
+    ldb = object2linedb(NULL, len);
     char *data = malloc(len);
-    linedb_load_binary(ldb, data, len);
+    linedb_load_object(ldb, data, len);
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
-    __logd("data size=%lu + %lu sizeof(block)=%lu\n", len, __sizeof_head(ldb), __sizeof_linedb(ldb));
+    __logd("data size=%lu + %u sizeof(block)=%lu\n", len, __sizeof_head(ldb), __sizeof_linedb(ldb));
     free(data);
     linedb_destroy(&ldb);
 

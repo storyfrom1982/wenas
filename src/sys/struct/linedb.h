@@ -4,22 +4,21 @@
 
 #include <env/env.h>
 
+//linedb 结构体是为快速传输结构化数据而设计的
+//linedb 只适合存储数据单元, 也可以使用 linedb 作为数据存储结构，但是需要进行一次拓展封装来维护 linedb 列表
 
+// #define LINEDB_HEAD_MASK     0x1f
 #define LINEDB_HEAD_MASK     0x0f
 #define LINEDB_TYPE_MASK     0xc0
 
-//一个 linedb 的长度是从一个已经分配完成的 linedb 中获取的，所以，这个 linedb 中包含的所有子孙的长度的总和不大于64bit，
-//一个子 linedb 的长度必定小于64bit
-
 enum {
-    //LINEDB_TYPE_4BIT
+    // LINEDB_TYPE_4BIT
     LINEDB_TYPE_8BIT = 0x01,
     LINEDB_TYPE_16BIT = 0x02,
     LINEDB_TYPE_32BIT = 0x04,
-    LINEDB_TYPE_64BIT = 0x08, //启用64bit的长度的对象，为支持 LINEDB_TYPE_LIST
-    LINEDB_TYPE_OBJECT = 0x10,
-    //LINEDB_TYPE_LIST //LIST 的第一项是一个number linedb，存储 list 的总条目数，之后是第一个条目。//第一个条目的地址 = linedb header + number linedb
-    LINEDB_TYPE_BIGENDIAN = 0x20, 
+    LINEDB_TYPE_64BIT = 0x08,
+    LINEDB_TYPE_OBJECT = 0x10
+    // LINEDB_TYPE_OBJECT = 0x20
 };
 
 enum {
@@ -30,10 +29,10 @@ enum {
 };
 
 enum {
-    LINEDB_OBJECT_BINARY = 0x00,
+    LINEDB_OBJECT_CUSTOM = 0x00,
     LINEDB_OBJECT_STRING = 0x40,
-    LINEDB_OBJECT_CUSTOM = 0x80,
-    LINEDB_OBJECT_RESERVED = 0xc0
+    LINEDB_OBJECT_BINARY = 0x80,
+    LINEDB_OBJECT_LIST = 0xc0
 };
 
 #define __LINEDB_HEAD_ALLOC_SIZE      16
@@ -55,178 +54,65 @@ typedef union {
 
 
 
-#ifdef __LITTLE_ENDIAN__
 
-#   define __number2block8bit(n, flag) \
-            (linedb_t){ \
-                LINEDB_TYPE_8BIT | (flag), \
-                (((char*)&(n))[0]) \
-            }
 
-#   define __block2number8bit(b)    ((b)->byte[1])
+#define __number2block8bit(n, flag) \
+        (linedb_t){ \
+            LINEDB_TYPE_8BIT | (flag), \
+            (((char*)&(n))[0]) \
+        }
 
-#   define __number2block16bit(n, flag) \
-            (linedb_t){ \
-                LINEDB_TYPE_16BIT | (flag), \
-                (((char*)&(n))[0]), (((char*)&(n))[1]) \
-            }
+#define __block2number8bit(b)   ((b)->byte[1])
 
-#   define __block2number16bit(b) \
-            (((b)->byte[0] & LINEDB_TYPE_BIGENDIAN) \
-                ? ((b)->byte[1] << 8 | (b)->byte[2]) \
-                : ((b)->byte[2] << 8 | (b)->byte[1]) \
-			)       
 
-#   define __number2block32bit(n, flag) \
-            (linedb_t){ \
-                LINEDB_TYPE_32BIT | (flag), \
-                (((char*)&(n))[0]), (((char*)&(n))[1]), \
-                (((char*)&(n))[2]), (((char*)&(n))[3]) \
-            }
 
-#   define __block2number32bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
-                : ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
-			)
+#define __number2block16bit(n, flag) \
+        (linedb_t){ \
+            LINEDB_TYPE_16BIT | (flag), \
+            (((char*)&(n))[0]), (((char*)&(n))[1]) \
+        }
 
-#   define __number2block64bit(n, flag) \
-            (linedb_t){ \
-                LINEDB_TYPE_64BIT | (flag), \
-                (((char*)&(n))[0]), (((char*)&(n))[1]), \
-                (((char*)&(n))[2]), (((char*)&(n))[3]), \
-                (((char*)&(n))[4]), (((char*)&(n))[5]), \
-                (((char*)&(n))[6]), (((char*)&(n))[7]) \
-            }
+#define __block2number16bit(b)  ((b)->byte[2] << 8 | (b)->byte[1])  
 
-#   define __block2number64bit(b, type) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((type)(b)->byte[1] << 56 \
-                | (type)(b)->byte[2] << 48 \
-                | (type)(b)->byte[3] << 40 \
-                | (type)(b)->byte[4] << 32 \
-                | (type)(b)->byte[5] << 24 \
-                | (type)(b)->byte[6] << 16 \
-                | (type)(b)->byte[7] << 8 \
-                | (type)(b)->byte[8]) \
-                : ((type)(b)->byte[8] << 56 \
-                | (type)(b)->byte[7] << 48 \
-                | (type)(b)->byte[6] << 40 \
-                | (type)(b)->byte[5] << 32 \
-                | (type)(b)->byte[4] << 24 \
-                | (type)(b)->byte[3] << 16 \
-                | (type)(b)->byte[2] << 8 \
-                | (type)(b)->byte[1]) \
-			)
 
-#   define __block2float32bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((__real32){.byte[0] = (b)->byte[4], .byte[1] = (b)->byte[3], .byte[2] = (b)->byte[2], .byte[3] = (b)->byte[1]}).f \
-                : ((__real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f \
-            )
+
+#define __number2block32bit(n, flag) \
+        (linedb_t){ \
+            LINEDB_TYPE_32BIT | (flag), \
+            (((char*)&(n))[0]), (((char*)&(n))[1]), \
+            (((char*)&(n))[2]), (((char*)&(n))[3]) \
+        }
+
+#define __block2number32bit(b) \
+        ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1])
+
+
+
+#define __number2block64bit(n, flag) \
+        (linedb_t){ \
+            LINEDB_TYPE_64BIT | (flag), \
+            (((char*)&(n))[0]), (((char*)&(n))[1]), \
+            (((char*)&(n))[2]), (((char*)&(n))[3]), \
+            (((char*)&(n))[4]), (((char*)&(n))[5]), \
+            (((char*)&(n))[6]), (((char*)&(n))[7]) \
+        }
+
+#define __block2number64bit(b, type) \
+        ( (type)(b)->byte[8] << 56 | (type)(b)->byte[7] << 48 | (type)(b)->byte[6] << 40 | (type)(b)->byte[5] << 32 \
+        | (type)(b)->byte[4] << 24 | (type)(b)->byte[3] << 16 | (type)(b)->byte[2] << 8 | (type)(b)->byte[1] )
+
+
+
+#define __block2float32bit(b) \
+        (((__real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f)
 
 #   define __block2float64bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((__real64) \
-                    { \
-                        .byte[0] = (b)->byte[8], .byte[1] = (b)->byte[7], .byte[2] = (b)->byte[6], .byte[3] = (b)->byte[4], \
-                        .byte[4] = (b)->byte[4], .byte[5] = (b)->byte[3], .byte[6] = (b)->byte[2], .byte[7] = (b)->byte[1], \
-                    } \
-                ).f \
-                : ((__real64) \
-                    { \
-                        .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
-                        .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
-                    } \
-                ).f \
-            )
-
-#else //__BIG_ENDIAN__ //不再单独适配大端，大端存储需要先交换字节序
-
-#   define __number2block8bit(n, flag) \
-            (lineardb_t){ \
-                LINEDB_TYPE_8BIT | LINEDB_TYPE_BIGENDIAN | (flag), \
-                (((char*)&(n))[0]) \
-            }
-#   define __block2number8it(b)    ((b)->byte[1])
-
-#   define __number2block16bit(n, flag) \
-            (lineardb_t){ \
-                LINEDB_TYPE_16BIT | LINEDB_TYPE_BIGENDIAN | (flag),\
-                (((char*)&(n))[0]), (((char*)&(n))[1]) \
-            }
-
-#   define __block2number16bit(b) \
-            (((b)->byte[0] & LINEDB_TYPE_BIGENDIAN) \
-                ? ((b)->byte[2] << 8 | (b)->byte[1]) \
-                : ((b)->byte[1] << 8 | (b)->byte[2]) \
-			)       
-
-#   define __number2block32bit(n, flag) \
-            (lineardb_t){ \
-                LINEDB_TYPE_32BIT | LINEDB_TYPE_BIGENDIAN | (flag), \
-                (((char*)&(n))[0]), (((char*)&(n))[1]), \
-                (((char*)&(n))[2]), (((char*)&(n))[3]) \
-            }
-
-#   define __block2number32bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((b)->byte[4] << 24 | (b)->byte[3] << 16 | (b)->byte[2] << 8 | (b)->byte[1]) \
-                : ((b)->byte[1] << 24 | (b)->byte[2] << 16 | (b)->byte[3] << 8 | (b)->byte[4]) \
-			)
-
-#   define __number2block64bit(n, flag) \
-            (lineardb_t){ \
-                LINEDB_TYPE_64BIT | LINEDB_TYPE_BIGENDIAN | (flag), \
-                (((char*)&(n))[0]), (((char*)&(n))[1]), \
-                (((char*)&(n))[2]), (((char*)&(n))[3]), \
-                (((char*)&(n))[4]), (((char*)&(n))[5]), \
-                (((char*)&(n))[6]), (((char*)&(n))[7]) \
-            }
-
-#   define __block2number64bit(b, type) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((type)(b)->byte[8] << 56 \
-                | (type)(b)->byte[7] << 48 \
-                | (type)(b)->byte[6] << 40 \
-                | (type)(b)->byte[5] << 32 \
-                | (type)(b)->byte[4] << 24 \
-                | (type)(b)->byte[3] << 16 \
-                | (type)(b)->byte[2] << 8 \
-                | (type)(b)->byte[1]) \
-                : ((type)(b)->byte[1] << 56 \
-                | (type)(b)->byte[2] << 48 \
-                | (type)(b)->byte[3] << 40 \
-                | (type)(b)->byte[4] << 32 \
-                | (type)(b)->byte[5] << 24 \
-                | (type)(b)->byte[6] << 16 \
-                | (type)(b)->byte[7] << 8 \
-                | (type)(b)->byte[8]) \
-			)
-
-#   define __block2float32bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((__real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f \
-                : ((__real32){.byte[0] = (b)->byte[4], .byte[1] = (b)->byte[3], .byte[2] = (b)->byte[2], .byte[3] = (b)->byte[1]}).f \
-            )
-
-#   define __block2float64bit(b) \
-            ((((b)->byte[0]) & LINEDB_TYPE_BIGENDIAN) \
-                ? ((__real64) \
-                    { \
-                        .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
-                        .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
-                    } \
-                ).f \
-                : ((__real64) \
-                    { \
-                        .byte[0] = (b)->byte[8], .byte[1] = (b)->byte[7], .byte[2] = (b)->byte[6], .byte[3] = (b)->byte[4], \
-                        .byte[4] = (b)->byte[4], .byte[5] = (b)->byte[3], .byte[6] = (b)->byte[2], .byte[7] = (b)->byte[1], \
-                    } \
-                ).f \
-            )
-
-#endif //__LITTLE_ENDIAN__
+        (((__real64) \
+            { \
+                .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
+                .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
+            } \
+        ).f)
 
 
 
@@ -260,12 +146,14 @@ typedef union {
 #define __typeis_number(b)      (!((b)->byte[0] & LINEDB_TYPE_OBJECT))
 #define __typeof_linedb(b)      ((b)->byte[0] & LINEDB_TYPE_MASK)
 
-#define __objectis_binary(b)    (__typeof_linedb(b) == LINEDB_OBJECT_BINARY)
+#define __objectis_custom(b)    (__typeof_linedb(b) == LINEDB_OBJECT_CUSTOM)
 #define __objectis_string(b)    (__typeof_linedb(b) == LINEDB_OBJECT_STRING)
+#define __objectis_list(b)      (__typeof_linedb(b) == LINEDB_OBJECT_LIST)
+#define __objectis_binary(b)    (__typeof_linedb(b) == LINEDB_OBJECT_BINARY)
 
-#define __numberis_float(b)     (__typeof_linedb(b) == LINEDB_NUMBER_FLOAT)
 #define __numberis_integer(b)   (__typeof_linedb(b) == LINEDB_NUMBER_INTEGER)
 #define __numberis_unsigned(b)  (__typeof_linedb(b) == LINEDB_NUMBER_UNSIGNED)
+#define __numberis_float(b)     (__typeof_linedb(b) == LINEDB_NUMBER_FLOAT)
 #define __numberis_boolean(b)   (__typeof_linedb(b) == LINEDB_NUMBER_BOOLEAN)
 
 #define __numberis_8bit(b)      ((b)->byte[0] & LINEDB_TYPE_8BIT)
@@ -276,16 +164,17 @@ typedef union {
 #define __sizeof_head(b)        (1 + (((b)->byte[0]) & LINEDB_HEAD_MASK))
 
 #define __sizeof_data(b) \
-        ( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
+        (uint64_t)( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
         ? (((b)->byte[0] & LINEDB_TYPE_8BIT)) ? __b2n8(b) \
-        : (((b)->byte[0] & LINEDB_TYPE_16BIT)) ? __b2n16(b) : (__b2n32(b)) \
-        : 0 )
+        : (((b)->byte[0] & LINEDB_TYPE_16BIT)) ? __b2n16(b) \
+        : (((b)->byte[0] & LINEDB_TYPE_32BIT)) ? __b2n32(b) \
+        : __b2n64(b) : 0 )
 
 #define __sizeof_linedb(b) \
         ( __sizeof_head(b) + __sizeof_data(b))
 
-#define __plan_sizeof_linedb(size) \
-        (size < 0x100 ? (2 + size) : size < 0x10000 ? (3 + size) : (5 + size));
+#define __planof_linedb(size) \
+        (size < 0x100 ? (2 + size) : size < 0x10000 ? (3 + size) : size < 0x100000000 ? (5 + size) : (9 + size))
 
 #define __dataof_linedb(b)       (&((b)->byte[0]) + __sizeof_head(b))
 
@@ -298,112 +187,60 @@ static inline void linedb_reset_type(linedb_t *ldb, char type)
 
 
 //使用宏现实这个函数，长度转字节用 number to byte
-static inline uint64_t linedb_bind_buffer(linedb_t **ldb, const void *b, uint64_t s)
+static inline uint64_t linedb_bind_address(linedb_t **ldb, void *addr, uint64_t size)
 {
-    *ldb = (linedb_t*)b;
-    if (s < 0x100){
-#ifdef __LITTLE_ENDIAN__
-        (*ldb)->byte[0] = LINEDB_TYPE_8BIT | LINEDB_TYPE_OBJECT;
-#else
-        (*ldb)->byte[0] = LINEDB_TYPE_8BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif
-        (*ldb)->byte[1] = ((char*)&s)[0];
-
-        return 2 + s;
-
-    }else if (s < 0x10000){
-#ifdef __LITTLE_ENDIAN__
-        (*ldb)->byte[0] = LINEDB_TYPE_16BIT | LINEDB_TYPE_OBJECT;
-#else
-        (*ldb)->byte[0] = LINEDB_TYPE_16BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif        
-        (*ldb)->byte[1] = ((char*)&s)[0];
-        (*ldb)->byte[2] = ((char*)&s)[1];
-
-        return 3 + s;
-
+    linedb_t *db = (linedb_t*)addr;
+    if (size < 0x100){
+        *db = __number2block8bit(size, LINEDB_TYPE_OBJECT);
+    }else if (size < 0x10000){
+        *db = __number2block16bit(size, LINEDB_TYPE_OBJECT);
+    }else if (size < 0x100000000){
+        *db = __number2block32bit(size, LINEDB_TYPE_OBJECT);
     }else {
-#ifdef __LITTLE_ENDIAN__
-        (*ldb)->byte[0] = LINEDB_TYPE_32BIT | LINEDB_TYPE_OBJECT;
-#else
-        (*ldb)->byte[0] = LINEDB_TYPE_32BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif            
-        (*ldb)->byte[1] = ((char*)&s)[0];
-        (*ldb)->byte[2] = ((char*)&s)[1];
-        (*ldb)->byte[3] = ((char*)&s)[2];
-        (*ldb)->byte[4] = ((char*)&s)[3];
-
-        return 5 + s;
+        *db = __number2block64bit(size, LINEDB_TYPE_OBJECT);
     }
-    
-    return 0;
+    *ldb = db;
+    return __sizeof_linedb(db);
 }
 
-static inline linedb_t* linedb_load_binary(linedb_t *db, const void *b, uint64_t  s)
+static inline linedb_t* linedb_load_object(linedb_t *ldb, const void *object, uint64_t size)
 {
-    if (s < 0x100){
-#ifdef __LITTLE_ENDIAN__
-        db->byte[0] = LINEDB_TYPE_8BIT | LINEDB_TYPE_OBJECT;
-#else
-        db->byte[0] = LINEDB_TYPE_8BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif
-        db->byte[1] = ((char*)&s)[0];
-        memcpy(&db->byte[2], b, s);
-
-    }else if (s < 0x10000){
-#ifdef __LITTLE_ENDIAN__
-        db->byte[0] = LINEDB_TYPE_16BIT | LINEDB_TYPE_OBJECT;
-#else
-        db->byte[0] = LINEDB_TYPE_16BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif        
-        db->byte[1] = ((char*)&s)[0];
-        db->byte[2] = ((char*)&s)[1];
-        memcpy(&db->byte[3], b, s);
-
+    if (size < 0x100){
+        *ldb = __number2block8bit(size, LINEDB_TYPE_OBJECT);
+        if (object){
+            memcpy(&ldb->byte[2], object, size);
+        }
+    }else if (size < 0x10000){
+        *ldb = __number2block16bit(size, LINEDB_TYPE_OBJECT);
+        if (object){
+            memcpy(&ldb->byte[3], object, size);
+        }
+    }else if (size < 0x100000000){
+        *ldb = __number2block32bit(size, LINEDB_TYPE_OBJECT);
+        if (object){
+            memcpy(&ldb->byte[5], object, size);
+        }
     }else {
-#ifdef __LITTLE_ENDIAN__
-        db->byte[0] = LINEDB_TYPE_32BIT | LINEDB_TYPE_OBJECT;
-#else
-        db->byte[0] = LINEDB_TYPE_32BIT | LINEDB_TYPE_OBJECT | LINEDB_TYPE_BIGENDIAN;
-#endif            
-        db->byte[1] = ((char*)&s)[0];
-        db->byte[2] = ((char*)&s)[1];
-        db->byte[3] = ((char*)&s)[2];
-        db->byte[4] = ((char*)&s)[3];
-        memcpy(&db->byte[5], b, s);
+        *ldb = __number2block64bit(size, LINEDB_TYPE_OBJECT);
+        if (object){
+            memcpy(&ldb->byte[9], object, size);
+        }
     }
-    return db;
+    return ldb;
 }
 
-static inline linedb_t* linedb_load_string(linedb_t *db, const char *s)
+static inline linedb_t* string2linedb(const char *str)
 {
-    uint64_t l = strlen(s);
-    linedb_load_binary(db, (const char *)s, l + 1);
-    db->byte[0] |= LINEDB_OBJECT_STRING;
-    db->byte[(1 + (((db)->byte[0]) & LINEDB_HEAD_MASK)) + l] = '\0';
-    return db;
+    size_t len = strlen(str);
+    linedb_t *ldb = (linedb_t *)malloc(__planof_linedb(len) + 1);
+    *(ldb->byte + __sizeof_linedb(ldb)) = '\0';
+    return linedb_load_object(ldb, str, len);
 }
 
-static inline linedb_t* string2inedb(const char *s)
+static inline linedb_t* object2linedb(const void *obj, size_t size)
 {
-    // fprintf(stdout, "strlen=%lu\n", strlen("1\n\0"));
-    // output strlen=2
-    uint64_t l = strlen(s);
-    linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + l + 1);
-    linedb_load_binary(db, (const char *)s, l + 1);
-    db->byte[0] |= LINEDB_OBJECT_STRING;
-    db->byte[(1 + (((db)->byte[0]) & LINEDB_HEAD_MASK)) + l] = '\0';
-    return db;
-}
-
-static inline linedb_t* linedb_create(const void *data, uint64_t size)
-{
-    linedb_t *db = (linedb_t *)malloc(__LINEDB_HEAD_ALLOC_SIZE + size);
-    if (data){
-        return linedb_load_binary(db, data, size);
-    }
-    linedb_bind_buffer(&db, db, size);
-    return db;
+    linedb_t *ldb = (linedb_t *)malloc(__planof_linedb(size));
+    return linedb_load_object(ldb, obj, size);
 }
 
 static inline void linedb_destroy(linedb_t **pp_ldb)
@@ -479,18 +316,19 @@ static inline void linedb_pipe_destroy(linedb_pipe_t **pp_lp)
 
 static inline uint64_t linedb_pipe_write(linedb_pipe_t *lp, void *data, uint64_t size)
 {
-    uint64_t ldb_size = __plan_sizeof_linedb(size); 
+    uint64_t ldb_size = __planof_linedb(size); 
     while ((uint64_t)(lp->len - lp->write_pos + lp->read_pos) >= ldb_size) {
 
         if (lp->leftover < ldb_size){
-            ldb_size = linedb_bind_buffer(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+            ldb_size = linedb_bind_address(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
             lp->write_block->byte[0] = 0;
             lp->write_pos += lp->leftover;
             lp->leftover = lp->len;
         }else {
-            ldb_size = linedb_bind_buffer(&lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
-            memcpy(__dataof_linedb(lp->write_block), data, size);
-            lp->write_pos += ldb_size;
+            linedb_load_object(lp->write_block, lp->buf + (lp->write_pos & (lp->len - 1)), size);
+            // ldb_size = __sizeof_linedb(lp->write_block);
+            // memcpy(__dataof_linedb(lp->write_block), data, size);
+            lp->write_pos += __sizeof_linedb(lp->write_block);
             lp->leftover = lp->len - (lp->write_pos & (lp->len - 1));
             lp->block_count++;
             return size;

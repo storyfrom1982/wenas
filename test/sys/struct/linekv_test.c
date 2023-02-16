@@ -201,7 +201,7 @@ static void print_objcet(linekv_t *kv)
 
 				__logd("key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
 
-			}else if (__objectis_linekv(val)){
+			}else if (__objectis_custom(val)){
 
 				linekv_t obj;
 				linekv_bind_object(&obj, val);
