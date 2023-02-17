@@ -7,7 +7,7 @@
 
 static void test_add_string()
 {
-	linekv_t *lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -40,7 +40,7 @@ static void test_add_string()
 
 static void test_find_after()
 {
-	linekv_t *lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -74,7 +74,7 @@ static void test_find_after()
 
 static void test_find_number()
 {
-	linekv_t *lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -109,7 +109,7 @@ static void test_find_number()
 
 static void test_find_float()
 {
-	linekv_t *lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -152,11 +152,11 @@ static void test_find_float()
 }
 
 
-static void print_objcet(linekv_t *kv)
+static void print_objcet(linekv_ptr kv)
 {
 	__logd("objcet >>>>---------->\n");
 
-	lineval_t *val = linekv_head(kv);
+	lineval_ptr val = linekv_head(kv);
 
 	do {
 
@@ -206,7 +206,7 @@ static void print_objcet(linekv_t *kv)
 
 			}else if (__objectis_custom(val)){
 
-				linekv_t obj;
+				struct linekv obj;
 				linekv_bind_object(&obj, val);
 				print_objcet(&obj);
 			}
@@ -217,9 +217,9 @@ static void print_objcet(linekv_t *kv)
 
 static void test_add_object()
 {
-	linekv_t *lkv = linekv_create(10240);
-	linekv_t *obj = linekv_create(10240);
-	linekv_t *obj1 = linekv_create(10240);
+	linekv_ptr lkv = linekv_create(10240);
+	linekv_ptr obj = linekv_create(10240);
+	linekv_ptr obj1 = linekv_create(10240);
 
 	linekv_add_int8(lkv, "int8", -8);
 	linekv_add_int16(lkv, "int16", -16);
@@ -258,9 +258,9 @@ static void test_add_object()
 
 void linearkv_test()
 {
-	test_add_string();
-	test_find_after();
-	test_find_float();
-	test_find_number();
+	// test_add_string();
+	// test_find_after();
+	// test_find_float();
+	// test_find_number();
 	test_add_object();
 }

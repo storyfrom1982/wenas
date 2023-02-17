@@ -118,7 +118,7 @@ __env_export uint64_t env_pipe_writable(env_pipe_t *pipe);
 __env_export void env_pipe_stop(env_pipe_t *pipe);
 __env_export void env_pipe_clear(env_pipe_t *pipe);
 
-typedef struct linear_key_value_pair linekv_t;
+typedef struct linekv linekv_t;
 typedef struct env_task_queue env_taskqueue_t;
 typedef void (*env_task_ptr)(linekv_t* ctx);
 typedef uint64_t (*env_timed_task_ptr)(linekv_t* ctx);

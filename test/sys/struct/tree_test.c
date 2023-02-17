@@ -23,7 +23,7 @@ void tree_test()
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] = %s\n", keys[i]);
-        linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
         key->byte[0] = strlen(keys[i]);
         memcpy(&key->byte[1], keys[i], strlen(keys[i]));
         key->byte[key->byte[0]+1] = '\0';
@@ -33,7 +33,7 @@ void tree_test()
 
     {
         const char *tmp_key = "bbb";
-        linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(tmp_key) + 2);
         key->byte[0] = strlen(tmp_key);
         memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
         __tree_node *sort = tree_sort_up(tree, key, 32);
@@ -48,7 +48,7 @@ void tree_test()
 
     {
         const char *tmp_key = "bbb";
-        linekey_t *key = (linekey_t *)malloc(strlen(tmp_key) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(tmp_key) + 2);
         key->byte[0] = strlen(tmp_key);
         memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
         __tree_node *sort = tree_sort_down(tree, key, 32);
@@ -69,7 +69,7 @@ void tree_test()
     
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
         key->byte[0] = strlen(keys[i]);
         memcpy(&key->byte[1], keys[i], strlen(keys[i]));
         key->byte[key->byte[0]+1] = '\0';
@@ -82,7 +82,7 @@ void tree_test()
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*) / 2; ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
         key->byte[0] = strlen(keys[i]);
         memcpy(&key->byte[1], keys[i], strlen(keys[i]));
         key->byte[key->byte[0]+1] = '\0';
@@ -94,7 +94,7 @@ void tree_test()
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
         key->byte[0] = strlen(keys[i]);
         memcpy(&key->byte[1], keys[i], strlen(keys[i]));
         key->byte[key->byte[0]+1] = '\0';
@@ -113,7 +113,7 @@ void tree_test()
 
     // for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
     //     // __logd("keys[i] ================================= %s\n", keys[i]);
-    //     linekey_t *key = (linekey_t *)malloc(strlen(keys[i]) + 2);
+    //     linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
     //     key->byte[0] = strlen(keys[i]);
     //     memcpy(&key->byte[1], keys[i], strlen(keys[i]));
     //     key->byte[key->byte[0]+1] = '\0';

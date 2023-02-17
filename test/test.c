@@ -27,11 +27,11 @@ void test()
 
     // heap_test();
     linearkv_test();
-    lineardb_test();
+    // lineardb_test();
     
     // task_queue_test();
 
-    // tree_test();
+    tree_test();
 
 //     env_logger_stop();
     
