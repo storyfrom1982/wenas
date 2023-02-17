@@ -106,7 +106,7 @@ union real64 {
 #define __byte_to_float_32bit(b) \
         (((union real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f)
 
-#   define __byte_to_float_64bit(b) \
+#define __byte_to_float_64bit(b) \
         (((union real64) \
             { \
                 .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
@@ -213,14 +213,14 @@ static inline linedb_ptr linedb_filled_data(linedb_ptr ldb, const void *data, ui
 
 static inline linedb_ptr linedb_from_string(const char *str)
 {
-    size_t len = strlen(str) + 1;
+    uint64_t len = strlen(str) + 1;
     linedb_ptr ldb = (linedb_ptr)malloc(__linedb_sizeof((len)));
     linedb_filled_data(ldb, str, len, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_STRING);
     *(ldb->byte + (__linedb_head_size(ldb) + len - 1)) = '\0';
     return ldb;
 }
 
-static inline linedb_ptr linedb_from_object(void *obj, size_t size, uint8_t flag)
+static inline linedb_ptr linedb_from_object(void *obj, uint64_t size, uint8_t flag)
 {
     linedb_ptr ldb = (linedb_ptr)malloc(__linedb_sizeof(size));
     linedb_filled_data(ldb, obj, size, flag);
