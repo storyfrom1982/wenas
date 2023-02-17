@@ -55,6 +55,7 @@ __env_export uint64_t env_time(void);
 __env_export uint64_t env_clock(void);
 __env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecond);
 
+#if 0
 ///////////////////////////////////////////////////////
 ///// 存储相关
 ///////////////////////////////////////////////////////
@@ -257,6 +258,20 @@ __env_export int32_t env_socket_send(__socket sock, const void* buf, uint64_t si
 __env_export int32_t env_socket_recv(__socket sock, void* buf, uint64_t size);
 __env_export int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr);
 __env_export int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr);
+#endif
 
+#include <stdio.h>
+
+#define __logd printf
+
+#define __logi printf
+
+#define __logw printf
+
+#define __loge printf
+
+#define __logf printf
+
+#define __logt printf
 
 #endif //__ENV_ENV_H__

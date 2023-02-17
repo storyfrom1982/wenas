@@ -53,20 +53,20 @@ endif()
 set(kzx_sources
     ${MAIN_ENTRY}
     src/env/time.c
-    src/env/storage.c
-    src/env/thread.c
-    src/env/logger.c
-    src/env/socket.c
+    # src/env/storage.c
+    # src/env/thread.c
+    # src/env/logger.c
+    # src/env/socket.c
     test/test.c
-    test/env/storage_test.c
-    test/env/thread_test.c
-    test/env/logger_test.c
-    test/env/socket_test.c
+    # test/env/storage_test.c
+    # test/env/thread_test.c
+    # test/env/logger_test.c
+    # test/env/socket_test.c
     test/sys/struct/heap_test.c
     test/sys/struct/linedb_test.c
     test/sys/struct/linekv_test.c
     test/sys/struct/tree_test.c
-    test/env/task_queue_test.c
+    # test/env/task_queue_test.c
 )
 
 set(kzx_defines "")
@@ -76,7 +76,7 @@ set(kzx_inclides "")
 set(kzx_directories "")
 
 if (UNIX)
-    list(APPEND kzx_sources src/env/unix/unix.c)
+    # list(APPEND kzx_sources src/env/unix/unix.c)
     set(kzx_cflags "-Wno-format")
     # set(kzx_cflags "-Wformat")
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -88,14 +88,14 @@ if (UNIX)
             list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA000000 -DENV_MALLOC_MAX_POOL=8)
             list(APPEND kzx_sources src/env/unix/malloc.c)
         endif()
-        list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-        list(APPEND kzx_sources src/env/unix/backtrace.c)
+        # list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
+        # list(APPEND kzx_sources src/env/unix/backtrace.c)
     endif()
 else()
-    list(APPEND kzx_sources src/env/win/win.c)
-    list(APPEND kzx_inclides src/env/win/include)
-    list(APPEND kzx_ldflags libpthreadVSE3)
-    list(APPEND kzx_directories ${CMAKE_SOURCE_DIR}/src/env/win/lib)
+    # list(APPEND kzx_sources src/env/win/win.c)
+    # list(APPEND kzx_inclides src/env/win/include)
+    # list(APPEND kzx_ldflags libpthreadVSE3)
+    # list(APPEND kzx_directories ${CMAKE_SOURCE_DIR}/src/env/win/lib)
 endif()
 
 if(QT_ENV)

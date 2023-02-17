@@ -9,7 +9,8 @@ static void test_add_string()
 {
 	linekv_t *lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
-	linedb_t *v, value, *b = &value;
+	struct linedb value;
+	linedb_ptr v, b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
@@ -24,7 +25,7 @@ static void test_add_string()
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_find(parser, key_buf);
 		if (v){
-			__logd("key %s -> value %s\n", key_buf, __dataof_linedb(v));
+			__logd("key %s -> value %s\n", key_buf, __linedb_data(v));
 		}
 	}
 
@@ -41,7 +42,8 @@ static void test_find_after()
 {
 	linekv_t *lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
-	linedb_t *v, value, *b = &value;
+	struct linedb value;
+	linedb_ptr v, b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
@@ -54,7 +56,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+		__logd("key %s from valude -> %s\n", key_buf, __linedb_data(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -62,7 +64,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+		__logd("key %s from valude -> %s\n", key_buf, __linedb_data(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -74,7 +76,8 @@ static void test_find_number()
 {
 	linekv_t *lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
-	linedb_t *v, value, *b = &value;
+	struct linedb value;
+	linedb_ptr v, b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
@@ -108,7 +111,8 @@ static void test_find_float()
 {
 	linekv_t *lkv = linekv_create(10240);
 	linekv_ptr parser = lkv;
-	linedb_t *v, value, *b = &value;
+	struct linedb value;
+	linedb_ptr v, b = &value;
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
@@ -159,7 +163,6 @@ static void print_objcet(linekv_t *kv)
 		if (__typeis_number(val)){
 
 			if (__numberis_integer(val)){
-
 				if (__numberis_8bit(val)){
 					__logd("key=%s value=%hhd\n", linekv_current_key(kv), __b2n8(val));
 				}else if (__numberis_16bit(val)){
@@ -199,7 +202,7 @@ static void print_objcet(linekv_t *kv)
 
 			if (__objectis_string(val)){
 
-				__logd("key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
+				__logd("key=%s value %s\n", linekv_current_key(kv), __linedb_data(val));
 
 			}else if (__objectis_custom(val)){
 
