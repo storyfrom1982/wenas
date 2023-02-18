@@ -167,14 +167,16 @@ union real64 {
 
 
 #define __linedb_head_size(b) \
-        (1 + (((b)->byte[0]) & LINEDB_HEAD_MASK))
+        (uint64_t)( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
+        ? 1 + (((b)->byte[0]) & LINEDB_HEAD_MASK) \
+        : 1 )
 
 #define __linedb_data_size(b) \
         (uint64_t)( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
         ? (((b)->byte[0] & LINEDB_TYPE_8BIT)) ? __b2u8(b) \
         : (((b)->byte[0] & LINEDB_TYPE_16BIT)) ? __b2u16(b) \
         : (((b)->byte[0] & LINEDB_TYPE_32BIT)) ? __b2u32(b) \
-        : __b2u64(b) : 0 )
+        : __b2u64(b) : (((b)->byte[0]) & LINEDB_HEAD_MASK) )
 
 #define __linedb_data(b)        (&((b)->byte[0]) + __linedb_head_size(b))
 
@@ -230,8 +232,7 @@ static inline linedb_ptr linedb_from_object(void *obj, uint64_t size, uint8_t fl
 
 
 
-// #define LINEARRAY_INIT_SIZE    65536
-#define LINEARRAY_INIT_SIZE    64
+#define LINEARRAY_INIT_SIZE    65536 //64K
 
 
 typedef struct linearray_writer {

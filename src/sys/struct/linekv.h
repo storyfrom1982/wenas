@@ -6,7 +6,7 @@
 typedef struct linedb* lineval_ptr;
 
 typedef struct linekey {
-    char byte[256];
+    char byte[2];
 }*linekey_ptr;
 
 typedef struct linekv {
