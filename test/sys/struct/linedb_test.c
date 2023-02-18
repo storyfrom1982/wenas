@@ -1,5 +1,5 @@
 #include "sys/struct/linedb.h"
-
+#include <stdio.h>
 
 static void test_byte_order()
 {
@@ -216,6 +216,34 @@ static void test_lineardb_header()
     __logd(">>>>------------>\n");
 }
 
+void linedb_array_test(){
+
+    linearray_writer_ptr la = linearray_writer_create();
+
+    linedb_ptr ldb;
+    char key_buf[1024];
+    size_t n;
+	for (int i = 0; i < 100; ++i){
+		n = snprintf(key_buf, 1024, "hello world %d %d\0", i, rand());
+		ldb = linedb_from_string(key_buf);
+        // __logd("%s\n", __linedb_data(ldb));
+        linearray_writer_append(la, ldb);
+        __linedb_free(ldb);
+	}
+
+    linearray_reader_ptr lareder = linearray_reader_load(la->head);
+    do {
+        ldb = linearray_reader_next(lareder);
+        if (ldb){
+            __logd("%s\n", (char*)__linedb_data(ldb));
+        }
+    }while(ldb);
+    
+    linearray_writer_free(&la);
+    linearray_reader_free(&lareder);
+}
+
+
 void lineardb_test()
 {
     test_byte_order();
@@ -225,6 +253,8 @@ void lineardb_test()
     string_to_ldb();
     float_to_ldb();
     test_lineardb_header();
+
+    linedb_array_test();
     __logd("strlen=%d\n", strlen("1\n\0"));
     char *src = "1234567890";
     char dst[11] = {0};

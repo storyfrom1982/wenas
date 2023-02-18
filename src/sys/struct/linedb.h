@@ -34,7 +34,7 @@ enum {
 };
 
 
-#define LINEDB_STATIC_SIZE      16
+#define LINEDB_STATIC_SIZE      9
 
 
 typedef struct linedb {
@@ -225,6 +225,109 @@ static inline linedb_ptr linedb_from_object(void *obj, uint64_t size, uint8_t fl
     linedb_ptr ldb = (linedb_ptr)malloc(__linedb_sizeof(size));
     linedb_filled_data(ldb, obj, size, flag);
     return ldb;
+}
+
+
+
+
+// #define LINEARRAY_INIT_SIZE    65536
+#define LINEARRAY_INIT_SIZE    64
+
+
+typedef struct linearray_writer {
+    uint64_t pos, len;
+    linedb_ptr head;
+    linedb_ptr next;
+}*linearray_writer_ptr;
+
+
+static inline linearray_writer_ptr linearray_writer_create()
+{
+    linearray_writer_ptr la = (linearray_writer_ptr)malloc(sizeof(struct linearray_writer));
+    la->head = (linedb_ptr) malloc(LINEARRAY_INIT_SIZE);
+    // __logd("linearray_writer_create malloc addr = %X\n", la->head);
+    la->len = LINEARRAY_INIT_SIZE;
+    la->pos = 0;
+    *la->head = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
+    // __logd("linearray_writer_create malloc addr = %X\n", la->head);
+    la->next = (linedb_ptr)__linedb_data(la->head);
+    // __logd("linearray_writer_create next addr = %X\n", la->next->byte);
+    return la;
+}
+
+static inline void linearray_writer_free(linearray_writer_ptr *p_ptr)
+{
+    linearray_writer_ptr la = *p_ptr;
+    *p_ptr = NULL;
+    free(la->head);
+    free(la);
+}
+
+static inline void linearray_writer_append(linearray_writer_ptr la, linedb_ptr ldb)
+{
+    // __logd("linearray_writer_append enter = %s\n", __linedb_data(ldb));
+    uint64_t ldb_size = __linedb_size(ldb);
+    while ((la->len - (__linedb_head_size(la->head) + la->pos)) < ldb_size){
+        // __logd("linearray_writer_append next addr = %X\n", la->next);
+        la->len += LINEARRAY_INIT_SIZE;
+        void *p = malloc(la->len);
+        // __logd("linearray_writer_append malloc addr = %X\n", p);
+        memcpy(p, la->head->byte, __linedb_size(la->head));
+        // __logd("linearray_writer_append free addr = %X\n", la->head);
+        free(la->head);
+        la->head = (linedb_ptr)p;
+        la->next = (linedb_ptr)__linedb_data(la->head);
+        // __logd("linearray_writer_append next 1 addr = %X\n", la->next);
+    }
+    
+    memcpy(la->next->byte + la->pos, ldb->byte, ldb_size);
+    // __logd("linearray_writer_append ldb len = %lu\n", __linedb_size((linedb_ptr)(la->next->byte + la->pos)));
+    // __logd("linearray_writer_append ldb = %s\n", (char*)(__linedb_data((linedb_ptr)(la->next->byte + la->pos))));
+    la->pos += ldb_size;
+    // struct linedb tmp = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
+    // memcpy(la->head->byte, tmp.byte, __linedb_head_size(&tmp));
+    *la->head = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
+    // __logd("linearray_writer_append data = %s\n", (char*)__linedb_data((linedb_ptr)__linedb_data(la->head)));
+}
+
+
+
+typedef struct linearray_reader {
+    uint64_t pos, len;
+    linedb_ptr next;
+}*linearray_reader_ptr;
+
+
+static inline linearray_reader_ptr linearray_reader_load(linedb_ptr ldb)
+{
+    linearray_reader_ptr la = (linearray_reader_ptr)malloc(sizeof(struct linearray_reader));
+    la->len = __linedb_data_size(ldb);
+    // __logd("linearray_reader_load len = %u\n", la->len);
+    // __logd("linearray_reader_load head size = %u\n", __linedb_head_size(ldb));
+    la->pos = 0;
+    la->next = (linedb_ptr)__linedb_data(ldb);
+    // __logd("linearray_reader_load next addr = %X\n", la->next->byte);
+    // __logd("linearray_reader_load ldb = %s\n", (char*)&la->next->byte[1]);
+    return la;
+}
+
+static inline void linearray_reader_free(linearray_reader_ptr *p_ptr)
+{
+    linearray_reader_ptr la = *p_ptr;
+    *p_ptr = NULL;
+    free(la);
+}
+
+static inline linedb_ptr linearray_reader_next(linearray_reader_ptr la)
+{
+    if (la->len - la->pos > 0){
+        linedb_ptr ldb = (linedb_ptr)(la->next->byte + la->pos);
+        // __logd("linearray_reader_next ldb len = %lu\n", __linedb_size(ldb));
+        // __logd("linearray_reader_next ldb = %s\n", __linedb_data(ldb));
+        la->pos += __linedb_size(ldb);
+        return ldb;
+    }
+    return NULL;
 }
 
 

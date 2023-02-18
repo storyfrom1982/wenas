@@ -435,20 +435,20 @@ void free(void* address)
 		ptr = __address2pointer(address);
 
 		if (ptr->size == 0 || ptr->flag == 0){
-			// __loge("ptr->size == 0 || ptr->flag == 0");
+			printf("ptr->size == 0 || ptr->flag == 0");
 			abort();
 		}
 
 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			// __loge("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
+			printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 			abort();
 		}
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			// __loge("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
+			printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
 			abort();
 		}
 
