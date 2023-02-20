@@ -25,7 +25,7 @@ static void test_add_string()
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_find(parser, key_buf);
 		if (v){
-			__logd("key %s -> value %s\n", key_buf, __linedb_data(v));
+			__logd("key %s -> value %s\n", key_buf, __dataof_linedb(v));
 		}
 	}
 
@@ -56,7 +56,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
 	for (int k = 98; v != NULL; --k){
-		__logd("key %s from valude -> %s\n", key_buf, __linedb_data(v));
+		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -64,7 +64,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		__logd("key %s from valude -> %s\n", key_buf, __linedb_data(v));
+		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -202,7 +202,7 @@ static void print_objcet(linekv_ptr kv)
 
 			if (__objectis_string(val)){
 
-				__logd("key=%s value %s\n", linekv_current_key(kv), __linedb_data(val));
+				__logd("key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
 
 			}else if (__objectis_custom(val)){
 

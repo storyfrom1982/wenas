@@ -90,13 +90,13 @@ static void number16_to_ldb()
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __linedb_size(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     __logd("int16_t %d to linear block %d sizeof(block)=%u\n", i16, n16, size);
 
     uint16_t u16, iu16 = 12345;
     ldb = __n2b16(iu16);
     u16 = __b2n16(&ldb);
-    size = __linedb_size(&ldb);
+    size = __sizeof_linedb(&ldb);
     __logd("uint16_t %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
 
     __logd(">>>>------------>\n");
@@ -109,13 +109,13 @@ static void number32_to_ldb()
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __linedb_size(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n32 = __b2n32(&ldb);
     __logd("__sint32 %d to linear block %d sizeof(block)=%u\n", i32, n32, size);
 
     uint32_t u32, iu32 = 12345;
     ldb = __n2b32(iu32);
-    size = __linedb_size(&ldb);
+    size = __sizeof_linedb(&ldb);
     u32 = __b2n32(&ldb);
     __logd("uint32_t %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
 
@@ -129,13 +129,13 @@ static void number64_to_ldb()
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __linedb_size(&ldb);
+    uint32_t size = __sizeof_linedb(&ldb);
     n64 = __b2n64(&ldb);
     __logd("int64_t %ld to linear block %ld sizeof(block)=%u\n", i64, n64, size);
 
     uint64_t u64, iu64 = 12345;
     ldb = __n2b64(iu64);
-    size = __linedb_size(&ldb);
+    size = __sizeof_linedb(&ldb);
     u64 = __b2n64(&ldb);
     __logd("__uint64 %lu to linear block %lu sizeof(block)=%u\n", iu64, u64, size);
 
@@ -149,7 +149,7 @@ static void string_to_ldb()
     linedb_ptr ldb = linedb_from_string(string8bit);
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string8bit, __linedb_data(ldb), __linedb_head_size(ldb), __linedb_size(ldb));
+        string8bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
     __linedb_free(ldb);
 
     __logd(">>>>------------>\n");
@@ -163,7 +163,7 @@ static void string_to_ldb()
     ldb = linedb_from_string(string16bit);
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string16bit, __linedb_data(ldb), __linedb_head_size(ldb), __linedb_size(ldb));
+        string16bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
     __linedb_free(ldb);
 
     __logd(">>>>------------>\n");
@@ -173,7 +173,7 @@ static void string_to_ldb()
     ldb = linedb_from_object(obj, len, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_BINARY);
 
     __logd("ldb type = %u\n", __typeof_linedb(ldb));
-    __logd("data size=%lu + %u sizeof(block)=%lu\n", len, __linedb_head_size(ldb), __linedb_size(ldb));
+    __logd("data size=%lu + %u sizeof(block)=%lu\n", len, __sizeof_head(ldb), __sizeof_linedb(ldb));
     free(obj);
     __linedb_free(ldb);
 
@@ -218,7 +218,7 @@ static void test_lineardb_header()
 
 void linedb_array_test(){
 
-    linearray_writer_ptr la = linearray_writer_create();
+    linearray_ptr builder = linearray_create_writer();
 
     linedb_ptr ldb;
     char key_buf[1024];
@@ -226,21 +226,21 @@ void linedb_array_test(){
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d %d\0", i, rand());
 		ldb = linedb_from_string(key_buf);
-        // __logd("%s\n", __linedb_data(ldb));
-        linearray_writer_append(la, ldb);
+        // __logd("%s\n", __dataof_linedb(ldb));
+        linearray_append(builder, ldb);
         __linedb_free(ldb);
 	}
 
-    linearray_reader_ptr lareder = linearray_reader_load(la->head);
+    linearray_ptr parser = linearray_create_reader(builder->head);
     do {
-        ldb = linearray_reader_next(lareder);
+        ldb = linearray_next(parser);
         if (ldb){
-            __logd("%s\n", (char*)__linedb_data(ldb));
+            __logd("%s\n", (char*)__dataof_linedb(ldb));
         }
     }while(ldb);
     
-    linearray_writer_free(&la);
-    linearray_reader_free(&lareder);
+    linearray_free(&builder);
+    linearray_free(&parser);
 }
 
 
