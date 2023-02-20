@@ -218,7 +218,7 @@ static void test_lineardb_header()
 
 void linedb_array_test(){
 
-    linearray_ptr writer = linearray_create_writer();
+    linearray_ptr writer = linearray_writer_create();
 
     linedb_ptr ldb;
     char key_buf[1024];
@@ -232,7 +232,7 @@ void linedb_array_test(){
 	}
 
     struct linearray reader;
-    linearray_load_reader(&reader, writer->head);
+    linearray_reader_load(&reader, writer->head);
     do {
         ldb = linearray_next(&reader);
         if (ldb){

@@ -244,7 +244,7 @@ typedef struct linearray {
 }*linearray_ptr;
 
 
-static inline linearray_ptr linearray_create_writer()
+static inline linearray_ptr linearray_writer_create()
 {
     linearray_ptr la = (linearray_ptr)malloc(sizeof(struct linearray));
     la->reader = 0;
@@ -277,7 +277,7 @@ static inline void linearray_append(linearray_ptr la, linedb_ptr ldb)
 }
 
 
-static inline void linearray_load_reader(linearray_ptr la, linedb_ptr ldb)
+static inline void linearray_reader_load(linearray_ptr la, linedb_ptr ldb)
 {
     la->reader = 1;
     la->len = __sizeof_data(ldb);

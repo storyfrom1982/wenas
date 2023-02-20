@@ -215,7 +215,7 @@ static void print_objcet(linekv_ptr kv)
 				__logd("__objectis_array size: %lu\n", __sizeof_linedb(val));
 				struct linearray reader;
 				linedb_ptr ldb;
-				linearray_load_reader(&reader, val);
+				linearray_reader_load(&reader, val);
 				do {
 					ldb = linearray_next(&reader);
 					if (ldb){
@@ -234,7 +234,7 @@ static void test_add_object()
 	linekv_ptr obj = linekv_writer_create();
 	linekv_ptr obj1 = linekv_writer_create();
 
-	linearray_ptr writer = linearray_create_writer();
+	linearray_ptr writer = linearray_writer_create();
 
     linedb_ptr ldb;
     char key_buf[1024];
@@ -283,6 +283,8 @@ static void test_add_object()
 	linekv_free(&lkv);
 	linekv_free(&obj);
 	linekv_free(&obj1);
+
+	linearray_free(&writer);
 }
 
 void linearkv_test()
