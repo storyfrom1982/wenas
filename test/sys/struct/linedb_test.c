@@ -218,7 +218,7 @@ static void test_lineardb_header()
 
 void linedb_array_test(){
 
-    linearray_ptr builder = linearray_create_writer();
+    linearray_ptr writer = linearray_create_writer();
 
     linedb_ptr ldb;
     char key_buf[1024];
@@ -227,20 +227,20 @@ void linedb_array_test(){
 		n = snprintf(key_buf, 1024, "hello world %d %d\0", i, rand());
 		ldb = linedb_from_string(key_buf);
         // __logd("%s\n", __dataof_linedb(ldb));
-        linearray_append(builder, ldb);
+        linearray_append(writer, ldb);
         __linedb_free(ldb);
 	}
 
-    linearray_ptr parser = linearray_create_reader(builder->head);
+    struct linearray reader;
+    linearray_load_reader(&reader, writer->head);
     do {
-        ldb = linearray_next(parser);
+        ldb = linearray_next(&reader);
         if (ldb){
             __logd("%s\n", (char*)__dataof_linedb(ldb));
         }
     }while(ldb);
     
-    linearray_free(&builder);
-    linearray_free(&parser);
+    linearray_free(&writer);
 }
 
 

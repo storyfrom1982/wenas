@@ -7,7 +7,7 @@
 
 static void test_add_string()
 {
-	linekv_ptr lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -18,7 +18,7 @@ static void test_add_string()
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
 		__logd("key = %s value = %s\n", key_buf, value_buf);
-		linekv_add_str(parser, key_buf, value_buf);
+		linekv_add_string(parser, key_buf, value_buf);
 	}
 
 	for (int k = 0; k < 100; ++k){
@@ -35,12 +35,12 @@ static void test_add_string()
     value_buf[n] = '\0';
     __logd("memcpy=%s\n", value_buf);
 
-	linekv_destroy(&lkv);
+	linekv_free(&lkv);
 }
 
 static void test_find_after()
 {
-	linekv_ptr lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -50,7 +50,7 @@ static void test_find_after()
 	for (int i = 0; i < 100; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
-		linekv_add_str(parser, key_buf, value_buf);
+		linekv_add_string(parser, key_buf, value_buf);
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
@@ -69,12 +69,12 @@ static void test_find_after()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_destroy(&lkv);
+	linekv_free(&lkv);
 }
 
 static void test_find_number()
 {
-	linekv_ptr lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -104,12 +104,12 @@ static void test_find_number()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_destroy(&lkv);
+	linekv_free(&lkv);
 }
 
 static void test_find_float()
 {
-	linekv_ptr lkv = linekv_create(10240);
+	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -148,7 +148,7 @@ static void test_find_float()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_destroy(&lkv);
+	linekv_free(&lkv);
 }
 
 
@@ -164,51 +164,64 @@ static void print_objcet(linekv_ptr kv)
 
 			if (__numberis_integer(val)){
 				if (__numberis_8bit(val)){
-					__logd("key=%s value=%hhd\n", linekv_current_key(kv), __b2n8(val));
+					__logd("key=%s value=%hhd\n", linekey_to_string(kv->key), __b2n8(val));
 				}else if (__numberis_16bit(val)){
-					__logd("key=%s value=%hd\n", linekv_current_key(kv), __b2n16(val));
+					__logd("key=%s value=%hd\n", linekey_to_string(kv->key), __b2n16(val));
 				}else if (__numberis_32bit(val)){
-					__logd("key=%s value=%d\n", linekv_current_key(kv), __b2n32(val));
+					__logd("key=%s value=%d\n", linekey_to_string(kv->key), __b2n32(val));
 				}else if (__numberis_64bit(val)){
-					__logd("key=%s value=%ld\n", linekv_current_key(kv), __b2n64(val));
+					__logd("key=%s value=%ld\n", linekey_to_string(kv->key), __b2n64(val));
 				}
 
 			}else if (__numberis_unsigned(val)){
 
 				if (__numberis_8bit(val)){
-					__logd("key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
+					__logd("key=%s value=%u\n", linekey_to_string(kv->key), __b2u8(val));
 				}else if (__numberis_16bit(val)){
-					__logd("key=%s value=%u\n", linekv_current_key(kv), __b2u16(val));
+					__logd("key=%s value=%u\n", linekey_to_string(kv->key), __b2u16(val));
 				}else if (__numberis_32bit(val)){
-					__logd("key=%s value=%u\n", linekv_current_key(kv), __b2u32(val));
+					__logd("key=%s value=%u\n", linekey_to_string(kv->key), __b2u32(val));
 				}else if (__numberis_64bit(val)){
-					__logd("key=%s value=%lu\n", linekv_current_key(kv), __b2u64(val));
+					__logd("key=%s value=%lu\n", linekey_to_string(kv->key), __b2u64(val));
 				}
 
 			}else if (__numberis_float(val)){
 
 				if (__numberis_32bit(val)){
-					__logd("key=%s value=%f\n", linekv_current_key(kv), __b2f32(val));
+					__logd("key=%s value=%f\n", linekey_to_string(kv->key), __b2f32(val));
 				}else {
-					__logd("key=%s value=%lf\n", linekv_current_key(kv), __b2f64(val));
+					__logd("key=%s value=%lf\n", linekey_to_string(kv->key), __b2f64(val));
 				}
 
 			}else if (__numberis_boolean(val)){
 
-				__logd("key=%s value=%u\n", linekv_current_key(kv), __b2u8(val));
+				__logd("key=%s value=%u\n", linekey_to_string(kv->key), __b2u8(val));
 			}
 
 		}else if (__typeis_object(val)){
 
 			if (__objectis_string(val)){
 
-				__logd("key=%s value %s\n", linekv_current_key(kv), __dataof_linedb(val));
+				__logd("key=%s value %s\n", linekey_to_string(kv->key), __dataof_linedb(val));
 
 			}else if (__objectis_custom(val)){
 
 				struct linekv obj;
-				linekv_bind_object(&obj, val);
+				linekv_reader_load(&obj, val);
 				print_objcet(&obj);
+
+			}else if (__objectis_array(val)){
+
+				__logd("__objectis_array size: %lu\n", __sizeof_linedb(val));
+				struct linearray reader;
+				linedb_ptr ldb;
+				linearray_load_reader(&reader, val);
+				do {
+					ldb = linearray_next(&reader);
+					if (ldb){
+						__logd("%s\n", (char*)__dataof_linedb(ldb));
+					}
+				}while(ldb);
 			}
 		}
 
@@ -217,9 +230,22 @@ static void print_objcet(linekv_ptr kv)
 
 static void test_add_object()
 {
-	linekv_ptr lkv = linekv_create(10240);
-	linekv_ptr obj = linekv_create(10240);
-	linekv_ptr obj1 = linekv_create(10240);
+	linekv_ptr lkv = linekv_writer_create();
+	linekv_ptr obj = linekv_writer_create();
+	linekv_ptr obj1 = linekv_writer_create();
+
+	linearray_ptr writer = linearray_create_writer();
+
+    linedb_ptr ldb;
+    char key_buf[1024];
+    size_t n;
+	for (int i = 0; i < 10; ++i){
+		n = snprintf(key_buf, 1024, "hello world %d %d\0", i, rand());
+		ldb = linedb_from_string(key_buf);
+        // __logd("%s\n", __dataof_linedb(ldb));
+        linearray_append(writer, ldb);
+        __linedb_free(ldb);
+	}
 
 	linekv_add_int8(lkv, "int8", -8);
 	linekv_add_int16(lkv, "int16", -16);
@@ -233,9 +259,11 @@ static void test_add_object()
 	linekv_add_uint64(obj, "uint64", 64);
 	linekv_add_float32(obj, "float32", 32.32f);
 	linekv_add_float64(obj, "float64", 64.64f);
-	linekv_add_str(obj, "string", "string >>>>------------------------> object");
+	linekv_add_string(obj, "string", "string >>>>------------------------> object");
 
-	linekv_add_obj(lkv, "object", obj);
+	linekv_add_array(obj, "array", writer);
+
+	linekv_add_object(lkv, "object", obj);
 
 	linekv_add_bool(obj1, "boolean", 1);
 	linekv_add_uint8(obj1, "uint8", 8);
@@ -244,16 +272,17 @@ static void test_add_object()
 	linekv_add_uint64(obj1, "uint64", 64);
 	linekv_add_float32(obj1, "float32", 32.32f);
 	linekv_add_float64(obj1, "float64", 64.64f);
-	linekv_add_str(obj1, "string", "string >>>>------------------------> object 1");
-	linekv_add_obj(obj1, "object", obj);
+	linekv_add_string(obj1, "string", "string >>>>------------------------> object 1");
+	linekv_add_object(obj1, "object", obj);
 
-	linekv_add_obj(lkv, "object", obj1);
+	linekv_add_object(lkv, "object", obj1);
+	linekv_add_array(lkv, "array", writer);
 
 	print_objcet(lkv);
 
-	linekv_destroy(&lkv);
-	linekv_destroy(&obj);
-	linekv_destroy(&obj1);
+	linekv_free(&lkv);
+	linekv_free(&obj);
+	linekv_free(&obj1);
 }
 
 void linearkv_test()

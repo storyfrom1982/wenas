@@ -234,7 +234,7 @@ static inline linedb_ptr linedb_from_object(void *obj, uint64_t size, uint8_t fl
 ///////////////////////////////////////////
 
 
-#define LINEARRAY_INIT_SIZE    65536 //64K
+#define LINEARRAY_INIT_SIZE    0x10000 //64K
 
 
 typedef struct linearray {
@@ -277,14 +277,12 @@ static inline void linearray_append(linearray_ptr la, linedb_ptr ldb)
 }
 
 
-static inline linearray_ptr linearray_create_reader(linedb_ptr ldb)
+static inline void linearray_load_reader(linearray_ptr la, linedb_ptr ldb)
 {
-    linearray_ptr la = (linearray_ptr)malloc(sizeof(struct linearray));
     la->reader = 1;
     la->len = __sizeof_data(ldb);
     la->pos = 0;
     la->next = (linedb_ptr)__dataof_linedb(ldb);
-    return la;
 }
 
 
@@ -299,14 +297,14 @@ static inline linedb_ptr linearray_next(linearray_ptr la)
 }
 
 
-static inline void linearray_free(linearray_ptr *p_ptr)
+static inline void linearray_free(linearray_ptr *pptr)
 {
-    linearray_ptr la = *p_ptr;
-    *p_ptr = NULL;
-    if (la->reader == 0){
+    if (pptr && *pptr && !((*pptr)->reader)){
+        linearray_ptr la = *pptr;
+        *pptr = NULL;
         free(la->head);
+        free(la);
     }
-    free(la);
 }
 
 

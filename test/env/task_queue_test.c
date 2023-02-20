@@ -13,7 +13,7 @@ static void test_task_func(linekv_t* parser)
     __logd("int: %d\n", linekv_find_int32(parser, "int"));
     __logd("float: %.3f\n", linekv_find_float32(parser, "float"));
     __logd("double: %.5lf\n", linekv_find_float64(parser, "double"));
-    __logd("string: %s\n", linekv_find_str(parser, "string"));
+    __logd("string: %s\n", linekv_find_string(parser, "string"));
 }
 
 static uint64_t test_timedtask_func(linekv_t* parser)
@@ -34,7 +34,7 @@ static uint64_t test_timedtask_func1(linekv_t* parser)
 
 static linekv_t* test_join_task_func(linekv_t* parser)
 {
-    linekv_t *result = linekv_create(10240);
+    linekv_t *result = linekv_writer_create(10240);
     linekv_add_float64(result, "result", 12345.12345f);
     for (int i = 0; i < 3; ++i){
         __logd("join task result=====================%d\n", i);
@@ -50,7 +50,7 @@ void task_queue_test()
     env_taskqueue_t *tq = env_taskqueue_create();
 
     char buf[256];
-    linekv_t *lkv = linekv_create(10240);
+    linekv_t *lkv = linekv_writer_create(10240);
     int test_number = 10240;
     float test_float = 123.456f;
     double test_double = 12345.12345f;
@@ -68,7 +68,7 @@ void task_queue_test()
         linekv_add_float64(lkv, "double", test_double);
         snprintf(buf, 256, "Hello World %ld %d", rand() * rand(), i);
         // __logd("task_queue_test push string %s\n", string_buf);
-        linekv_add_str(lkv, "string", buf);
+        linekv_add_string(lkv, "string", buf);
         env_taskqueue_post_task(tq, lkv);
         linekv_clear(lkv);
     }
@@ -91,13 +91,13 @@ void task_queue_test()
     linekv_add_ptr(lkv, "func", test_join_task_func);
     linekv_t *result = env_taskqueue_run_sync_task(tq, lkv);
     __logd("result >>>>------------>  >>>>------------>  >>>>------------> %lf\n", linekv_find_float64(result, "result"));
-    linekv_destroy(&result);
+    linekv_free(&result);
 
     env_taskqueue_exit(tq);
 
     env_taskqueue_destroy(&tq);
 
-    linekv_destroy(&lkv);
+    linekv_free(&lkv);
 
     __logd("task_queue_test exit\n");
 }
