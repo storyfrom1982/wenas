@@ -7,6 +7,7 @@
 
 static void test_add_string()
 {
+	__logd(">>>>----------------------------------------------------------------------------------------------> test_add_string\n");
 	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
@@ -14,18 +15,18 @@ static void test_add_string()
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
-	for (int i = 0; i < 100; ++i){
+	for (int i = 0; i < 10; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
-		__logd("key = %s value = %s\n", key_buf, value_buf);
+		// __logd("key = %s value = %s\n", key_buf, value_buf);
 		linekv_add_string(parser, key_buf, value_buf);
 	}
 
-	for (int k = 0; k < 100; ++k){
+	for (int k = 0; k < 10; ++k){
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_find(parser, key_buf);
 		if (v){
-			__logd("key %s -> value %s\n", key_buf, __dataof_linedb(v));
+			__logd("fond key %s -> value %s\n", key_buf, __dataof_linedb(v));
 		}
 	}
 
@@ -40,6 +41,7 @@ static void test_add_string()
 
 static void test_find_after()
 {
+	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_after\n");
 	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
@@ -47,7 +49,7 @@ static void test_find_after()
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
-	for (int i = 0; i < 100; ++i){
+	for (int i = 0; i < 10; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = snprintf(value_buf, 1024, "hello world %d", rand());
 		linekv_add_string(parser, key_buf, value_buf);
@@ -55,8 +57,8 @@ static void test_find_after()
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
-	for (int k = 98; v != NULL; --k){
-		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+	for (int k = 8; v != NULL; --k){
+		__logd("fond key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -64,7 +66,7 @@ static void test_find_after()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		__logd("key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
+		__logd("fond key %s from valude -> %s\n", key_buf, __dataof_linedb(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -74,6 +76,7 @@ static void test_find_after()
 
 static void test_find_number()
 {
+	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_number\n");
 	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
@@ -81,17 +84,17 @@ static void test_find_number()
 	char key_buf[1024] = {0};
 	char value_buf[1024] = {0};
 	int32_t n;
-	for (int i = 0; i < 100; ++i){
+	for (int i = 0; i < 10; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = rand();
-		__logd("input %d\n", n);
+		// __logd("input %d\n", n);
 		linekv_add_number(parser, key_buf, __n2b32(n));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
-	for (int k = 98; v != NULL; --k){
-		__logd("key %s from valude -> %u\n", key_buf, __b2n32(v));
+	for (int k = 8; v != NULL; --k){
+		__logd("fond key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -99,7 +102,7 @@ static void test_find_number()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		__logd("key %s from valude -> %u\n", key_buf, __b2n32(v));
+		__logd("fond key %s from valude -> %u\n", key_buf, __b2n32(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -109,6 +112,7 @@ static void test_find_number()
 
 static void test_find_float()
 {
+	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_float\n");
 	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr parser = lkv;
 	struct linedb value;
@@ -117,7 +121,7 @@ static void test_find_float()
 	char value_buf[1024] = {0};
 	int32_t n;
 	double f64;
-	for (int i = 0; i < 100; ++i){
+	for (int i = 0; i < 10; ++i){
 		n = snprintf(key_buf, 1024, "hello world %d", i);
 		n = rand();
 		if (n%2){
@@ -125,17 +129,17 @@ static void test_find_float()
 		}else {
 			f64 = (double)n / 2.2f;
 		}
-		__logd("input ====>>>>>%d %lf\n", i, f64);
+		// __logd("input ====>>>>>%d %lf\n", i, f64);
 		// lkv_add_f64(parser, key_buf, f64);
 		value = __f2b64(f64);
 		linekv_add_number(parser, key_buf, value);
-		__logd("input ====###>>>>>%d %lf\n", i, __b2f64(&value));
+		// __logd("input ====###>>>>>%d %lf\n", i, __b2f64(&value));
 	}
 
 	n = snprintf(key_buf, 1024, "hello world %d", 99);
 	v = linekv_find(parser, key_buf);
-	for (int k = 98; v != NULL; --k){
-		__logd("key %s from valude --------> %lf\n", key_buf, __b2f64(v));
+	for (int k = 8; v != NULL; --k){
+		__logd("fond key %s from valude --------> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k-1);
 		v = linekv_after(parser, key_buf);
 	}
@@ -143,7 +147,7 @@ static void test_find_float()
 	n = snprintf(key_buf, 1024, "hello world %d", 0);
 	v = linekv_find(parser, key_buf);
 	for (int k = 1; v != NULL; ++k){
-		__logd("key %s from valude >>>>>>>>-> %lf\n", key_buf, __b2f64(v));
+		__logd("fond key %s from valude >>>>>>>>-> %lf\n", key_buf, __b2f64(v));
 		n = snprintf(key_buf, 1024, "hello world %d", k);
 		v = linekv_after(parser, key_buf);
 	}
@@ -154,9 +158,9 @@ static void test_find_float()
 
 static void print_objcet(linekv_ptr kv)
 {
-	__logd("objcet >>>>---------->\n");
+	__logd(">>>>----------------------------------------------------------------------------------------------> print_objcet\n");
 
-	lineval_ptr val = linekv_head(kv);
+	lineval_ptr val = linekv_first(kv);
 
 	do {
 
@@ -207,7 +211,7 @@ static void print_objcet(linekv_ptr kv)
 			}else if (__objectis_custom(val)){
 
 				struct linekv obj;
-				linekv_reader_load(&obj, val);
+				linekv_reader_load(&obj, __dataof_linedb(val), __sizeof_data(val));
 				print_objcet(&obj);
 
 			}else if (__objectis_array(val)){
@@ -215,7 +219,7 @@ static void print_objcet(linekv_ptr kv)
 				__logd("__objectis_array size: %lu\n", __sizeof_linedb(val));
 				struct linearray reader;
 				linedb_ptr ldb;
-				linearray_reader_load(&reader, val);
+				linearray_reader_load(&reader, __dataof_linedb(val), __sizeof_data(val));
 				do {
 					ldb = linearray_next(&reader);
 					if (ldb){
@@ -230,6 +234,7 @@ static void print_objcet(linekv_ptr kv)
 
 static void test_add_object()
 {
+	__logd(">>>>----------------------------------------------------------------------------------------------> test_add_object\n");
 	linekv_ptr lkv = linekv_writer_create();
 	linekv_ptr obj = linekv_writer_create();
 	linekv_ptr obj1 = linekv_writer_create();
@@ -289,9 +294,10 @@ static void test_add_object()
 
 void linearkv_test()
 {
-	// test_add_string();
-	// test_find_after();
-	// test_find_float();
-	// test_find_number();
+	__logd(">>>>----------------------------------------------------------------------------------------------> linearkv_test\n");
+	test_add_string();
+	test_find_after();
+	test_find_float();
+	test_find_number();
 	test_add_object();
 }

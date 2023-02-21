@@ -34,11 +34,11 @@ enum {
 };
 
 
-#define LINEDB_STATIC_SIZE      9
+#define LINEDB_HEAD_MAX_SIZE      9
 
 
 typedef struct linedb {
-    unsigned char byte[LINEDB_STATIC_SIZE];
+    unsigned char byte[LINEDB_HEAD_MAX_SIZE];
 }*linedb_ptr;
 
 
@@ -226,85 +226,6 @@ static inline linedb_ptr linedb_from_object(void *obj, uint64_t size, uint8_t fl
     linedb_ptr ldb = (linedb_ptr)malloc(__planof_malloc(size));
     linedb_filled_data(ldb, obj, size, flag);
     return ldb;
-}
-
-
-///////////////////////////////////////////
-///////////////////////////////////////////
-///////////////////////////////////////////
-
-
-#define LINEARRAY_INIT_SIZE    0x10000 //64K
-
-
-typedef struct linearray {
-    uint32_t reader;
-    uint64_t pos, len;
-    linedb_ptr head, next;
-}*linearray_ptr;
-
-
-static inline linearray_ptr linearray_writer_create()
-{
-    linearray_ptr la = (linearray_ptr)malloc(sizeof(struct linearray));
-    la->reader = 0;
-    la->head = (linedb_ptr) malloc(LINEARRAY_INIT_SIZE);
-    la->len = LINEARRAY_INIT_SIZE;
-    la->pos = 0;
-    *la->head = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
-    la->next = (linedb_ptr)__dataof_linedb(la->head);
-    return la;
-}
-
-
-static inline void linearray_append(linearray_ptr la, linedb_ptr ldb)
-{
-    uint64_t ldb_size = __sizeof_linedb(ldb);
-    while ((la->len - (__sizeof_head(la->head) + la->pos)) < ldb_size){
-        la->len += LINEARRAY_INIT_SIZE;
-        void *p = malloc(la->len);
-        memcpy(p, la->head->byte, __sizeof_linedb(la->head));
-        free(la->head);
-        la->head = (linedb_ptr)p;
-        la->next = (linedb_ptr)__dataof_linedb(la->head);
-    }
-    
-    memcpy(la->next->byte + la->pos, ldb->byte, ldb_size);
-    la->pos += ldb_size;
-    // struct linedb tmp = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
-    // memcpy(la->head->byte, tmp.byte, __sizeof_head(&tmp));
-    *la->head = __number_to_byte_64bit(la->pos, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_ARRAY);
-}
-
-
-static inline void linearray_reader_load(linearray_ptr la, linedb_ptr ldb)
-{
-    la->reader = 1;
-    la->len = __sizeof_data(ldb);
-    la->pos = 0;
-    la->next = (linedb_ptr)__dataof_linedb(ldb);
-}
-
-
-static inline linedb_ptr linearray_next(linearray_ptr la)
-{
-    if (la->len - la->pos > 0){
-        linedb_ptr ldb = (linedb_ptr)(la->next->byte + la->pos);
-        la->pos += __sizeof_linedb(ldb);
-        return ldb;
-    }
-    return NULL;
-}
-
-
-static inline void linearray_free(linearray_ptr *pptr)
-{
-    if (pptr && *pptr && !((*pptr)->reader)){
-        linearray_ptr la = *pptr;
-        *pptr = NULL;
-        free(la->head);
-        free(la);
-    }
 }
 
 

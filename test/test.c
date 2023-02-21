@@ -27,7 +27,7 @@ void test()
 
     // heap_test();
     linearkv_test();
-    // lineardb_test();
+    lineardb_test();
     
     // task_queue_test();
 

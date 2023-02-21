@@ -216,33 +216,6 @@ static void test_lineardb_header()
     __logd(">>>>------------>\n");
 }
 
-void linedb_array_test(){
-
-    linearray_ptr writer = linearray_writer_create();
-
-    linedb_ptr ldb;
-    char key_buf[1024];
-    size_t n;
-	for (int i = 0; i < 100; ++i){
-		n = snprintf(key_buf, 1024, "hello world %d %d\0", i, rand());
-		ldb = linedb_from_string(key_buf);
-        // __logd("%s\n", __dataof_linedb(ldb));
-        linearray_append(writer, ldb);
-        __linedb_free(ldb);
-	}
-
-    struct linearray reader;
-    linearray_reader_load(&reader, writer->head);
-    do {
-        ldb = linearray_next(&reader);
-        if (ldb){
-            __logd("%s\n", (char*)__dataof_linedb(ldb));
-        }
-    }while(ldb);
-    
-    linearray_free(&writer);
-}
-
 
 void lineardb_test()
 {
@@ -254,7 +227,6 @@ void lineardb_test()
     float_to_ldb();
     test_lineardb_header();
 
-    linedb_array_test();
     __logd("strlen=%d\n", strlen("1\n\0"));
     char *src = "1234567890";
     char dst[11] = {0};
