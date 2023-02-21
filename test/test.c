@@ -26,12 +26,12 @@ void test()
     // // socket_test();
 
     // heap_test();
-    linearkv_test();
-    lineardb_test();
+    // linearkv_test();
+    // lineardb_test();
     
     // task_queue_test();
 
-    // tree_test();
+    tree_test();
 
 //     env_logger_stop();
     
