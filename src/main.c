@@ -4,15 +4,9 @@ extern void test();
 
 int main(int argc, char *argv[])
 {
-//     env_backtrace_setup();
-// #if defined(OS_WINDOWS)
-//     //env_logger_start("d:/tmp/log", NULL);
-//     env_logger_start("./tmp/log", NULL);
-// #else
-//     env_logger_start("./tmp/log", NULL);
-// #endif
+    env_backtrace_setup();
+    env_logger_start("./tmp/log", NULL);
 	
-
     __logi("hello world\n");
     __logi("time %llu clock %llu\n", env_time(), env_clock());
     char buf[1024] = {0};

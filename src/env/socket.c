@@ -1,44 +1,5 @@
 #include "env/env.h"
 
-#ifdef OS_WINDOWS
-
-#include <Winsock2.h>
-#include <WS2tcpip.h>
-#include <ws2ipdef.h>
-
-#define socket_invalid  INVALID_SOCKET
-#define socket_error    SOCKET_ERROR
-
-//#if defined(_MSC_VER)
-#pragma comment(lib, "Ws2_32.lib")
-#pragma warning(push)
-#pragma warning(disable: 6031) // warning C6031: Return value ignored: 'snprintf'
-//#endif
-
-#define SHUT_RD SD_RECEIVE
-#define SHUT_WR SD_SEND
-#define SHUT_RDWR SD_BOTH
-
-#ifndef ETIMEDOUT
-    #define ETIMEDOUT 138
-#endif
-
-// IPv6 MTU
-#ifndef IPV6_MTU_DISCOVER
-    #define IPV6_MTU_DISCOVER   71
-    #define IP_PMTUDISC_DO      1
-    #define IP_PMTUDISC_DONT    2                                                                                                                                                                                 
-#endif
-
-#ifndef AI_V4MAPPED
-    #define AI_V4MAPPED 0x00000800
-#endif
-#ifndef AI_NUMERICSERV
-    #define AI_NUMERICSERV  0x00000008
-#endif
-
-#else
-
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -54,14 +15,12 @@
 #include <fcntl.h>
 #include <poll.h>
 
-#define socket_invalid  -1
-#define socket_error    -1
-
-#endif
-
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+
+#define socket_invalid  -1
+#define socket_error    -1
 
 struct __socket{
     int32_t connected;
@@ -73,64 +32,28 @@ struct __socket{
 
 static __atombool __init_socket = false;
 
-static inline int32_t env_socket_init(void)
-{
-	if (__atom_try_lock(__init_socket)){
-#if defined(OS_WINDOWS)
-    WORD wVersionRequested;
-    WSADATA wsaData;
-    wVersionRequested = MAKEWORD(2, 2);
-    return WSAStartup(wVersionRequested, &wsaData); 
-#endif
-	}
-	return 0;
-}
-
-static inline int32_t env_socket_cleanup(void)
-{
-	if (__atom_unlock(__init_socket)){
-#if defined(OS_WINDOWS)
-    return WSACleanup();
-#endif
-	}
-	return 0;
-}
 
 static inline int socket_setopt(int32_t sock, int optname, int enable)
 {
-#if defined(OS_WINDOWS)
-    BOOL v = enable ? TRUE : FALSE;
-    return setsockopt(sock, SOL_SOCKET, optname, (const char*)&v, sizeof(v));
-#else
-    return setsockopt(sock, SOL_SOCKET, optname, &enable, sizeof(enable));
-#endif
+	return setsockopt(sock, SOL_SOCKET, optname, &enable, sizeof(enable));
 }
 
 int32_t env_socket_set_nonblock(__socket sock, int noblock)
 {
-	// 0-block, 1-no-block
-#if defined(OS_WINDOWS)
-	u_long arg = noblock;
-	return ioctlsocket(sock, FIONBIO, &arg);
-#else
 	// http://stackoverflow.com/questions/1150635/unix-nonblocking-i-o-o-nonblock-vs-fionbio
 	// Prior to standardization there was ioctl(...FIONBIO...) and fcntl(...O_NDELAY...) ...
 	// POSIX addressed this with the introduction of O_NONBLOCK.
 	int flags = fcntl(sock, F_GETFL, 0);
 	return fcntl(sock, F_SETFL, noblock ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK));
 	//return ioctl(sock, FIONBIO, &noblock);
-#endif
 }
 
 __socket env_socket_open()
 {
     __socket sock;
-	env_socket_init();
     __pass((sock = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
     __pass(socket_setopt(sock, SO_REUSEADDR, 1) == 0);
-#ifdef SO_REUSEPORT
-    __pass(socket_setopt(sock, SO_REUSEPORT, 1) == 0);
-#endif
+	__pass(socket_setopt(sock, SO_REUSEPORT, 1) == 0);
     return sock;
 Reset:
     return -1;
@@ -138,15 +61,7 @@ Reset:
 
 void env_socket_close(__socket sock)
 {
-    shutdown(sock, 0);
-#if defined(OS_WINDOWS)
-    // MSDN:
-    // If closesocket fails with WSAEWOULDBLOCK the socket handle is still valid,
-    // and a disconnect is not initiated. The application must call closesocket again to close the socket.
-    closesocket(sock);
-#else
-    close(sock);
-#endif
+	close(sock);
 }
 
 __sockaddr_ptr env_socket_addr_create(char* host, uint16_t port)
@@ -158,11 +73,7 @@ __sockaddr_ptr env_socket_addr_create(char* host, uint16_t port)
     in->sin_family = AF_INET;
     in->sin_port = htons(port);
 	if (host != NULL){
-#if defined(OS_WINDOWS)
-		in->sin_addr.s_addr = inet_addr(host);
-#else
 		__pass(inet_aton(host, &in->sin_addr) == 1);
-#endif
 	}else {
 		in->sin_addr.s_addr = INADDR_ANY;
 	}
@@ -218,38 +129,22 @@ int32_t env_socket_bind(__socket sock, __sockaddr_ptr addr)
 
 int32_t env_socket_send(__socket sock, const void* buf, uint64_t size)
 {
-#if defined(OS_WINDOWS)
-    return send(sock, (const char*)buf, (int)size, 0);
-#else
-    return send(sock, buf, size, 0);
-#endif
+	return send(sock, buf, size, 0);
 }
 
 int32_t env_socket_recv(__socket sock, void* buf, uint64_t size)
 {
-#if defined(OS_WINDOWS)
-    return recv(sock, (char*)buf, (int)size, 0);
-#else
-    return recv(sock, buf, size, 0);
-#endif
+	return recv(sock, buf, size, 0);
 }
 
 int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr)
 {
 	static socklen_t len = sizeof(struct sockaddr_in);
-#if defined(OS_WINDOWS)
-    return sendto(sock, (const char*)buf, (int)size, 0, addr, len);
-#else
-    return sendto(sock, buf, size, 0, addr, len);
-#endif
+	return sendto(sock, buf, size, 0, addr, len);
 }
 
 int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr)
 {
 	static socklen_t len = sizeof(struct sockaddr_in);
-#if defined(OS_WINDOWS)
-    return recvfrom(sock, (char*)buf, (int)size, 0, addr, &len);
-#else
 	return recvfrom(sock, buf, size, 0, addr, &len);
-#endif
 }

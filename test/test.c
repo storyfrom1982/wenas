@@ -1,5 +1,5 @@
 #include <env/env.h>
-#include <env/unix/malloc.h>
+#include <env/malloc.h>
 
 
 static void malloc_debug_cb(const char *debug)
@@ -32,9 +32,10 @@ void test()
     
     linetask_test();
 
-//     env_logger_stop();
+    env_logger_stop();
     
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
+
 }

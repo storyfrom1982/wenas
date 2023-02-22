@@ -1,23 +1,10 @@
 #ifndef __ENV_ENV_H__
 #define __ENV_ENV_H__
 
-#if defined(_WIN64)
-#   define OS_WINDOWS
-#elif defined(__APPLE__)
-#   define OS_APPLE
-#elif defined(__ANDROID__)
-#   define OS_ANDROID
-#elif defined(__linux__)
-#   define OS_LINUX
-#else
+#if !defined(__linux__) && !defined(__APPLE__)
 #error Not yet adapted to the environment
 #endif
 
-#if defined(OS_WINDOWS)
-#define inline          _inline
-#define __env_export    __declspec(dllexport)
-#define __env_import    __declspec(dllimport)
-#else
 #if __GNUC__ >= 4
 #define __env_export    __attribute__((visibility("default")))
 #define __env_import    __attribute__((visibility("default")))
@@ -25,12 +12,27 @@
 #define __env_export
 #define __env_import
 #endif
-#endif
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+typedef size_t	__atombool;
+
+#define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
+#define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
+#define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
+#define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
+
+#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
+#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
+
+#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
+#define __atom_try_lock(x)		__set_true(x)
+#define __atom_unlock(x)		__set_false(x)
+
 
 ///////////////////////////////////////////////////////
 ///// 可变类型指针
@@ -55,7 +57,6 @@ __env_export uint64_t env_time(void);
 __env_export uint64_t env_clock(void);
 __env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecond);
 
-#if 0
 ///////////////////////////////////////////////////////
 ///// 存储相关
 ///////////////////////////////////////////////////////
@@ -83,31 +84,6 @@ __env_export bool env_move_path(const char* from, const char* to);
 ///// 线程相关
 ///////////////////////////////////////////////////////
 
-//使用 Message Channel 实现所有多线程并行任务相关的数据交换和线程切换，及异步，阻塞等待，定时器等等功能
-//将任务抽象为一个在 Message 中执行的循环操作 MessageChannelRunTask
-//在通道中实现/支持消息的优先级
-//通道支持阻塞和非阻塞的读写
-//使用消息通道代替互斥锁和条件变量
-
-typedef void* env_thread_ptr;
-typedef struct env_mutex env_mutex_t;
-typedef __ptr(*env_thread_cb)(__ptr ctx);
-
-__env_export int32_t env_thread_create(env_thread_ptr *tid, env_thread_cb cb, __ptr ctx);
-__env_export void env_thread_destroy(env_thread_ptr *tid);
-__env_export uint64_t env_thread_self();
-__env_export uint64_t env_thread_id(env_thread_ptr thread_ptr);
-__env_export void env_thread_sleep(uint64_t nano_seconds);
-
-__env_export env_mutex_t* env_mutex_create(void);
-__env_export void env_mutex_destroy(env_mutex_t **pp_mutex);
-__env_export void env_mutex_lock(env_mutex_t *mutex);
-__env_export void env_mutex_unlock(env_mutex_t *mutex);
-__env_export void env_mutex_signal(env_mutex_t *mutex);
-__env_export void env_mutex_broadcast(env_mutex_t *mutex);
-__env_export void env_mutex_wait(env_mutex_t *mutex);
-__env_export int32_t env_mutex_timedwait(env_mutex_t *mutex, uint64_t timeout);
-
 typedef struct env_pipe env_pipe_t;
 __env_export env_pipe_t* env_pipe_create(uint64_t len);
 __env_export void env_pipe_destroy(env_pipe_t **pp_pipe);
@@ -117,57 +93,6 @@ __env_export uint64_t env_pipe_readable(env_pipe_t *pipe);
 __env_export uint64_t env_pipe_writable(env_pipe_t *pipe);
 __env_export void env_pipe_stop(env_pipe_t *pipe);
 __env_export void env_pipe_clear(env_pipe_t *pipe);
-
-typedef struct linekv linekv_t;
-typedef struct env_task_queue env_taskqueue_t;
-typedef void (*env_task_ptr)(linekv_t* ctx);
-typedef uint64_t (*env_timed_task_ptr)(linekv_t* ctx);
-typedef linekv_t* (*env_sync_task_ptr)(linekv_t* ctx);
-
-__env_export env_taskqueue_t* env_taskqueue_create();
-__env_export void env_taskqueue_exit(env_taskqueue_t *tq);
-__env_export void env_taskqueue_destroy(env_taskqueue_t **pp_tq);
-__env_export void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv);
-__env_export void env_taskqueue_insert_timed_task(env_taskqueue_t *tq, linekv_t *lkv);
-__env_export linekv_t* env_taskqueue_run_sync_task(env_taskqueue_t *tq, linekv_t *lkv);
-
-///////////////////////////////////////////////////////
-///// 原子操作
-///////////////////////////////////////////////////////
-
-// typedef struct __cpp_atombool __atombool;
-
-typedef uint64_t    __atombool;
-__env_export uint64_t env_atomic_load(volatile uint64_t*);
-__env_export void env_atomic_store(volatile uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_exchange(volatile uint64_t*, uint64_t);
-__env_export bool env_atomic_compare_exchange(volatile uint64_t*, uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_increment(volatile uint64_t*);
-__env_export uint64_t env_atomic_decrement(volatile uint64_t*);
-__env_export uint64_t env_atomic_add(volatile uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_subtract(volatile uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_and(volatile uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_or(volatile uint64_t*, uint64_t);
-__env_export uint64_t env_atomic_xor(volatile uint64_t*, uint64_t);
-__env_export __atombool env_atomic_is_true(volatile __atombool*);
-__env_export __atombool env_atomic_is_false(volatile __atombool*);
-__env_export __atombool env_atomic_set_true(volatile __atombool*);
-__env_export __atombool env_atomic_set_false(volatile __atombool*);
-
-#define	__is_true(x) env_atomic_is_true(&(x))
-#define	__is_false(x) env_atomic_is_false(&(x))
-#define	__set_true(x) env_atomic_set_true(&(x))
-#define	__set_false(x) env_atomic_set_false(&(x))
-#define __atom_add(x, y) env_atomic_add(&(x), (y))
-#define __atom_sub(x, y) env_atomic_subtract(&(x), (y))
-#define __atom_lock(x) while(!__set_true(x)) env_thread_sleep(1ULL)
-#define __atom_try_lock(x) __set_true(x)
-#define __atom_unlock(x) __set_false(x)
-
-///////////////////////////////////////////////////////
-///// 状态码
-///////////////////////////////////////////////////////
-#define ENV_TIMEDOUT        1
 
 
 ///////////////////////////////////////////////////////
@@ -258,20 +183,7 @@ __env_export int32_t env_socket_send(__socket sock, const void* buf, uint64_t si
 __env_export int32_t env_socket_recv(__socket sock, void* buf, uint64_t size);
 __env_export int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr);
 __env_export int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr);
-#endif
 
-#include <stdio.h>
 
-#define __logd printf
-
-#define __logi printf
-
-#define __logw printf
-
-#define __loge printf
-
-#define __logf printf
-
-#define __logt printf
 
 #endif //__ENV_ENV_H__

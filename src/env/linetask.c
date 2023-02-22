@@ -8,22 +8,6 @@
 #include "sys/struct/heap.h"
 
 
-typedef size_t	__atombool;
-
-#define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
-#define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
-#define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
-#define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
-
-#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
-#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
-
-#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
-#define __atom_try_lock(x)		__set_true(x)
-#define __atom_unlock(x)		__set_false(x)
-
-
-
 #define LINETASK_FALG_POST          (LINEKV_FLAG_EXPANDED << 1)
 #define LINETASK_FALG_TIMER         (LINEKV_FLAG_EXPANDED << 2)
 

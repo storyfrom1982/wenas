@@ -46,21 +46,17 @@ check_c_source_compiles("
         return 0;
     }" ENV_CHECK_BACKTRACE)
 
-if(NOT QT_ENV)
-    set(MAIN_ENTRY src/main.c)
-endif()
 
 set(kzx_sources
-    ${MAIN_ENTRY}
+    src/main.c
+    src/env/malloc.c
     src/env/time.c
+    src/env/pipe.c 
+    src/env/storage.c
+    src/env/logger.c
+    src/env/socket.c
     src/env/linetask.c
-    # src/env/storage.c
-    # src/env/thread.c
-    # src/env/logger.c
-    # src/env/socket.c
-    test/test.c
     # test/env/storage_test.c
-    # test/env/thread_test.c
     # test/env/logger_test.c
     # test/env/socket_test.c
     test/sys/struct/heap_test.c
@@ -68,6 +64,7 @@ set(kzx_sources
     test/sys/struct/linekv_test.c
     test/sys/struct/tree_test.c
     test/env/linetask_test.c
+    test/test.c
 )
 
 set(kzx_defines "")
@@ -76,48 +73,27 @@ set(kzx_ldflags "")
 set(kzx_inclides "")
 set(kzx_directories "")
 
-if (UNIX)
-    # list(APPEND kzx_sources src/env/unix/unix.c)
-    set(kzx_cflags "-Wno-format")
-    # set(kzx_cflags "-Wformat")
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        list(APPEND kzx_ldflags pthread dl)
-    endif()
-    if(ENV_CHECK_BACKTRACE)
-        if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-            list(APPEND kzx_defines -DENV_MALLOC_BACKTRACE)
-            list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA000000 -DENV_MALLOC_MAX_POOL=8)
-            list(APPEND kzx_sources src/env/unix/malloc.c)
-        endif()
-        # list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-        # list(APPEND kzx_sources src/env/unix/backtrace.c)
-    endif()
-else()
-    # list(APPEND kzx_sources src/env/win/win.c)
-    # list(APPEND kzx_inclides src/env/win/include)
-    # list(APPEND kzx_ldflags libpthreadVSE3)
-    # list(APPEND kzx_directories ${CMAKE_SOURCE_DIR}/src/env/win/lib)
+set(kzx_cflags "-Wno-format")
+# set(kzx_cflags "-Wformat")
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND kzx_ldflags pthread dl)
 endif()
 
-if(QT_ENV)
-    qt_add_library(kang SHARED ${kzx_sources})
-else()
-    add_executable(kang ${kzx_sources})
+if(ENV_CHECK_BACKTRACE)
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND kzx_defines -DENV_MALLOC_BACKTRACE)
+        list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA000000 -DENV_MALLOC_MAX_POOL=8)
+    endif()
+    list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
+    list(APPEND kzx_sources src/env/backtrace.c)
 endif()
+
+add_executable(kang ${kzx_sources})
 
 target_compile_definitions(kang PRIVATE ${kzx_defines})
 target_compile_options(kang PRIVATE ${kzx_cflags})
 target_include_directories(kang PRIVATE src ${kzx_inclides})
 target_link_directories(kang PRIVATE ${kzx_directories})
 target_link_libraries(kang ${kzx_ldflags} ${log-lib})
-
-if(QT_ENV)
-    if(ANDROID)
-        add_custom_command(TARGET kang
-                           POST_BUILD
-                           DEPENDS kang
-                           COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/plugins/kangzixin/lib${LIBRARY_NAME}_${CMAKE_ANDROID_ARCH_ABI}.so ${CMAKE_BINARY_DIR}/android-build/libs/${CMAKE_ANDROID_ARCH_ABI}/lib${LIBRARY_NAME}_${CMAKE_ANDROID_ARCH_ABI}.so
-                           )
-    endif()
-endif()
 

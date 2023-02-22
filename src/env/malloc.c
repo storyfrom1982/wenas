@@ -766,8 +766,7 @@ char* strndup(const char *s, size_t n)
 // {
 //     assert(s);
 //     size_t l = 0;
-//     while (s[l] != '\0')
-//     {
+//     while (s[l] != '\0'){
 //         l++;
 //     }
 //     return l;

@@ -8,7 +8,10 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <pthread.h>
 
+#include "linetask.h"
 
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
@@ -29,15 +32,16 @@ typedef struct env_logger {
     __atombool inited;
     __atombool writing;
     char *path;
-    env_thread_ptr tid;
+    linetask_ptr task;
     env_logger_cb printer;
     env_pipe_t *pipe;
 }env_logger_t;
 
 static env_logger_t g_logger = {0};
 
-static __ptr env_logger_write_loop(__ptr ctx)
+static void env_logger_write_loop(__ptr ctx)
 {
+    linekv_release((linekv_ptr*)&ctx);
     __fp fp = NULL;
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
@@ -102,7 +106,6 @@ Reset:
         free(buf);
         printf("buf addr: %llu.%llu\n", *a, *b);
     }
-    return NULL;
 }
 
 int env_logger_start(const char *path, env_logger_cb cb)
@@ -112,9 +115,13 @@ int env_logger_start(const char *path, env_logger_cb cb)
         if (path){
             g_logger.path = strdup(path);
             g_logger.pipe = env_pipe_create(__log_pipe_size);
-            __pass(g_logger.pipe != NULL);
+            assert(g_logger.pipe);
             __set_true(g_logger.writing);
-            __pass(env_thread_create(&g_logger.tid, env_logger_write_loop, &g_logger) == 0);
+            g_logger.task = linetask_create();
+            linekv_ptr ctx = linekv_create(1024);
+            linekv_add_ptr(ctx, "ctx", &g_logger);
+            linekv_add_ptr(ctx, "func", env_logger_write_loop);
+            linetask_post(g_logger.task, ctx);
             __logi(">>>>-------------->\n");
             __logi("Logger start >>>>-------------->\n");
             __logi(">>>>-------------->\n");
@@ -132,7 +139,7 @@ void env_logger_stop()
     if (__set_false(g_logger.inited) 
         && __set_false(g_logger.writing)){
         env_pipe_stop(g_logger.pipe);
-        env_thread_destroy(&g_logger.tid);
+        linetask_release(&g_logger.task);
         env_pipe_destroy(&g_logger.pipe);
         if (g_logger.path){
             free(g_logger.path);
@@ -140,27 +147,6 @@ void env_logger_stop()
         memset(&g_logger, 0, sizeof(g_logger));
     }
 }
-
-#if defined( __ANDROID__ )
-# include <jni.h>
-# include <android/log.h>
-JNIEXPORT void JNICALL
-Java_cn_kangzixin_Logger_loggerStart(JNIEnv *env, jclass clazz, jstring logDirectoryPath)
-{
-    const char *path = (*env)->GetStringUTFChars(env, logDirectoryPath, 0);
-    env_logger_start(path, NULL);
-    (*env)->ReleaseStringUTFChars(env, logDirectoryPath, path);
-}
-JNIEXPORT void JNICALL
-Java_cn_kangzixin_Logger_loggerPrint(JNIEnv *env, jclass clazz, jint level, jstring file_name, jint line, jstring log)
-{
-    const char *file = (*env)->GetStringUTFChars(env, file_name, 0);
-    const char *text = (*env)->GetStringUTFChars(env, log, 0);
-    env_logger_printf(level, file, line, text);
-    (*env)->ReleaseStringUTFChars(env, file_name, file);
-    (*env)->ReleaseStringUTFChars(env, log, text);
-}
-#endif
 
 void env_logger_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
 {
@@ -170,8 +156,8 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     uint64_t millisecond = env_time() / MICRO_SECONDS;
     n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%lX] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
-                  env_thread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
+                    pthread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
     va_start (args, fmt);
@@ -195,18 +181,7 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     if (g_logger.printer != NULL){
         g_logger.printer(level, text);
     }else {
-#if defined( __ANDROID__ )
-        if (level == ENV_LOG_LEVEL_DEBUG)
-            __android_log_print(ANDROID_LOG_DEBUG, "KANG", "%s", text);
-        else if (level == ENV_LOG_LEVEL_INFO)
-            __android_log_print(ANDROID_LOG_INFO, "KANG", "%s", text);
-        else if (level == ENV_LOG_LEVEL_WARN)
-            __android_log_print(ANDROID_LOG_WARN, "KANG", "%s", text);
-        else if (level == ENV_LOG_LEVEL_ERROR)
-            __android_log_print(ANDROID_LOG_ERROR, "KANG", "%s", text);
-#else
         fprintf(stdout, "%s", text);
-#endif
     }
 
 }
