@@ -4,15 +4,9 @@
 
 #include "env/env.h"
 
-#if defined(OS_WINDOWS)
-#include <Windows.h>
-#include <direct.h>
-#define PATH_MAX _MAX_PATH
-#else
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
-#endif
 
 #include <stdio.h>
 #include <stdint.h>
@@ -34,11 +28,7 @@ bool env_fclose(__fp fp)
 
 int64_t env_ftell(__fp fp)
 {
-#if defined(OS_WINDOWS)
-	return _ftelli64((FILE*)fp);
-#else
 	return ftello((FILE*)fp);
-#endif
 }
 
 int64_t env_fflush(__fp fp)
@@ -58,11 +48,7 @@ int64_t env_fread(__fp fp, __ptr buf, uint64_t size)
 
 int64_t env_fseek(__fp fp, int64_t offset, int32_t whence)
 {
-#if defined(OS_WINDOWS)
-	return _fseeki64((FILE*)fp, offset, whence);
-#else
 	return fseeko((FILE*)fp, offset, whence);
-#endif	
 }
 
 
@@ -70,102 +56,58 @@ int64_t env_fseek(__fp fp, int64_t offset, int32_t whence)
 
 bool env_find_file(const char* path)
 {
-#if defined(OS_WINDOWS)
-	// we must use GetFileAttributes() instead of the ANSI C functions because
-	// it can cope with network (UNC) paths unlike them
-    DWORD ret = GetFileAttributesA(path);
-	return ((ret != INVALID_FILE_ATTRIBUTES) && !(ret & FILE_ATTRIBUTE_DIRECTORY)) ? true : false;
-#else
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFREG)) ? true : false;
-#endif
 }
 
 /// get file size in bytes
 /// return file size
 uint64_t env_file_size(const char* filename)
 {
-#if defined(OS_WINDOWS)
-	struct _stat64 st;
-	if (0 == _stat64(filename, &st) && (st.st_mode & S_IFREG))
-		return st.st_size;
-	return -1;
-#else
 	struct stat st;
 	if (0 == stat(filename, &st) && (st.st_mode & S_IFREG))
 		return st.st_size;
 	return -1;
-#endif
 }
 
 bool env_find_path(const char* path)
 {
-#if defined(OS_WINDOWS)
-	DWORD ret = GetFileAttributesA(path);
-	return ((ret != INVALID_FILE_ATTRIBUTES) && (ret & FILE_ATTRIBUTE_DIRECTORY)) ? true : false;
-#else
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
-#endif
 }
 
 static bool env_mkdir(const char* path)
 {
-#if defined(OS_WINDOWS)
-	bool r = CreateDirectoryA(path, NULL);
-	return r ? true : false;
-#else
 	int r = mkdir(path, 0777);
 	return 0 == r ? true : false;
-#endif
 }
 
 bool env_remove_path(const char* path)
 {
-#if defined(OS_WINDOWS)
-	bool r = RemoveDirectoryA(path);
-	return r ? true : false;
-#else
 	int r = rmdir(path);
 	return 0 == r ? true : false;
-#endif
 }
 
 bool env_realpath(const char* path, char resolved_path[PATH_MAX])
 {
-#if defined(OS_WINDOWS)
-	DWORD r = GetFullPathNameA(path, PATH_MAX, resolved_path, NULL);
-	return r > 0 ? true : false;
-#else
 	char* p = realpath(path, resolved_path);
 	return p ? true : false;
-#endif
 }
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
 bool env_remove_file(const char* path)
 {
-#if defined(OS_WINDOWS)
-	bool r = DeleteFileA(path);
-	return r ? true : false;
-#else
 	int r = remove(path);
 	return 0 == r ? true : false;
-#endif
 }
 
 /// change the name or location of a file
 /// 0-ok, other-error
 bool env_move_path(const char* from, const char* to)
 {
-#if defined(OS_WINDOWS)
-	bool r = MoveFileA(from, to);
-	return r ? true : false;
-#else
 	int r = rename(from, to);
 	return 0 == r ? true : false;
-#endif
 }
 
 bool env_make_path(const char* path)

@@ -17,13 +17,8 @@
 #define __log_file_size         1024 * 1024 * 8
 #define __log_pipe_size			1 << 14
 
-#if defined(OS_WINDOWS)
-    #define __path_clear(path) \
-        ( strrchr( path, '\\' ) ? strrchr( path, '\\' ) + 1 : path )
-#else
-    #define __path_clear(path) \
+#define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
-#endif
 
 static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E", "W", "I", "D", "T"};
 

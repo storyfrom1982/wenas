@@ -2,17 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(OS_WINDOWS)
-#define TEST_PATH  "C:/tmp/test/dir" 
-#define TEST_FILE  "C:/tmp/test/dir/test.txt" 
-#define TEST_MOVE_FILE  "C:/tmp/test/dir/test1.txt"
-#define TEST_WRITE_TEXT  "C:/tmp/test/dir/test1.txt\n"
-#else
 #define TEST_PATH  "/tmp/test/dir" 
 #define TEST_FILE  "/tmp/test/dir/test.txt" 
 #define TEST_MOVE_FILE  "/tmp/test/dir/test1.txt"
 #define TEST_WRITE_TEXT  "/tmp/test/dir/test1.txt\n"
-#endif
 
 void storage_test()
 {
