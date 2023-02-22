@@ -14,7 +14,7 @@ static void test_post_func(linekv_ptr  parser)
     __logd("float: %.3f\n", linekv_find_float32(parser, "float"));
     __logd("double: %.5lf\n", linekv_find_float64(parser, "double"));
     __logd("string: %s\n", linekv_find_string(parser, "string"));
-    linekv_free(&parser);
+    linekv_release(&parser);
 }
 
 static uint64_t test_timer_func(linekv_ptr  parser)
@@ -45,20 +45,20 @@ void linetask_test()
     const char *test_string = "test string";
 
 
-    lkv = linekv_writer_create();
+    lkv = linekv_create(1024);
     linekv_add_ptr(lkv, "func", test_timer_func);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_uint64(lkv, "delay", 3000000000ULL);
     linetask_timer(tq, lkv);
 
-    lkv = linekv_writer_create();
+    lkv = linekv_create(1024);
     linekv_add_ptr(lkv, "func", test_timer_func1);
     linekv_add_ptr(lkv, "ctx", (void*)test_string);
     linekv_add_uint64(lkv, "delay", 1000000000ULL);
     linetask_timer(tq, lkv);
 
     for (int i = 0; i < 100; ++i){
-        lkv = linekv_writer_create();
+        lkv = linekv_create(1024);
         linekv_add_ptr(lkv, "func", test_post_func);
         linekv_add_ptr(lkv, "ctx", (void*)test_string);
         linekv_add_int32(lkv, "int", test_number);

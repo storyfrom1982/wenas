@@ -19,26 +19,38 @@ typedef struct linedb* lineval_ptr;
 
 
 
+enum {
+    LINEARRAY_FLAG_NONE = 0x00,
+    LINEARRAY_FLAG_MEMFREE = 0x01,
+    LINEARRAY_FLAG_EXPANDED = 0x02
+};
+
 #define LINEARRAY_INIT_SIZE     0x10000 //64K
 
 typedef struct linearray {
-    uint32_t ismalloc;
+    uint32_t flag;
+    uint32_t stride;
     uint64_t pos, len;
     uint8_t *head;
 }*linearray_ptr;
 
 
+enum {
+    LINEKV_FLAG_NONE = 0x00,
+    LINEKV_FLAG_MEMFREE = 0x01,
+    LINEKV_FLAG_EXPANDED = 0x02
+};
 
-#define LINEKV_INIT_SIZE        0x100000 //1M
+// #define LINEKV_INIT_SIZE        0x100000 //1M
 
 typedef struct linekv {
     uint32_t flag;
-    uint32_t ismalloc;
-    struct linekv *prev, *next;
+    uint32_t stride;
     uint64_t pos, len;
     linekey_ptr key;
     lineval_ptr val;
     uint8_t *head;
+    struct linekv *prev, *next;
 }*linekv_ptr;
 
 
@@ -71,12 +83,12 @@ static inline const char* linekey_to_string(linekey_ptr key)
 }
 
 
-static inline linearray_ptr linearray_writer_create()
+static inline linearray_ptr linearray_create(uint32_t stride)
 {
     linearray_ptr la = (linearray_ptr)malloc(sizeof(struct linearray));
-    la->ismalloc = 1;
-    la->head = (uint8_t *) malloc(LINEARRAY_INIT_SIZE);
-    la->len = LINEARRAY_INIT_SIZE;
+    la->flag = LINEARRAY_FLAG_MEMFREE;
+    la->head = (uint8_t *) malloc(stride);
+    la->len = stride;
     la->pos = 0;
     return la;
 }
@@ -86,7 +98,7 @@ static inline void linearray_append(linearray_ptr la, linedb_ptr ldb)
 {
     uint64_t ldb_size = __sizeof_linedb(ldb);
     while ((la->len - la->pos) < ldb_size){
-        la->len += LINEARRAY_INIT_SIZE;
+        la->len += la->stride;
         void *p = (uint8_t *)malloc(la->len);
         memcpy(p, la->head, la->pos);
         free(la->head);
@@ -97,9 +109,9 @@ static inline void linearray_append(linearray_ptr la, linedb_ptr ldb)
 }
 
 
-static inline void linearray_reader_load(linearray_ptr la, void *data, uint64_t size)
+static inline void linearray_load(linearray_ptr la, void *data, uint64_t size)
 {
-    la->ismalloc = 0;
+    la->flag = LINEARRAY_FLAG_NONE;
     la->pos = 0;
     la->len = size;
     la->head = (uint8_t*)data;
@@ -117,9 +129,9 @@ static inline linedb_ptr linearray_next(linearray_ptr la)
 }
 
 
-static inline void linearray_free(linearray_ptr *pptr)
+static inline void linearray_release(linearray_ptr *pptr)
 {
-    if (pptr && *pptr && ((*pptr)->ismalloc)){
+    if (pptr && *pptr && ((*pptr)->flag & LINEARRAY_FLAG_MEMFREE)){
         linearray_ptr la = *pptr;
         *pptr = NULL;
         free(la->head);
@@ -128,33 +140,32 @@ static inline void linearray_free(linearray_ptr *pptr)
 }
 
 
-static inline linekv_ptr linekv_writer_create()
+static inline linekv_ptr linekv_create(uint32_t stride)
 {
-    linekv_ptr lkv = (linekv_ptr)malloc(sizeof(struct linekv));
-    lkv->head = (uint8_t*) malloc(LINEKV_INIT_SIZE);
-    lkv->ismalloc = 1;
-    lkv->key = (linekey_ptr )(lkv->head);
-    lkv->len = LINEKV_INIT_SIZE;
+    linekv_ptr lkv = (linekv_ptr)malloc(sizeof(struct linekv) + stride);
+    lkv->flag = LINEKV_FLAG_MEMFREE;
+    lkv->head = (uint8_t*) malloc(stride);
+    lkv->stride = stride;
+    lkv->key = (linekey_ptr)(lkv->head);
+    lkv->len = stride;
     lkv->pos = 0;
     lkv->val = NULL;
     return lkv;
 }
 
-static inline void linekv_free(linekv_ptr *pptr)
+static inline void linekv_release(linekv_ptr *pptr)
 {
-    if (pptr && *pptr && ((*pptr)->ismalloc)){
+    if (pptr && *pptr && ((*pptr)->flag & LINEKV_FLAG_MEMFREE)){
         linekv_ptr lkv = *pptr;
         *pptr = NULL;
-        __logi("linekv_free head\n");
         free(lkv->head);
-        __logi("linekv_free lkv\n");
         free(lkv);
     }
 }
 
-static inline void linekv_reader_load(linekv_ptr lkv, void *data, uint64_t size)
+static inline void linekv_load(linekv_ptr lkv, void *data, uint64_t size)
 {
-    lkv->ismalloc = 0;
+    lkv->flag = LINEKV_FLAG_NONE;
     lkv->len = lkv->pos = size;
     lkv->head = (uint8_t*)data;
     lkv->key = (linekey_ptr)(lkv->head);
@@ -173,7 +184,7 @@ static inline void linekv_clear(linekv_ptr lkv)
 static inline void linekv_add_value(linekv_ptr lkv, const char *key, const void *val, uint64_t size, uint8_t flag)
 {
     while ((lkv->len - lkv->pos) < (LINEKEY_MAX_LENGTH + LINEDB_HEAD_MAX_SIZE + size)){
-        lkv->len += LINEKV_INIT_SIZE;
+        lkv->len += lkv->stride;
         void *p = malloc(lkv->len);
         memcpy(p, lkv->head, lkv->pos);
         free(lkv->head);
@@ -210,7 +221,7 @@ static inline void linekv_add_binary(linekv_ptr lkv, const char *key, const void
 static inline void linekv_add_number(linekv_ptr lkv, const char *key, struct linedb val)
 {
     while ((lkv->len - lkv->pos) < (LINEKEY_MAX_LENGTH + __sizeof_linedb(&val))){
-        lkv->len += LINEKV_INIT_SIZE;
+        lkv->len += lkv->stride;
         void *p = malloc(lkv->len);
         memcpy(p, lkv->head, lkv->pos);
         free(lkv->head);

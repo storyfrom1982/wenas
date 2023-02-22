@@ -447,7 +447,7 @@ static inline void* env_taskqueue_loop(void *ctx)
     linedb_t *ldb;
     env_taskqueue_t *tq = (env_taskqueue_t *)ctx;
     __pass(tq != NULL);
-    linekv_t* task_ctx = linekv_writer_create(10240);
+    linekv_t* task_ctx = linekv_create(10240);
     __pass(task_ctx != NULL);
 
     while (1) {
@@ -517,7 +517,7 @@ static inline void* env_taskqueue_loop(void *ctx)
 
 Reset:
 
-    linekv_free(&task_ctx);
+    linekv_release(&task_ctx);
 
     __logi("env_taskqueue_loop(0x%X) exit\n", env_thread_self());
 
@@ -581,7 +581,7 @@ void env_taskqueue_destroy(env_taskqueue_t **pp_tq)
         while (tq->timed_task->pos > 0){
             heapment_t element = min_heapify_pop(tq->timed_task);
             if (element.value){
-                linekv_free((linekv_t**)&(element.value));
+                linekv_release((linekv_t**)&(element.value));
             }
         }
         heap_destroy(&tq->timed_task);
@@ -607,7 +607,7 @@ void env_taskqueue_post_task(env_taskqueue_t *tq, linekv_t *lkv)
 void env_taskqueue_insert_timed_task(env_taskqueue_t *tq, linekv_t *lkv)
 {
     env_mutex_lock(&tq->mutex);
-    linekv_t *task = linekv_writer_create(lkv->pos);
+    linekv_t *task = linekv_create(lkv->pos);
     task->pos = lkv->pos;
     memcpy(task->head, lkv->head, lkv->pos);
     heapment_t t;

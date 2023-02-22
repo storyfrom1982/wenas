@@ -24,8 +24,8 @@ typedef size_t	__atombool;
 
 
 
-#define LINETASK_FALG_POST          0
-#define LINETASK_FALG_TIMER         1
+#define LINETASK_FALG_POST          (LINEKV_FLAG_EXPANDED << 1)
+#define LINETASK_FALG_TIMER         (LINEKV_FLAG_EXPANDED << 2)
 
 
 struct linetask {
@@ -149,7 +149,7 @@ static void* linetask_loop(void *p)
 
             pthread_mutex_unlock(ltq->mutex);
 
-            if (task->flag == LINETASK_FALG_TIMER){
+            if (task->flag & LINETASK_FALG_TIMER){
 
                 element.key = linekv_find_uint64(task, "delay") + env_time();
                 element.value = task;
@@ -219,13 +219,13 @@ void linetask_release(linetask_ptr *pptr)
         while ((ptr)->head.next != &((ptr)->end)){
             (ptr)->head.prev = (ptr)->head.next;
             (ptr)->head.next = (ptr)->head.next->next;
-            linekv_free(&(ptr->head.prev));
+            linekv_release(&(ptr->head.prev));
         }
 
         while (ptr->timer_list->pos > 0){
             heapment_t element = min_heapify_pop(ptr->timer_list);
             if (element.value){
-                linekv_free((linekv_ptr*)&(element.value));
+                linekv_release((linekv_ptr*)&(element.value));
             }
         }
 
@@ -271,7 +271,7 @@ int linetask_timedwait(linetask_ptr ptr, uint64_t timeout)
 
 int linetask_post(linetask_ptr ptr, linekv_ptr ctx)
 {
-    ctx->flag = LINETASK_FALG_POST;
+    ctx->flag |= LINETASK_FALG_POST;
     pthread_mutex_lock(ptr->mutex);
     while (linetask_push_back(ptr, ctx) == -1){
         if (__is_true(ptr->running)){
@@ -292,7 +292,7 @@ int linetask_post(linetask_ptr ptr, linekv_ptr ctx)
 
 int linetask_timer(linetask_ptr ptr, linekv_ptr ctx)
 {
-    ctx->flag = LINETASK_FALG_TIMER;
+    ctx->flag |= LINETASK_FALG_TIMER;
     pthread_mutex_lock(ptr->mutex);
     while (linetask_push_back(ptr, ctx) == -1){
         if (__is_true(ptr->running)){
@@ -313,7 +313,7 @@ int linetask_timer(linetask_ptr ptr, linekv_ptr ctx)
 
 int linetask_immediately(linetask_ptr ptr, linekv_ptr ctx)
 {
-    ctx->flag = LINETASK_FALG_POST;
+    ctx->flag |= LINETASK_FALG_POST;
     pthread_mutex_lock(ptr->mutex);
     while (linetask_push_front(ptr, ctx) == -1){
         if (__is_true(ptr->running)){

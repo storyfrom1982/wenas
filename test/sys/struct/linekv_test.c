@@ -8,7 +8,7 @@
 static void test_add_string()
 {
 	__logd(">>>>----------------------------------------------------------------------------------------------> test_add_string\n");
-	linekv_ptr lkv = linekv_writer_create();
+	linekv_ptr lkv = linekv_create(1024);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -36,13 +36,13 @@ static void test_add_string()
     value_buf[n] = '\0';
     __logd("memcpy=%s\n", value_buf);
 
-	linekv_free(&lkv);
+	linekv_release(&lkv);
 }
 
 static void test_find_after()
 {
 	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_after\n");
-	linekv_ptr lkv = linekv_writer_create();
+	linekv_ptr lkv = linekv_create(1024);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -71,13 +71,13 @@ static void test_find_after()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_free(&lkv);
+	linekv_release(&lkv);
 }
 
 static void test_find_number()
 {
 	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_number\n");
-	linekv_ptr lkv = linekv_writer_create();
+	linekv_ptr lkv = linekv_create(1024);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -107,13 +107,13 @@ static void test_find_number()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_free(&lkv);
+	linekv_release(&lkv);
 }
 
 static void test_find_float()
 {
 	__logd(">>>>----------------------------------------------------------------------------------------------> test_find_float\n");
-	linekv_ptr lkv = linekv_writer_create();
+	linekv_ptr lkv = linekv_create(1024);
 	linekv_ptr parser = lkv;
 	struct linedb value;
 	linedb_ptr v, b = &value;
@@ -152,7 +152,7 @@ static void test_find_float()
 		v = linekv_after(parser, key_buf);
 	}
 
-	linekv_free(&lkv);
+	linekv_release(&lkv);
 }
 
 
@@ -211,7 +211,7 @@ static void print_objcet(linekv_ptr kv)
 			}else if (__objectis_custom(val)){
 
 				struct linekv obj;
-				linekv_reader_load(&obj, __dataof_linedb(val), __sizeof_data(val));
+				linekv_load(&obj, __dataof_linedb(val), __sizeof_data(val));
 				print_objcet(&obj);
 
 			}else if (__objectis_array(val)){
@@ -219,7 +219,7 @@ static void print_objcet(linekv_ptr kv)
 				__logd("__objectis_array size: %lu\n", __sizeof_linedb(val));
 				struct linearray reader;
 				linedb_ptr ldb;
-				linearray_reader_load(&reader, __dataof_linedb(val), __sizeof_data(val));
+				linearray_load(&reader, __dataof_linedb(val), __sizeof_data(val));
 				do {
 					ldb = linearray_next(&reader);
 					if (ldb){
@@ -235,11 +235,11 @@ static void print_objcet(linekv_ptr kv)
 static void test_add_object()
 {
 	__logd(">>>>----------------------------------------------------------------------------------------------> test_add_object\n");
-	linekv_ptr lkv = linekv_writer_create();
-	linekv_ptr obj = linekv_writer_create();
-	linekv_ptr obj1 = linekv_writer_create();
+	linekv_ptr lkv = linekv_create(1024);
+	linekv_ptr obj = linekv_create(1024);
+	linekv_ptr obj1 = linekv_create(1024);
 
-	linearray_ptr writer = linearray_writer_create();
+	linearray_ptr writer = linearray_create(1024);
 
     linedb_ptr ldb;
     char key_buf[1024];
@@ -285,11 +285,11 @@ static void test_add_object()
 
 	print_objcet(lkv);
 
-	linekv_free(&lkv);
-	linekv_free(&obj);
-	linekv_free(&obj1);
+	linekv_release(&lkv);
+	linekv_release(&obj);
+	linekv_release(&obj1);
 
-	linearray_free(&writer);
+	linearray_release(&writer);
 }
 
 void linearkv_test()
