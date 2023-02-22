@@ -32,7 +32,9 @@ typedef struct linearray {
 #define LINEKV_INIT_SIZE        0x100000 //1M
 
 typedef struct linekv {
+    uint32_t flag;
     uint32_t ismalloc;
+    struct linekv *prev, *next;
     uint64_t pos, len;
     linekey_ptr key;
     lineval_ptr val;
@@ -143,7 +145,9 @@ static inline void linekv_free(linekv_ptr *pptr)
     if (pptr && *pptr && ((*pptr)->ismalloc)){
         linekv_ptr lkv = *pptr;
         *pptr = NULL;
+        __logi("linekv_free head\n");
         free(lkv->head);
+        __logi("linekv_free lkv\n");
         free(lkv);
     }
 }

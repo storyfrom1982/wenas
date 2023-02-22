@@ -53,6 +53,7 @@ endif()
 set(kzx_sources
     ${MAIN_ENTRY}
     src/env/time.c
+    src/env/linetask.c
     # src/env/storage.c
     # src/env/thread.c
     # src/env/logger.c
@@ -66,7 +67,7 @@ set(kzx_sources
     test/sys/struct/linedb_test.c
     test/sys/struct/linekv_test.c
     test/sys/struct/tree_test.c
-    # test/env/task_queue_test.c
+    test/env/linetask_test.c
 )
 
 set(kzx_defines "")
