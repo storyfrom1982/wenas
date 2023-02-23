@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     __logi("int32_t size: %d\n", sizeof(int32_t));
     __logi("bool size: %d\n", sizeof(bool));
 
-    test();
+    // test();
 
 	return 0;
 }

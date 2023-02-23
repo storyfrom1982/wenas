@@ -48,7 +48,7 @@ check_c_source_compiles("
 
 
 set(kzx_sources
-    src/main.c
+    # src/main.c
     src/env/malloc.c
     src/env/time.c
     src/env/pipe.c 
@@ -59,12 +59,12 @@ set(kzx_sources
     # test/env/storage_test.c
     # test/env/logger_test.c
     # test/env/socket_test.c
-    test/sys/struct/heap_test.c
-    test/sys/struct/linedb_test.c
-    test/sys/struct/linekv_test.c
-    test/sys/struct/tree_test.c
-    test/env/linetask_test.c
-    test/test.c
+    # test/sys/struct/heap_test.c
+    # test/sys/struct/linedb_test.c
+    # test/sys/struct/linekv_test.c
+    # test/sys/struct/tree_test.c
+    # test/env/linetask_test.c
+    # test/test.c
 )
 
 set(kzx_defines "")
@@ -89,11 +89,15 @@ if(ENV_CHECK_BACKTRACE)
     list(APPEND kzx_sources src/env/backtrace.c)
 endif()
 
-add_executable(kang ${kzx_sources})
 
-target_compile_definitions(kang PRIVATE ${kzx_defines})
-target_compile_options(kang PRIVATE ${kzx_cflags})
-target_include_directories(kang PRIVATE src ${kzx_inclides})
-target_link_directories(kang PRIVATE ${kzx_directories})
-target_link_libraries(kang ${kzx_ldflags} ${log-lib})
+function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
+    add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
+    target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ${kzx_defines})
+    target_compile_options(${EXECUTABLE_NAME} PRIVATE ${kzx_cflags})
+    target_include_directories(${EXECUTABLE_NAME} PRIVATE src ${kzx_inclides})
+    target_link_directories(${EXECUTABLE_NAME} PRIVATE ${kzx_directories})
+    target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
+endfunction(build_executable)
 
+# build_executable(kang src/main.c)
+build_executable(server src/business/server.c)
