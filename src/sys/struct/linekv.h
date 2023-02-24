@@ -74,6 +74,14 @@ static inline linekey_ptr linekey_from_string(const char *str)
     return key;
 }
 
+static inline linekey_ptr linekey_from_data(void *data, uint64_t size)
+{
+    linekey_ptr key = (linekey_ptr)malloc(size + 1);
+    key->byte[0] = size;
+    memcpy(key->byte + LINEKEY_HEAD_SIZE, data, size);
+    return key;
+}
+
 static inline const char* linekey_to_string(linekey_ptr key)
 {
     if (key){

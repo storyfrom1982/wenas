@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.4)
 
-project(kangzixin LANGUAGES C)
+project(kangzixin LANGUAGES C CXX)
 set(LIBRARY_NAME "kang")
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 include (TestBigEndian)
 include (CheckCSourceCompiles)
@@ -99,5 +100,5 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-# build_executable(kang src/main.c)
-build_executable(server src/business/server.c)
+build_executable(kang src/main.cpp)
+# build_executable(server src/business/server.c)
