@@ -100,5 +100,5 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-build_executable(kang src/main.cpp)
+build_executable(kang src/main.c)
 # build_executable(server src/business/server.c)
