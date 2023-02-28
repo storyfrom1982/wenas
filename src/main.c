@@ -1,5 +1,6 @@
 #include "env/env.h"
-#include "env/mutex.h"
+#include "env/task.h"
+#include "env/malloc.h"
 
 
 struct targs {
@@ -7,10 +8,14 @@ struct targs {
     ___atom_bool *testTrue;
 };
 
-
-static void* sthread(void *p)
+static void malloc_debug_cb(const char *debug)
 {
-    struct targs *targ = (struct targs *)p;
+    __logw("%s\n", debug);
+}
+
+static void mutex_task(linekv_ptr kv)
+{
+    struct targs *targ = (struct targs *)linekv_find_ptr(kv, "ctx");
     __logi("lock %u", *targ->testTrue);
 
     while (1)
@@ -28,14 +33,13 @@ static void* sthread(void *p)
     ___lock lk = ___mutex_lock(targ->mtx);
     __logi("sleep_until");
     
-    ___mutex_timer(targ->mtx, lk, 1000000000);
+    ___mutex_timer(targ->mtx, lk, 3000000000);
 
     ___mutex_notify(targ->mtx);
     __logi("notify");
     ___mutex_wait(targ->mtx, lk);
     ___mutex_unlock(targ->mtx, lk);
     __logi("exit");
-    return NULL;
 }
 
 int main(int argc, char *argv[])
@@ -92,9 +96,13 @@ int main(int argc, char *argv[])
     targ.mtx = mtx;
     targ.testTrue = &testTrue;
 
-    __thread_ptr tid = ___thread_create(sthread, &targ);
+    task_ptr task = task_create();
+    linekv_ptr kv = linekv_create(1024);
+    linekv_add_ptr(kv, "func", (void*)mutex_task);
+    linekv_add_ptr(kv, "ctx", (void*)&targ);
+    task_post(task, kv);
 
-    ___mutex_timer(mtx, lk, 1000000000);
+    ___mutex_timer(mtx, lk, 3000000000);
     ___atom_unlock(&testTrue);
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
@@ -107,11 +115,20 @@ int main(int argc, char *argv[])
     ___mutex_unlock(mtx, lk);
 
     __logi("join thread %lu", ___thread_id());
-    ___thread_join(tid);
+    // ___thread_join(tid);
+    task_release(&task);
 
     ___mutex_release(mtx);
 
+    linekv_release(&kv);
+
+    env_logger_stop();
+
     __logi("exit");
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(malloc_debug_cb);
+#endif
 
 	return 0;
 }

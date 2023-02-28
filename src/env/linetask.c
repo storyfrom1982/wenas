@@ -80,7 +80,7 @@ static inline int linetask_pop_back(linetask_ptr queue, linekv_ptr *pp_node)
 }
 
 
-static void* linetask_loop(void *p)
+static void* task_loop(void *p)
 {
     uint64_t timeout = 0;
     linekv_ptr timer;
@@ -176,7 +176,7 @@ linetask_ptr linetask_create()
     assert(ltq->timer_list);
 
     ltq->running = true;
-    ret = pthread_create(&ltq->tid, NULL, linetask_loop, ltq);
+    ret = pthread_create(&ltq->tid, NULL, task_loop, ltq);
     assert(ret == 0);
 
     return ltq;

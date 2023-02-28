@@ -1,7 +1,8 @@
-#include "env/mutex.h"
+#include "env/task.h"
 
 extern "C" {
     #include "env/env.h"
+    #include "env/malloc.h"
 }
 
 #include <iostream>
@@ -12,15 +13,19 @@ struct targs {
     ___atom_bool *testTrue;
 };
 
-
-static void* mutex_task(void *p)
+static void malloc_debug_cb(const char *debug)
 {
-    struct targs *targ = (struct targs *)p;
+    __logw("%s\n", debug);
+}
+
+static void mutex_task(linekv_ptr kv)
+{
+    struct targs *targ = (struct targs *)linekv_find_ptr(kv, "ctx");
     std::cout << "tt: " << *targ->testTrue << std::endl;
     while (1)
     {
         bool ret = ___atom_try_lock(targ->testTrue);
-        std::cout << "__atom_try_lock: " << *targ->testTrue << std::endl;
+        // std::cout << "__atom_try_lock: " << *targ->testTrue << std::endl;
         if (ret){
             std::cout << "__atom_try_lock: " << *targ->testTrue << std::endl;
             break;
@@ -31,14 +36,14 @@ static void* mutex_task(void *p)
     std::cout << "thread enter\n";
     auto lk = ___mutex_lock(targ->mtx);
     std::cout << "sleep_until\n";
-    ___mutex_timer(targ->mtx, *(CxxMutex::CxxLock*)(&lk), 1000000000);
+    ___mutex_timer(targ->mtx, *(CxxMutex::CxxLock*)(&lk), 3000000000);
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
     ___mutex_notify(targ->mtx);
     std::cout << "notify\n";
     ___mutex_wait(targ->mtx, lk);
     ___mutex_unlock(targ->mtx, lk);
     std::cout << "exit\n";
-    return nullptr;
+    // return nullptr;
 }
 
 
@@ -102,9 +107,15 @@ int main(int argc, char *argv[])
     targ.mtx = mtx;
     targ.testTrue = &testTrue;
 
-    __thread_ptr tid = ___thread_create(mutex_task, &targ);
+    task_ptr task = task_create();
+    linekv_ptr kv = linekv_create(1024);
+    linekv_add_ptr(kv, "func", (void*)mutex_task);
+    linekv_add_ptr(kv, "ctx", (void*)&targ);
+    task_post(task, kv);
 
-    ___mutex_timer(mtx, *(CxxMutex::CxxLock*)(&lk), 1000000000);
+    // ___thread_ptr tid = ___thread_create(mutex_task, &targ);
+
+    ___mutex_timer(mtx, *(CxxMutex::CxxLock*)(&lk), 3000000000);
     ___atom_unlock(&testTrue);
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
@@ -115,11 +126,18 @@ int main(int argc, char *argv[])
     ___mutex_unlock(mtx, lk);
 
     std::cout << "join thread " << ___thread_id() << std::endl;
-    ___thread_join(tid);
+    // ___thread_join(tid);
+    task_release(&task);
 
     ___mutex_release(mtx);
 
+    linekv_release(&kv);
+
     std::cout << "exit\n";
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(malloc_debug_cb);
+#endif
 
 	return 0;
 }

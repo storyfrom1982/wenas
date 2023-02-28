@@ -70,12 +70,14 @@ set(kzx_sources
 
 set(kzx_defines "")
 set(kzx_cflags "")
+set(kzx_cxxflags "")
 set(kzx_ldflags "")
 set(kzx_inclides "")
 set(kzx_directories "")
 
 set(kzx_cflags "-Wno-format")
 # set(kzx_cflags "-Wformat")
+set(kzx_cxxflags "-Wno-c++11-narrowing")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND kzx_ldflags pthread dl)
@@ -94,7 +96,7 @@ endif()
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
     target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ${kzx_defines})
-    target_compile_options(${EXECUTABLE_NAME} PRIVATE ${kzx_cflags})
+    target_compile_options(${EXECUTABLE_NAME} PRIVATE ${kzx_cflags} ${kzx_cxxflags})
     target_include_directories(${EXECUTABLE_NAME} PRIVATE src ${kzx_inclides})
     target_link_directories(${EXECUTABLE_NAME} PRIVATE ${kzx_directories})
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
