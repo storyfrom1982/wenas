@@ -222,6 +222,10 @@ typedef void* __thread_ptr;
 
 static inline __thread_ptr ___thread_create(void*(*task_func)(void*), void *ctx)
 {
+    // std::thread *thread_ptr = new std::thread([](void*(*task_func)(void*), void *ctx){
+    //     task_func(ctx);
+    // }, task_func, ctx);
+
     std::thread *thread_ptr = new std::thread(task_func, ctx);
     if (thread_ptr != nullptr){
         return (__thread_ptr)thread_ptr;
@@ -318,7 +322,7 @@ private:
     std::condition_variable _cond;
 };
 
-typedef struct CxxLock      ___lock;
+using ___lock = CxxMutex::CxxLock;
 typedef struct CxxMutex*    ___mutex_ptr;
 
 #define ___mutex_create()                  new CxxMutex()
