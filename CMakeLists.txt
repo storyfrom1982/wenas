@@ -84,7 +84,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 if(ENV_CHECK_BACKTRACE)
-    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
         list(APPEND kzx_defines -DENV_MALLOC_BACKTRACE)
         list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA000000 -DENV_MALLOC_MAX_POOL=8)
     endif()
