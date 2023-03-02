@@ -103,4 +103,4 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
 endfunction(build_executable)
 
 build_executable(kang src/main.cpp)
-# build_executable(server src/business/server.c)
+build_executable(server src/business/server.c)

@@ -1,6 +1,6 @@
 #include <env/env.h>
-#include <env/linetask.h>
-#include <sys/struct/antenna.h>
+#include <env/task.h>
+#include <sys/struct/mtp.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -28,11 +28,11 @@
 typedef struct server {
     socklen_t addlen;
     struct sockaddr_in addr;
-    struct msgaddr msgaddr;
-    struct msgchannel_listener listener;
-    linekv_ptr recv_func, send_func;
-    linetask_ptr recv_task, send_task;
-    antenna_ptr antenna;
+    struct transaddr transaddr;
+    struct transchannel_listener listener;
+    linekv_ptr send_func;
+    task_ptr send_task;
+    mtp_ptr mtp;
 }server_t;
 
 
@@ -42,48 +42,41 @@ static void malloc_debug_cb(const char *debug)
 }
 
 
-static size_t send_msg(int socket, msgaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(int socket, transaddr_ptr addr, void *data, size_t size)
 {
     return sendto(socket, data, size, 0, (struct sockaddr*)addr->byte, addr->size);
 }
 
-static size_t recv_msg(int socket, msgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(int socket, transaddr_ptr addr, void *buf, size_t size)
 {
     return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->byte, (socklen_t*)&addr->size);
 }
 
-static void connected(void *ctx, msgchannel_ptr channel)
+static void connected(transchannel_listener_ptr listener, transchannel_ptr channel)
 {
 
 }
 
-static void disconnected(void *ctx, msgchannel_ptr channel)
+static void disconnected(transchannel_listener_ptr listener, transchannel_ptr channel)
 {
 
 }
 
-static void message_arrived(void *ctx, msgchannel_ptr channel, void *data, size_t size)
+static void message_arrived(transchannel_listener_ptr listener, transchannel_ptr channel, void *data, size_t size)
 {
 
 }
 
-static void update_status(void *ctx, msgchannel_ptr channel)
+static void update_status(transchannel_listener_ptr listener, transchannel_ptr channel)
 {
 
-}
-
-static void recv_task_func(linekv_ptr ctx)
-{
-    __logi("start recv_task");
-    server_t *server = linekv_find_ptr(ctx, "ctx");
-    antenna_start_receive(server->antenna);
 }
 
 static void send_task_func(linekv_ptr ctx)
 {
     __logi("start send_task");
     server_t *server = linekv_find_ptr(ctx, "ctx");
-    antenna_start_send(server->antenna);
+    mtp_run(server->mtp, &server->listener);
 }
 
 int main(int argc, char *argv[])
@@ -93,18 +86,13 @@ int main(int argc, char *argv[])
     uint16_t port = 3721;
     server_t server;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
-    msgaddr_ptr addr = &server.msgaddr;
-    msgchannel_listener_ptr listener = &server.listener;
-
-    server.recv_func = linekv_create(1024);
-    linekv_add_ptr(server.recv_func, "func", recv_task_func);
-    linekv_add_ptr(server.recv_func, "ctx", &server);
-    server.recv_task = linetask_create();
+    transaddr_ptr addr = &server.transaddr;
+    transchannel_listener_ptr listener = &server.listener;
 
     server.send_func = linekv_create(1024);
     linekv_add_ptr(server.send_func, "func", send_task_func);
     linekv_add_ptr(server.send_func, "ctx", &server);
-    server.send_task = linetask_create();
+    server.send_task = task_create();
 
     addr->size = sizeof(struct sockaddr_in);
     addr->byte = &server.addr;
@@ -129,12 +117,12 @@ int main(int argc, char *argv[])
     device->send = send_msg;
     device->receive = recv_msg;
     
-    server.antenna = antenna_create(device);
+    server.mtp = mtp_create(device);
 
-    antenna_connect(server.antenna, addr, listener, &server);
+    listener->ctx = &server;
+    mtp_connect(server.mtp, addr);
 
-    linetask_post(server.recv_task, server.recv_func);
-    linetask_post(server.send_task, server.send_func);
+    task_post(server.send_task, server.send_func);
 
     char str[100];
 
@@ -148,10 +136,10 @@ int main(int argc, char *argv[])
         }
 
         printf( "\nsend msg len: %d", strlen(str));
-        // antenna_send_message();
+        // mtp_send();
     }
 
-    antenna_release(&server.antenna);
+    mtp_release(&server.mtp);
 
     close(fd);
 
