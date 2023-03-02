@@ -94,8 +94,8 @@ int main(int argc, char *argv[])
     linekv_add_ptr(server.send_func, "ctx", &server);
     server.send_task = task_create();
 
-    addr->size = sizeof(struct sockaddr_in);
-    addr->byte = &server.addr;
+    addr->size = 6;
+    addr->byte = &server.addr.sin_addr;
     memset(addr->byte, 0, addr->size);
     server.addr.sin_family = AF_INET;
     server.addr.sin_port = htons(port);

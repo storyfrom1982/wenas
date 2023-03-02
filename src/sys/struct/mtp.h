@@ -118,7 +118,7 @@ static inline void mtp_connect(mtp_ptr mtp, transaddr_ptr addr)
 {
     transchannel_ptr channel = (transchannel_ptr)malloc(sizeof(transchannel_t));
     channel->addr = *addr;
-    tree_inseart(mtp->peers, channel->addr.byte, channel);
+    tree_inseart(mtp->peers, channel->addr.byte, channel->addr.size, channel);
 }
 
 static inline void mtp_disconnect(mtp_ptr mtp, transchannel_ptr pptr)
@@ -167,7 +167,7 @@ static inline int mtp_run(mtp_ptr mtp, transchannel_listener_ptr listener)
             }
             ret = mtp->device->receive(mtp->device->socket, &mtp->addr, &pkt, UNIT_TOTAL_SIZE);
             if (ret > 0){
-                transchannel_ptr ch = (transchannel_ptr)tree_find(mtp->peers, mtp->addr.byte);
+                transchannel_ptr ch = (transchannel_ptr)tree_find(mtp->peers, mtp->addr.byte, mtp->addr.size);
                 if (ch){
                     if (pkt->head.type & TRANSUNIT_ACK){
                         ret = mtp->device->send(mtp->device->socket, &pkt->chennel->addr, 

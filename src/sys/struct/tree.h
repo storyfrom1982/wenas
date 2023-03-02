@@ -2,7 +2,6 @@
 #define __SYS_TREE_H__
 
 #include <env/env.h>
-#include <sys/struct/linekv.h>
 
 #define NODE_DIMENSION          4
 #define TREE_DIMENSION          16
@@ -36,25 +35,26 @@ __tree tree_create()
 }
 
 
-void tree_destroy(__tree *pp_root)
+void tree_release(__tree *pptr)
 {
-    if (pp_root && *pp_root){
-        __tree root = *pp_root;
-        *pp_root = (__tree)NULL;
-        free(root);
+    if (pptr && *pptr){
+        __tree node = *pptr;
+        *pptr = (__tree)NULL;
+        free(node);
     }
 }
 
-void tree_inseart(__tree root, linekey_ptr key, __ptr mapping)
+void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 {
     uint64_t i;
     __tree parent, tree = root;
-    __tree_node *node, *prev = __tree2node(tree);
+    __tree_node *node;
     
     __tree2node(tree)->route ++;
-    char *p = &key->byte[1], *end = p + key->byte[0];
+    uint8_t len = 0;
+    char *p = (char *)key;
 
-    while (p != end)
+    while (len < keylen)
     {
         parent = tree;
         i = (*p) >> 4;
@@ -81,16 +81,18 @@ void tree_inseart(__tree root, linekey_ptr key, __ptr mapping)
         node->parent = parent;
 
         p++;
+        len++;
     }
     
     node->mapping = mapping;
     __tree2node(parent)->leaves ++;
 }
 
-__ptr tree_find(__tree root, linekey_ptr key)
+__ptr tree_find(__tree root, void *key, uint8_t keylen)
 {
-    char *p = &key->byte[1], *end = p + key->byte[0];
-    while (p != end)
+    uint8_t len = 0;
+    char *p = (char *)key;
+    while (len < keylen)
     {
         if (root != NULL){
             root = (__tree)root[((*p) >> 4)];
@@ -105,6 +107,7 @@ __ptr tree_find(__tree root, linekey_ptr key)
         }
     
         p++;
+        len++;
     }
 
     if (root != NULL){
@@ -115,12 +118,14 @@ __ptr tree_find(__tree root, linekey_ptr key)
 }
 
 
-void tree_delete(__tree root, linekey_ptr key, void(*free_ptr)(__ptr))
+__ptr tree_delete(__tree root, void *key, uint8_t keylen)
 {
+    __ptr mapping = NULL;
     __tree parent, tree = root;
-    char *p = &key->byte[1], *end = p + key->byte[0];
+    uint8_t len = 0;
+    char *p = (char *)key;
 
-    while (p != end)
+    while (len < keylen)
     {
         if (tree != NULL){
             tree = (__tree)tree[((*p) >> 4)];
@@ -134,24 +139,22 @@ void tree_delete(__tree root, linekey_ptr key, void(*free_ptr)(__ptr))
         }
 
         p++;
+        len++;
     }
 
     if (tree == NULL){
-        return;
+        return mapping;
     }
 
     __tree2node(root)->route--;
 
-    if (free_ptr){
-        free_ptr(__tree2node(tree)->mapping);
-    }
+    mapping = __tree2node(tree)->mapping;
     __tree2node(tree)->mapping = NULL;
     __tree2node(__tree2node(tree)->parent)->leaves--;
 
     p--;
-    end = &key->byte[0];
 
-    while (p != end)
+    while (len > 0)
     {
         parent = __tree2node(tree)->parent;
         if (tree != NULL){
@@ -174,7 +177,10 @@ void tree_delete(__tree root, linekey_ptr key, void(*free_ptr)(__ptr))
         }
 
         p--;
+        len--;
     }
+
+    return mapping;
 }
 
 
@@ -272,7 +278,7 @@ __ptr tree_max(__tree root)
 }
 
 
-__node_list* tree_sort_up(__tree root, linekey_ptr key, uint64_t count)
+__node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
     int first = 0, i = 0;
     __tree parent, tree = root;
@@ -280,8 +286,9 @@ __node_list* tree_sort_up(__tree root, linekey_ptr key, uint64_t count)
     
     if (key != NULL)
     {
-        char *p = &key->byte[1], *end = p + key->byte[0];
-        while (p != end)
+        uint8_t len = 0;
+        char *p = (char *)key;
+        while (len < keylen)
         {
             parent = tree;
             if (tree != NULL){
@@ -300,6 +307,7 @@ __node_list* tree_sort_up(__tree root, linekey_ptr key, uint64_t count)
             }
 
             p++;
+            len++;
         }
 
         if (tree){
@@ -350,7 +358,7 @@ __node_list* tree_sort_up(__tree root, linekey_ptr key, uint64_t count)
 }
 
 
-__node_list* tree_sort_down(__tree root, linekey_ptr key, uint64_t count)
+__node_list* tree_down(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
     int i = TREE_DIMENSION -1;
     __tree parent, tree = root;
@@ -358,8 +366,9 @@ __node_list* tree_sort_down(__tree root, linekey_ptr key, uint64_t count)
     
     if (key != NULL)
     {
-        char *p = &key->byte[1], *end = p + key->byte[0];
-        while (p != end)
+        uint8_t len = 0;
+        char *p = (char *)key;
+        while (len < keylen)
         {
             parent = tree;
             if (tree != NULL){
@@ -378,6 +387,7 @@ __node_list* tree_sort_down(__tree root, linekey_ptr key, uint64_t count)
             }
 
             p++;
+            len++;
         }
 
         tree = parent;

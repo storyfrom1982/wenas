@@ -1,14 +1,19 @@
 #include "sys/struct/tree.h"
+#include "env/malloc.h"
 
+static void malloc_debug_cb(const char *debug)
+{
+    __logw("%s\n", debug);
+}
 
 static void free_mapping(void *mapping)
 {
     __logd("free tree node mapping: %s\n", (char*)mapping);
+    free(mapping);
 }
 
-void tree_test()
+int main(int argc, char *argv[])
 {
-
     // const char *root = "a";
     const char *keys[] ={
                             "aaa",      "aaab",     "az",       "aaabbb",   "aaabbc",   "aaabcc",   "aaabcd",   "aaabcde", 
@@ -23,21 +28,12 @@ void tree_test()
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] = %s\n", keys[i]);
-        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
-        key->byte[0] = strlen(keys[i]);
-        memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-        key->byte[key->byte[0]+1] = '\0';
-        tree_inseart(tree, key, (__ptr)keys[i]);
-        free(key);
+        tree_inseart(tree, keys[i], strlen(keys[i]), strdup(keys[i]));
     }
 
     {
-        const char *tmp_key = "bbb";
-        linekey_ptr key = (linekey_ptr )malloc(strlen(tmp_key) + 2);
-        key->byte[0] = strlen(tmp_key);
-        memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-        __node_list *tmp, *sort = tree_sort_up(tree, key, 32);
-        free(key);
+        const char *key = "bbb";
+        __node_list *tmp, *sort = tree_up(tree, key, strlen(key), 32);
         while (sort)
         {
             tmp = sort;
@@ -49,12 +45,8 @@ void tree_test()
 
 
     {
-        const char *tmp_key = "bbb";
-        linekey_ptr key = (linekey_ptr )malloc(strlen(tmp_key) + 2);
-        key->byte[0] = strlen(tmp_key);
-        memcpy(&key->byte[1], tmp_key, strlen(tmp_key));
-        __node_list *tmp, *sort = tree_sort_down(tree, key, 32);
-        free(key);
+        const char *key = "bbb";
+        __node_list *tmp, *sort = tree_down(tree, key, strlen(key), 32);
         while (sort)
         {
             tmp = sort;
@@ -72,62 +64,32 @@ void tree_test()
     __logd("max >>>>------------> %s\n", max);
     
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
-        // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
-        key->byte[0] = strlen(keys[i]);
-        memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-        key->byte[key->byte[0]+1] = '\0';
-        char *mapping = tree_find(tree, key);
-        __logd("key =%s mapping = %s\n", (char*)&key->byte[1], mapping);
-        free(key);
+        char *mapping = tree_find(tree, keys[i], strlen(keys[i]));
+        __logd("find key =%s mapping = %s\n", keys[i], mapping);
     }
 
     __logd("tree node count -- %lu\n", __tree2node(tree)->route);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*) / 2; ++i){
-        // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
-        key->byte[0] = strlen(keys[i]);
-        memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-        key->byte[key->byte[0]+1] = '\0';
-        tree_delete(tree, key, free_mapping);
-        free(key);
+        __logd("delete key ================================= %s\n", keys[i]);
+        __ptr val = tree_delete(tree, keys[i], strlen(keys[i]));
+        __logd("delete val ================================= %s\n", (char*)val);
+        free(val);
     }
 
     __logd("tree node count ---- %lu\n", __tree2node(tree)->route);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         // __logd("keys[i] ================================= %s\n", keys[i]);
-        linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
-        key->byte[0] = strlen(keys[i]);
-        memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-        key->byte[key->byte[0]+1] = '\0';
-        char *mapping = tree_find(tree, key);
-        __logd("----->>> key =%s mapping = %s\n", (char*)&key->byte[1], mapping);
-        free(key);
+        char *mapping = tree_find(tree, keys[i], strlen(keys[i]));
+        __logd("----->>> key =%s mapping = %s\n", keys[i], mapping);
     }
-
-    // __tree_node *next = __tree2node(tree)->next;
-    // while (next)
-    // {
-    //     __logd("tree node mapping %s\n", (char*)next->mapping);
-    //     next = next->next;
-    // }
-    
-
-    // for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
-    //     // __logd("keys[i] ================================= %s\n", keys[i]);
-    //     linekey_ptr key = (linekey_ptr )malloc(strlen(keys[i]) + 2);
-    //     key->byte[0] = strlen(keys[i]);
-    //     memcpy(&key->byte[1], keys[i], strlen(keys[i]));
-    //     key->byte[key->byte[0]+1] = '\0';
-    //     // __logd("key = %s node count $$$-------> %lu\n", keys[i], __tree_node(tree->index)->count);
-    //     tree_delete(tree, key, free_mapping);
-    //     __logd("key = %s node count -------> %lu\n", keys[i], __tree2node(tree)->count);
-    //     free(key);
-    // }
 
     __logd("tree node count %lu\n", __tree2node(tree)->route);
     tree_clear(tree, free_mapping);
-    tree_destroy(&tree);
+    tree_release(&tree);
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(malloc_debug_cb);
+#endif
 }
