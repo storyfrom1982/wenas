@@ -104,4 +104,4 @@ endfunction(build_executable)
 
 build_executable(kang src/main.cpp)
 build_executable(server src/business/server.c)
-build_executable(tree test/sys/struct/tree_test.c)
+# build_executable(tree test/sys/struct/tree_test.c)

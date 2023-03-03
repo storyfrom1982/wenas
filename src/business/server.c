@@ -44,12 +44,12 @@ static void malloc_debug_cb(const char *debug)
 
 static size_t send_msg(int socket, transaddr_ptr addr, void *data, size_t size)
 {
-    return sendto(socket, data, size, 0, (struct sockaddr*)addr->byte, addr->size);
+    return sendto(socket, data, size, 0, (struct sockaddr*)addr->addr, addr->addrlen);
 }
 
 static size_t recv_msg(int socket, transaddr_ptr addr, void *buf, size_t size)
 {
-    return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->byte, (socklen_t*)&addr->size);
+    return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
 }
 
 static void connected(transchannel_listener_ptr listener, transchannel_ptr channel)
@@ -94,9 +94,12 @@ int main(int argc, char *argv[])
     linekv_add_ptr(server.send_func, "ctx", &server);
     server.send_task = task_create();
 
-    addr->size = 6;
-    addr->byte = &server.addr.sin_addr;
-    memset(addr->byte, 0, addr->size);
+    addr->keylen = 6;
+    addr->ip = server.addr.sin_addr.s_addr;
+    addr->port =server.addr.sin_port;
+    addr->addr = &server.addr;
+    addr->addrlen = sizeof(server.addr);
+
     server.addr.sin_family = AF_INET;
     server.addr.sin_port = htons(port);
     server.addr.sin_addr.s_addr = INADDR_ANY;
@@ -135,7 +138,9 @@ int main(int argc, char *argv[])
             break;
         }
 
-        printf( "\nsend msg len: %d", strlen(str));
+        uint16_t u = 0;
+        // printf( "\nsend msg len: %d", strlen(str));
+        printf( "\nsend 1 - 255: %hu\n", u-65535U);
         // mtp_send();
     }
 
