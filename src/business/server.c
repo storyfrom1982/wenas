@@ -28,11 +28,11 @@
 typedef struct server {
     socklen_t addlen;
     struct sockaddr_in addr;
-    struct transaddr transaddr;
-    struct transchannel_listener listener;
+    struct msgaddr msgaddr;
+    struct msglistener listener;
     linekv_ptr send_func;
     task_ptr send_task;
-    mtp_ptr mtp;
+    msgtransmitter_ptr mtp;
 }server_t;
 
 
@@ -42,32 +42,32 @@ static void malloc_debug_cb(const char *debug)
 }
 
 
-static size_t send_msg(int socket, transaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(int socket, msgaddr_ptr addr, void *data, size_t size)
 {
     return sendto(socket, data, size, 0, (struct sockaddr*)addr->addr, addr->addrlen);
 }
 
-static size_t recv_msg(int socket, transaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(int socket, msgaddr_ptr addr, void *buf, size_t size)
 {
     return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
 }
 
-static void connected(transchannel_listener_ptr listener, transchannel_ptr channel)
+static void connected(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
 
-static void disconnected(transchannel_listener_ptr listener, transchannel_ptr channel)
+static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
 
-static void message_arrived(transchannel_listener_ptr listener, transchannel_ptr channel, void *data, size_t size)
+static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
 
 }
 
-static void update_status(transchannel_listener_ptr listener, transchannel_ptr channel)
+static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
@@ -76,7 +76,7 @@ static void send_task_func(linekv_ptr ctx)
 {
     __logi("start send_task");
     server_t *server = linekv_find_ptr(ctx, "ctx");
-    mtp_run(server->mtp, &server->listener);
+    msgtransmitter_run(server->mtp);
 }
 
 int main(int argc, char *argv[])
@@ -86,8 +86,8 @@ int main(int argc, char *argv[])
     uint16_t port = 3721;
     server_t server;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
-    transaddr_ptr addr = &server.transaddr;
-    transchannel_listener_ptr listener = &server.listener;
+    msgaddr_ptr addr = &server.msgaddr;
+    msglistener_ptr listener = &server.listener;
 
     server.send_func = linekv_create(1024);
     linekv_add_ptr(server.send_func, "func", send_task_func);
@@ -107,8 +107,8 @@ int main(int argc, char *argv[])
 
     listener->connected = connected;
     listener->disconnected = disconnected;
-    listener->message_arrived = message_arrived;
-    listener->update_status = update_status;
+    listener->message = message_arrived;
+    listener->status = update_status;
 
     int fd;
     int enable = 1;
@@ -120,10 +120,10 @@ int main(int argc, char *argv[])
     device->send = send_msg;
     device->receive = recv_msg;
     
-    server.mtp = mtp_create(device);
+    server.mtp = msgtransmitter_create(device, &server.listener);
 
     listener->ctx = &server;
-    mtp_connect(server.mtp, addr);
+    msgtransmitter_connect(server.mtp, addr);
 
     task_post(server.send_task, server.send_func);
 
@@ -141,10 +141,10 @@ int main(int argc, char *argv[])
         uint16_t u = 0;
         // printf( "\nsend msg len: %d", strlen(str));
         printf( "\nsend 1 - 255: %hu\n", u-65535U);
-        // mtp_send();
+        // msgtransmitter_send();
     }
 
-    mtp_release(&server.mtp);
+    msgtransmitter_release(&server.mtp);
 
     close(fd);
 

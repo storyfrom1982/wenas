@@ -16,19 +16,19 @@ enum {
     TRANSUNIT_DISCONNECT = 0x08,
     TRANSUNIT_BIND = 0x10,
     TRANSUNIT_PING = 0x20,
-    TRANSUNIT_GROUP = 0x40,
-    TRANSUNIT_SERIAL = 0x80
+    TRANSUNIT_MESSAGE = 0x40
 };
 
-#define UNIT_HEAD_SIZE          64
-#define UNIT_BODY_SIZE          1324
-#define UNIT_TOTAL_SIZE         1388
+#define UNIT_HEAD_SIZE          8
+#define UNIT_BODY_SIZE          1400
+#define UNIT_TOTAL_SIZE         1408
 #define UNIT_GROUP_SIZE         256
 #define UNIT_GROUP_BUF_SIZE     (UNIT_BODY_SIZE * UNIT_GROUP_SIZE)
 
-typedef struct transchannel* transchannel_ptr;
+typedef struct msgchannel* msgchannel_ptr;
+typedef struct msglistener* msglistener_ptr;
 
-typedef struct transaddr {
+typedef struct msgaddr {
     void *addr;
     size_t addrlen;
     union{
@@ -39,17 +39,17 @@ typedef struct transaddr {
         char key[6];
     };
     uint8_t keylen;
-}*transaddr_ptr;
+}*msgaddr_ptr;
 
 typedef struct transunit {
-    transchannel_ptr chennel;
+    msgchannel_ptr chennel;
     struct {
-        uint16_t type;
-        uint16_t body_size;
-        uint8_t group_id;
-        uint8_t group_descending;
+        uint8_t type;
+        uint8_t flag;
         uint8_t serial_number;
-        uint8_t ack_serial_number;
+        uint8_t maximal;
+        uint16_t expand;
+        uint16_t body_size;
     } head;
     uint8_t body[UNIT_BODY_SIZE];
 }*transunit_ptr;
@@ -60,13 +60,20 @@ typedef struct transunitbuf {
     struct transunit *buf[UNIT_GROUP_SIZE];
 }*transunitbuf_ptr;
 
-typedef struct transgroup {
-    size_t group_size;
-    char *group_buffer;
-    uint8_t group_descending;
-    ___atom_8bit rpos, wpos;
-    struct transunit *serialbuf[UNIT_GROUP_SIZE];
-}*transgroup_ptr;
+
+typedef struct message {
+    msgchannel_ptr channel;
+    size_t size;
+    char data[1];
+}*message_ptr;
+
+
+typedef struct msgbuf {
+    message_ptr msg;
+    uint8_t max_serial_number;
+    uint8_t rpos, wpos;
+    struct transunit *buf[UNIT_GROUP_SIZE];
+}*msgbuf_ptr;
 
 
 enum {
@@ -77,53 +84,48 @@ enum {
     CHANNEL_STATUS_BIND = 4,
 };
 
-struct transchannel {
+struct msgchannel {
     int status;
     ___atom_bool sending;
     ___mutex_ptr mtx;
-    struct transaddr addr;
+    msglistener_ptr listener;
+    struct msgaddr addr;
+    struct msgbuf recvbuf;
     struct transunitbuf sendbuf;
-    struct transgroup recvbuf;
-    struct transchannel *prev, *next;
+    struct msgchannel *prev, *next;
 };
 
-typedef struct transchannel_listener {
+struct msglistener {
     void *ctx;
-    void (*connected)(struct transchannel_listener*, transchannel_ptr channel);
-    void (*disconnected)(struct transchannel_listener*, transchannel_ptr channel);
-    void (*message_arrived)(struct transchannel_listener*, transchannel_ptr channel, void *data, size_t size);
-    void (*update_status)(struct transchannel_listener*, transchannel_ptr channel);
-}*transchannel_listener_ptr;
+    void (*connected)(struct msglistener*, msgchannel_ptr channel);
+    void (*disconnected)(struct msglistener*, msgchannel_ptr channel);
+    void (*message)(struct msglistener*, msgchannel_ptr channel, message_ptr msg);
+    void (*status)(struct msglistener*, msgchannel_ptr channel);
+};
 
 typedef struct physics_socket {
     int socket;
-    size_t (*send)(int socket, transaddr_ptr addr, void *data, size_t size);
-    size_t (*receive)(int socket, transaddr_ptr addr, void *data, size_t size);
+    size_t (*send)(int socket, msgaddr_ptr addr, void *data, size_t size);
+    size_t (*receive)(int socket, msgaddr_ptr addr, void *data, size_t size);
 }*physics_socket_ptr;
 
-typedef struct mtp {
+typedef struct msgtransmitter {
+    __tree peers;
     ___atom_bool running;
     ___atom_bool watting;
     ___atom_bool readable;
     ___atom_size sendable;
-    heap_t *timer;
-    __tree peers;
     ___mutex_ptr mtx;
-    struct transaddr addr;
+    heap_t *timer;
     physics_socket_ptr device;
-    transchannel_listener_ptr listener;
-    struct transchannel head, end;
-}*mtp_ptr;
+    msglistener_ptr listener;
+    struct msgchannel head, end;
+}*msgtransmitter_ptr;
 
-typedef struct mtp** mtp_pptr;
+typedef struct msgtransmitter** mtp_pptr;
 
 
-static inline void transunitbuf_clear(transunitbuf_ptr buf)
-{
-    memset(buf, 0, sizeof(struct transunitbuf));
-}
-
-static inline void channel_put_unit(transchannel_ptr channel, transunit_ptr unit)
+static inline void channel_push_unit(msgchannel_ptr channel, transunit_ptr unit)
 {
     while (UNIT_GROUP_SIZE - channel->sendbuf.wpos + channel->sendbuf.rpos == 0){
         ___lock lk = ___mutex_lock(channel->mtx);
@@ -136,7 +138,7 @@ static inline void channel_put_unit(transchannel_ptr channel, transunit_ptr unit
     ___mutex_notify(channel->mtx);
 }
 
-static inline transunit_ptr channel_get_unit(transchannel_ptr channel)
+static inline transunit_ptr channel_hold_unit(msgchannel_ptr channel)
 {
     if (channel->sendbuf.wpos - channel->sendbuf.reading > 0){
         return channel->sendbuf.buf[channel->sendbuf.reading++];
@@ -145,7 +147,7 @@ static inline transunit_ptr channel_get_unit(transchannel_ptr channel)
     }
 }
 
-static inline void channel_free_unit(transchannel_ptr channel, transunit_ptr unit)
+static inline void channel_free_unit(msgchannel_ptr channel, transunit_ptr unit)
 {
     unit->chennel = NULL;
     if (unit == channel->sendbuf.buf[channel->sendbuf.rpos]){
@@ -159,49 +161,47 @@ static inline void channel_free_unit(transchannel_ptr channel, transunit_ptr uni
     ___mutex_notify(channel->mtx);
 }
 
-static inline void transgroupbuf_clear(transgroup_ptr group)
-{
-    memset(group, 0, sizeof(struct transgroup));
-}
-
-static inline void channel_write_group(transchannel_ptr channel, transunit_ptr unit)
+static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr unit)
 {
     int serial_gap = unit->head.serial_number - channel->recvbuf.wpos;
 
     if (serial_gap < 0){
-        channel->recvbuf.serialbuf[unit->head.serial_number] = unit;
+        channel->recvbuf.buf[unit->head.serial_number] = unit;
     }else if (serial_gap > 0){
-        channel->recvbuf.serialbuf[unit->head.serial_number] = unit;
+        channel->recvbuf.buf[unit->head.serial_number] = unit;
         channel->recvbuf.wpos = unit->head.serial_number + 1;
     }else {
-        channel->recvbuf.serialbuf[channel->recvbuf.wpos] = unit;
+        channel->recvbuf.buf[channel->recvbuf.wpos] = unit;
         channel->recvbuf.wpos++;
     }
 
-    while (channel->recvbuf.serialbuf[channel->recvbuf.rpos] != NULL){
-        if (channel->recvbuf.group_buffer == NULL){
-            channel->recvbuf.group_descending = channel->recvbuf.serialbuf[channel->recvbuf.rpos]->head.group_descending;
-            channel->recvbuf.group_size = 0;
-            channel->recvbuf.group_buffer = (char*)malloc(channel->recvbuf.group_descending * UNIT_BODY_SIZE);
+    while (channel->recvbuf.buf[channel->recvbuf.rpos] != NULL){
+        if (channel->recvbuf.msg == NULL){
+            channel->recvbuf.max_serial_number = channel->recvbuf.buf[channel->recvbuf.rpos]->head.maximal;
+            channel->recvbuf.msg = (message_ptr)malloc(sizeof(struct message) + (channel->recvbuf.max_serial_number * UNIT_BODY_SIZE));
+            channel->recvbuf.msg->size = 0;
+            channel->recvbuf.msg->channel = channel;
         }
-        memcpy(channel->recvbuf.group_buffer + channel->recvbuf.group_size, 
-            channel->recvbuf.serialbuf[channel->recvbuf.rpos]->body, 
-            channel->recvbuf.serialbuf[channel->recvbuf.rpos]->head.body_size);
-        channel->recvbuf.group_size += channel->recvbuf.serialbuf[channel->recvbuf.rpos]->head.body_size;
-        channel->recvbuf.group_descending--;
-        if (channel->recvbuf.group_descending == 0){
-            channel->recvbuf.group_buffer = NULL;
+        memcpy(channel->recvbuf.msg->data + channel->recvbuf.msg->size, 
+            channel->recvbuf.buf[channel->recvbuf.rpos]->body, 
+            channel->recvbuf.buf[channel->recvbuf.rpos]->head.body_size);
+        channel->recvbuf.msg->size += channel->recvbuf.buf[channel->recvbuf.rpos]->head.body_size;
+        channel->recvbuf.max_serial_number--;
+        if (channel->recvbuf.max_serial_number == 0){
+            channel->listener->message(channel->listener, channel, channel->recvbuf.msg);
+            channel->recvbuf.msg = NULL;
         }
-        free(channel->recvbuf.serialbuf[channel->recvbuf.rpos]);
+        free(channel->recvbuf.buf[channel->recvbuf.rpos]);
         channel->recvbuf.rpos++;
     }
 }
 
-static inline mtp_ptr mtp_create(physics_socket_ptr device)
+static inline msgtransmitter_ptr msgtransmitter_create(physics_socket_ptr device, msglistener_ptr listener)
 {
-    mtp_ptr mtp = (mtp_ptr)calloc(1, sizeof(struct mtp));
+    msgtransmitter_ptr mtp = (msgtransmitter_ptr)calloc(1, sizeof(struct msgtransmitter));
     mtp->sendable = 0;
     mtp->device = device;
+    mtp->listener = listener;
     mtp->timer = heap_create(1024);
     mtp->peers = tree_create();
     mtp->mtx = ___mutex_create();
@@ -212,26 +212,25 @@ static inline mtp_ptr mtp_create(physics_socket_ptr device)
     return mtp;
 }
 
-static inline void mtp_release(mtp_pptr pptr)
+static inline void msgtransmitter_release(mtp_pptr pptr)
 {
 
 }
 
-static inline void mtp_connect(mtp_ptr mtp, transaddr_ptr addr)
+static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msgaddr_ptr addr)
 {
-    transchannel_ptr channel = (transchannel_ptr)calloc(1, sizeof(struct transchannel));
+    msgchannel_ptr channel = (msgchannel_ptr)calloc(1, sizeof(struct msgchannel));
     channel->status = CHANNEL_STATUS_OPEN;
+    channel->listener = mtp->listener;
     channel->addr = *addr;
     channel->mtx = ___mutex_create();
     tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);    
-    transunitbuf_clear(&channel->sendbuf);
-    transgroupbuf_clear(&channel->recvbuf);
 
     transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
     unit->head.type = TRANSUNIT_REQ | TRANSUNIT_CONNECT;
     unit->head.body_size = 0;
-    unit->head.group_descending = 1;
-    channel_put_unit(channel, unit);
+    unit->head.maximal = 1;
+    channel_push_unit(channel, unit);
     ___lock lk = ___mutex_lock(mtp->mtx);
     ___set_true(&channel->sending);
     channel->next = &mtp->end;
@@ -242,19 +241,23 @@ static inline void mtp_connect(mtp_ptr mtp, transaddr_ptr addr)
         ___mutex_notify(mtp->mtx);
     }
     ___mutex_unlock(mtp->mtx, lk);
+    return channel;
 }
 
-static inline void mtp_disconnect(mtp_ptr mtp, transchannel_ptr pptr)
+static inline void msgtransmitter_disconnect(msgtransmitter_ptr mtp, msgchannel_ptr pptr)
 {
 
 }
 
-static inline void mtp_send(mtp_ptr mtp, transchannel_ptr channel, void *data, size_t size)
+static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr channel, void *data, size_t size)
 {
+    void *group_data;
+    size_t group_size;
     size_t group_count = size / (UNIT_GROUP_BUF_SIZE);
     size_t last_group_size = size - (group_count * UNIT_GROUP_BUF_SIZE);
-    size_t group_size;
-    void *group_data;
+    uint32_t unit_count;
+    uint8_t last_unit_size;
+    uint8_t last_unit_id;
 
     for (int x = 0; x < group_count; ++x){
         group_size = UNIT_GROUP_BUF_SIZE;
@@ -264,10 +267,10 @@ static inline void mtp_send(mtp_ptr mtp, transchannel_ptr channel, void *data, s
             transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
             memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
             unit->chennel = channel;
-            unit->head.type = TRANSUNIT_REQ | TRANSUNIT_GROUP;
+            unit->head.type = TRANSUNIT_REQ | TRANSUNIT_MESSAGE;
             unit->head.body_size = UNIT_BODY_SIZE;
-            unit->head.group_descending = UNIT_GROUP_SIZE - y;
-            channel_put_unit(channel, unit);
+            unit->head.maximal = UNIT_GROUP_SIZE - y;
+            channel_push_unit(channel, unit);
         }
 
         if (___set_true(&channel->sending)){
@@ -286,28 +289,32 @@ static inline void mtp_send(mtp_ptr mtp, transchannel_ptr channel, void *data, s
     group_data = data + (size - last_group_size);
     group_size = last_group_size;
 
-    uint32_t unit_count = group_size / UNIT_BODY_SIZE;
-    uint8_t last_unit_size = group_size - unit_count * UNIT_BODY_SIZE;
-    uint8_t last_unit_id = last_unit_size > 0 ? unit_count + 1 : unit_count;
+    unit_count = group_size / UNIT_BODY_SIZE;
+    last_unit_size = group_size - unit_count * UNIT_BODY_SIZE;
+    last_unit_id = 0;
 
-    for (size_t y = 0; y < unit_count; y++)
-    {
+    if (last_unit_size > 0){
+        last_unit_id = 1;
+        unit_count += 1;
+    }
+
+    for (size_t y = 0; (y + last_unit_id) < unit_count; y++){
         transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
         memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
         unit->chennel = channel;
-        unit->head.type = TRANSUNIT_REQ | TRANSUNIT_GROUP;
+        unit->head.type = TRANSUNIT_REQ | TRANSUNIT_MESSAGE;
         unit->head.body_size = UNIT_BODY_SIZE;
-        unit->head.group_descending = last_unit_id - y;
-        channel_put_unit(channel, unit);
+        unit->head.maximal = last_unit_id - y;
+        channel_push_unit(channel, unit);
     }
 
     if (last_unit_id){
         transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
-        memcpy(unit->body, group_data + (last_unit_id * UNIT_BODY_SIZE), last_unit_size);
+        memcpy(unit->body, group_data + ((unit_count - 1) * UNIT_BODY_SIZE), last_unit_size);
         unit->head.body_size = last_unit_size;
         unit->chennel = channel;
-        unit->head.group_descending = last_unit_id - last_unit_id;
-        channel_put_unit(channel, unit);
+        unit->head.maximal = 1;
+        channel_push_unit(channel, unit);
     }
     
     if (___set_true(&channel->sending)){
@@ -323,7 +330,7 @@ static inline void mtp_send(mtp_ptr mtp, transchannel_ptr channel, void *data, s
     }
 }
 
-static inline void mtp_update(mtp_ptr mtp)
+static inline void msgtransmitter_update(msgtransmitter_ptr mtp)
 {
     ___set_true(&mtp->readable);
     if (___set_false(&mtp->watting)){
@@ -333,16 +340,16 @@ static inline void mtp_update(mtp_ptr mtp)
     }
 }
 
-static inline int mtp_run(mtp_ptr mtp, transchannel_listener_ptr listener)
+static inline int msgtransmitter_run(msgtransmitter_ptr mtp)
 {
     int ret;
     uint64_t sleep_time;
+    struct msgaddr addr;
     heapment_t timer;
     transunit_ptr recvunit = NULL;
     transunit_ptr sendunit = NULL;
-    transchannel_ptr channel = NULL;
+    msgchannel_ptr channel = NULL;
     
-    mtp->listener = listener;
     mtp->readable = 0;
     mtp->sendable = false;
     
@@ -353,22 +360,22 @@ static inline int mtp_run(mtp_ptr mtp, transchannel_listener_ptr listener)
         if (recvunit == NULL){
             recvunit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
         }
-        ret = mtp->device->receive(mtp->device->socket, &mtp->addr, &recvunit, UNIT_TOTAL_SIZE);
+        ret = mtp->device->receive(mtp->device->socket, &addr, &recvunit, UNIT_TOTAL_SIZE);
         if (ret > 0){
-            transchannel_ptr ch = (transchannel_ptr)tree_find(mtp->peers, mtp->addr.key, mtp->addr.keylen);
+            msgchannel_ptr ch = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
             if (ch){
                 if (recvunit->head.type == (TRANSUNIT_REQ | TRANSUNIT_BIND)){
                     recvunit->head.type = TRANSUNIT_ACK | TRANSUNIT_BIND;
                     ret = mtp->device->send(mtp->device->socket, &recvunit->chennel->addr, 
                                 (void*)&(recvunit->head), UNIT_HEAD_SIZE + recvunit->head.body_size);
                 }else {
-                    mtp->listener->message_arrived(mtp->listener, ch, recvunit->body, ret - UNIT_HEAD_SIZE);
+                    channel_make_message(ch, recvunit);
                 }
             }else {
-                transchannel_ptr ch = (transchannel_ptr)malloc(sizeof(struct transchannel));
-                ch->addr = mtp->addr;
+                msgchannel_ptr ch = (msgchannel_ptr)malloc(sizeof(struct msgchannel));
                 ch->status = CHANNEL_STATUS_CONNECTING;
-                tree_inseart(mtp->peers, mtp->addr.key, mtp->addr.keylen, ch);
+                ch->addr = addr;
+                tree_inseart(mtp->peers, addr.key, addr.keylen, ch);
                 recvunit->head.type = TRANSUNIT_ACK | TRANSUNIT_CONNECT;
                 ret = mtp->device->send(mtp->device->socket, &ch->addr,
                     (void*)&(recvunit->head), UNIT_HEAD_SIZE + recvunit->head.body_size);
@@ -408,7 +415,7 @@ static inline int mtp_run(mtp_ptr mtp, transchannel_listener_ptr listener)
         
         while (channel != &mtp->end)
         {
-            sendunit = channel_get_unit(channel);
+            sendunit = channel_hold_unit(channel);
             if (sendunit){
                 ret = mtp->device->send(mtp->device->socket, &channel->addr, 
                     (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
