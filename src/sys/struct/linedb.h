@@ -38,18 +38,18 @@ enum {
 
 
 typedef struct linedb {
-    unsigned char byte[LINEDB_HEAD_MAX_SIZE];
+    uint8_t byte[LINEDB_HEAD_MAX_SIZE];
 }*linedb_ptr;
 
 
 union real32 {
     float f;
-    unsigned char byte[4];
+    char byte[4];
 };
 
 union real64 {
     double f;
-    unsigned char byte[8];
+    char byte[8];
 };
 
 
@@ -103,18 +103,40 @@ union real64 {
 
 
 
-#define __byte_to_float_32bit(b) \
-        (((union real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f)
+// #define __byte_to_float_32bit(b) \
+//         (((union real32){.byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4]}).f)
 
-#define __byte_to_float_64bit(b) \
-        (((union real64) \
-            { \
-                .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
-                .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
-            } \
-        ).f)
+// #define __byte_to_float_64bit(b) \
+//         (((union real64) \
+//             { \
+//                 .byte[0] = (b)->byte[1], .byte[1] = (b)->byte[2], .byte[2] = (b)->byte[3], .byte[3] = (b)->byte[4], \
+//                 .byte[4] = (b)->byte[5], .byte[5] = (b)->byte[6], .byte[6] = (b)->byte[7], .byte[7] = (b)->byte[8], \
+//             } \
+//         ).f)
 
+static inline float __byte_to_float_32bit(linedb_ptr db)
+{
+    union real32 r;
+    r.byte[0] = db->byte[1];
+    r.byte[1] = db->byte[2];
+    r.byte[2] = db->byte[3];
+    r.byte[3] = db->byte[4];
+    return r.f;
+}
 
+static inline float __byte_to_float_64bit(linedb_ptr db)
+{
+    union real64 r;
+    r.byte[0] = db->byte[1];
+    r.byte[1] = db->byte[2];
+    r.byte[2] = db->byte[3];
+    r.byte[3] = db->byte[4];
+    r.byte[4] = db->byte[5];
+    r.byte[5] = db->byte[6];
+    r.byte[6] = db->byte[7];
+    r.byte[7] = db->byte[8];
+    return r.f;
+}
 
 #define __n2b8(n)        __number_to_byte_8bit(n, LINEDB_NUMBER_INTEGER)
 #define __n2b16(n)       __number_to_byte_16bit(n, LINEDB_NUMBER_INTEGER)

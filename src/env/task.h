@@ -194,6 +194,7 @@ static inline void ___mutex_unlock(___mutex_ptr mptr, pthread_mutex_t *lock)
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <assert.h>
 
 
 static inline uint64_t ___sys_time()
