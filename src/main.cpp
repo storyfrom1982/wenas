@@ -69,6 +69,8 @@ int main(int argc, char *argv[])
     std::cout << "cxx clock: " << text << std::endl;
 
     ___atom_size size = 10;
+    ___atom_set(&size, 10);
+
     ___atom_sub(&size, 5);
     std::cout << "___atom_sub: " << size << std::endl;
 

@@ -26,12 +26,11 @@
 
 
 typedef struct server {
+    int socket;
     socklen_t addlen;
     struct sockaddr_in addr;
     struct msgaddr msgaddr;
     struct msglistener listener;
-    linekv_ptr send_func;
-    task_ptr send_task;
     msgtransmitter_ptr mtp;
 }server_t;
 
@@ -42,14 +41,16 @@ static void malloc_debug_cb(const char *debug)
 }
 
 
-static size_t send_msg(int socket, msgaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    return sendto(socket, data, size, 0, (struct sockaddr*)addr->addr, addr->addrlen);
+    // return sendto(socket, data, size, 0, (struct sockaddr*)addr->addr, addr->addrlen);
+    return size;
 }
 
-static size_t recv_msg(int socket, msgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size, uint64_t timeout)
 {
-    return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    // return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    return size;
 }
 
 static void connected(msglistener_ptr listener, msgchannel_ptr channel)
@@ -72,13 +73,6 @@ static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
 
 }
 
-static void send_task_func(linekv_ptr ctx)
-{
-    __logi("start send_task");
-    server_t *server = linekv_find_ptr(ctx, "ctx");
-    msgtransmitter_run(server->mtp);
-}
-
 int main(int argc, char *argv[])
 {
     __logi("start server");
@@ -88,11 +82,6 @@ int main(int argc, char *argv[])
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
     msgaddr_ptr addr = &server.msgaddr;
     msglistener_ptr listener = &server.listener;
-
-    server.send_func = linekv_create(1024);
-    linekv_add_ptr(server.send_func, "func", send_task_func);
-    linekv_add_ptr(server.send_func, "ctx", &server);
-    server.send_task = task_create();
 
     addr->keylen = 6;
     addr->ip = server.addr.sin_addr.s_addr;
@@ -116,16 +105,14 @@ int main(int argc, char *argv[])
     __pass(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == 0);
 	__pass(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == 0);
 
-    device->socket = fd;
-    device->send = send_msg;
-    device->receive = recv_msg;
+    server.socket = fd;
+    device->sendto = send_msg;
+    device->recvfrom = recv_msg;
     
     server.mtp = msgtransmitter_create(device, &server.listener);
 
     listener->ctx = &server;
     msgtransmitter_connect(server.mtp, addr);
-
-    task_post(server.send_task, server.send_func);
 
     char str[100];
 

@@ -94,6 +94,8 @@ typedef uint8_t ___atom_8bit;
 #define	___set_true(x)		    __sync_bool_compare_and_swap((x), false, true)
 #define	___set_false(x)		    __sync_bool_compare_and_swap((x), true, false)
 
+#define ___atom_set(x, y)       __sync_bool_compare_and_swap((x), *(x), (y))
+
 #define ___atom_sub(x, y)		__sync_sub_and_fetch((x), (y))
 #define ___atom_add(x, y)		__sync_add_and_fetch((x), (y))
 
@@ -257,6 +259,8 @@ typedef std::atomic<size_t>                 ___atom_bool;
 typedef std::atomic<size_t>                 ___atom_size;
 typedef std::atomic<uint8_t>                 ___atom_8bit;
 
+
+#define ___atom_set(x, y)                   (x)->store((y))
 #define ___atom_sub(x, y)                   (x)->fetch_sub((y))
 #define ___atom_add(x, y)                   (x)->fetch_add((y))
 
