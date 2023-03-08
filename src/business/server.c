@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
     server.mtp = msgtransmitter_create(device, &server.listener);
 
     listener->ctx = &server;
-    msgtransmitter_connect(server.mtp, addr);
+    msgchannel_ptr channel = msgtransmitter_connect(server.mtp, addr);
 
     char str[100];
 
@@ -131,7 +131,10 @@ int main(int argc, char *argv[])
         // msgtransmitter_send();
     }
 
+    msgtransmitter_disconnect(server.mtp, channel);
+    __logi("msgtransmitter_disconnect");
     msgtransmitter_release(&server.mtp);
+    __logi("msgtransmitter_release");
 
     close(fd);
 
