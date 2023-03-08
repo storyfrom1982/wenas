@@ -47,7 +47,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
     return size;
 }
 
-static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size, uint64_t timeout)
+static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
     // return recvfrom(socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     return size;
