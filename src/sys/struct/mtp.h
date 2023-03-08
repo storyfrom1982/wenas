@@ -10,28 +10,11 @@
 
 enum {
     TRANSUNIT_NONE = 0x00,
-    TRANSUNIT_REQ = 0x01,
+    TRANSUNIT_MSG = 0x01,
     TRANSUNIT_ACK = 0x02,
-    TRANSUNIT_CONNECT = 0x04,
-    TRANSUNIT_DISCONNECT = 0x08,
-    TRANSUNIT_BIND = 0x10,
-    TRANSUNIT_PING = 0x20,
-    TRANSUNIT_MESSAGE = 0x40
+    TRANSUNIT_PING = 0x04,
+    TRANSUNIT_PONG = 0x08
 };
-
-
-#define REQ_CONNECT         (TRANSUNIT_REQ | TRANSUNIT_CONNECT)
-#define REQ_DISCONNRCT      (TRANSUNIT_REQ | TRANSUNIT_DISCONNECT)
-#define REQ_BIND            (TRANSUNIT_REQ | TRANSUNIT_BIND)
-#define REQ_PING            (TRANSUNIT_REQ | TRANSUNIT_PING)
-#define REQ_MESSAGE         (TRANSUNIT_REQ | TRANSUNIT_MESSAGE)
-
-#define ACK_CONNECT         (TRANSUNIT_ACK | TRANSUNIT_CONNECT)
-#define ACK_DISCONNRCT      (TRANSUNIT_ACK | TRANSUNIT_DISCONNECT)
-#define ACK_BIND            (TRANSUNIT_ACK | TRANSUNIT_BIND)
-#define ACK_PING            (TRANSUNIT_ACK | TRANSUNIT_PING)
-#define ACK_MESSAGE         (TRANSUNIT_ACK | TRANSUNIT_MESSAGE)
-
 
 #define UNIT_HEAD_SIZE          8
 #define UNIT_BODY_SIZE          1400
@@ -106,6 +89,7 @@ struct msgchannel {
     int status;
     ___atom_bool sending;
     ___mutex_ptr mtx;
+    heap_t *timer;
     struct msgaddr addr;
     struct msgbuf recvbuf;
     struct transunitbuf ackbuf;
@@ -136,7 +120,6 @@ struct msgtransmitter {
     ___atom_bool readable;
     ___atom_size sendable;
     ___mutex_ptr mtx;
-    heap_t *timer;
     physics_socket_ptr device;
     msglistener_ptr listener;
     linekv_ptr send_func, recv_func;
@@ -285,71 +268,45 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
         unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
         result = mtp->device->recvfrom(mtp->device, &addr, &unit->head, UNIT_TOTAL_SIZE);
         if (result == (unit->head.body_size + UNIT_HEAD_SIZE)){
+            channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
             switch (unit->head.type)
             {
-            case REQ_CONNECT:
-                channel = (msgchannel_ptr) malloc(sizeof(struct msgchannel));
-                channel->transmitter = mtp;
-                channel->addr = addr;
-                channel->status = CHANNEL_STATUS_CONNECTING;
-                tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
-                unit->head.type = ACK_CONNECT;
-                unit->head.body_size = 0;
-                unit->head.maximal = 1;
-                channel_ack_push_unit(channel, unit);
-                break;
-            case REQ_DISCONNRCT:
-                channel = (msgchannel_ptr)tree_delete(mtp->peers, addr.key, addr.keylen);
-                free(channel);
-                break;
-            case REQ_BIND:
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                unit->head.type = ACK_BIND;
-                unit->head.body_size = 0;
-                unit->head.maximal = 1;
-                channel_ack_push_unit(channel, unit);
-                break;
-            case REQ_PING:
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                unit->head.type = ACK_PING;
-                unit->head.body_size = 0;
-                unit->head.maximal = 1;
-                channel_ack_push_unit(channel, unit);
-                break;        
-            case REQ_MESSAGE:
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                unit->head.type = ACK_MESSAGE;
+            case TRANSUNIT_MSG:
+                unit->head.type = TRANSUNIT_ACK;
                 unit->head.body_size = 0;
                 unit->head.maximal = 1;
                 channel_ack_push_unit(channel, unit);
                 channel_make_message(channel, unit);
-                break;
-            case ACK_CONNECT:
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                unit->head.type = REQ_BIND;
-                unit->head.body_size = 0;
-                unit->head.maximal = 1;
-                channel_push_unit(channel, unit);
-                break;
-            case ACK_DISCONNRCT:
-                break;
-            case ACK_BIND:
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                unit->head.type = REQ_PING;
-                unit->head.body_size = 0;
-                unit->head.maximal = 1;
-                channel_push_unit(channel, unit);
-                break;
-            case ACK_PING:
-                break;        
-            case ACK_MESSAGE:
+                break;                 
+            case TRANSUNIT_ACK:
                 ___set_false(&channel->sendbuf.buf[unit->head.serial_number]->timer);
-                uint8_t rpos = channel_free_unit(channel, unit->head.serial_number);
-                while (rpos < unit->head.serial_number){
-                    rpos++;
+                channel_free_unit(channel, unit->head.serial_number);
+                break;
+            case TRANSUNIT_PING:
+                if (channel == NULL){
+                    channel = (msgchannel_ptr) malloc(sizeof(struct msgchannel));
+                    channel->transmitter = mtp;
+                    channel->addr = addr;
+                    channel->status = CHANNEL_STATUS_CONNECTING;
+                    channel->timer = heap_create(UNIT_GROUP_SIZE + 1);
+                    tree_inseart(mtp->peers, addr.key, addr.keylen, channel);                    
                 }
-                break;        
+                unit->head.type = TRANSUNIT_PONG;
+                unit->head.body_size = 0;
+                unit->head.maximal = 1;
+                channel_push_unit(channel, unit);
+                break;                
+            case TRANSUNIT_PONG:
+                ___set_false(&channel->sendbuf.buf[unit->head.serial_number]->timer);
+                channel_free_unit(channel, unit->head.serial_number);
+                unit->head.type = TRANSUNIT_ACK;
+                unit->head.body_size = 0;
+                unit->head.maximal = 1;
+                channel_ack_push_unit(channel, unit);
+                break;
             default:
+                channel = (msgchannel_ptr)tree_delete(mtp->peers, addr.key, addr.keylen);
+                free(channel);
                 break;
             }
         }else {
@@ -364,11 +321,10 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
 static inline int msgtransmitter_send_loop(msgtransmitter_ptr mtp)
 {
     int ret;
-    uint64_t sleep_time;
+    uint64_t sleep_time = 0;
     struct msgaddr addr;
     heapment_t timer;
-    transunit_ptr recvunit = NULL;
-    transunit_ptr sendunit = NULL;
+    transunit_ptr unit = NULL;
     msgchannel_ptr channel = NULL;
     
     mtp->readable = 0;
@@ -378,57 +334,69 @@ static inline int msgtransmitter_send_loop(msgtransmitter_ptr mtp)
 
     while (___is_true(&mtp->running))
     {
-        while (mtp->timer->pos > 0 && (mtp->timer->array[1].key <= ___sys_clock()))
-        {                
-            transunit_ptr pkt = (transunit_ptr)mtp->timer->array[1].value;
-            if (___is_true(&pkt->timer)){
-                ret = mtp->device->sendto(mtp->device, &pkt->chennel->addr, 
-                        (void*)&(pkt->head), UNIT_HEAD_SIZE + pkt->head.body_size);
-                if (ret > 0){
-                    min_heapify_pop(mtp->timer);
-                    timer.key = ___sys_clock();
-                    timer.value = pkt;
-                    min_heapify_push(mtp->timer, timer);
-                }else {
-                    break;
-                }
-
-            }else {
-                free(pkt);
-            }
-        }
-
         ___lock lk = ___mutex_lock(mtp->mtx);
 
         channel = mtp->head.next;
         
         while (channel != &mtp->end)
         {
+            while (channel->timer->pos > 0)
+            {
+                uint64_t timeout = channel->timer->array[1].key - ___sys_clock();
+                if (timeout > 0){
+                    if (timeout < sleep_time ){
+                        sleep_time = timeout;
+                    }
+                    break;
+
+                }else {
+                    unit = (transunit_ptr)channel->timer->array[1].value;
+                    if (___is_true(&unit->timer)){
+                        ret = mtp->device->sendto(mtp->device, &unit->chennel->addr, 
+                                (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
+                        if (ret > 0){
+                            min_heapify_pop(channel->timer);
+                            timer.key = ___sys_clock();
+                            timer.value = unit;
+                            min_heapify_push(channel->timer, timer);
+                        }else {
+                            break;
+                        }
+
+                    }else {
+                        free(unit);
+                    }
+                }
+            }
+
             if (channel->sendbuf.rpos != channel->sendbuf.confirm){
                 uint8_t pos = 0; 
                 while ((channel->sendbuf.rpos + pos) != channel->sendbuf.confirm){
-                    sendunit = channel->sendbuf.buf[channel->sendbuf.rpos];
-                    if (___is_true(&sendunit->timer) && !sendunit->resending){
-                        sendunit->resending = true;
-                        ret = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
+                    unit = channel->sendbuf.buf[channel->sendbuf.rpos];
+                    if (___is_true(&unit->timer) && !unit->resending){
+                        unit->resending = true;
+                        ret = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                     }else {
                         break;
                     }
                 }
             }
 
-            sendunit = channel_hold_unit(channel);
-            if (sendunit){
+            unit = channel_hold_unit(channel);
+            if (unit){
+
                 ret = mtp->device->sendto(mtp->device, &channel->addr, 
-                    (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
+                    (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                 if (ret > 0){
                     timer.key = ___sys_clock();
                     timer.value = channel->sendbuf.buf[channel->sendbuf.reading];
-                    min_heapify_push(mtp->timer, timer);
+                    min_heapify_push(channel->timer, timer);
                 }else {
                     ___set_false(&mtp->sendable);
                 }
-            }else {
+
+            }else if (channel->timer->pos == 0 ){
+
                 if (channel->next){
                     channel->next->prev = channel->prev;
                 }
@@ -444,13 +412,9 @@ static inline int msgtransmitter_send_loop(msgtransmitter_ptr mtp)
         if (mtp->head.next == &mtp->end){
             
             ___set_true(&mtp->watting);
-            if (mtp->timer->pos){
-                sleep_time = mtp->timer->array[1].key - ___sys_clock();
-            }else {
-                sleep_time = 0;
-            }
-            if (sleep_time){
+            if (sleep_time > 0){
                 ___mutex_timer(mtp->mtx, lk, sleep_time);
+                sleep_time = 0;
             }else {
                 ___mutex_wait(mtp->mtx, lk);
             }
@@ -468,7 +432,6 @@ static inline msgtransmitter_ptr msgtransmitter_create(physics_socket_ptr device
     mtp->sendable = 0;
     mtp->device = device;
     mtp->listener = listener;
-    mtp->timer = heap_create(1024);
     mtp->peers = tree_create();
     mtp->mtx = ___mutex_create();
     mtp->head.prev = NULL;
@@ -504,38 +467,17 @@ static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msga
     channel->status = CHANNEL_STATUS_OPEN;
     channel->listener = mtp->listener;
     channel->addr = *addr;
+    channel->timer = heap_create(UNIT_GROUP_SIZE);
     channel->mtx = ___mutex_create();
-    ___lock lk = ___mutex_lock(channel->mtx);
 
     tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);    
     transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
-    unit->head.type = TRANSUNIT_REQ | TRANSUNIT_CONNECT;
+    unit->head.type = TRANSUNIT_PING;
     unit->head.body_size = 0;
     unit->head.maximal = 1;
     channel_push_unit(channel, unit);
-    {
-        ___lock lk = ___mutex_lock(mtp->mtx);
-        ___set_true(&channel->sending);
-        channel->next = &mtp->end;
-        channel->prev = mtp->end.prev;
-        channel->prev->next = channel;
-        channel->next->prev = channel;
-        if (___set_false(&mtp->watting)){
-            ___mutex_notify(mtp->mtx);
-        }
-        ___mutex_unlock(mtp->mtx, lk);
-    }
 
-    // ___mutex_wait(channel->mtx, lk);
-    ___mutex_unlock(channel->mtx, lk);
-
-    if (channel->status == CHANNEL_STATUS_BIND){
-        return channel;
-    }
-
-    ___mutex_release(channel->mtx);
-    free(channel);
-    return NULL;
+    return channel;
 }
 
 static inline void msgtransmitter_disconnect(msgtransmitter_ptr mtp, msgchannel_ptr pptr)
@@ -561,22 +503,10 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
             transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
             memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
             unit->chennel = channel;
-            unit->head.type = TRANSUNIT_REQ | TRANSUNIT_MESSAGE;
+            unit->head.type = TRANSUNIT_MSG;
             unit->head.body_size = UNIT_BODY_SIZE;
             unit->head.maximal = UNIT_GROUP_SIZE - y;
             channel_push_unit(channel, unit);
-        }
-
-        if (___set_true(&channel->sending)){
-            ___lock lk = ___mutex_lock(mtp->mtx);
-            channel->next = &mtp->end;
-            channel->prev = mtp->end.prev;
-            channel->prev->next = channel;
-            channel->next->prev = channel;
-            if (___set_false(&mtp->watting)){
-                ___mutex_notify(mtp->mtx);
-            }
-            ___mutex_unlock(mtp->mtx, lk);
         }
     }
 
@@ -596,7 +526,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
         memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
         unit->chennel = channel;
-        unit->head.type = TRANSUNIT_REQ | TRANSUNIT_MESSAGE;
+        unit->head.type = TRANSUNIT_MSG;
         unit->head.body_size = UNIT_BODY_SIZE;
         unit->head.maximal = last_unit_id - y;
         channel_push_unit(channel, unit);
@@ -610,28 +540,8 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         unit->head.maximal = 1;
         channel_push_unit(channel, unit);
     }
-    
-    if (___set_true(&channel->sending)){
-        ___lock lk = ___mutex_lock(mtp->mtx);
-        channel->next = &mtp->end;
-        channel->prev = mtp->end.prev;
-        channel->prev->next = channel;
-        channel->next->prev = channel;
-        if (___set_false(&mtp->watting)){
-            ___mutex_notify(mtp->mtx);
-        }
-        ___mutex_unlock(mtp->mtx, lk);
-    }
 }
 
-static inline void msgtransmitter_update(msgtransmitter_ptr mtp)
-{
-    ___set_true(&mtp->readable);
-    if (___set_false(&mtp->watting)){
-        ___lock lk = ___mutex_lock(mtp->mtx);
-        ___mutex_notify(mtp->mtx);
-        ___mutex_unlock(mtp->mtx, lk);
-    }
-}
+
 
 #endif //__MESSAGE_TRANSFER_PROTOCOL_H__
