@@ -85,6 +85,7 @@ enum {
     CHANNEL_STATUS_BIND = 4,
 };
 
+
 struct msgchannel {
     int status;
     ___atom_bool sending;
@@ -151,9 +152,7 @@ static inline void channel_ack_push_unit(msgchannel_ptr channel, transunit_ptr u
         channel->prev = channel->transmitter->end.prev;
         channel->prev->next = channel;
         channel->next->prev = channel;
-        if (___set_false(&channel->transmitter->watting)){
-            ___mutex_notify(channel->transmitter->mtx);
-        }
+        ___mutex_notify(channel->transmitter->mtx);
         ___mutex_unlock(channel->transmitter->mtx, lk);
     }
 }
@@ -190,9 +189,7 @@ static inline void channel_push_unit(msgchannel_ptr channel, transunit_ptr unit)
         channel->prev = channel->transmitter->end.prev;
         channel->prev->next = channel;
         channel->next->prev = channel;
-        if (___set_false(&channel->transmitter->watting)){
-            ___mutex_notify(channel->transmitter->mtx);
-        }
+        ___mutex_notify(channel->transmitter->mtx);
         ___mutex_unlock(channel->transmitter->mtx, lk);
     }
 
@@ -329,8 +326,7 @@ static inline int msgtransmitter_send_loop(msgtransmitter_ptr mtp)
     
     mtp->readable = 0;
     mtp->sendable = false;
-    
-    ___set_true(&mtp->running);
+
 
     while (___is_true(&mtp->running))
     {
@@ -395,7 +391,9 @@ static inline int msgtransmitter_send_loop(msgtransmitter_ptr mtp)
                     ___set_false(&mtp->sendable);
                 }
 
-            }else if (channel->timer->pos == 0 ){
+            }else if (channel->timer->pos == 0 
+                && channel->sendbuf.wpos - channel->sendbuf.rpos == 0
+                && channel->ackbuf.wpos - channel->ackbuf.rpos == 0){
 
                 if (channel->next){
                     channel->next->prev = channel->prev;
@@ -470,7 +468,7 @@ static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msga
     channel->timer = heap_create(UNIT_GROUP_SIZE);
     channel->mtx = ___mutex_create();
 
-    tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);    
+    tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
     transunit_ptr unit = (transunit_ptr)malloc(UNIT_TOTAL_SIZE);
     unit->head.type = TRANSUNIT_PING;
     unit->head.body_size = 0;
