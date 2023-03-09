@@ -119,7 +119,7 @@ typedef struct physics_socket {
 }*physics_socket_ptr;
 
 
-#define RESEND_INTERVAL                 1000000000ULL
+#define RESEND_INTERVAL                 10000000000ULL
 #define CHANNEL_QUEUE_COUNT             3
 
 struct msgtransmitter {
@@ -232,14 +232,22 @@ static inline transunit_ptr channel_hold_unit(msgchannel_ptr channel)
 
 static inline uint8_t channel_free_unit(msgchannel_ptr channel, uint8_t serial_number)
 {
+    // __logi("channel_free_unit enter");
     ___atom_set(&channel->sendbuf->confirm_pos, serial_number);
+    __logi("channel_free_unit rpos %u confirm pos %u free pos %u", channel->sendbuf->rpos, channel->sendbuf->confirm_pos, serial_number);
     if (serial_number == channel->sendbuf->rpos){
+        // __logi("channel_free_unit 2");
         ___atom_add(&channel->sendbuf->rpos, 1);
-        while (___is_true(&channel->sendbuf->buf[channel->sendbuf->rpos]->confirm)){
+        // __logi("channel_free_unit 2.1");
+        while (channel->sendbuf->buf[channel->sendbuf->rpos] != NULL 
+                && ___is_true(&channel->sendbuf->buf[channel->sendbuf->rpos]->confirm)){
+            // __logi("channel_free_unit 3");
             ___atom_add(&channel->sendbuf->rpos, 1);
         }
+        // __logi("channel_free_unit 4");
         ___mutex_notify(channel->mtx);
     }
+    // __logi("channel_free_unit exit");
     return channel->sendbuf->rpos;
 }
 
@@ -322,6 +330,7 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
         unit = (transunit_ptr)malloc(sizeof(struct transunit));
         result = treanmitter->device->recvfrom(treanmitter->device, &addr, &unit->head, UNIT_TOTAL_SIZE);
         if (result == (unit->head.body_size + UNIT_HEAD_SIZE)){
+            __logi("msgtransmitter_recv_loop >>>>----------> serial number %u", unit->head.serial_number);
             channel = (msgchannel_ptr)tree_find(treanmitter->peers, addr.key, addr.keylen);
             switch (unit->head.type)
             {
@@ -333,10 +342,12 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
                 channel_make_message(channel, unit);
                 break;                 
             case TRANSUNIT_ACK:
+                __logi("msgtransmitter_recv_loop TRANSUNIT_ACK");
                 ___set_true(&channel->sendbuf->buf[unit->head.serial_number]->confirm);
                 channel_free_unit(channel, unit->head.serial_number);
                 break;
             case TRANSUNIT_PING:
+                __logi("msgtransmitter_recv_loop TRANSUNIT_PING");
                 if (channel == NULL){
                     channel = msgchannel_create(treanmitter, &addr);
                     tree_inseart(treanmitter->peers, addr.key, addr.keylen, channel);
@@ -347,12 +358,17 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
                 channel_push_unit(channel, unit);
                 break;                
             case TRANSUNIT_PONG:
+                __logi("msgtransmitter_recv_loop TRANSUNIT_PONG");
                 ___set_true(&channel->sendbuf->buf[unit->head.serial_number]->confirm);
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG 1");
                 channel_free_unit(channel, unit->head.serial_number);
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG 2");
                 unit->head.type = TRANSUNIT_ACK;
                 unit->head.body_size = 0;
                 unit->head.maximal = 1;
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG 3");
                 channel_ack_push_unit(channel, unit);
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG exit");
                 break;
             default:
                 channel = (msgchannel_ptr)tree_delete(treanmitter->peers, addr.key, addr.keylen);
@@ -382,13 +398,15 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
     channelqueue_ptr channellist = NULL;
     msgtransmitter_ptr tansmitter = (msgtransmitter_ptr)linekv_find_ptr(ctx, "ctx");
 
-    __logi("msgtransmitter_send_loop running = %d", tansmitter->running);
+    // __logi("msgtransmitter_send_loop running = %d", tansmitter->running);
 
     while (___is_true(&tansmitter->running))
     {
+        // __logi("msgtransmitter_send_loop channel queue %d", tansmitter->running);
 
         for (size_t i = 0; i < CHANNEL_QUEUE_COUNT; ++i)
         {
+            // __logi("msgtransmitter_send_loop channel queue %lu", i);
             channellist = &tansmitter->channels[i];
 
             if (!___atom_try_lock(&channellist->lock)){
@@ -404,9 +422,11 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             
             while (channel != &channellist->end)
             {
+                // __logi("msgtransmitter_send_loop channel list len %lu", channellist->len);
                 if (channel->sendbuf->rpos != channel->sendbuf->confirm_pos){
-                    uint8_t pos = 0; 
+                    int8_t pos = -1; 
                     while ((channel->sendbuf->rpos + pos) != channel->sendbuf->confirm_pos){
+                        __logi("msgtransmitter_send_loop rpos %u  confirm pos %u", channel->sendbuf->rpos, channel->sendbuf->confirm_pos);
                         unit = channel->sendbuf->buf[channel->sendbuf->rpos + pos];
                         if (___is_false(&unit->confirm) && ___set_true(&unit->resending)){
                             result = tansmitter->device->sendto(tansmitter->device, &channel->addr, 
@@ -418,6 +438,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     }
                 }
 
+                // __logi("msgtransmitter_send_loop channel_ack_pull_unit");
                 while ((unit = channel_ack_pull_unit(channel)) != NULL)
                 {
                     if (tansmitter->device->sendto(tansmitter->device, &channel->addr, 
@@ -427,9 +448,10 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     }
                 }
                 
+                // __logi("msgtransmitter_send_loop channel_hold_unit");
                 if ((unit = channel_hold_unit(channel)) != NULL){
                     ___atom_sub(&channel->transmitter->send_queue_length, 1);
-                    __logi("msgtransmitter_send_loop channel_hold_unit");
+                    __logi("msgtransmitter_send_loop send_queue_length %lu", channel->transmitter->send_queue_length);
                     result = tansmitter->device->sendto(tansmitter->device, &channel->addr, 
                         (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                     __logi("msgtransmitter_send_loop send size %lu result size %lu", UNIT_HEAD_SIZE + unit->head.body_size, result);
@@ -437,7 +459,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                         timenode.key = ___sys_clock() + RESEND_INTERVAL;
                         __logi("msgtransmitter_send_loop timer.key %lu", timenode.key);
                         timenode.value = channel->sendbuf->buf[channel->sendbuf->reading-1];
-                        __logi("msgtransmitter_send_loop min_heapify_push %x", timenode.value);
+                        __logi("msgtransmitter_send_loop min_heapify_push 0x%x", timenode.value);
                         min_heapify_push(channel->timer, timenode);
                     }else {
                         __logi("msgtransmitter_send_loop return");
@@ -470,24 +492,31 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                                 timenode.key = ___sys_clock() + RESEND_INTERVAL;
                                 timenode.value = unit;
                                 min_heapify_push(channel->timer, timenode);
-                                __logi("msgtransmitter_send_loop timer repush");
+                                __logi("msgtransmitter_send_loop timer repush 0x%x", timenode.value);
                             }else {
                                 break;
                             }
                         }else {
+                            min_heapify_pop(channel->timer);
+                            __logi("msgtransmitter_send_loop free unit 0x%x", unit);
                             free(unit);
                         }
                     }
                 }
 
+                // __logi("msgtransmitter_send_loop next channel");
                 channel = channel->next;
+                // __logi("msgtransmitter_send_loop next channel %x", channel);
             }
+
+            // __logi("msgtransmitter_send_loop channel queue unlock");
 
             ___atom_unlock(&channellist->lock);
         }
-
+        
         ___lock lk = ___mutex_lock(tansmitter->mtx);
         if (tansmitter->send_queue_length == 0){
+            __logi("msgtransmitter_send_loop check sleep time");
             ___mutex_timer(tansmitter->mtx, lk, timer);
             timer = INT64_MAX;
         }
@@ -559,7 +588,7 @@ static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msga
     msgchannel_ptr channel = msgchannel_create(mtp, addr);
     tree_inseart(mtp->peers, addr->key, addr->keylen, channel);
     transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
-    __logi("msgtransmitter_connect %x", unit);
+    __logi("msgtransmitter_connect 0x%x", unit);
     unit->head.type = TRANSUNIT_PING;
     unit->head.body_size = 0;
     unit->head.maximal = 1;
