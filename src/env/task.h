@@ -264,8 +264,8 @@ typedef std::atomic<uint8_t>                 ___atom_8bit;
 #define ___atom_sub(x, y)                   (x)->fetch_sub((y))
 #define ___atom_add(x, y)                   (x)->fetch_add((y))
 
-#define	___is_true(x)                       (x)->load()
-#define	___is_false(x)                      (x)->load()
+#define	___is_true(x)                       ((x)->load() == true)
+#define	___is_false(x)                      ((x)->load() == false)
 
 static inline bool ___set_true(___atom_bool *obj)
 {

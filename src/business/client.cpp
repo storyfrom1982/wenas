@@ -1,0 +1,173 @@
+extern "C" {
+    #include "env/env.h"
+    #include "env/malloc.h"
+}
+
+#include <sys/struct/mtp.h>
+
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/in.h>
+
+// #include <sys/un.h>
+
+// #include <netinet/tcp.h>
+#include <arpa/inet.h>
+
+#include <iostream>
+
+
+typedef struct client{
+    int socket;
+    socklen_t addlen;
+    struct sockaddr_in addr;
+    struct msgaddr msgaddr;
+    struct msglistener listener;
+    msgtransmitter_ptr mtp;
+}*client_ptr;
+
+
+
+static void malloc_debug_cb(const char *debug)
+{
+    __logw("%s\n", debug);
+}
+
+
+static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
+{
+    // __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
+    // client_ptr client = (client_ptr)socket->ctx;
+    // struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
+    // addr->addrlen = sizeof(struct sockaddr_in);
+    // ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
+    // __logi("send_msg result %d", result);
+    // return result;
+    return size;
+}
+
+static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
+{
+    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
+    client_ptr client = (client_ptr)socket->ctx;
+    struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
+    addr->addrlen = sizeof(struct sockaddr_in);
+    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
+    addr->ip = fromaddr->sin_addr.s_addr;
+    addr->port = fromaddr->sin_port;
+    __logi("recv_msg result %d", result);
+    return result;
+}
+
+static void connected(msglistener_ptr listener, msgchannel_ptr channel)
+{
+
+}
+
+static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
+{
+
+}
+
+static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
+{
+
+}
+
+static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
+{
+
+}
+
+
+int main(int argc, char *argv[])
+{
+    env_backtrace_setup();
+    env_logger_start("./tmp/client/log", NULL);
+    __logi("start server");
+
+    client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
+
+    const char *host = "127.0.0.1";
+    // uint16_t port = atoi(argv[1]);
+    uint16_t port = 3721;
+    physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
+    msgaddr_ptr addr = &client->msgaddr;
+    msglistener_ptr listener = &client->listener;
+
+    client->addr.sin_family = AF_INET;
+    client->addr.sin_port = htons(port);
+    inet_aton(host, &client->addr.sin_addr);
+
+    addr->keylen = 6;
+    addr->ip = client->addr.sin_addr.s_addr;
+    addr->port =client->addr.sin_port;
+    addr->addr = &client->addr;
+    addr->addrlen = sizeof(client->addr);
+
+    listener->connected = connected;
+    listener->disconnected = disconnected;
+    listener->message = message_arrived;
+    listener->status = update_status;
+
+    int fd;
+    int enable = 1;
+    if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+        __loge("socket error");
+    }
+    if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
+        __loge("setsockopt error");
+    }
+	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
+        __loge("setsockopt error");
+    }
+
+    client->socket = fd;
+    device->ctx = client;
+    device->sendto = send_msg;
+    device->recvfrom = recv_msg;
+    
+    client->mtp = msgtransmitter_create(device, &client->listener);
+
+    listener->ctx = client;
+    msgchannel_ptr channel = msgtransmitter_connect(client->mtp, addr);
+
+    char str[100];
+
+    while (1)
+    {
+        printf( "Enter a value :");
+        fgets(str, 100, stdin);
+
+        if (str[0] == 'q'){
+            break;
+        }
+
+        uint16_t u = 0;
+        // printf( "\nsend msg len: %d", strlen(str));
+        printf( "\nsend 1 - 255: %hu\n", u-65535U);
+        msgtransmitter_send(client->mtp, channel, str, strlen(str));
+    }
+
+    close(fd);
+    msgtransmitter_disconnect(client->mtp, channel);
+    __logi("msgtransmitter_disconnect");
+    msgtransmitter_release(&client->mtp);
+    __logi("msgtransmitter_release");
+
+    free(device);
+    free(client);
+    env_logger_stop();
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(malloc_debug_cb);
+#endif
+
+    return 0;
+
+Reset:
+    return -1;
+}

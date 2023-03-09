@@ -26,18 +26,18 @@
 
 
 
-typedef struct udpnode {
-    size_t size;
-    void *data;
-    struct udpnode *prev, *next;
-}*udpnode_ptr;
+// typedef struct udpnode {
+//     size_t size;
+//     void *data;
+//     struct udpnode *prev, *next;
+// }*udpnode_ptr;
 
 
-typedef struct udpqueue {
-    ___mutex_ptr mtx;
-    ___atom_size len;
-    struct udpnode head, end;
-}*udpqueue_ptr;
+// typedef struct udpqueue {
+//     ___mutex_ptr mtx;
+//     ___atom_size len;
+//     struct udpnode head, end;
+// }*udpqueue_ptr;
 
 
 typedef struct server {
@@ -47,7 +47,7 @@ typedef struct server {
     struct msgaddr msgaddr;
     struct msglistener listener;
     msgtransmitter_ptr mtp;
-    udpqueue_ptr udpbuf;
+    // udpqueue_ptr udpbuf;
 }server_t;
 
 
@@ -63,7 +63,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = sendto(server->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)addr->addrlen);
+    ssize_t result = sendto(server->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
     __logi("send_msg result %d", result);
     return result;
     // // __logi("send_msg size %lu", size);
@@ -150,23 +150,24 @@ static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
 int main(int argc, char *argv[])
 {
     env_backtrace_setup();
-    env_logger_start("./tmp/log", NULL);
+    env_logger_start("./tmp/server/log", NULL);
     __logi("start server");
 
     const char *host = "127.0.0.1";
-    uint16_t port = atoi(argv[1]);
+    // uint16_t port = atoi(argv[1]);
+    uint16_t port = 3721;
     server_t server;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
     msgaddr_ptr addr = &server.msgaddr;
     msglistener_ptr listener = &server.listener;
 
-    server.udpbuf = (udpqueue_ptr)malloc(sizeof(struct udpqueue));
-    server.udpbuf->mtx = ___mutex_create();
-    server.udpbuf->len = 0;
-    server.udpbuf->head.prev = NULL;
-    server.udpbuf->end.next = NULL;
-    server.udpbuf->head.next = &server.udpbuf->end;
-    server.udpbuf->end.prev = &server.udpbuf->head;
+    // server.udpbuf = (udpqueue_ptr)malloc(sizeof(struct udpqueue));
+    // server.udpbuf->mtx = ___mutex_create();
+    // server.udpbuf->len = 0;
+    // server.udpbuf->head.prev = NULL;
+    // server.udpbuf->end.next = NULL;
+    // server.udpbuf->head.next = &server.udpbuf->end;
+    // server.udpbuf->end.prev = &server.udpbuf->head;
 
     server.addr.sin_family = AF_INET;
     server.addr.sin_port = htons(port);
@@ -216,13 +217,15 @@ int main(int argc, char *argv[])
         msgtransmitter_send(server.mtp, channel, str, strlen(str));
     }
 
+    close(fd);
     msgtransmitter_disconnect(server.mtp, channel);
     __logi("msgtransmitter_disconnect");
     msgtransmitter_release(&server.mtp);
     __logi("msgtransmitter_release");
 
-    close(fd);
     free(device);
+
+    env_logger_stop();
 
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
