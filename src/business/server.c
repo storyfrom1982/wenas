@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
         uint16_t u = 0;
         // printf( "\nsend msg len: %d", strlen(str));
         printf( "\nsend 1 - 255: %hu\n", u-65535U);
-        // msgtransmitter_send();
+        msgtransmitter_send(server.mtp, channel, str, strlen(str));
     }
 
     msgtransmitter_disconnect(server.mtp, channel);
@@ -137,6 +137,7 @@ int main(int argc, char *argv[])
     __logi("msgtransmitter_release");
 
     close(fd);
+    free(device);
 
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
