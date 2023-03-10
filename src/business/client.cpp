@@ -39,10 +39,10 @@ static void malloc_debug_cb(const char *debug)
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
     client_ptr client = (client_ptr)socket->ctx;
     ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)addr->addr, (socklen_t)addr->addrlen);
-    __logi("send_msg result %d", result);
+    // __logi("send_msg result %d", result);
     return result;
 }
 
@@ -55,8 +55,8 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     addr->ip = fromaddr->sin_addr.s_addr;
     addr->port = fromaddr->sin_port;
     addr->keylen = 6;
-    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
-    __logi("recv_msg result %d", result);
+    // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("recv_msg result %d", result);
     return result;
 }
 
@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        printf( "Enter a value :");
+        __logi("Enter a value :\n");
         fgets(str, 100, stdin);
         size_t len = strlen(str);
         if (len == 2 && str[0] == 'q'){

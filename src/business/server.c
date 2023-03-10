@@ -59,12 +59,12 @@ static void malloc_debug_cb(const char *debug)
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
     ssize_t result = sendto(server->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
-    __logi("send_msg result %d", result);
+    // __logi("send_msg result %d", result);
     return result;
     // // __logi("send_msg size %lu", size);
     
@@ -96,8 +96,8 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     addr->ip = fromaddr->sin_addr.s_addr;
     addr->port = fromaddr->sin_port;
     addr->keylen = 6;
-    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
-    __logi("recv_msg result %d", result);
+    // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("recv_msg result %d", result);
     return result;
 
     // // *addr = server->msgaddr
@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 
     while (1)
     {
-        printf( "Enter a value :");
+        __logi("Enter a value :\n");
         fgets(str, 100, stdin);
 
         if (str[0] == 'q'){
