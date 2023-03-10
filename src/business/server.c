@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 
 // #include <sys/un.h>
 
@@ -56,6 +57,14 @@ static void malloc_debug_cb(const char *debug)
     __logw("%s\n", debug);
 }
 
+static void listening(struct physics_socket *socket)
+{
+    server_t *server = (server_t*)socket->ctx;
+	fd_set fds;
+	FD_ZERO(&fds);
+	FD_SET(server->socket, &fds);
+    select(0, &fds, NULL, NULL, NULL);
+}
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
@@ -203,6 +212,7 @@ int main(int argc, char *argv[])
 
     server.socket = fd;
     device->ctx = &server;
+    device->listening = listening;
     device->sendto = send_msg;
     device->recvfrom = recv_msg;
     

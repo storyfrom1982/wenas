@@ -116,6 +116,7 @@ struct msglistener {
 
 typedef struct physics_socket {
     void *ctx;
+    void (*listening)(struct physics_socket *socket);
     size_t (*sendto)(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size);
     size_t (*recvfrom)(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size);
 }*physics_socket_ptr;
@@ -144,7 +145,9 @@ static inline void channel_ack_push_unit(msgchannel_ptr channel, transunit_ptr u
     unit->confirm = false;
     while (UNIT_GROUP_SIZE - channel->ackbuf->wpos + channel->ackbuf->rpos == 0){
         ___lock lk = ___mutex_lock(channel->mtx);
+        __logi("channel_ack_push_unit waitting enter");
         ___mutex_wait(channel->mtx, lk);
+        __logi("channel_ack_push_unit waitting exit");
         ___mutex_unlock(channel->mtx, lk);
     }
     unit->head.serial_number = channel->ackbuf->wpos;
@@ -181,6 +184,7 @@ static inline transunit_ptr channel_ack_pull_unit(msgchannel_ptr channel)
     if (channel->ackbuf->wpos - channel->ackbuf->rpos > 0){
         transunit_ptr unit = channel->ackbuf->buf[channel->ackbuf->rpos];
         ___atom_add(&channel->ackbuf->rpos, 1);
+        ___mutex_notify(channel->mtx);
         return unit;
     }else {
         return NULL;
@@ -258,8 +262,8 @@ static inline uint8_t channel_free_unit(msgchannel_ptr channel, uint8_t serial_n
 
 static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr unit)
 {
-    __logi("channel_make_message rpos: %u unit max: %u serial number %u body: %s", 
-        channel->recvbuf->rpos, unit->head.maximal, unit->head.serial_number, unit->body);
+    // __logi("channel_make_message rpos: %u unit max: %u serial number %u body: %s", 
+    //     channel->recvbuf->rpos, unit->head.maximal, unit->head.serial_number, unit->body);
     int serial_gap = unit->head.serial_number - channel->recvbuf->wpos;
 
     if (serial_gap < 0){
@@ -272,8 +276,9 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
         channel->recvbuf->wpos++;
     }
 
+    __logi("channel_make_message ------------- rpos: %hu", channel->recvbuf->rpos);
     while (channel->recvbuf->buf[channel->recvbuf->rpos] != NULL){
-        __logi("channel_make_message rpos: %u", channel->recvbuf->rpos);
+        __logi("channel_make_message rpos: %hu", channel->recvbuf->rpos);
         if (channel->recvbuf->msg == NULL){
             channel->recvbuf->max_serial_number = channel->recvbuf->buf[channel->recvbuf->rpos]->head.maximal;
             channel->recvbuf->msg = (message_ptr)malloc(sizeof(struct message) + (channel->recvbuf->max_serial_number * UNIT_BODY_SIZE));
@@ -288,7 +293,7 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
         channel->recvbuf->msg->size += channel->recvbuf->buf[channel->recvbuf->rpos]->head.body_size;
         channel->recvbuf->max_serial_number--;
         if (channel->recvbuf->max_serial_number == 0){
-            __logi("channel_make_message msg: %s", (char*)channel->recvbuf->msg->data);
+            // __logi("channel_make_message msg: %s", (char*)channel->recvbuf->msg->data);
             channel->transmitter->listener->message(channel->transmitter->listener, channel, channel->recvbuf->msg);
             channel->recvbuf->msg = NULL;
         }
@@ -342,7 +347,7 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
         unit = (transunit_ptr)malloc(sizeof(struct transunit));
         result = treanmitter->device->recvfrom(treanmitter->device, &addr, &unit->head, UNIT_TOTAL_SIZE);
         if (result == (unit->head.body_size + UNIT_HEAD_SIZE)){
-            __logi("msgtransmitter_recv_loop >>>>----------> serial number %u", unit->head.serial_number);
+            // __logi("msgtransmitter_recv_loop >>>>----------> serial number %u", unit->head.serial_number);
             channel = (msgchannel_ptr)tree_find(treanmitter->peers, addr.key, addr.keylen);
             if (channel == NULL){
                 channel = msgchannel_create(treanmitter, &addr);
@@ -351,7 +356,7 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
             switch (unit->head.type & 0x0F)
             {
             case TRANSUNIT_MSG:
-                __logi("msgtransmitter_recv_loop TRANSUNIT_MSG %s", unit->body);
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_MSG %s", unit->body);
                 channel_make_message(channel, unit);
                 unit->head.type = TRANSUNIT_ACK;
                 unit->head.body_size = 0;
@@ -359,10 +364,11 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
                 channel_ack_push_unit(channel, unit);
                 break;
             case TRANSUNIT_ACK:
+                __logi("msgtransmitter_recv_loop >>>>----------> serial number %u", unit->head.serial_number);
                 // __logi("msgtransmitter_recv_loop TRANSUNIT_ACK");
                 // __logi("msgtransmitter_recv_loop TRANSUNIT_ACK channel 0x%x", channel);
                 ___set_true(&channel->sendbuf->buf[unit->head.serial_number]->confirm);
-                __logi("msgtransmitter_recv_loop TRANSUNIT_ACK unit addr 0x%x", channel->sendbuf->buf[unit->head.serial_number]);
+                // __logi("msgtransmitter_recv_loop TRANSUNIT_ACK unit addr 0x%x", channel->sendbuf->buf[unit->head.serial_number]);
                 channel_free_unit(channel, unit->head.serial_number);
                 break;
             case TRANSUNIT_PING:
@@ -381,6 +387,7 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
                 ___set_true(&channel->sendbuf->buf[unit->head.serial_number]->confirm);
                 // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG 1");
                 channel_free_unit(channel, unit->head.serial_number);
+                ___mutex_notify(channel->mtx);
                 // // __logi("msgtransmitter_recv_loop TRANSUNIT_PONG 2");
                 // unit->head.type = TRANSUNIT_ACK;
                 // unit->head.body_size = 0;
@@ -447,7 +454,9 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     while ((channel->sendbuf->rpos + pos) != channel->sendbuf->confirm_pos){
                         // __logi("msgtransmitter_send_loop rpos %u  confirm pos %u", channel->sendbuf->rpos, channel->sendbuf->confirm_pos);
                         unit = channel->sendbuf->buf[channel->sendbuf->rpos + pos];
+                        __logi("msgtransmitter_send_loop confirm enter");
                         if (___is_false(&unit->confirm) && ___set_true(&unit->resending)){
+                            __logi("msgtransmitter_send_loop confirm exit");
                             result = tansmitter->device->sendto(tansmitter->device, &channel->addr, 
                                     (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                         }else {
@@ -472,7 +481,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                 if ((unit = channel_hold_unit(channel)) != NULL){
                     __logi("msgtransmitter_send_loop >>>>------------> msg unit serial number: %u addr: 0x%x size: %u type: %u", unit->head.serial_number, unit, unit->head.body_size, unit->head.type);
                     size_t qlen = ___atom_sub(&channel->transmitter->send_queue_length, 1);
-                    // __logi("msgtransmitter_send_loop send_queue_length %lu", qlen);
+                    // __logi("msgtransmitter_send_loop send_queue_length >>>>------------> %lu", qlen);
                     result = tansmitter->device->sendto(tansmitter->device, &channel->addr, 
                         (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                     // __logi("msgtransmitter_send_loop send size %lu result size %lu", UNIT_HEAD_SIZE + unit->head.body_size, result);
@@ -505,7 +514,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                         }
                         break;
                     }else {
-                        __logi("msgtransmitter_send_loop timeout %ld", timeout);
+                        // __logi("msgtransmitter_send_loop timeout %ld", timeout);
                         unit = (transunit_ptr)channel->timer->array[1].value;
                         // std::cout << "unit->confirm: " << ___is_false(&unit->confirm) << std::endl;
                         if (___is_false(&unit->confirm)){
@@ -516,13 +525,13 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                                 timenode.key = ___sys_clock() + RESEND_INTERVAL;
                                 timenode.value = unit;
                                 min_heapify_push(channel->timer, timenode);
-                                __logi("msgtransmitter_send_loop timer repush %u", unit->head.serial_number);
+                                // __logi("msgtransmitter_send_loop timer repush %u", unit->head.serial_number);
                             }else {
                                 break;
                             }
                         }else {
                             min_heapify_pop(channel->timer);
-                            __logi("msgtransmitter_send_loop free unit 0x%x", unit);
+                            __logi("msgtransmitter_send_loop free unit serial number %u", unit->head.serial_number);
                             // std::cout << "unit->confirm: " << ___is_false(&unit->confirm) << std::endl;
                             free(unit);
                         }
@@ -534,7 +543,6 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             }
 
             // __logi("msgtransmitter_send_loop channel queue unlock");
-
             ___atom_unlock(&channellist->lock);
         }
         
@@ -613,6 +621,7 @@ static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msga
 {
     __logi("msgtransmitter_connect enter");
     msgchannel_ptr channel = msgchannel_create(mtp, addr);
+    ___lock lk = ___mutex_lock(channel->mtx);
     tree_inseart(mtp->peers, addr->key, addr->keylen, channel);
     transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
     __logi("msgtransmitter_connect 0x%x", unit);
@@ -620,6 +629,8 @@ static inline msgchannel_ptr msgtransmitter_connect(msgtransmitter_ptr mtp, msga
     unit->head.body_size = 0;
     unit->head.maximal = 1;
     channel_push_unit(channel, unit);
+    ___mutex_wait(channel->mtx, lk);
+    ___mutex_unlock(channel->mtx, lk);
     __logi("msgtransmitter_connect exit");
     return channel;
 }
@@ -683,7 +694,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         unit->head.type = TRANSUNIT_MSG;        
         unit->head.body_size = last_unit_size;
         unit->head.maximal = 1;
-        __logi("msgtransmitter_send unit addr: 0x%x size: %u type: %u msg: %s", unit, unit->head.body_size, unit->head.type, unit->body);
+        // __logi("msgtransmitter_send unit addr: 0x%x size: %u type: %u msg: %s", unit, unit->head.body_size, unit->head.type, unit->body);
         channel_push_unit(channel, unit);
     }
 }

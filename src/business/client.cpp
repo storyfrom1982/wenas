@@ -11,6 +11,7 @@ extern "C" {
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 
 // #include <sys/un.h>
 
@@ -36,6 +37,14 @@ static void malloc_debug_cb(const char *debug)
     __logw("%s\n", debug);
 }
 
+static void listening(struct physics_socket *socket)
+{
+    client_ptr client = (client_ptr)socket->ctx;
+	fd_set fds;
+	FD_ZERO(&fds);
+	FD_SET(client->socket, &fds);
+    select(0, &fds, NULL, NULL, NULL);
+}
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
@@ -125,6 +134,7 @@ int main(int argc, char *argv[])
 
     client->socket = fd;
     device->ctx = client;
+    device->listening = listening;
     device->sendto = send_msg;
     device->recvfrom = recv_msg;
     
@@ -135,17 +145,30 @@ int main(int argc, char *argv[])
 
     char str[100];
 
-    while (1)
-    {
-        __logi("Enter a value :\n");
-        fgets(str, 100, stdin);
-        size_t len = strlen(str);
-        if (len == 2 && str[0] == 'q'){
-            break;
-        }
+    // while (1)
+    // {
+    //     __logi("Enter a value :\n");
+    //     fgets(str, 100, stdin);
+    //     size_t len = strlen(str);
+    //     if (len == 2 && str[0] == 'q'){
+    //         break;
+    //     }
 
+    //     msgtransmitter_send(client->mtp, channel, str, strlen(str));
+    // }
+
+    for (size_t i = 0; i < 1000; i++)
+    {
+        size_t len = rand() % 99;
+        if (len < 10){
+            len = 10;
+        }
+        memset(str, i % 256, len);
+        str[len] = '\0';
         msgtransmitter_send(client->mtp, channel, str, strlen(str));
     }
+    
+    sleep(1000);
 
     close(fd);
 
