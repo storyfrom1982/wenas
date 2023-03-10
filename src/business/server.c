@@ -89,13 +89,14 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
 
 static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
-    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
     ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
     addr->ip = fromaddr->sin_addr.s_addr;
     addr->port = fromaddr->sin_port;
+    addr->keylen = 6;
+    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     __logi("recv_msg result %d", result);
     return result;
 
@@ -139,7 +140,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
-
+    __logi(">>>>---------------> recv msg: %s", msg->data);
 }
 
 static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
@@ -154,8 +155,8 @@ int main(int argc, char *argv[])
     __logi("start server");
 
     const char *host = "127.0.0.1";
-    // uint16_t port = atoi(argv[1]);
-    uint16_t port = 3721;
+    uint16_t port = atoi(argv[1]);
+    // uint16_t port = 3721;
     server_t server;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
     msgaddr_ptr addr = &server.msgaddr;
@@ -171,7 +172,8 @@ int main(int argc, char *argv[])
 
     server.addr.sin_family = AF_INET;
     server.addr.sin_port = htons(port);
-    inet_aton(host, &server.addr.sin_addr);
+    server.addr.sin_addr.s_addr = INADDR_ANY;
+    // inet_aton(host, &server.addr.sin_addr);
 
     addr->keylen = 6;
     addr->ip = server.addr.sin_addr.s_addr;
@@ -186,19 +188,28 @@ int main(int argc, char *argv[])
 
     int fd;
     int enable = 1;
-    __pass((fd = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
-    __pass(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == 0);
-	__pass(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == 0);
+    if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+        __loge("socket error");
+    }
+    if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
+        __loge("setsockopt error");
+    }
+	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
+        __loge("setsockopt error");
+    }
+    if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
+        __loge("bind error");
+    }
 
     server.socket = fd;
     device->ctx = &server;
     device->sendto = send_msg;
     device->recvfrom = recv_msg;
     
+    listener->ctx = &server;
     server.mtp = msgtransmitter_create(device, &server.listener);
 
-    listener->ctx = &server;
-    msgchannel_ptr channel = msgtransmitter_connect(server.mtp, addr);
+    // msgchannel_ptr channel = msgtransmitter_connect(server.mtp, addr);
 
     char str[100];
 
@@ -214,24 +225,26 @@ int main(int argc, char *argv[])
         uint16_t u = 0;
         // printf( "\nsend msg len: %d", strlen(str));
         printf( "\nsend 1 - 255: %hu\n", u-65535U);
-        msgtransmitter_send(server.mtp, channel, str, strlen(str));
+        // msgtransmitter_send(server.mtp, channel, str, strlen(str));
     }
 
     close(fd);
-    msgtransmitter_disconnect(server.mtp, channel);
+    // msgtransmitter_disconnect(server.mtp, channel);
     __logi("msgtransmitter_disconnect");
     msgtransmitter_release(&server.mtp);
     __logi("msgtransmitter_release");
 
+    __logi("free device");
     free(device);
 
+    __logi("env_logger_stop");
     env_logger_stop();
 
+    __logi("env_malloc_debug");
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
 
+    __logi("exit");
     return 0;
-Reset:
-    return -1;
 }

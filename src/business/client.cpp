@@ -39,25 +39,23 @@ static void malloc_debug_cb(const char *debug)
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    // __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
-    // client_ptr client = (client_ptr)socket->ctx;
-    // struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
-    // addr->addrlen = sizeof(struct sockaddr_in);
-    // ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
-    // __logi("send_msg result %d", result);
-    // return result;
-    return size;
+    __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
+    client_ptr client = (client_ptr)socket->ctx;
+    ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)addr->addr, (socklen_t)addr->addrlen);
+    __logi("send_msg result %d", result);
+    return result;
 }
 
 static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
-    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     client_ptr client = (client_ptr)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
+    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     addr->ip = fromaddr->sin_addr.s_addr;
     addr->port = fromaddr->sin_port;
+    addr->keylen = 6;
+    __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     __logi("recv_msg result %d", result);
     return result;
 }
@@ -74,7 +72,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
-
+    __logi(">>>>---------------> recv msg: %s", msg->data);
 }
 
 static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
@@ -87,13 +85,13 @@ int main(int argc, char *argv[])
 {
     env_backtrace_setup();
     env_logger_start("./tmp/client/log", NULL);
-    __logi("start server");
+    __logi("start client");
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
     const char *host = "127.0.0.1";
     // uint16_t port = atoi(argv[1]);
-    uint16_t port = 3721;
+    uint16_t port = 3824;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
     msgaddr_ptr addr = &client->msgaddr;
     msglistener_ptr listener = &client->listener;
@@ -130,9 +128,9 @@ int main(int argc, char *argv[])
     device->sendto = send_msg;
     device->recvfrom = recv_msg;
     
+    listener->ctx = client;
     client->mtp = msgtransmitter_create(device, &client->listener);
 
-    listener->ctx = client;
     msgchannel_ptr channel = msgtransmitter_connect(client->mtp, addr);
 
     char str[100];
@@ -141,33 +139,36 @@ int main(int argc, char *argv[])
     {
         printf( "Enter a value :");
         fgets(str, 100, stdin);
-
-        if (str[0] == 'q'){
+        size_t len = strlen(str);
+        if (len == 2 && str[0] == 'q'){
             break;
         }
 
-        uint16_t u = 0;
-        // printf( "\nsend msg len: %d", strlen(str));
-        printf( "\nsend 1 - 255: %hu\n", u-65535U);
         msgtransmitter_send(client->mtp, channel, str, strlen(str));
     }
 
     close(fd);
-    msgtransmitter_disconnect(client->mtp, channel);
-    __logi("msgtransmitter_disconnect");
-    msgtransmitter_release(&client->mtp);
-    __logi("msgtransmitter_release");
 
+    __logi("msgtransmitter_disconnect");
+    msgtransmitter_disconnect(client->mtp, channel);
+    
+    __logi("msgtransmitter_release");
+    msgtransmitter_release(&client->mtp);
+
+    __logi("free device");
     free(device);
+    
+    __logi("free client");
     free(client);
+
+    __logi("env_logger_stop");
     env_logger_stop();
 
+    __logi("env_malloc_debug");
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
 
+    __logi("exit");
     return 0;
-
-Reset:
-    return -1;
 }

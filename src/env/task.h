@@ -261,8 +261,8 @@ typedef std::atomic<uint8_t>                 ___atom_8bit;
 
 
 #define ___atom_set(x, y)                   (x)->store((y))
-#define ___atom_sub(x, y)                   (x)->fetch_sub((y))
-#define ___atom_add(x, y)                   (x)->fetch_add((y))
+#define ___atom_sub(x, y)                   ((x)->fetch_sub((y)) - 1)
+#define ___atom_add(x, y)                   ((x)->fetch_add((y)) + 1)
 
 #define	___is_true(x)                       ((x)->load() == true)
 #define	___is_false(x)                      ((x)->load() == false)
@@ -297,12 +297,15 @@ public:
     using CxxLock = std::unique_lock<std::mutex>;
 
     CxxLock lock(){
+        // CxxLock _lock(_mutex, std::defer_lock);
+        // _lock.lock();
         CxxLock _lock(_mutex);
         return _lock;
     }
 
     void unlock(CxxLock &_lock){
         _lock.unlock();
+        // _lock.release();
     }
 
     void wait(CxxLock &_lock){
