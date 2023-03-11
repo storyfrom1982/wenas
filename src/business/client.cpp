@@ -12,6 +12,7 @@ extern "C" {
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/select.h>
+#include <fcntl.h>
 
 // #include <sys/un.h>
 
@@ -43,7 +44,7 @@ static void listening(struct physics_socket *socket)
 	fd_set fds;
 	FD_ZERO(&fds);
 	FD_SET(client->socket, &fds);
-    select(0, &fds, NULL, NULL, NULL);
+    select(client->socket + 1, &fds, NULL, NULL, NULL);
 }
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
@@ -61,9 +62,11 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
     ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
-    addr->ip = fromaddr->sin_addr.s_addr;
-    addr->port = fromaddr->sin_port;
-    addr->keylen = 6;
+    if (result > 0){
+        addr->ip = fromaddr->sin_addr.s_addr;
+        addr->port = fromaddr->sin_port;
+        addr->keylen = 6;
+    }
     // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     // __logi("recv_msg result %d", result);
     return result;
@@ -131,6 +134,10 @@ int main(int argc, char *argv[])
 	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
         __loge("setsockopt error");
     }
+	int flags = fcntl(fd, F_GETFL, 0);
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
+        __loge("set no block failed");
+    }
 
     client->socket = fd;
     device->ctx = client;
@@ -145,28 +152,31 @@ int main(int argc, char *argv[])
 
     char str[100];
 
-    // while (1)
-    // {
-    //     __logi("Enter a value :\n");
-    //     fgets(str, 100, stdin);
-    //     size_t len = strlen(str);
-    //     if (len == 2 && str[0] == 'q'){
-    //         break;
-    //     }
+    while (1)
+    {
+        __logi("Enter a value :\n");
+        fgets(str, 100, stdin);
+        size_t len = strlen(str);
+        if (len == 2 && str[0] == 'q'){
+            break;
+        }
 
+        msgtransmitter_send(client->mtp, channel, str, strlen(str));
+    }
+
+    // for (size_t i = 0; i < 1000; i++)
+    // {
+    //     size_t len = rand() % 99;
+    //     if (len < 10){
+    //         len = 10;
+    //     }
+    //     memset(str, i % 256, len);
+    //     str[len] = '\0';
     //     msgtransmitter_send(client->mtp, channel, str, strlen(str));
     // }
 
-    for (size_t i = 0; i < 1000; i++)
-    {
-        size_t len = rand() % 99;
-        if (len < 10){
-            len = 10;
-        }
-        memset(str, i % 256, len);
-        str[len] = '\0';
-        msgtransmitter_send(client->mtp, channel, str, strlen(str));
-    }
+
+    __loge("msgtransmitter_send finish");
     
     sleep(1000);
 

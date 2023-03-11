@@ -9,16 +9,18 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/select.h>
+#include <fcntl.h>
+#include <arpa/inet.h>
 
 // #include <sys/un.h>
 
 // #include <netinet/tcp.h>
-#include <arpa/inet.h>
+
 // #include <netdb.h>
 // #include <errno.h>
 
 // #include <string.h>
-// #include <fcntl.h>
+
 // #include <poll.h>
 
 // #include <assert.h>
@@ -63,7 +65,7 @@ static void listening(struct physics_socket *socket)
 	fd_set fds;
 	FD_ZERO(&fds);
 	FD_SET(server->socket, &fds);
-    select(0, &fds, NULL, NULL, NULL);
+    select(server->socket+1, &fds, NULL, NULL, NULL);
 }
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
@@ -102,9 +104,11 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
     ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
-    addr->ip = fromaddr->sin_addr.s_addr;
-    addr->port = fromaddr->sin_port;
-    addr->keylen = 6;
+    if (result > 0){
+        addr->ip = fromaddr->sin_addr.s_addr;
+        addr->port = fromaddr->sin_port;
+        addr->keylen = 6;
+    }
     // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     // __logi("recv_msg result %d", result);
     return result;
@@ -208,6 +212,10 @@ int main(int argc, char *argv[])
     }
     if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
         __loge("bind error");
+    }
+	int flags = fcntl(fd, F_GETFL, 0);
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
+        __loge("set no block failed");
     }
 
     server.socket = fd;
