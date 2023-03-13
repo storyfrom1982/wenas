@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "linetask.h"
+#include "task.h"
 
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
@@ -27,7 +27,7 @@ typedef struct env_logger {
     __atombool inited;
     __atombool writing;
     char *path;
-    linetask_ptr task;
+    task_ptr task;
     env_logger_cb printer;
     env_pipe_t *pipe;
 }env_logger_t;
@@ -112,11 +112,11 @@ int env_logger_start(const char *path, env_logger_cb cb)
             g_logger.pipe = env_pipe_create(__log_pipe_size);
             assert(g_logger.pipe);
             __set_true(g_logger.writing);
-            g_logger.task = linetask_create();
+            g_logger.task = task_create();
             linekv_ptr ctx = linekv_create(1024);
             linekv_add_ptr(ctx, "ctx", &g_logger);
             linekv_add_ptr(ctx, "func", env_logger_write_loop);
-            linetask_post(g_logger.task, ctx);
+            task_post(g_logger.task, ctx);
             __logi(">>>>-------------->\n");
             __logi("Logger start >>>>-------------->\n");
             __logi(">>>>-------------->\n");
@@ -134,7 +134,7 @@ void env_logger_stop()
     if (__set_false(g_logger.inited) 
         && __set_false(g_logger.writing)){
         env_pipe_stop(g_logger.pipe);
-        linetask_release(&g_logger.task);
+        task_release(&g_logger.task);
         env_pipe_destroy(&g_logger.pipe);
         if (g_logger.path){
             free(g_logger.path);
@@ -152,7 +152,7 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
-                    pthread_self(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
+                    ___thread_id(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
     va_start (args, fmt);

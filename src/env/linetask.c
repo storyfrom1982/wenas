@@ -95,13 +95,13 @@ static void* task_loop(void *p)
     while (__is_true(ltq->running)) {
 
         while (ltq->timer_list->pos > 0 && ltq->timer_list->array[1].key <= env_time()){
-            element = min_heapify_pop(ltq->timer_list);
+            element = heap_pop(ltq->timer_list);
             timer = (linekv_ptr) element.value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
             element.key = timer_func(timer); 
             if (element.key != 0){
                 element.key += env_time();
-                min_heapify_push(ltq->timer_list, element);
+                heap_push(ltq->timer_list, element);
             }
         }
 
@@ -137,7 +137,7 @@ static void* task_loop(void *p)
 
                 element.key = linekv_find_uint64(task, "delay") + env_time();
                 element.value = task;
-                min_heapify_push(ltq->timer_list, element);
+                heap_push(ltq->timer_list, element);
 
             }else {
 
@@ -207,7 +207,7 @@ void linetask_release(linetask_ptr *pptr)
         }
 
         while (ptr->timer_list->pos > 0){
-            heapment_t element = min_heapify_pop(ptr->timer_list);
+            heapment_t element = heap_pop(ptr->timer_list);
             if (element.value){
                 linekv_release((linekv_ptr*)&(element.value));
             }

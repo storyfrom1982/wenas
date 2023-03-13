@@ -386,7 +386,7 @@ struct task {
     ___atom_size pop_waiting;
     ___mutex_ptr mtx;
     ___thread_ptr tid;
-    heap_t *timer_list;
+    heap_ptr timer_list;
     struct linekv head, end;
 };
 
@@ -453,7 +453,7 @@ static void* task_loop(void *p)
     uint64_t timeout = 0;
     linekv_ptr timer;
     linekv_ptr task;
-    heapment_t element;
+    struct heapnode node;
     linetask_post_func post_func;
     linetask_timer_func timer_func;
     task_ptr ltq = (task_ptr)p;
@@ -463,13 +463,13 @@ static void* task_loop(void *p)
     while (___is_true(&ltq->running)) {
 
         while (ltq->timer_list->pos > 0 && ltq->timer_list->array[1].key <= env_time()){
-            element = min_heapify_pop(ltq->timer_list);
-            timer = (linekv_ptr) element.value;
+            node = heap_pop(ltq->timer_list);
+            timer = (linekv_ptr) node.value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
-            element.key = timer_func(timer); 
-            if (element.key != 0){
-                element.key += env_time();
-                min_heapify_push(ltq->timer_list, element);
+            node.key = timer_func(timer); 
+            if (node.key != 0){
+                node.key += env_time();
+                heap_push(ltq->timer_list, node);
             }
         }
 
@@ -503,9 +503,9 @@ static void* task_loop(void *p)
 
             if (task->flag & LINETASK_FALG_TIMER){
 
-                element.key = linekv_find_uint64(task, "delay") + env_time();
-                element.value = task;
-                min_heapify_push(ltq->timer_list, element);
+                node.key = linekv_find_uint64(task, "delay") + env_time();
+                node.value = task;
+                heap_push(ltq->timer_list, node);
 
             }else {
 
@@ -572,9 +572,9 @@ static inline void task_release(task_ptr *pptr)
         }
 
         while (ptr->timer_list->pos > 0){
-            heapment_t element = min_heapify_pop(ptr->timer_list);
-            if (element.value){
-                linekv_release((linekv_ptr*)&(element.value));
+            struct heapnode node = heap_pop(ptr->timer_list);
+            if (node.value){
+                linekv_release((linekv_ptr*)&(node.value));
             }
         }
 

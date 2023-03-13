@@ -95,7 +95,7 @@ struct msgchannel {
     int status;
     ___atom_bool sending;
     ___mutex_ptr mtx;
-    heap_t *timer;
+    heap_ptr timer;
     struct msgaddr addr;
     msgbuf_ptr msgbuf;
     transunitbuf_ptr sendbuf;
@@ -282,8 +282,8 @@ static inline void msgchannel_release(msgchannel_ptr channel)
 {
     ___mutex_release(channel->mtx);
     while (channel->timer->pos > 0){
-        __logi("msgchannel_release min_heapify_pop %lu", channel->timer->pos);
-        heapment_t node = min_heapify_pop(channel->timer);
+        __logi("msgchannel_release heap_pop %lu", channel->timer->pos);
+        struct heapnode node = heap_pop(channel->timer);
         free(node.value);
     }
     heap_destroy(&channel->timer);
@@ -332,7 +332,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
     int result;
     int64_t timeout;
     uint64_t timer = 1000000000UL * 60UL;
-    heapment_t timenode;
+    struct heapnode timenode;
     struct msgaddr addr;
     struct unithead ack;
     transunit_ptr unit = NULL;
@@ -340,7 +340,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
     channelqueue_ptr channellist = NULL;
     msgtransmitter_ptr transmitter = (msgtransmitter_ptr)linekv_find_ptr(ctx, "ctx");
 
-
+    uint64_t timerkey;
     while (___is_true(&transmitter->running))
     {
         // __logi("msgtransmitter_send_loop running");
@@ -378,7 +378,20 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                 case TRANSUNIT_ACK:
                     __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK %u", unit->head.serial_number);
                     ___set_true(&channel->sendbuf->buf[unit->head.serial_number]->confirm);
+                    __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK heap_delete");
+                    timerkey = channel->sendbuf->buf[unit->head.serial_number]->timestamp + RESEND_INTERVAL;
+                    __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK heap_delete key %llu", timerkey);
+                    timenode = heap_delete(channel->timer, timerkey);
+                    __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK channel_free_unit");
                     channel_free_unit(channel, unit->head.serial_number);
+                    __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit");
+                    unit = (transunit_ptr)timenode.value;
+                    if (unit != NULL){
+                        __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit %u", unit->head.serial_number);
+                        free(unit);
+                    }else {
+                        __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit error");
+                    }
                     break;
                 case TRANSUNIT_PING:
                     ack = unit->head;
@@ -469,11 +482,11 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                         channel_move_reading_pos(channel);
                         unit->timestamp = ___sys_clock();
                         timenode.key = unit->timestamp + RESEND_INTERVAL;
-                        // __logi("msgtransmitter_send_loop timer.key %lu", timenode.key);
+                        __logi("msgtransmitter_send_loop timer.key %lu", timenode.key);
                         // timenode.value = channel->sendbuf->buf[channel->sendbuf->reading-1];
                         timenode.value = unit;
-                        // __logi("msgtransmitter_send_loop min_heapify_push 0x%x", timenode.value);
-                        min_heapify_push(channel->timer, timenode);
+                        // __logi("msgtransmitter_send_loop heap_push 0x%x", timenode.value);
+                        heap_push(channel->timer, timenode);
                     }else {
                         __logi("msgtransmitter_send_loop return");
                         return;
@@ -488,7 +501,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
 
                 while (channel->timer->pos > 0)
                 {
-                    if ((timeout = channel->timer->array[1].key - ___sys_clock()) > 0){
+                    if ((timeout = __heap_min(channel->timer).key - ___sys_clock()) > 0){
                         if (timer > timeout){
                             timer = timeout;
                             // __logi("msgtransmitter_send_loop timer %lu", timer);
@@ -502,19 +515,19 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                             result = transmitter->device->sendto(transmitter->device, &unit->chennel->addr, 
                                     (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size);
                             if (result > 0){
-                                min_heapify_pop(channel->timer);
+                                heap_pop(channel->timer);
                                 unit->timestamp = ___sys_clock();
                                 timenode.key = unit->timestamp + RESEND_INTERVAL;
                                 // timenode.key = ___sys_clock() + RESEND_INTERVAL;
                                 timenode.value = unit;
-                                min_heapify_push(channel->timer, timenode);
+                                heap_push(channel->timer, timenode);
                                 __logi("msgtransmitter_send_loop timer resend %u", unit->head.serial_number);
                             }else {
                                 __logi("msgtransmitter_send_loop resend failed");
                                 break;
                             }
                         }else {
-                            min_heapify_pop(channel->timer);
+                            heap_pop(channel->timer);
                             __logi("msgtransmitter_send_loop free unit serial number %u", unit->head.serial_number);
                             // std::cout << "unit->confirm: " << ___is_false(&unit->confirm) << std::endl;
                             free(unit);
