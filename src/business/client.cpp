@@ -152,6 +152,18 @@ int main(int argc, char *argv[])
 
     char str[100];
 
+    for (size_t i = 0; i < 1000; i++)
+    {
+        size_t len = rand() % 99;
+        if (len < 10){
+            len = 10;
+        }
+        memset(str, i % 256, len);
+        str[len] = '\0';
+        msgtransmitter_send(client->mtp, channel, str, strlen(str));
+    }
+
+
     while (1)
     {
         __logi("Enter a value :\n");
@@ -163,22 +175,9 @@ int main(int argc, char *argv[])
 
         msgtransmitter_send(client->mtp, channel, str, strlen(str));
     }
-
-    // for (size_t i = 0; i < 1000; i++)
-    // {
-    //     size_t len = rand() % 99;
-    //     if (len < 10){
-    //         len = 10;
-    //     }
-    //     memset(str, i % 256, len);
-    //     str[len] = '\0';
-    //     msgtransmitter_send(client->mtp, channel, str, strlen(str));
-    // }
-
+    
 
     __loge("msgtransmitter_send finish");
-    
-    sleep(1000);
 
     close(fd);
 
