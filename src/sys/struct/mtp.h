@@ -669,7 +669,8 @@ static inline void msgtransmitter_release(msgtransmitter_ptr *pptr)
         task_release(&transmitter->recv_task);
         __logi("tree_clear");
         // tree_clear(transmitter->peers, free_channel);
-        msgchannel_ptr channel = (msgchannel_ptr)tree_max(transmitter->peers);
+        msgchannel_ptr channel = (msgchannel_ptr)tree_min(transmitter->peers);
+        channel = (msgchannel_ptr)tree_max(transmitter->peers);
         if (channel){
             tree_delete(transmitter->peers, channel->addr.key, channel->addr.keylen);
             msgchannel_release(channel);

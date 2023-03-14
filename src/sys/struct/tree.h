@@ -46,18 +46,18 @@ void tree_release(__tree *pptr)
 
 void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 {
-    uint64_t i;
+    uint8_t i;
     __tree parent, tree = root;
     __tree_node *node;
     
     __tree2node(tree)->route ++;
     uint8_t len = 0;
-    char *p = (char *)key;
+    uint8_t *p = (uint8_t *)key;
 
     while (len < keylen)
     {
         parent = tree;
-        i = (*p) >> 4;
+        i = ((*p) >> 4);
         if (tree[i] == NULL){
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
             __tree2node(tree)->branch ++;
@@ -69,7 +69,7 @@ void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
         node->parent = parent;
 
         parent = tree;
-        i = *p & 0x0F;
+        i = (*p & 0x0F);
         if (tree[i] == NULL){
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
             __tree2node(tree)->branch ++;
@@ -91,7 +91,7 @@ void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 __ptr tree_find(__tree root, void *key, uint8_t keylen)
 {
     uint8_t len = 0;
-    char *p = (char *)key;
+    uint8_t *p = (uint8_t *)key;
     while (len < keylen)
     {
         if (root != NULL){
@@ -123,7 +123,7 @@ __ptr tree_delete(__tree root, void *key, uint8_t keylen)
     __ptr mapping = NULL;
     __tree parent, tree = root;
     uint8_t len = 0;
-    char *p = (char *)key;
+    uint8_t *p = (uint8_t *)key;
 
     while (len < keylen)
     {
@@ -186,7 +186,7 @@ __ptr tree_delete(__tree root, void *key, uint8_t keylen)
 
 void tree_clear(__tree root, void(*free_ptr)(__ptr))
 {
-    uint64_t i = 0;
+    uint8_t i = 0;
     __tree tree = root, temp;
 
     while (tree && __tree2node(root)->branch > 0)
@@ -198,18 +198,25 @@ void tree_clear(__tree root, void(*free_ptr)(__ptr))
                 continue;
             }
             
+            //找到一个分支结点
             tree = (__tree)tree[i];
-            i = 0;
-
+            //判断是否为叶子结点
             if (__tree2node(tree)->branch == 0){
+                //是叶子结点就跳出循环
                 break;
             }
+            //不是叶子结点就开始遍历这个分支
+            i = 0;
         }
 
+        //保存下一个兄弟结点的索引
         i = __tree2node(tree)->index + 1;
         temp = tree;
+        //指向上级父亲结点
         tree = __tree2node(tree)->parent;
+        //判断是否为叶子结点
         if (__tree2node(temp)->branch == 0){
+            //移除叶子结点
             __tree2node(tree)->branch--;
             if (__tree2node(temp)->mapping){
                 __tree2node(root)->route--;
@@ -217,9 +224,12 @@ void tree_clear(__tree root, void(*free_ptr)(__ptr))
                     free_ptr(__tree2node(temp)->mapping);
                 }
             }
+            __logi("tree_clear %u ", i-1);
             free(temp);
             tree[i-1] = NULL;
         }
+        //已经回到了上级父结点
+        //开始遍历下一个子结点
     }
 }
 
@@ -229,20 +239,21 @@ __ptr tree_min(__tree root)
     if (__tree2node(root)->route > 0){
 
         __tree tree = root;
+        uint8_t i = 0;
 
-        int i = 0;
-        while (1)
+        while (tree)
         {
+            // i 不会大于 TREE_DIMENSION，因为 root 的 route 大于 0，所以 tree 必然有一个分支
             while (tree[i] == NULL){
                 i++;
             }
 
             tree = (__tree)tree[i];
 
-            if (__tree2node(tree)->mapping != NULL){
+            if (tree && __tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
                 return __tree2node(tree)->mapping;
             }
-            
+
             i = 0;
         }
     }
@@ -256,9 +267,9 @@ __ptr tree_max(__tree root)
     if (__tree2node(root)->route > 0){
 
         __tree tree = root;
+        uint8_t i = TREE_DIMENSION - 1;
 
-        int i = TREE_DIMENSION -1;
-        while (1)
+        while (tree)
         {
             while (tree[i] == NULL){
                 i--;
@@ -266,11 +277,11 @@ __ptr tree_max(__tree root)
 
             tree = (__tree)tree[i];
 
-            if (__tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
+            if (tree && __tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
                 return __tree2node(tree)->mapping;
             }
             
-            i = TREE_DIMENSION -1;
+            i = TREE_DIMENSION - 1;
         }
     }
 
@@ -280,14 +291,14 @@ __ptr tree_max(__tree root)
 
 __node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
-    int first = 0, i = 0;
+    uint8_t first = 0, i = 0;
     __tree parent, tree = root;
     __node_list head = {0}, *next = &head;
     
     if (key != NULL)
     {
         uint8_t len = 0;
-        char *p = (char *)key;
+        uint8_t *p = (uint8_t *)key;
         while (len < keylen)
         {
             parent = tree;
@@ -360,14 +371,14 @@ __node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
 
 __node_list* tree_down(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
-    int i = TREE_DIMENSION -1;
+    uint8_t i = TREE_DIMENSION -1;
     __tree parent, tree = root;
     __node_list head = {0}, *next = &head;
     
     if (key != NULL)
     {
         uint8_t len = 0;
-        char *p = (char *)key;
+        uint8_t *p = (uint8_t *)key;
         while (len < keylen)
         {
             parent = tree;
