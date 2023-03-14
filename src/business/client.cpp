@@ -44,7 +44,10 @@ static void listening(struct physics_socket *socket)
 	fd_set fds;
 	FD_ZERO(&fds);
 	FD_SET(client->socket, &fds);
-    select(client->socket + 1, &fds, NULL, NULL, NULL);
+    struct timeval timeout;
+    timeout.tv_sec  = 10;
+    timeout.tv_usec = 0;
+    select(client->socket + 1, &fds, NULL, NULL, &timeout);
 }
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
@@ -85,6 +88,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
     __logi(">>>>---------------> recv msg: %s", msg->data);
+    free(msg);
 }
 
 static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
@@ -152,16 +156,16 @@ int main(int argc, char *argv[])
 
     char str[100];
 
-    for (size_t i = 0; i < 10000; i++)
-    {
-        size_t len = rand() % 99;
-        if (len < 10){
-            len = 10;
-        }
-        memset(str, i % 256, len);
-        str[len] = '\0';
-        msgtransmitter_send(client->mtp, channel, str, strlen(str));
-    }
+    // for (size_t i = 0; i < 10000; i++)
+    // {
+    //     size_t len = rand() % 99;
+    //     if (len < 10){
+    //         len = 10;
+    //     }
+    //     memset(str, i % 256, len);
+    //     str[len] = '\0';
+    //     msgtransmitter_send(client->mtp, channel, str, strlen(str));
+    // }
 
 
     while (1)
@@ -179,8 +183,6 @@ int main(int argc, char *argv[])
 
     __loge("msgtransmitter_send finish");
 
-    close(fd);
-
     __logi("msgtransmitter_disconnect");
     msgtransmitter_disconnect(client->mtp, channel);
     
@@ -192,6 +194,8 @@ int main(int argc, char *argv[])
     
     __logi("free client");
     free(client);
+
+    close(fd);
 
     __logi("env_logger_stop");
     env_logger_stop();

@@ -65,7 +65,10 @@ static void listening(struct physics_socket *socket)
 	fd_set fds;
 	FD_ZERO(&fds);
 	FD_SET(server->socket, &fds);
-    select(server->socket+1, &fds, NULL, NULL, NULL);
+    struct timeval timeout;
+    timeout.tv_sec  = 10;
+    timeout.tv_usec = 0;
+    select(server->socket + 1, &fds, NULL, NULL, &timeout);
 }
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
@@ -154,6 +157,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
     __logi(">>>>---------------> recv msg: %s", msg->data);
+    free(msg);
 }
 
 static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
@@ -246,7 +250,6 @@ int main(int argc, char *argv[])
         // msgtransmitter_send(server.mtp, channel, str, strlen(str));
     }
 
-    close(fd);
     // msgtransmitter_disconnect(server.mtp, channel);
     __logi("msgtransmitter_disconnect");
     msgtransmitter_release(&server.mtp);
@@ -254,6 +257,8 @@ int main(int argc, char *argv[])
 
     __logi("free device");
     free(device);
+
+    close(fd);
 
     __logi("env_logger_stop");
     env_logger_stop();

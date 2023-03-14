@@ -19,8 +19,8 @@ enum {
 };
 
 #define UNIT_HEAD_SIZE          8
-#define UNIT_BODY_SIZE          1400
-#define UNIT_TOTAL_SIZE         1408
+#define UNIT_BODY_SIZE          1280
+#define UNIT_TOTAL_SIZE         1288
 #define UNIT_GROUP_SIZE         256
 #define UNIT_GROUP_BUF_SIZE     ( UNIT_BODY_SIZE * UNIT_GROUP_SIZE )
 
@@ -345,8 +345,14 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
                 ___mutex_broadcast(transmitter->mtx);
             }else {
                 ___lock lk = ___mutex_lock(transmitter->mtx);
-                ___mutex_wait(transmitter->mtx, lk);
+                if (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos == 0){
+                    ___mutex_wait(transmitter->mtx, lk);
+                }
                 ___mutex_unlock(transmitter->mtx, lk);
+            }
+
+            if (___is_false(&transmitter->running)){
+                return;
             }
         }
 
@@ -416,6 +422,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                         timerkey = channel->sendbuf->buf[unit->head.serial_number]->timestamp + RESEND_INTERVAL;
                         timenode = heap_delete(channel->timer, timerkey);
                         channel_free_unit(channel, unit->head.serial_number);
+                        free(unit);
                         unit = (transunit_ptr)timenode.value;
                         if (unit != NULL){
                             // __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit %u", unit->head.serial_number);
@@ -424,7 +431,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                             __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit error");
                         }
                     }else {
-
+                        free(unit);
                     }
                     break;
                 case TRANSUNIT_PING:
@@ -450,6 +457,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     timerkey = channel->sendbuf->buf[unit->head.serial_number]->timestamp + RESEND_INTERVAL;
                     timenode = heap_delete(channel->timer, timerkey);
                     channel_free_unit(channel, unit->head.serial_number);
+                    free(unit);
                     unit = (transunit_ptr)timenode.value;
                     if (unit != NULL){
                         // __loge("msgtransmitter_send_loop recv TRANSUNIT_ACK free unit %u", unit->head.serial_number);
@@ -642,6 +650,12 @@ static inline msgtransmitter_ptr msgtransmitter_create(physics_socket_ptr device
     return mtp;
 }
 
+static void free_channel(__ptr val)
+{
+    __logi("=======================================free_channel");
+    msgchannel_release((msgchannel_ptr)val);
+}
+
 static inline void msgtransmitter_release(msgtransmitter_ptr *pptr)
 {
     if (pptr && *pptr){        
@@ -653,6 +667,13 @@ static inline void msgtransmitter_release(msgtransmitter_ptr *pptr)
         task_release(&transmitter->send_task);
         __logi("task_release recv");
         task_release(&transmitter->recv_task);
+        __logi("tree_clear");
+        // tree_clear(transmitter->peers, free_channel);
+        msgchannel_ptr channel = (msgchannel_ptr)tree_max(transmitter->peers);
+        if (channel){
+            tree_delete(transmitter->peers, channel->addr.key, channel->addr.keylen);
+            msgchannel_release(channel);
+        }
         __logi("tree_release");
         tree_release(&transmitter->peers);
         linekv_release(&transmitter->send_func);
