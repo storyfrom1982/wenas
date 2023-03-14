@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
 
     char str[100];
 
-    for (size_t i = 0; i < 1000; i++)
+    for (size_t i = 0; i < 10000; i++)
     {
         size_t len = rand() % 99;
         if (len < 10){
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 
         msgtransmitter_send(client->mtp, channel, str, strlen(str));
     }
-    
+
 
     __loge("msgtransmitter_send finish");
 

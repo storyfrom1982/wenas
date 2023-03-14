@@ -289,7 +289,7 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
             channel->transmitter->listener->message(channel->transmitter->listener, channel, channel->msgbuf->msg);
             channel->msgbuf->msg = NULL;
         }
-        // free(channel->msgbuf->buf[channel->msgbuf->rpos]);
+        free(channel->msgbuf->buf[channel->msgbuf->rpos]);
         channel->msgbuf->buf[channel->msgbuf->rpos] = NULL;
         channel->msgbuf->rpos++;
     }
@@ -399,12 +399,12 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                         __loge("msgtransmitter_send_loop sendto failed !!!!!!");
                     }
                     unit->addr = addr;
-                    if (((uint16_t)(TRANSMITTER_RECVBUF_LEN - transmitter->recvbuf->wpos + transmitter->recvbuf->rpos)) == 0){
+                    if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
                         ___lock lk = ___mutex_lock(transmitter->mtx);
                         ___mutex_wait(transmitter->mtx, lk);
                         ___mutex_unlock(transmitter->mtx, lk);
                     }
-                    transmitter->recvbuf->buf[transmitter->recvbuf->wpos] = unit;
+                    transmitter->recvbuf->buf[transmitter->recvbuf->wpos & (TRANSMITTER_RECVBUF_LEN - 1)] = unit;
                     ___atom_add(&transmitter->recvbuf->wpos, 1);
                     ___mutex_broadcast(transmitter->mtx);
                     break;
@@ -436,12 +436,12 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     }
 
                     unit->addr = addr;
-                    if (((uint16_t)(TRANSMITTER_RECVBUF_LEN - transmitter->recvbuf->wpos + transmitter->recvbuf->rpos)) == 0){
+                    if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
                         ___lock lk = ___mutex_lock(transmitter->mtx);
                         ___mutex_wait(transmitter->mtx, lk);
                         ___mutex_unlock(transmitter->mtx, lk);
                     }
-                    transmitter->recvbuf->buf[transmitter->recvbuf->wpos] = unit;
+                    transmitter->recvbuf->buf[transmitter->recvbuf->wpos & (TRANSMITTER_RECVBUF_LEN - 1)] = unit;
                     ___atom_add(&transmitter->recvbuf->wpos, 1);
                     ___mutex_broadcast(transmitter->mtx);
                     break;
