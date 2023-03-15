@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
         }
         memset(str, i % 256, len);
         str[len] = '\0';
-        msgtransmitter_send(client->mtp, channel, str, strlen(str));
+        msgtransmitter_send(client->mtp, channel, str, len);
     }
 
 

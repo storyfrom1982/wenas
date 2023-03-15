@@ -144,6 +144,7 @@ struct msgtransmitter {
     __tree peers;
     ___atom_bool running;
     ___atom_bool listening;
+    ___atom_size waitting;
     physics_socket_ptr device;
     msglistener_ptr listener;
     linekv_ptr send_func, recv_func;
@@ -164,11 +165,12 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     // __logi("channel_push_unit %llu wpos: %llu", (UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)), channel->sendbuf->wpos + 0);
     while ((UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)) == 0){
         ___lock lk = ___mutex_lock(channel->mtx);
-        __logi("channel_push_unit ___mutex_wait enter");
+        // __logi("channel_push_unit ___mutex_wait enter");
         ___mutex_wait(channel->mtx, lk);
-        __logi("channel_push_unit ___mutex_wait exit");
+        // __logi("channel_push_unit ___mutex_wait exit");
         ___mutex_unlock(channel->mtx, lk);
     }
+    // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %llu reading: %llu wpos: %llu", unit->head.serial_number, channel->sendbuf->rpos + 0, channel->sendbuf->reading + 0, channel->sendbuf->wpos + 0);
     unit->head.serial_number = channel->sendbuf->wpos & (UNIT_GROUP_SIZE - 1);
     channel->sendbuf->buf[unit->head.serial_number] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
@@ -192,13 +194,15 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
         }
     }
 
-    if (___atom_add(&channel->transmitter->send_queue_length, 1) == 1){
-        ___lock lk = ___mutex_lock(channel->transmitter->sendmtx);
-        ___mutex_broadcast(channel->transmitter->sendmtx);
-        __logi("channel_push_unit ___mutex_notify");
-        ___mutex_unlock(channel->transmitter->sendmtx, lk);
-    }
-    // __logi("channel_push_unit send_queue_length >>>>------------> %lu", channel->transmitter->send_queue_length + 0);
+    ___atom_add(&channel->transmitter->send_queue_length, 1);
+    ___mutex_notify(channel->transmitter->sendmtx);
+
+    // if (___atom_add(&channel->transmitter->send_queue_length, 1) == 1){
+    //     // ___lock lk = ___mutex_lock(channel->transmitter->sendmtx);
+    //     ___mutex_notify(channel->transmitter->sendmtx);
+    //     // __logi("channel_push_unit ___mutex_notify");
+    //     // ___mutex_unlock(channel->transmitter->sendmtx, lk);
+    // }
 }
 
 static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number)
@@ -212,6 +216,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number
         unit = channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)];
         channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)] = NULL;
         ___atom_add(&channel->sendbuf->rpos, 1);
+        ___mutex_notify(channel->mtx);
 
         struct heapnode timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
         if ((transunit_ptr)timenode.value == unit){
@@ -226,15 +231,16 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number
             unit = channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)];
             channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)] = NULL;
             ___atom_add(&channel->sendbuf->rpos, 1);
+            ___mutex_notify(channel->mtx);
 
             struct heapnode timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
             if ((transunit_ptr)timenode.value == unit){
                 free(unit);
             }else {
                 __loge("msgchannel_pull free unit error !!!");
-            }                    
+            }
         }
-        ___mutex_notify(channel->mtx);
+        
 
     }else {
 
@@ -335,39 +341,29 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
 
     while (___is_true(&transmitter->running))
     {
-        while (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos == 0)
-        {
+        if (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos == 0){
             if (___is_true(&transmitter->listening)){
-                ___lock lk = ___mutex_lock(transmitter->recvmtx);
-                ___mutex_unlock(transmitter->recvmtx, lk);
-                // __logw("msgtransmitter_recv_loop listening enter");
                 transmitter->device->listening(transmitter->device);
-                // __logw("msgtransmitter_recv_loop listening exit");
                 ___set_false(&transmitter->listening);
                 ___mutex_notify(transmitter->sendmtx);
             }else {
                 ___lock lk = ___mutex_lock(transmitter->recvmtx);
-                if (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos == 0){
-                    ___mutex_wait(transmitter->recvmtx, lk);
-                }
+                ___mutex_wait(transmitter->recvmtx, lk);
                 ___mutex_unlock(transmitter->recvmtx, lk);
             }
+        }
 
-            if (___is_false(&transmitter->running)){
-                return;
+        if (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos > 0){
+            unit = transmitter->recvbuf->buf[transmitter->recvbuf->rpos & (TRANSMITTER_RECVBUF_LEN - 1)];
+            unit->channel = (msgchannel_ptr)tree_find(transmitter->peers, unit->addr.key, unit->addr.keylen);
+            if (unit->channel == NULL){
+                unit->channel = msgchannel_create(transmitter, &unit->addr);
+                tree_inseart(transmitter->peers, unit->addr.key, unit->addr.keylen, unit->channel);
             }
+            channel_make_message(unit->channel, unit);
+            ___atom_add(&transmitter->recvbuf->rpos, 1);
+            ___mutex_notify(transmitter->recvmtx);
         }
-
-        unit = transmitter->recvbuf->buf[transmitter->recvbuf->rpos & (TRANSMITTER_RECVBUF_LEN - 1)];
-        unit->channel = (msgchannel_ptr)tree_find(transmitter->peers, unit->addr.key, unit->addr.keylen);
-        if (unit->channel == NULL){
-            unit->channel = msgchannel_create(transmitter, &unit->addr);
-            tree_inseart(transmitter->peers, unit->addr.key, unit->addr.keylen, unit->channel);
-        }
-
-        channel_make_message(unit->channel, unit);
-        ___atom_add(&transmitter->recvbuf->rpos, 1);
-        ___mutex_notify(transmitter->recvmtx);
     }
 
     __logw("msgtransmitter_recv_loop exit");
@@ -387,34 +383,29 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
     transunit_ptr recvunit = NULL;
     msgchannel_ptr channel = NULL;
     channelqueue_ptr channellist = NULL;
-    __logw("msgtransmitter_send_loop 0");
+
     msgtransmitter_ptr transmitter = (msgtransmitter_ptr)linekv_find_ptr(ctx, "ctx");
+    transmitter->waitting = 0;
 
     addr.addr = malloc(256);
 
-    // uint64_t timerkey;
-
-    __logw("msgtransmitter_send_loop 1");
-
     while (___is_true(&transmitter->running))
     {
-        __logw("msgtransmitter_send_loop 2");
         // __logi("msgtransmitter_send_loop running");
         while (___is_true(&transmitter->running))
         {
-            __logw("msgtransmitter_send_loop 3");
             if (recvunit == NULL){
                 recvunit = (transunit_ptr)malloc(sizeof(struct transunit));
             }
-            __logw("msgtransmitter_send_loop 4");
+
             recvunit->head.body_size = 0;
             result = transmitter->device->recvfrom(transmitter->device, &addr, &recvunit->head, UNIT_TOTAL_SIZE);
-            __logi("msgtransmitter_send_loop recvfrom = %llu", result);
+
             if (result == (recvunit->head.body_size + UNIT_HEAD_SIZE)){
                 switch (recvunit->head.type & 0x0F)
                 {
                 case TRANSUNIT_MSG:
-                    __logw("msgtransmitter_send_loop TRANSUNIT_MSG");
+                    // __logw("msgtransmitter_send_loop TRANSUNIT_MSG");
                     ack = recvunit->head;
                     ack.type = TRANSUNIT_ACK;
                     ack.body_size = 0;
@@ -423,17 +414,17 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     }
                     recvunit->addr = addr;
                     if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
-                        ___lock lk = ___mutex_lock(transmitter->sendmtx);
-                        ___mutex_wait(transmitter->sendmtx, lk);
-                        ___mutex_unlock(transmitter->sendmtx, lk);
+                        ___lock lk = ___mutex_lock(transmitter->recvmtx);
+                        ___mutex_wait(transmitter->recvmtx, lk);
+                        ___mutex_unlock(transmitter->recvmtx, lk);
                     }
                     transmitter->recvbuf->buf[transmitter->recvbuf->wpos & (TRANSMITTER_RECVBUF_LEN - 1)] = recvunit;
                     ___atom_add(&transmitter->recvbuf->wpos, 1);
-                    ___mutex_broadcast(transmitter->sendmtx);
+                    ___mutex_notify(transmitter->recvmtx);
                     recvunit = NULL;
                     break;
                 case TRANSUNIT_ACK:
-                    __loge("msgtransmitter_send_loop TRANSUNIT_ACK %u", recvunit->head.serial_number);
+                    // __loge("msgtransmitter_send_loop TRANSUNIT_ACK %u", recvunit->head.serial_number);
                     channel = (msgchannel_ptr)tree_find(transmitter->peers, addr.key, addr.keylen);
                     if (channel){
                         msgchannel_pull(channel, recvunit->head.serial_number);
@@ -450,13 +441,13 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
 
                     recvunit->addr = addr;
                     if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
-                        ___lock lk = ___mutex_lock(transmitter->sendmtx);
-                        ___mutex_wait(transmitter->sendmtx, lk);
-                        ___mutex_unlock(transmitter->sendmtx, lk);
+                        ___lock lk = ___mutex_lock(transmitter->recvmtx);
+                        ___mutex_wait(transmitter->recvmtx, lk);
+                        ___mutex_unlock(transmitter->recvmtx, lk);
                     }
                     transmitter->recvbuf->buf[transmitter->recvbuf->wpos & (TRANSMITTER_RECVBUF_LEN - 1)] = recvunit;
                     ___atom_add(&transmitter->recvbuf->wpos, 1);
-                    ___mutex_broadcast(transmitter->sendmtx);
+                    ___mutex_notify(transmitter->recvmtx);
                     recvunit = NULL;
                     break;
                 case TRANSUNIT_PONG:
@@ -482,7 +473,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             }
         }
 
-        __logi("msgtransmitter_send_loop start sending");
+        // __logi("msgtransmitter_send_loop start sending");
 
         for (size_t i = 0; i < CHANNEL_QUEUE_COUNT; ++i)
         {
@@ -506,6 +497,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             {
                 // __logi("msgtransmitter_send_loop channel_hold_reading_pos");
                 if (channel->sendbuf->wpos - channel->sendbuf->reading > 0){
+                    transmitter->waitting = 0;
                     // __logi("msgtransmitter_send_loop >>>>------------> msg unit serial number: %u addr: 0x%x size: %u type: %u", sendunit->head.serial_number, sendunit, sendunit->head.body_size, sendunit->head.type);
                     sendunit = channel->sendbuf->buf[channel->sendbuf->reading & (UNIT_GROUP_SIZE - 1)];
                     result = transmitter->device->sendto(transmitter->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
@@ -513,7 +505,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                         channel->sendbuf->reading++;
                         ___atom_sub(&channel->transmitter->send_queue_length, 1);
-                        __logi("channel_move_reading_pos send_queue_length >>>>------------> %lu", channel->transmitter->send_queue_length - 0);
+                        // __logi("channel_move_reading_pos send_queue_length >>>>------------> %lu", channel->transmitter->send_queue_length - 0);
                         sendunit->timestamp = ___sys_clock();
                         timenode.key = sendunit->timestamp + RESEND_INTERVAL;
                         timenode.value = sendunit;
@@ -570,17 +562,19 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             ___atom_unlock(&channellist->lock);
         }
         
-        {
-            ___lock lk = ___mutex_lock(transmitter->sendmtx);
-            if (transmitter->send_queue_length == 0){
+        if (transmitter->send_queue_length == 0){
+            if (++transmitter->waitting > 100){
+                ___lock lk = ___mutex_lock(transmitter->sendmtx);
                 ___set_true(&transmitter->listening);
                 ___mutex_notify(transmitter->recvmtx);
+                // __logi("msgtransmitter_send_loop channellist->len %llu", transmitter->waitting + 0);
                 // __logi("msgtransmitter_send_loop waitting enter %lu", timer);
                 ___mutex_timer(transmitter->sendmtx, lk, timer);
-                timer = 1000000000UL * 60UL;;
+                timer = 1000000000UL * 60UL;
+                transmitter->waitting = 0;
                 // __logi("msgtransmitter_send_loop waitting exit %lu", timer);
+                ___mutex_unlock(transmitter->sendmtx, lk);
             }
-            ___mutex_unlock(transmitter->sendmtx, lk);
         }
     }
 
@@ -699,6 +693,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
     size_t group_size;
     size_t group_count = size / (UNIT_GROUP_BUF_SIZE);
     size_t last_group_size = size - (group_count * UNIT_GROUP_BUF_SIZE);
+    // __logi("size: %llu last_group_size: %llu group_count: %llu", size, last_group_size, group_count);
     uint32_t unit_count;
     uint8_t last_unit_size;
     uint8_t last_unit_id;
@@ -723,6 +718,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
     unit_count = group_size / UNIT_BODY_SIZE;
     last_unit_size = group_size - unit_count * UNIT_BODY_SIZE;
     last_unit_id = 0;
+    // __logi("last_unit_size: %llu unit_count: %llu", last_unit_size, unit_count);
 
     if (last_unit_size > 0){
         last_unit_id = 1;
@@ -738,7 +734,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         msgchannel_push(channel, unit);
     }
 
-    if (last_unit_id){
+    if (last_unit_size){
         transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
         memcpy(unit->body, group_data + ((unit_count - 1) * UNIT_BODY_SIZE), last_unit_size);
         unit->head.type = TRANSUNIT_MSG;        
@@ -746,6 +742,8 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         unit->head.maximal = 1;
         // __logi("msgtransmitter_send unit addr: 0x%x size: %u type: %u msg: %s", unit, unit->head.body_size, unit->head.type, unit->body);
         msgchannel_push(channel, unit);
+    }else {
+        exit(0);
     }
 }
 
