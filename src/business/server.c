@@ -104,17 +104,24 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
 
 static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
+    __logi("recv_msg enter");
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
+    __logi("recv_msg 0x%x", fromaddr);
     ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
+    __logi("recv_msg 2");
     if (result > 0){
+        __logi("recv_msg 0x%x", fromaddr);
         addr->ip = fromaddr->sin_addr.s_addr;
+        __logi("recv_msg 4");
         addr->port = fromaddr->sin_port;
+        __logi("recv_msg 5");
         addr->keylen = 6;
     }
     // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
     // __logi("recv_msg result %d", result);
+    __logi("recv_msg exit");
     return result;
 
     // // *addr = server->msgaddr
