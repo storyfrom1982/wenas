@@ -66,9 +66,10 @@ static void listening(struct physics_socket *socket)
 	FD_ZERO(&fds);
 	FD_SET(server->socket, &fds);
     struct timeval timeout;
-    timeout.tv_sec  = 10;
-    timeout.tv_usec = 0;
-    select(server->socket + 1, &fds, NULL, NULL, &timeout);
+    // timeout.tv_sec  = 10;
+    // timeout.tv_usec = 0;
+    // select(server->socket + 1, &fds, NULL, NULL, &timeout);
+    select(server->socket + 1, &fds, NULL, NULL, NULL);
 }
 
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
@@ -172,8 +173,8 @@ int main(int argc, char *argv[])
     __logi("start server");
 
     const char *host = "127.0.0.1";
-    uint16_t port = atoi(argv[1]);
-    // uint16_t port = 3721;
+    // uint16_t port = atoi(argv[1]);
+    uint16_t port = 3824;
     server_t server;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
     msgaddr_ptr addr = &server.msgaddr;
@@ -251,6 +252,10 @@ int main(int argc, char *argv[])
     }
 
     // msgtransmitter_disconnect(server.mtp, channel);
+
+    ___set_false(&server.mtp->running);
+    int data = 0;
+    ssize_t result = sendto(server.socket, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
     __logi("msgtransmitter_disconnect");
     msgtransmitter_release(&server.mtp);
     __logi("msgtransmitter_release");

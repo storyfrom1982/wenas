@@ -24,8 +24,10 @@ extern "C" {
 
 typedef struct client{
     int socket;
+    int local_socket;
     socklen_t addlen;
-    struct sockaddr_in addr;
+    struct sockaddr_in local_addr;
+    struct sockaddr_in remote_addr;
     struct msgaddr msgaddr;
     struct msglistener listener;
     msgtransmitter_ptr mtp;
@@ -43,34 +45,36 @@ static void listening(struct physics_socket *socket)
     client_ptr client = (client_ptr)socket->ctx;
 	fd_set fds;
 	FD_ZERO(&fds);
+    FD_SET(client->local_socket, &fds);
 	FD_SET(client->socket, &fds);
     struct timeval timeout;
-    timeout.tv_sec  = 10;
-    timeout.tv_usec = 0;
-    select(client->socket + 1, &fds, NULL, NULL, &timeout);
+    // timeout.tv_sec  = 10;
+    // timeout.tv_usec = 0;
+    // select(client->socket + 1, &fds, NULL, NULL, &timeout);
+    select(client->socket + 1, &fds, NULL, NULL, NULL);
 }
 
-static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *data, size_t size)
 {
-    // __logi("send_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("send_msg ip: %u port: %u", remote_addr->ip, remote_addr->port);
     client_ptr client = (client_ptr)socket->ctx;
-    ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)addr->addr, (socklen_t)addr->addrlen);
+    ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t)remote_addr->addrlen);
     // __logi("send_msg result %d", result);
     return result;
 }
 
-static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *buf, size_t size)
 {
     client_ptr client = (client_ptr)socket->ctx;
-    struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
-    addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    struct sockaddr_in *fromaddr = (struct sockaddr_in *)remote_addr->addr;
+    remote_addr->addrlen = sizeof(struct sockaddr_in);
+    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t*)&remote_addr->addrlen);
     if (result > 0){
-        addr->ip = fromaddr->sin_addr.s_addr;
-        addr->port = fromaddr->sin_port;
-        addr->keylen = 6;
+        remote_addr->ip = fromaddr->sin_addr.s_addr;
+        remote_addr->port = fromaddr->sin_port;
+        remote_addr->keylen = 6;
     }
-    // __logi("recv_msg ip: %u port: %u", addr->ip, addr->port);
+    // __logi("recv_msg ip: %u port: %u", remote_addr->ip, remote_addr->port);
     // __logi("recv_msg result %d", result);
     return result;
 }
@@ -109,18 +113,33 @@ int main(int argc, char *argv[])
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
-    msgaddr_ptr addr = &client->msgaddr;
+    msgaddr_ptr remote_addr = &client->msgaddr;
     msglistener_ptr listener = &client->listener;
 
-    client->addr.sin_family = AF_INET;
-    client->addr.sin_port = htons(port);
-    inet_aton(host, &client->addr.sin_addr);
+    client->local_addr.sin_family = AF_INET;
+    client->local_addr.sin_port = htons(3721);
+    client->local_addr.sin_addr.s_addr = INADDR_ANY;
+    if((client->local_socket = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+        __loge("socket error");
+    }
+    if (bind(client->local_socket, (const struct sockaddr *)&client->local_addr, sizeof(client->local_addr)) == -1){
+        __loge("bind error");
+    }    
+	int event_flags = fcntl(client->local_socket, F_GETFL, 0);
+    if (fcntl(client->local_socket, F_SETFL, event_flags | O_NONBLOCK) == -1){
+        __loge("set no block failed");
+    }
 
-    addr->keylen = 6;
-    addr->ip = client->addr.sin_addr.s_addr;
-    addr->port =client->addr.sin_port;
-    addr->addr = &client->addr;
-    addr->addrlen = sizeof(client->addr);
+    client->remote_addr.sin_family = AF_INET;
+    client->remote_addr.sin_port = htons(port);
+    // client->remote_addr.sin_addr.s_addr = INADDR_ANY;
+    inet_aton(host, &client->remote_addr.sin_addr);
+
+    remote_addr->keylen = 6;
+    remote_addr->ip = client->remote_addr.sin_addr.s_addr;
+    remote_addr->port =client->remote_addr.sin_port;
+    remote_addr->addr = &client->remote_addr;
+    remote_addr->addrlen = sizeof(client->remote_addr);
 
     listener->connected = connected;
     listener->disconnected = disconnected;
@@ -152,7 +171,7 @@ int main(int argc, char *argv[])
     listener->ctx = client;
     client->mtp = msgtransmitter_create(device, &client->listener);
 
-    msgchannel_ptr channel = msgtransmitter_connect(client->mtp, addr);
+    msgchannel_ptr channel = msgtransmitter_connect(client->mtp, remote_addr);
 
     char str[100];
 
@@ -185,6 +204,10 @@ int main(int argc, char *argv[])
 
     __logi("msgtransmitter_disconnect");
     msgtransmitter_disconnect(client->mtp, channel);
+
+    ___set_false(&client->mtp->running);
+    int data = 0;
+    ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
     __logi("msgtransmitter_release");
     msgtransmitter_release(&client->mtp);
