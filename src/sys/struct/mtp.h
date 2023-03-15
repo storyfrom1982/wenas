@@ -488,7 +488,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             if (channellist->len == 0){
                 // __logi("msgtransmitter_send_loop channellist->len");
                 ___atom_unlock(&channellist->lock);
-                break;
+                continue;
             }
 
             channel = channellist->head.next;
