@@ -129,6 +129,7 @@ static inline struct heapnode heap_delete(heap_ptr h, uint64_t key)
     } while (smallest != index);
 
     if (h->array[0].value == tmp.value){
+        // exit(0);
         return tmp;
     }
 
@@ -150,7 +151,7 @@ static inline struct heapnode heap_delete(heap_ptr h, uint64_t key)
         h->array[smallest] = tmp;
 
     } while (smallest != index);
-
+    // __logi("heap_delete key %llu", h->array[0].key);
     h->pos--;
     return h->array[0];
 }

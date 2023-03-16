@@ -21,8 +21,8 @@ enum {
 #define UNIT_HEAD_SIZE          8
 // #define UNIT_BODY_SIZE          1280
 // #define UNIT_TOTAL_SIZE         1288
-#define UNIT_BODY_SIZE          2
-#define UNIT_TOTAL_SIZE         10
+#define UNIT_BODY_SIZE          8
+#define UNIT_TOTAL_SIZE         16
 #define UNIT_GROUP_SIZE         256
 #define UNIT_GROUP_BUF_SIZE     ( UNIT_BODY_SIZE * UNIT_GROUP_SIZE )
 
@@ -138,7 +138,7 @@ typedef struct physics_socket {
 }*physics_socket_ptr;
 
 
-#define RESEND_INTERVAL                 10000000000ULL
+#define RESEND_INTERVAL                 100000000ULL
 #define CHANNEL_QUEUE_COUNT             3
 #define TRANSMITTER_RECVBUF_LEN         4096
 
@@ -215,19 +215,19 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number
     channel->sendbuf->buf[serial_number]->confirm = true;
 
     if (serial_number == (channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1))){
-
+        struct heapnode timenode;
         unit = channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)];
         channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)] = NULL;
         // ___atom_sub(&channel->transmitter->send_queue_length, 1);
         ___atom_add(&channel->sendbuf->rpos, 1);
         ___mutex_notify(channel->mtx);
 
-        struct heapnode timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
+        timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
         if ((transunit_ptr)timenode.value == unit){
             free(unit);
         }else {
+            __logi("msgchannel_pull timer resend timestamp: %llu value: 0x%x unit: 0x%x number: %u", timenode.key, timenode.value, unit, unit->head.serial_number);
             __loge("msgchannel_pull free unit error !!!");
-            exit(0);
         }
 
         while (channel->sendbuf->buf[channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1)] != NULL 
@@ -239,18 +239,18 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number
             ___atom_add(&channel->sendbuf->rpos, 1);
             ___mutex_notify(channel->mtx);
 
-            struct heapnode timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
+            timenode = heap_delete(channel->timer, unit->timestamp + RESEND_INTERVAL);
             if ((transunit_ptr)timenode.value == unit){
                 free(unit);
             }else {
-                exit(0);
+                __logi("msgchannel_pull timer resend timestamp: %llu value: 0x%x unit: 0x%x number: %u", unit->timestamp, timenode.value, unit, unit->head.serial_number);
                 __loge("msgchannel_pull free unit error !!!");
             }
         }
         
 
     }else {
-        exit(0);
+        
         uint8_t rpos = channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1);
         int serial_gap = serial_number - rpos;
         if (serial_gap > 0){
@@ -258,6 +258,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint8_t serial_number
             {
                 unit = channel->sendbuf->buf[rpos];
                 if (!unit->confirm && !unit->resending){
+                    // __logi("msgchannel_pull resend unit %hu", unit->head.serial_number);
                     if (channel->transmitter->device->sendto(channel->transmitter->device, &channel->addr, 
                         (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
                         unit->resending = true;
@@ -287,7 +288,10 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
     while (channel->msgbuf->buf[channel->msgbuf->rpos] != NULL){
         // __logi("channel_make_message max: %hu rpos: %hu", channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal, channel->msgbuf->rpos);
         if (channel->msgbuf->msg == NULL){
-            channel->msgbuf->max_serial_number = channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal ? channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal : UNIT_GROUP_SIZE;
+            channel->msgbuf->max_serial_number = channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal;
+            if (channel->msgbuf->max_serial_number == 0){
+                channel->msgbuf->max_serial_number = UNIT_GROUP_SIZE;
+            }
             channel->msgbuf->msg = (message_ptr)malloc(sizeof(struct message) + (channel->msgbuf->max_serial_number * UNIT_BODY_SIZE));
             channel->msgbuf->msg->size = 0;
             channel->msgbuf->msg->channel = channel;
@@ -300,9 +304,7 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
         channel->msgbuf->msg->size += channel->msgbuf->buf[channel->msgbuf->rpos]->head.body_size;
         channel->msgbuf->max_serial_number--;
         if (channel->msgbuf->max_serial_number == 0){
-            if (channel->msgbuf->msg->size != 512){
-                __logi("channel_make_message msg size: %llu", channel->msgbuf->msg->size);
-            }
+            __logi("channel_make_message msg size: %llu", channel->msgbuf->msg->size);
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
             channel->transmitter->listener->message(channel->transmitter->listener, channel, channel->msgbuf->msg);
             channel->msgbuf->msg = NULL;
@@ -402,6 +404,8 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
     msgtransmitter_ptr transmitter = (msgtransmitter_ptr)linekv_find_ptr(ctx, "ctx");
     transmitter->waitting = 0;
 
+    uint8_t resend = 0;
+
     addr.addr = malloc(256);
 
     while (___is_true(&transmitter->running))
@@ -426,7 +430,20 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     ack.body_size = 0;
                     while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
                         __loge("msgtransmitter_send_loop sendto failed !!!!!!");
-                    }
+                    }                    
+                    // if (recvunit->head.serial_number % 10){
+                    //     while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
+                    //         __loge("msgtransmitter_send_loop sendto failed !!!!!!");
+                    //     }
+                    // }else {
+                    //     if (resend == recvunit->head.serial_number){
+                    //         while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
+                    //             __loge("msgtransmitter_send_loop sendto failed !!!!!!");
+                    //         }
+                    //     }else {
+                    //         resend = recvunit->head.serial_number;
+                    //     }
+                    // }
                     recvunit->addr = addr;
                     if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
                         ___lock lk = ___mutex_lock(transmitter->sendmtx);
@@ -551,14 +568,17 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                                 timenode = heap_pop(channel->timer);
                                 sendunit->timestamp = ___sys_clock();
                                 timenode.key = sendunit->timestamp + RESEND_INTERVAL;
+                                timenode.value = sendunit;
                                 heap_push(channel->timer, timenode);
-                                __logi("msgtransmitter_send_loop timer resend %u", sendunit->head.serial_number);
+                                __logi("msgtransmitter_send_loop timer %llu timenode.value: 0x%x resend unit: 0x%x number: %u", sendunit->timestamp, timenode.value, sendunit, sendunit->head.serial_number);
+                                timenode = heap_delete(channel->timer, sendunit->timestamp + RESEND_INTERVAL);
+                                __logi("msgtransmitter_send_loop del %llu timenode.value: 0x%x resend unit: 0x%x number: %u", sendunit->timestamp, timenode.value, sendunit, sendunit->head.serial_number);
                             }else {
                                 __logi("msgtransmitter_send_loop resend failed");
                                 break;
                             }
                         }else {
-                            __logi("msgtransmitter_send_loop confirm %d", sendunit->confirm);
+                            // __logi("msgtransmitter_send_loop confirm %d", sendunit->confirm);
                             break;
                         }
                     }
@@ -569,7 +589,12 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     transmitter->waitting = 0;
                     // __logi("msgtransmitter_send_loop >>>>------------> msg unit serial number: %u addr: 0x%x size: %u type: %u", sendunit->head.serial_number, sendunit, sendunit->head.body_size, sendunit->head.type);
                     sendunit = channel->sendbuf->buf[channel->sendbuf->reading & (UNIT_GROUP_SIZE - 1)];
-                    result = transmitter->device->sendto(transmitter->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
+                    if (sendunit->head.serial_number % 2){
+                        result = transmitter->device->sendto(transmitter->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
+                    }else {
+                        result = UNIT_HEAD_SIZE + sendunit->head.body_size;
+                    }
+                    
                     // __logi("msgtransmitter_send_loop send size %lu result size %lu", UNIT_HEAD_SIZE + unit->head.body_size, result);
                     if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                         channel->sendbuf->reading++;
@@ -734,7 +759,7 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
     size_t group_size;
     size_t group_count = size / (UNIT_GROUP_BUF_SIZE);
     size_t last_group_size = size - (group_count * UNIT_GROUP_BUF_SIZE);
-    __logi("size: %llu last_group_size: %llu group_count: %llu", size, last_group_size, group_count);
+    // __logi("size: %llu last_group_size: %llu group_count: %llu", size, last_group_size, group_count);
     uint32_t unit_count;
     uint8_t last_unit_size;
     uint8_t last_unit_id;
