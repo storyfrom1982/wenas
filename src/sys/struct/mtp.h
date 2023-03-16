@@ -19,8 +19,10 @@ enum {
 };
 
 #define UNIT_HEAD_SIZE          8
-#define UNIT_BODY_SIZE          1280
-#define UNIT_TOTAL_SIZE         1288
+// #define UNIT_BODY_SIZE          1280
+// #define UNIT_TOTAL_SIZE         1288
+#define UNIT_BODY_SIZE          2
+#define UNIT_TOTAL_SIZE         10
 #define UNIT_GROUP_SIZE         256
 #define UNIT_GROUP_BUF_SIZE     ( UNIT_BODY_SIZE * UNIT_GROUP_SIZE )
 
@@ -93,7 +95,7 @@ typedef struct message {
 
 typedef struct msgbuf {
     message_ptr msg;
-    uint8_t max_serial_number;
+    uint16_t max_serial_number;
     uint8_t rpos, wpos;
     struct transunit *buf[1];
 }*msgbuf_ptr;
@@ -136,7 +138,7 @@ typedef struct physics_socket {
 }*physics_socket_ptr;
 
 
-#define RESEND_INTERVAL                 100000000ULL
+#define RESEND_INTERVAL                 10000000000ULL
 #define CHANNEL_QUEUE_COUNT             3
 #define TRANSMITTER_RECVBUF_LEN         4096
 
@@ -167,10 +169,10 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
 
     // __logi("channel_push_unit %llu wpos: %llu", (UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)), channel->sendbuf->wpos + 0);
     while ((UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)) == 0){
-        __logi("channel_push_unit ___mutex_wait enter readable: %llu queuelen: %llu  sending: %d", 
-            (UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)), (channel->transmitter->send_queue_length + 0), channel->sending);
+        // __logi("channel_push_unit ___mutex_wait enter readable: %llu queuelen: %llu  sending: %d", 
+        //     (UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)), (channel->transmitter->send_queue_length + 0), channel->sending);
         ___mutex_wait(channel->mtx, lk);
-        __logi("channel_push_unit ___mutex_wait exit");
+        // __logi("channel_push_unit ___mutex_wait exit");
     }
     // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %llu reading: %llu wpos: %llu", unit->head.serial_number, channel->sendbuf->rpos + 0, channel->sendbuf->reading + 0, channel->sendbuf->wpos + 0);
     unit->head.serial_number = channel->sendbuf->wpos & (UNIT_GROUP_SIZE - 1);
@@ -283,9 +285,9 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
     }
 
     while (channel->msgbuf->buf[channel->msgbuf->rpos] != NULL){
-        __logi("channel_make_message rpos: %hu", channel->msgbuf->rpos);
+        // __logi("channel_make_message max: %hu rpos: %hu", channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal, channel->msgbuf->rpos);
         if (channel->msgbuf->msg == NULL){
-            channel->msgbuf->max_serial_number = channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal;
+            channel->msgbuf->max_serial_number = channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal ? channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal : UNIT_GROUP_SIZE;
             channel->msgbuf->msg = (message_ptr)malloc(sizeof(struct message) + (channel->msgbuf->max_serial_number * UNIT_BODY_SIZE));
             channel->msgbuf->msg->size = 0;
             channel->msgbuf->msg->channel = channel;
@@ -298,7 +300,9 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
         channel->msgbuf->msg->size += channel->msgbuf->buf[channel->msgbuf->rpos]->head.body_size;
         channel->msgbuf->max_serial_number--;
         if (channel->msgbuf->max_serial_number == 0){
-            // __logi("channel_make_message msg: %s", (char*)channel->msgbuf->msg->data);
+            if (channel->msgbuf->msg->size != 512){
+                __logi("channel_make_message msg size: %llu", channel->msgbuf->msg->size);
+            }
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
             channel->transmitter->listener->message(channel->transmitter->listener, channel, channel->msgbuf->msg);
             channel->msgbuf->msg = NULL;
@@ -749,38 +753,37 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
         }
     }
 
-    group_data = ((char*)data) + (size - last_group_size);
-    group_size = last_group_size;
+    if (last_group_size){
+        group_data = ((char*)data) + (size - last_group_size);
+        group_size = last_group_size;
 
-    unit_count = group_size / UNIT_BODY_SIZE;
-    last_unit_size = group_size - unit_count * UNIT_BODY_SIZE;
-    last_unit_id = 0;
-    __logi("last_unit_size: %llu unit_count: %llu", last_unit_size, unit_count);
+        unit_count = group_size / UNIT_BODY_SIZE;
+        last_unit_size = group_size - unit_count * UNIT_BODY_SIZE;
+        last_unit_id = 0;
+        // __logi("last_unit_size: %llu unit_count: %llu", last_unit_size, unit_count);
 
-    if (last_unit_size > 0){
-        last_unit_id = 1;
-        unit_count += 1;
-    }
+        if (last_unit_size > 0){
+            last_unit_id = 1;
+        }
 
-    for (size_t y = 0; (y + last_unit_id) < unit_count; y++){
-        transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
-        memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
-        unit->head.type = TRANSUNIT_MSG;
-        unit->head.body_size = UNIT_BODY_SIZE;
-        unit->head.maximal = last_unit_id - y;
-        msgchannel_push(channel, unit);
-    }
+        for (size_t y = 0; y < unit_count; y++){
+            transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
+            memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
+            unit->head.type = TRANSUNIT_MSG;
+            unit->head.body_size = UNIT_BODY_SIZE;
+            unit->head.maximal = (unit_count + last_unit_id) - y;
+            msgchannel_push(channel, unit);
+        }
 
-    if (last_unit_size){
-        transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
-        memcpy(unit->body, group_data + ((unit_count - 1) * UNIT_BODY_SIZE), last_unit_size);
-        unit->head.type = TRANSUNIT_MSG;        
-        unit->head.body_size = last_unit_size;
-        unit->head.maximal = 1;
-        __logi("msgtransmitter_send unit addr: 0x%x size: %u type: %u msg: %s", unit, unit->head.body_size, unit->head.type, unit->body);
-        msgchannel_push(channel, unit);
-    }else {
-        exit(0);
+        if (last_unit_id){
+            transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
+            memcpy(unit->body, group_data + (unit_count * UNIT_BODY_SIZE), last_unit_size);
+            unit->head.type = TRANSUNIT_MSG;        
+            unit->head.body_size = last_unit_size;
+            unit->head.maximal = last_unit_id;
+            // __logi("msgtransmitter_send unit addr: 0x%x size: %u type: %u msg: %s", unit, unit->head.body_size, unit->head.type, unit->body);
+            msgchannel_push(channel, unit);
+        }
     }
 }
 

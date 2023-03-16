@@ -164,7 +164,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, message_ptr msg)
 {
-    __logi(">>>>---------------> recv msg: %s", msg->data);
+    // __logi(">>>>---------------> recv msg: %s", msg->data);
     free(msg);
 }
 
