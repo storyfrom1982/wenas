@@ -570,9 +570,17 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                                 timenode.key = sendunit->timestamp + RESEND_INTERVAL;
                                 timenode.value = sendunit;
                                 heap_push(channel->timer, timenode);
+                                for (size_t i = 1; i <= channel->timer->pos; i++)
+                                {
+                                    if (channel->timer->array[i].key == sendunit->timestamp+RESEND_INTERVAL){
+                                        __logi("msgtransmitter_send_loop timer timenode.value: 0x%x key: %llu resend unit: %llu ", channel->timer->array[i].value, channel->timer->array[i].key, sendunit->timestamp+RESEND_INTERVAL);
+                                    }
+                                    
+                                }
                                 __logi("msgtransmitter_send_loop timer %llu timenode.value: 0x%x resend unit: 0x%x number: %u", sendunit->timestamp, timenode.value, sendunit, sendunit->head.serial_number);
                                 timenode = heap_delete(channel->timer, sendunit->timestamp + RESEND_INTERVAL);
                                 __logi("msgtransmitter_send_loop del %llu timenode.value: 0x%x resend unit: 0x%x number: %u", sendunit->timestamp, timenode.value, sendunit, sendunit->head.serial_number);
+                                heap_push(channel->timer, timenode);
                             }else {
                                 __logi("msgtransmitter_send_loop resend failed");
                                 break;
