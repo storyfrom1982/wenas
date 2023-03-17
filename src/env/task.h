@@ -453,7 +453,7 @@ static void* task_loop(void *p)
     uint64_t timeout = 0;
     linekv_ptr timer;
     linekv_ptr task;
-    struct heapnode node;
+    heapnode_ptr timer_ptr;
     linetask_post_func post_func;
     linetask_timer_func timer_func;
     task_ptr ltq = (task_ptr)p;
@@ -462,14 +462,17 @@ static void* task_loop(void *p)
     
     while (___is_true(&ltq->running)) {
 
-        while (ltq->timer_list->pos > 0 && ltq->timer_list->array[1].key <= env_time()){
-            node = heap_pop(ltq->timer_list);
-            timer = (linekv_ptr) node.value;
+        while (ltq->timer_list->pos > 0 && __heap_min(ltq->timer_list)->key <= env_time()){
+            timer_ptr = heap_pop(ltq->timer_list);
+            timer = (linekv_ptr) timer_ptr->value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
-            node.key = timer_func(timer); 
-            if (node.key != 0){
-                node.key += env_time();
-                heap_push(ltq->timer_list, node);
+            timer_ptr->key = timer_func(timer); 
+            if (timer_ptr->key != 0){
+                timer_ptr->key += env_time();
+                timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
+            }else {
+                free(timer_ptr);
+                timer_ptr = NULL;
             }
         }
 
@@ -484,7 +487,7 @@ static void* task_loop(void *p)
 
             ___atom_add(&ltq->pop_waiting, 1);
             if (ltq->timer_list->pos > 0){
-                timeout = ltq->timer_list->array[1].key - env_time();
+                timeout = __heap_min(ltq->timer_list)->key - env_time();
                 ___mutex_timer(ltq->mtx, lk, timeout);
             }else {
                 ___mutex_wait(ltq->mtx, lk);
@@ -502,10 +505,10 @@ static void* task_loop(void *p)
             ___mutex_unlock(ltq->mtx, lk);
 
             if (task->flag & LINETASK_FALG_TIMER){
-
-                node.key = linekv_find_uint64(task, "delay") + env_time();
-                node.value = task;
-                heap_push(ltq->timer_list, node);
+                timer_ptr = (heapnode_ptr)malloc(sizeof(struct heapnode));
+                timer_ptr->key = linekv_find_uint64(task, "delay") + env_time();
+                timer_ptr->value = task;
+                timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
 
             }else {
 
@@ -572,9 +575,10 @@ static inline void task_release(task_ptr *pptr)
         }
 
         while (ptr->timer_list->pos > 0){
-            struct heapnode node = heap_pop(ptr->timer_list);
-            if (node.value){
-                linekv_release((linekv_ptr*)&(node.value));
+            heapnode_ptr node = heap_pop(ptr->timer_list);
+            if (node->value){
+                linekv_release((linekv_ptr*)&(node->value));
+                free(node);
             }
         }
 
