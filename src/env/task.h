@@ -88,6 +88,7 @@ static inline uint64_t ___thread_id()
 typedef size_t ___atom_bool;
 typedef size_t ___atom_size;
 typedef uint8_t ___atom_8bit;
+typedef uint16_t ___atom_size16bit;
 
 #define	___is_true(x)	    	__sync_bool_compare_and_swap((x), true, true)
 #define	___is_false(x)	    	__sync_bool_compare_and_swap((x), false, false)
@@ -258,7 +259,7 @@ static inline uint64_t ___thread_id()
 typedef std::atomic<size_t>                 ___atom_bool;
 typedef std::atomic<size_t>                 ___atom_size;
 typedef std::atomic<uint8_t>                 ___atom_8bit;
-typedef std::atomic<uint16_t>                 ___atom_size8bit;
+typedef std::atomic<uint16_t>                 ___atom_size16bit;
 
 
 #define ___atom_set(x, y)                   (x)->store((y))

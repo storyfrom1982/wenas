@@ -64,6 +64,10 @@ static inline size_t heap_push(heap_ptr h, heapnode_ptr node)
         // 小于父节点时，找到自己的位置
         h->array[i] = node;
         h->array[i]->pos = i;
+        if (i <= 0){
+            __logi("heap_push %llu", i);
+            exit(0);
+        }
         return i;
     }
 
