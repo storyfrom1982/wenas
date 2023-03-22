@@ -215,19 +215,19 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
     transunit_ptr unit;
     heapnode_ptr timenode;
     // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %u reading: %u wpos: %u", 
-    //     serial_number, channel->sendbuf->rpos + 0, channel->sendbuf->reading + 0, channel->sendbuf->wpos + 0);    
+    //     serial_number, channel->sendbuf->rpos + 0, channel->sendbuf->reading + 0, channel->sendbuf->wpos + 0);
     // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %u reading: %u wpos: %u", 
     //     serial_number, channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1), channel->sendbuf->reading & (UNIT_GROUP_SIZE - 1), channel->sendbuf->wpos & (UNIT_GROUP_SIZE - 1));
     uint16_t index = serial_number & (UNIT_GROUP_SIZE - 1);
-    
-    // 如果索引位置是 NULL，那么索引位置一定已经处理过了，
-    // 如果 ACK 携带的 SN 不等于索引位置的 SN，那么这个 SN 一定是重复发送的，而且之前发送的 SN 已经到达了，而且又已经写入了新的 SN
-    // 不处理上述两种情况的 ACK
-    if (channel->sendbuf->buf[index] && serial_number == channel->sendbuf->buf[index]->head.serial_number){
 
-        // __logi("msgchannel_pull >>>>---------------> enter sn: %u SN: %u timer pos: %u", serial_number, channel->sendbuf->buf[index]->head.serial_number, channel->sendbuf->buf[index]->timer.pos);
-        //只处理 非 NULL 和 SN 相等的 ACK
+    // 只处理在 rpos 与 reading 之间的 SN
+    if ((uint16_t)(serial_number - channel->sendbuf->rpos) <= (uint16_t)(channel->sendbuf->reading - channel->sendbuf->rpos)){
+        // 检测此 SN 是否未确认
         if (channel->sendbuf->buf[index] && !channel->sendbuf->buf[index]->confirm){
+            // if (channel->timer->array[channel->sendbuf->buf[index]->timer.pos] == NULL){
+            //     __logi("msgchannel_pull h->array[smallest]->key != node->key");
+            //     exit(0);
+            // }
             // 移除定时器，设置确认状态
             channel->sendbuf->buf[index]->confirm = true;
             timenode = heap_delete(channel->timer, &channel->sendbuf->buf[index]->timer);
@@ -261,7 +261,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
 
         }else {
             // __logi("msgchannel_pull resend unit enter");
-            // SN 一定在 rpos 后边，rpos 前面的 SN 不会到达这里
+            // 重传 rpos 到 SN 之间的所有尚未确认的 SN
             uint16_t rpos = channel->sendbuf->rpos;
             while (rpos != serial_number) {
                 // __logi("msgchannel_pull resend unit 1");
@@ -280,7 +280,6 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
             // __logi("msgchannel_pull resend unit exit");
         }        
     }
-
     // __logi("channel_free_unit >>>>---------------> exit");
 }
 
@@ -581,24 +580,24 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     ack = recvunit->head;
                     ack.type = TRANSUNIT_ACK;
                     ack.body_size = 0;
-                    while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
-                        __loge("msgtransmitter_send_loop sendto failed !!!!!!");
-                    }                    
-                    // if (recvunit->head.serial_number % 5){
-                    //     // __logw("msgtransmitter_send_loop TRANSUNIT_MSG send ACK %hu", recvunit->head.serial_number);
-                    //     while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
-                    //         __loge("msgtransmitter_send_loop sendto failed !!!!!!");
-                    //     }
-                    // }else {
-                    //     if (recvunit->head.flag == 1){
-                    //         __logw("msgtransmitter_send_loop TRANSUNIT_MSG resend ACK %hu", recvunit->head.serial_number);
-                    //         while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
-                    //             __loge("msgtransmitter_send_loop sendto failed !!!!!!");
-                    //         }
-                    //     }else {
-                    //         __logw("msgtransmitter_send_loop TRANSUNIT_MSG miss ACK %hu", recvunit->head.serial_number);
-                    //     }
-                    // }
+                    // while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
+                    //     __loge("msgtransmitter_send_loop sendto failed !!!!!!");
+                    // }                    
+                    if (recvunit->head.serial_number % 5){
+                        // __logw("msgtransmitter_send_loop TRANSUNIT_MSG send ACK %hu", recvunit->head.serial_number);
+                        while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
+                            __loge("msgtransmitter_send_loop sendto failed !!!!!!");
+                        }
+                    }else {
+                        if (recvunit->head.flag == 1){
+                            // __logw("msgtransmitter_send_loop TRANSUNIT_MSG resend ACK %hu", recvunit->head.serial_number);
+                            while (transmitter->device->sendto(transmitter->device, &addr, (void*)&(ack), UNIT_HEAD_SIZE) != UNIT_HEAD_SIZE){
+                                __loge("msgtransmitter_send_loop sendto failed !!!!!!");
+                            }
+                        }else {
+                            // __logw("msgtransmitter_send_loop TRANSUNIT_MSG miss ACK %hu", recvunit->head.serial_number);
+                        }
+                    }
                     recvunit->addr = addr;
                     if ((TRANSMITTER_RECVBUF_LEN - (transmitter->recvbuf->wpos - transmitter->recvbuf->rpos)) == 0){
                         ___lock lk = ___mutex_lock(transmitter->sendmtx);

@@ -28,7 +28,7 @@ typedef struct heap* heap_ptr;
 
 static inline heap_ptr heap_create(uint32_t size)
 {
-    heap_ptr heap = (heap_ptr) malloc(sizeof(struct heap) + sizeof(heapnode_ptr) * size);
+    heap_ptr heap = (heap_ptr) calloc(1, sizeof(struct heap) + sizeof(heapnode_ptr) * size);
     // heap 结构体中已经有了一个 heapnode，所以数组的实际长度是 1 + size，
     // 下标 0 不存储元素，从索引 1 开始存储，范围是 1 到 len，容量是 len
     heap->len = size;
@@ -86,7 +86,9 @@ static inline heapnode_ptr heap_pop(heap_ptr h)
 
     if (h->pos == HEAP_TOP){
         h->pos = 0;
-        return h->array[1];
+        h->array[0] = h->array[HEAP_TOP];
+        h->array[HEAP_TOP] = NULL;
+        return h->array[0];
     }
 
     // 把堆顶端最小的元素先放到数组的 0 下标处
@@ -95,6 +97,7 @@ static inline heapnode_ptr heap_pop(heap_ptr h)
     h->array[HEAP_TOP] = h->array[h->pos];
     // 更新索引
     h->array[HEAP_TOP]->pos = HEAP_TOP;
+    h->array[h->pos] = NULL;
 
     do {
         // 缓存当前索引
@@ -128,6 +131,11 @@ static inline heapnode_ptr heap_pop(heap_ptr h)
 
     } while (smallest != index);
 
+    // if (h->array[index] == NULL || h->array[smallest] == NULL){
+    //     __logi("heap_pop index NULL");
+    //     exit(0);
+    // }
+
     h->pos--;
     return h->array[0];
 }
@@ -143,10 +151,12 @@ static inline heapnode_ptr heap_delete(heap_ptr h, heapnode_ptr node)
 
     if (h->pos == HEAP_TOP){
         h->pos = 0;
-        return h->array[1];
+        h->array[0] = h->array[HEAP_TOP];
+        h->array[HEAP_TOP] = NULL;
+        return h->array[0];
     }
 
-    if (h->array[smallest]->value != node->value){
+    if (h->array[smallest]->key != node->key){
         __logi("heap_delete h->array[smallest]->key != node->key");
         exit(0);
     }
@@ -157,6 +167,8 @@ static inline heapnode_ptr heap_delete(heap_ptr h, heapnode_ptr node)
     h->array[smallest] = h->array[h->pos];
     // 更新索引
     h->array[smallest]->pos = smallest;
+    // smallest 可能等于 pos，所以要后置空
+    h->array[h->pos] = NULL;
 
     do {
         // 缓存当前索引
@@ -189,6 +201,11 @@ static inline heapnode_ptr heap_delete(heap_ptr h, heapnode_ptr node)
         }
 
     } while (smallest != index);
+
+    // if (h->array[index] == NULL || h->array[smallest] == NULL){
+    //     __logi("heap_delete index NULL");
+    //     exit(0);
+    // }
 
     h->pos--;
     return h->array[0];
