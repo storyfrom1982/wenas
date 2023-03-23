@@ -224,7 +224,7 @@ void tree_clear(__tree root, void(*free_ptr)(__ptr))
                     free_ptr(__tree2node(temp)->mapping);
                 }
             }
-            __logi("tree_clear %u ", i-1);
+            // __logi("tree_clear %u ", i-1);
             free(temp);
             tree[i-1] = NULL;
         }

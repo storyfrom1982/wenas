@@ -30,7 +30,7 @@ typedef struct client{
     struct sockaddr_in remote_addr;
     struct msgaddr msgaddr;
     struct msglistener listener;
-    msgtransmitter_ptr mtp;
+    msgtransport_ptr mtp;
 }*client_ptr;
 
 
@@ -169,9 +169,9 @@ int main(int argc, char *argv[])
     device->recvfrom = recv_msg;
     
     listener->ctx = client;
-    client->mtp = msgtransmitter_create(device, &client->listener);
+    client->mtp = msgtransport_create(device, &client->listener);
 
-    msgchannel_ptr channel = msgtransmitter_connect(client->mtp, remote_addr);
+    msgchannel_ptr channel = msgtransport_connect(client->mtp, remote_addr);
 
     char str[4096];
 
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
             }
             memset(str, i % 256, len);
             str[len] = '\0';
-            msgtransmitter_send(client->mtp, channel, str, len);
+            msgtransport_send(client->mtp, channel, str, len);
         }
     }
     
@@ -198,21 +198,21 @@ int main(int argc, char *argv[])
             break;
         }
 
-        msgtransmitter_send(client->mtp, channel, str, strlen(str));
+        msgtransport_send(client->mtp, channel, str, strlen(str));
     }
 
 
-    __loge("msgtransmitter_send finish");
+    __loge("msgtransport_send finish");
 
-    __logi("msgtransmitter_disconnect");
-    msgtransmitter_disconnect(client->mtp, channel);
+    __logi("msgtransport_disconnect");
+    msgtransport_disconnect(client->mtp, channel);
 
     ___set_false(&client->mtp->running);
     int data = 0;
     ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
-    __logi("msgtransmitter_release");
-    msgtransmitter_release(&client->mtp);
+    __logi("msgtransport_release");
+    msgtransport_release(&client->mtp);
 
     __logi("free device");
     free(device);
