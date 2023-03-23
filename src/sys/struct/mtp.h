@@ -8,7 +8,6 @@
 #include <sys/struct/heap.h>
 #include <sys/struct/tree.h>
 
-// #include <iostream>
 
 enum {
     TRANSUNIT_NONE = 0x00,
@@ -20,11 +19,12 @@ enum {
 
 #define UNIT_HEAD_SIZE          8
 // #define UNIT_BODY_SIZE          1280
-// #define UNIT_TOTAL_SIZE         1288
 #define UNIT_BODY_SIZE          8
-#define UNIT_TOTAL_SIZE         16
-#define UNIT_GROUP_SIZE         256
-#define UNIT_GROUP_BUF_SIZE     ( UNIT_BODY_SIZE * UNIT_GROUP_SIZE )
+#define UNIT_BUFF_RANGE         256
+
+
+#define TRANSMSG_SIZE           ( UNIT_BODY_SIZE * UNIT_BUFF_RANGE )
+#define TRANSUNIT_SIZE          ( UNIT_BODY_SIZE + UNIT_HEAD_SIZE )
 
 
 typedef struct msgchannel* msgchannel_ptr;
@@ -56,7 +56,6 @@ typedef struct transunit {
     bool comfirmed;
     bool resending;
     struct heapnode ts;
-    // struct msgaddr addr;
     msgchannel_ptr channel;
     struct unithead head;
     uint8_t body[UNIT_BODY_SIZE];
@@ -64,7 +63,7 @@ typedef struct transunit {
 
 typedef struct transunitbuf {
     uint16_t range;
-    ___atom_size16bit reading, rpos, wpos;
+    ___atom_size16bit upos, rpos, wpos;
     struct transunit *buf[1];
 }*transunitbuf_ptr;
 
@@ -75,25 +74,20 @@ typedef struct transack {
 
 typedef struct transackbuf {
     uint16_t range;
-    ___atom_size16bit reading, rpos, wpos;
+    ___atom_size16bit upos, rpos, wpos;
     struct transack buf[1];
 }*transackbuf_ptr;
 
-#define __transunitbuf_write(b, u) \
-            ((b)->buf[(b)->wpos & (UNIT_GROUP_SIZE - 1)]) = (u); \
-            ___atom_add(&(b)->wpos, 1)
 
-#define __transunitbuf_read(b, u) \
-            (u) = ((b)->buf[(b)->rpos & (UNIT_GROUP_SIZE - 1)]); \
-            ___atom_add(&(b)->rpos, 1)
+#define __transbuf_wpos(b)          ((b)->wpos & ((b)->range - 1))
+#define __transbuf_rpos(b)          ((b)->rpos & ((b)->range - 1))
+#define __transbuf_upos(b)          ((b)->upos & ((b)->range - 1))
 
-#define __transunitbuf_wpos(b)          ((b)->wpos & (UNIT_GROUP_SIZE - 1))
-#define __transunitbuf_rpos(b)          ((b)->rpos & (UNIT_GROUP_SIZE - 1))
-#define __transunitbuf_reading(b)       ((b)->reading & (UNIT_GROUP_SIZE - 1))
+#define __transbuf_inuse(b)         ((uint16_t)((b)->upos - (b)->rpos))
+#define __transbuf_usable(b)        ((uint16_t)((b)->wpos - (b)->upos))
 
-#define __transunitbuf_writable(buf)        ((UNIT_GROUP_SIZE - (buf)->wpos + (buf)->rpos) & (UNIT_GROUP_SIZE - 1))
-#define __transunitbuf_readable(buf)        ((buf)->wpos - (buf)->rpos)
-#define __transunitbuf_readingable(buf)     ((buf)->wpos - (buf)->reading)
+#define __transbuf_readable(b)      ((uint16_t)((b)->wpos - (b)->rpos))
+#define __transbuf_writable(b)      (((b)->range - ((uint16_t)((b)->wpos - (b)->rpos))))
 
 
 typedef struct message {
@@ -106,7 +100,7 @@ typedef struct message {
 typedef struct msgbuf {
     message_ptr msg;
     uint16_t max_serial_number;
-    uint16_t rpos, wpos;
+    uint16_t range, upos, rpos, wpos;
     struct transunit *buf[1];
 }*msgbuf_ptr;
 
@@ -154,16 +148,13 @@ typedef struct physics_socket {
 
 struct msgtransmitter {
     __tree peers;
-    bool listening;
+    ___mutex_ptr mtx;
     ___atom_bool running;
     physics_socket_ptr device;
     msglistener_ptr listener;
     linekv_ptr send_func, recv_func;
     task_ptr send_task, recv_task;
-    // ___mutex_ptr recvmtx;
-    // transunitbuf_ptr recvbuf;
     transackbuf_ptr ackbuf;
-    ___mutex_ptr mtx;
     ___atom_size send_queue_length;
     struct channelqueue channels[CHANNEL_QUEUE_COUNT];
 };
@@ -179,15 +170,15 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     ___lock lk = ___mutex_lock(channel->mtx);
 
     // __logi("channel_push_unit %llu wpos: %llu", (UNIT_GROUP_SIZE - (channel->sendbuf->wpos - channel->sendbuf->rpos)), channel->sendbuf->wpos + 0);
-    while ((UNIT_GROUP_SIZE - ((uint16_t)(channel->sendbuf->wpos - channel->sendbuf->rpos))) == 0){
+    while (__transbuf_writable(channel->sendbuf) == 0){
         // __logi("channel_push_unit ___mutex_wait enter");
         ___mutex_wait(channel->mtx, lk);
         // __logi("channel_push_unit ___mutex_wait exit");
     }
     // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %llu reading: %llu wpos: %llu", unit->head.serial_number, channel->sendbuf->rpos + 0, channel->sendbuf->reading + 0, channel->sendbuf->wpos + 0);
     unit->head.serial_number = channel->sendbuf->wpos;
+    channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
-    channel->sendbuf->buf[unit->head.serial_number & (UNIT_GROUP_SIZE - 1)] = unit;
 
     if (!channel->sending){
         channelqueue_ptr queue;
@@ -228,10 +219,10 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
     // __logi("msgchannel_pull >>>>---------------> enter sn: %u rpos: %u reading: %u wpos: %u", 
     //     serial_number, channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1), channel->sendbuf->reading & (UNIT_GROUP_SIZE - 1), channel->sendbuf->wpos & (UNIT_GROUP_SIZE - 1));
 
-    uint16_t index = serial_number & (UNIT_GROUP_SIZE - 1);
+    uint16_t index = serial_number & (UNIT_BUFF_RANGE - 1);
 
     // 只处理在 rpos 与 reading 之间的 SN
-    if ((uint16_t)(serial_number - channel->sendbuf->rpos) <= (uint16_t)(channel->sendbuf->reading - channel->sendbuf->rpos)){
+    if ((uint16_t)(serial_number - channel->sendbuf->rpos) <= (uint16_t)(channel->sendbuf->upos - channel->sendbuf->rpos)){
         // 检测此 SN 是否未确认
         if (channel->sendbuf->buf[index] && !channel->sendbuf->buf[index]->comfirmed){
             // if (channel->timer->array[channel->sendbuf->buf[index]->timer.pos] == NULL){
@@ -248,15 +239,15 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
 
         if (serial_number == channel->sendbuf->rpos){
             // 收到索引位置连续的 SN
-            index = channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1);
+            index = __transbuf_rpos(channel->sendbuf);
             free(channel->sendbuf->buf[index]);
             channel->sendbuf->buf[index] = NULL;
             ___atom_add(&channel->sendbuf->rpos, 1);
             ___mutex_notify(channel->mtx);
 
-            while ((uint16_t)(channel->sendbuf->reading - channel->sendbuf->rpos) > 0) {
+            while (__transbuf_inuse(channel->sendbuf) > 0) {
                 // 有已发送但尚未收到的 SN
-                index = channel->sendbuf->rpos & (UNIT_GROUP_SIZE - 1);
+                index = __transbuf_rpos(channel->sendbuf);
                 if (channel->sendbuf->buf[index] != NULL && channel->sendbuf->buf[index]->comfirmed){
                     // 有提前到达，已经确认过，而且索引连续的 SN
                     free(channel->sendbuf->buf[index]);
@@ -275,7 +266,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
             uint16_t rpos = channel->sendbuf->rpos;
             while (rpos != serial_number) {
                 // __logi("msgchannel_pull resend unit rpos: %u sn: %u", rpos, serial_number);
-                unit = channel->sendbuf->buf[rpos & (UNIT_GROUP_SIZE - 1)];
+                unit = channel->sendbuf->buf[rpos & (channel->sendbuf->range - 1)];
                 if (unit != NULL && !unit->comfirmed && !unit->resending){
                     // __logi("msgchannel_pull resend unit sn: %hu", unit->head.serial_number);
                     unit->head.flag = 1;
@@ -285,7 +276,6 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
                     }
                 }
                 rpos++;
-                // exit(0);
             }
             // __logi("msgchannel_pull resend unit exit");
         }        
@@ -295,46 +285,51 @@ static inline void msgchannel_pull(msgchannel_ptr channel, uint16_t serial_numbe
 
 static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr unit)
 {
-    uint16_t index = unit->head.serial_number & (UNIT_GROUP_SIZE - 1);
+    uint16_t index = unit->head.serial_number & (UNIT_BUFF_RANGE - 1);
     
     if (unit->head.serial_number == channel->msgbuf->wpos){
         if (channel->msgbuf->buf[index] == NULL){
             channel->msgbuf->buf[index] = unit;
             channel->msgbuf->wpos++;
-            while (channel->msgbuf->buf[channel->msgbuf->wpos & (UNIT_GROUP_SIZE - 1)] != NULL){
+            while (channel->msgbuf->buf[__transbuf_wpos(channel->msgbuf)] != NULL){
                 channel->msgbuf->wpos++;
             }
         }else {
+            __logi("channel_make_message receive");
             free(unit);
         }
     }else {
         // SN 不等于 wpos
-        if ((uint16_t)(unit->head.serial_number - channel->msgbuf->rpos) < (uint16_t)(channel->msgbuf->wpos - channel->msgbuf->rpos)){
+        if ((uint16_t)(unit->head.serial_number - channel->msgbuf->rpos) < __transbuf_writable(channel->msgbuf)){
             // SN 与 rpos 的间距小于 SN 与 wpos 的间距，SN 在 rpos 与 wpos 之间，SN 是重复的 MSG
+            __logi("channel_make_message resend %u", unit->head.serial_number);
             free(unit);
         }else {
             // SN 不在 rpos 与 wpos 之间
             if ((uint16_t)(channel->msgbuf->wpos - unit->head.serial_number) > (uint16_t)(unit->head.serial_number - channel->msgbuf->wpos)){
                 // SN 在 wpos 方向越界，是提前到达的 MSG
                 if (channel->msgbuf->buf[index] == NULL){
+                    // __logi("channel_make_message over range wpos first %u", unit->head.serial_number);
                     channel->msgbuf->buf[index] = unit;
                 }else {
+                    __logi("channel_make_message over range wpos sencond %u", unit->head.serial_number);
                     free(unit);
                 }
             }else {
                 // SN 在 rpos 方向越界，是重复的 MSG
+                // __logi("channel_make_message over range rpos %u", unit->head.serial_number);
                 free(unit);
             }
         }
     }
 
-    index = channel->msgbuf->rpos & (UNIT_GROUP_SIZE - 1);
+    index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
         // __logi("channel_make_message max: %hu rpos: %hu", channel->msgbuf->buf[channel->msgbuf->rpos]->head.maximal, channel->msgbuf->rpos);
         if (channel->msgbuf->msg == NULL){
             channel->msgbuf->max_serial_number = channel->msgbuf->buf[index]->head.maximal;
             if (channel->msgbuf->max_serial_number == 0){
-                channel->msgbuf->max_serial_number = UNIT_GROUP_SIZE;
+                channel->msgbuf->max_serial_number = UNIT_BUFF_RANGE;
             }
             channel->msgbuf->msg = (message_ptr)malloc(sizeof(struct message) + (channel->msgbuf->max_serial_number * UNIT_BODY_SIZE));
             channel->msgbuf->msg->size = 0;
@@ -356,7 +351,7 @@ static inline void channel_make_message(msgchannel_ptr channel, transunit_ptr un
         free(channel->msgbuf->buf[index]);
         channel->msgbuf->buf[index] = NULL;
         channel->msgbuf->rpos++;
-        index = channel->msgbuf->rpos & (UNIT_GROUP_SIZE - 1);
+        index = __transbuf_rpos(channel->msgbuf);
     }
 }
 
@@ -367,9 +362,11 @@ static inline msgchannel_ptr msgchannel_create(msgtransmitter_ptr transmitter, m
     channel->connected = false;
     channel->transmitter = transmitter;
     channel->addr = *addr;
-    channel->msgbuf = (msgbuf_ptr) calloc(1, sizeof(struct msgbuf) + sizeof(transunit_ptr) * UNIT_GROUP_SIZE);
-    channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_GROUP_SIZE);
-    channel->timer = heap_create(UNIT_GROUP_SIZE);
+    channel->msgbuf = (msgbuf_ptr) calloc(1, sizeof(struct msgbuf) + sizeof(transunit_ptr) * UNIT_BUFF_RANGE);
+    channel->msgbuf->range = UNIT_BUFF_RANGE;
+    channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUFF_RANGE);
+    channel->sendbuf->range = UNIT_BUFF_RANGE;
+    channel->timer = heap_create(UNIT_BUFF_RANGE);
     channel->mtx = ___mutex_create();
     return channel;
 }
@@ -412,7 +409,7 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
         }
 
         unit->head.body_size = 0;
-        result = transmitter->device->recvfrom(transmitter->device, &addr, &unit->head, UNIT_TOTAL_SIZE);
+        result = transmitter->device->recvfrom(transmitter->device, &addr, &unit->head, TRANSUNIT_SIZE);
 
         if (result == (unit->head.body_size + UNIT_HEAD_SIZE)){
             // __logi("msgtransmitter_recv_loop addr: %lu", addr.port);
@@ -459,29 +456,29 @@ static inline void msgtransmitter_recv_loop(linekv_ptr ctx)
             }
 
             if (channel){
-                if ((transmitter->ackbuf->range - (transmitter->ackbuf->wpos - transmitter->ackbuf->rpos)) == 0){
+                if (__transbuf_writable(transmitter->ackbuf) == 0){
                     ___lock lk = ___mutex_lock(transmitter->mtx);
                     ___mutex_notify(transmitter->mtx);
                     ___mutex_wait(transmitter->mtx, lk);
                     ___mutex_unlock(transmitter->mtx, lk);
                 }
-                // if (ack.head.type == TRANSUNIT_MSG){
-                //     if ((ack.head.serial_number % 5) != 0){
-                //         transmitter->ackbuf->buf[transmitter->ackbuf->wpos & (transmitter->ackbuf->range - 1)] = ack;
-                //         ___atom_add(&transmitter->ackbuf->wpos, 1);
-                //         ___mutex_notify(transmitter->mtx);
-                //     }else {
-                //         if (ack.head.flag == 1){
-                //             transmitter->ackbuf->buf[transmitter->ackbuf->wpos & (transmitter->ackbuf->range - 1)] = ack;
-                //             ___atom_add(&transmitter->ackbuf->wpos, 1);
-                //             ___mutex_notify(transmitter->mtx);
-                //         }else {
-                //             __logd("msgtransmitter_recv_loop miss TRANSUNIT_MSG %u", ack.head.serial_number);
-                //         }
-                //     }   
-                // }else 
+                if (ack.head.type == TRANSUNIT_MSG){
+                    if ((ack.head.serial_number % 3) != 0){
+                        transmitter->ackbuf->buf[__transbuf_wpos(transmitter->ackbuf)] = ack;
+                        ___atom_add(&transmitter->ackbuf->wpos, 1);
+                        ___mutex_notify(transmitter->mtx);
+                    }else {
+                        if (ack.head.flag == 1){
+                            transmitter->ackbuf->buf[__transbuf_wpos(transmitter->ackbuf)] = ack;
+                            ___atom_add(&transmitter->ackbuf->wpos, 1);
+                            ___mutex_notify(transmitter->mtx);
+                        }else {
+                            // __logd("msgtransmitter_recv_loop miss TRANSUNIT_MSG %u", ack.head.serial_number);
+                        }
+                    }   
+                }else 
                 {
-                    transmitter->ackbuf->buf[transmitter->ackbuf->wpos & (transmitter->ackbuf->range - 1)] = ack;
+                    transmitter->ackbuf->buf[__transbuf_wpos(transmitter->ackbuf)] = ack;
                     ___atom_add(&transmitter->ackbuf->wpos, 1);
                     ___mutex_notify(transmitter->mtx);
                 }
@@ -544,9 +541,8 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             
             while (channel != &channellist->end)
             {
-                // __logi("msgtransmitter_send_loop channel_hold_reading_pos");
-                if ((uint16_t)(channel->sendbuf->wpos - channel->sendbuf->reading) > 0){
-                    sendunit = channel->sendbuf->buf[channel->sendbuf->reading & (UNIT_GROUP_SIZE - 1)];
+                if (__transbuf_usable(channel->sendbuf) > 0){
+                    sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                     if (sendunit->head.serial_number % 2){
                         result = transmitter->device->sendto(transmitter->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                     }else {
@@ -555,7 +551,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
                     
                     // __logi("msgtransmitter_send_loop send size %lu result size %lu", UNIT_HEAD_SIZE + unit->head.body_size, result);
                     if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
-                        channel->sendbuf->reading++;
+                        channel->sendbuf->upos++;
                         ___mutex_notify(channel->mtx);
                         // ___atom_sub(&transmitter->send_queue_length, 1);
                         sendunit->ts.key = ___sys_clock() + RESEND_INTERVAL;
@@ -569,7 +565,7 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
 
                 }else {
                     ___lock lk = ___mutex_lock(channel->mtx);
-                    if (channel->timer->pos == 0 && channel->sendbuf->wpos - channel->sendbuf->rpos == 0){
+                    if (channel->timer->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
                         if (channel->sending){
                             msgchannel_ptr tmp = channel;
                             __logi("msgtransmitter_send_loop remove channel");
@@ -629,9 +625,9 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
             ___atom_unlock(&channellist->lock);
         }
 
-        while (((uint16_t)(transmitter->ackbuf->wpos - transmitter->ackbuf->rpos)) > 0){
+        while (__transbuf_readable(transmitter->ackbuf) > 0){
 
-            ack = &transmitter->ackbuf->buf[transmitter->ackbuf->rpos & (transmitter->ackbuf->range - 1)];
+            ack = &transmitter->ackbuf->buf[__transbuf_rpos(transmitter->ackbuf)];
 
             switch (ack->head.type & 0x0F)
             {
@@ -681,7 +677,6 @@ static inline void msgtransmitter_send_loop(linekv_ptr ctx)
 
         if (transmitter->send_queue_length == 0){
             ___lock lk = ___mutex_lock(transmitter->mtx);
-            transmitter->listening = true;
             ___mutex_notify(transmitter->mtx);
             // __logi("msgtransmitter_send_loop send_queue_length: %llu", transmitter->send_queue_length + 0);
             // __logw("msgtransmitter_send_loop ackbuf len %u", ((uint16_t)(transmitter->ackbuf->wpos - transmitter->ackbuf->rpos)));
@@ -701,7 +696,6 @@ static inline msgtransmitter_ptr msgtransmitter_create(physics_socket_ptr device
     msgtransmitter_ptr mtp = (msgtransmitter_ptr)calloc(1, sizeof(struct msgtransmitter));
 
     mtp->running = true;
-    mtp->listening = true;
     mtp->device = device;
     mtp->listener = listener;
     mtp->send_queue_length = 0;
@@ -804,23 +798,23 @@ static inline void msgtransmitter_send(msgtransmitter_ptr mtp, msgchannel_ptr ch
 {
     char *group_data;
     size_t group_size;
-    size_t group_count = size / (UNIT_GROUP_BUF_SIZE);
-    size_t last_group_size = size - (group_count * UNIT_GROUP_BUF_SIZE);
+    size_t group_count = size / (TRANSMSG_SIZE);
+    size_t last_group_size = size - (group_count * TRANSMSG_SIZE);
     // __logi("size: %llu last_group_size: %llu group_count: %llu", size, last_group_size, group_count);
     uint32_t unit_count;
     uint8_t last_unit_size;
     uint8_t last_unit_id;
 
     for (int x = 0; x < group_count; ++x){
-        group_size = UNIT_GROUP_BUF_SIZE;
-        group_data = ((char*)data) + x * UNIT_GROUP_BUF_SIZE;
-        for (size_t y = 0; y < UNIT_GROUP_SIZE; y++)
+        group_size = TRANSMSG_SIZE;
+        group_data = ((char*)data) + x * TRANSMSG_SIZE;
+        for (size_t y = 0; y < UNIT_BUFF_RANGE; y++)
         {
             transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
             memcpy(unit->body, group_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
             unit->head.type = TRANSUNIT_MSG;
             unit->head.body_size = UNIT_BODY_SIZE;
-            unit->head.maximal = UNIT_GROUP_SIZE - y;
+            unit->head.maximal = UNIT_BUFF_RANGE - y;
             msgchannel_push(channel, unit);
         }
     }
