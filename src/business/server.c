@@ -69,6 +69,7 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
         addr->port = fromaddr->sin_port;
         addr->keylen = 6;
     }
+    // __logi("error: %s", strerror(errno));
     return result;
 }
 
@@ -84,7 +85,7 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> recv msg: %llu", msg->size);
+    __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
     free(msg);
 }
 

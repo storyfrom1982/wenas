@@ -33,7 +33,7 @@ typedef struct msgtransport* msgtransport_ptr;
 
 typedef struct msgaddr {
     void *addr;
-    uint8_t addrlen;
+    unsigned int addrlen;
     uint8_t keylen;
     union {
         char key[6];
@@ -463,8 +463,10 @@ static inline void msgtransport_recv_loop(linekv_ptr ctx)
             }
         }
 
+        unit->head.type = 0;
         unit->head.body_size = 0;
         result = mtp->device->recvfrom(mtp->device, &addr, &unit->head, TRANSUNIT_SIZE);
+        // __logw("msgtransport_recv_loop result %d: %u", result, unit->head.type);
 
         if (result == (unit->head.body_size + UNIT_HEAD_SIZE)){
 
@@ -513,7 +515,9 @@ static inline void msgtransport_recv_loop(linekv_ptr ctx)
 
         }else {
 
+            // __logw("msgtransport_recv_loop waitting enter");
             mtp->device->listening(mtp->device);
+            // __logw("msgtransport_recv_loop waitting exit");
 
         }
     }
@@ -603,7 +607,7 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
 
                     }else {
 
-                        __logw("msgtransport_send_loop timeout %lld", timeout);
+                        __logw("msgtransport_send_loop timeout %u", sendunit->head.serial_number);
 
                         sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
                         sendunit->head.flag = 1;
