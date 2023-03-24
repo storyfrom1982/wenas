@@ -160,7 +160,7 @@ struct msgtransport {
 #define __transbuf_usable(b)        ((uint16_t)((b)->wpos - (b)->upos))
 
 #define __transbuf_readable(b)      ((uint16_t)((b)->wpos - (b)->rpos))
-#define __transbuf_writable(b)      (((b)->range - ((uint16_t)((b)->wpos - (b)->rpos))))
+#define __transbuf_writable(b)      (((b)->range - 1 - ((uint16_t)((b)->wpos - (b)->rpos))))
 
 
 
@@ -220,43 +220,15 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transack_ptr ack)
         transunit_ptr unit;
         heapnode_ptr timenode;
 
-        // 收到不连续的 SN
-        if (ack->head.maximal != ack->head.serial_number){
+        // __logi("msgchannel_pull recv serial SN: %u max: %u rpos: %u upos: %u wpos %u", 
+        //     ack->head.serial_number & (channel->sendbuf->range - 1), ack->head.maximal & (channel->sendbuf->range - 1),
+        //     __transbuf_rpos(channel->sendbuf), __transbuf_upos(channel->sendbuf), __transbuf_wpos(channel->sendbuf));
 
-            // __logi("msgchannel_pull recv interval SN: %u max: %u", ack->head.serial_number, ack->head.maximal);
-            index = ack->head.serial_number & (UNIT_BUFF_RANGE - 1);
-            unit = channel->sendbuf->buf[index];
-
-            // 检测此 SN 是否未确认
-            if (unit && !unit->comfirmed){
-                assert(channel->timer->array[unit->ts.pos] != NULL);
-                // 移除定时器，设置确认状态
-                unit->comfirmed = true;
-                timenode = heap_delete(channel->timer, &unit->ts);
-                assert(timenode->value == unit);
-            }
-
-            // 重传 rpos 到 SN 之间的所有尚未确认的 SN
-            index = channel->sendbuf->rpos;
-            while (index != ack->head.serial_number) {
-                unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
-                if (!unit->comfirmed && !unit->resending){
-                    __logi("msgchannel_pull resend SN: %u", index);
-                    unit->head.flag = 1;
-                    if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
-                        (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
-                        unit->resending = true;
-                    }
-                }
-                index++;
-            }
-
-        }else {
-
-            // __logi("msgchannel_pull recv serial SN: %u max: %u", ack->head.serial_number, ack->head.maximal);
-
-            while (channel->sendbuf->rpos != (ack->head.serial_number + 1))
+        if (ack->head.maximal == ack->head.serial_number){
+            // 收到连续的 ACK，连续的最大序列号是 maximal
+            while (channel->sendbuf->rpos != ack->head.maximal)
             {
+                // rpos 对应的 ACK 可能丢失了，现在更新 rpos 并且释放资源
                 assert(__transbuf_inuse(channel->sendbuf) > 0);
                 // 释放所有已经确认的 SN
                 index = __transbuf_rpos(channel->sendbuf);
@@ -277,6 +249,53 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transack_ptr ack)
 
                 ___atom_add(&channel->sendbuf->rpos, 1);
                 ___mutex_notify(channel->mtx);
+            }
+
+            assert(__transbuf_inuse(channel->sendbuf) > 0);
+            index = __transbuf_rpos(channel->sendbuf);
+            unit = channel->sendbuf->buf[index];
+
+            if (!unit->comfirmed){
+                assert(channel->timer->array[unit->ts.pos] != NULL);
+                unit->comfirmed = true;
+                timenode = heap_delete(channel->timer, &unit->ts);
+                assert(timenode->value == unit);
+            }
+
+            free(unit);
+            channel->sendbuf->buf[index] = NULL;
+
+            ___atom_add(&channel->sendbuf->rpos, 1);
+            ___mutex_notify(channel->mtx);
+
+        } else {
+
+            // __logi("msgchannel_pull recv interval SN: %u max: %u", ack->head.serial_number, ack->head.maximal);
+            index = ack->head.serial_number & (UNIT_BUFF_RANGE - 1);
+            unit = channel->sendbuf->buf[index];
+
+            // 检测此 SN 是否未确认
+            if (unit && !unit->comfirmed){
+                assert(channel->timer->array[unit->ts.pos] != NULL);
+                // 移除定时器，设置确认状态
+                unit->comfirmed = true;
+                timenode = heap_delete(channel->timer, &unit->ts);
+                assert(timenode->value == unit);
+            }
+
+            // 重传 rpos 到 SN 之间的所有尚未确认的 SN
+            index = channel->sendbuf->rpos;
+            while (index != ack->head.serial_number) {
+                unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
+                if (!unit->comfirmed && !unit->resending){
+                    // __logi("msgchannel_pull resend SN: %u", (index & (channel->sendbuf->range - 1)));
+                    unit->head.flag = 1;
+                    if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
+                        (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
+                        unit->resending = true;
+                    }
+                }
+                index++;
             }
         }
     }
@@ -302,16 +321,20 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
     // 设置当前最大连续 SN，重复收到 SN 时直接回复默认设置的 ACK
     ack.channel = channel;
     ack.head = unit->head;
-    ack.head.serial_number = channel->msgbuf->wpos - 1;
-    ack.head.maximal = ack.head.serial_number;
 
     uint16_t index = unit->head.serial_number & (UNIT_BUFF_RANGE - 1);
+
+    // __logi("msgchannel_recv SN: %u wpos: %u rpos: %u", index, __transbuf_wpos(channel->msgbuf), __transbuf_rpos(channel->msgbuf));
     
     if (unit->head.serial_number == channel->msgbuf->wpos){
 
+        if (channel->msgbuf->buf[index] != NULL){
+            assert(channel->msgbuf->buf[index] != NULL);
+        }
         channel->msgbuf->buf[index] = unit;
         channel->msgbuf->wpos++;
         while (channel->msgbuf->buf[__transbuf_wpos(channel->msgbuf)] != NULL){
+            assert(__transbuf_writable(channel->msgbuf) > 0);
             channel->msgbuf->wpos++;
         }
 
@@ -319,12 +342,16 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
         ack.head.serial_number = channel->msgbuf->wpos - 1;
         ack.head.maximal = ack.head.serial_number;
 
+        msgtransport_push_ack(channel->mtp, &ack);
+
+        // 所有 SN 都已经是连续的，间隔计数器清零
+        channel->interval = 0;
+
     }else {
 
         // SN 不在 rpos 与 wpos 之间
         if ((uint16_t)(channel->msgbuf->wpos - unit->head.serial_number) > (uint16_t)(unit->head.serial_number - channel->msgbuf->wpos)){
 
-            // 反馈是提前到达的 SN，促使发送端重传
             ack.head.serial_number = unit->head.serial_number;
 
             // SN 在 wpos 方向越界，是提前到达的 MSG
@@ -332,22 +359,30 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
                 // __logi("msgchannel_recv over range sn: %u wpos: %u", unit->head.serial_number, channel->msgbuf->wpos);
                 channel->msgbuf->buf[index] = unit;
             }else {
-                // __logi("msgchannel_recv over range wpos sencond %u", unit->head.serial_number);
+                // __logi("msgchannel_recv over range --------------- wpos sencond %u", unit->head.serial_number);
                 free(unit);
+            }
+
+            if (++channel->interval > 2){
+                // 连续收到两个不连续 SN，则反馈 ACK，促使发送端重传缺失的 SN
+                ack.head.maximal = channel->msgbuf->wpos - 1;
+                msgtransport_push_ack(channel->mtp, &ack);
             }
             
         }else {
-            // SN 在 rpos 方向越界，是重复的 MSG
-            // __logi("msgchannel_recv over range rpos %u", unit->head.serial_number);
+            // __logi("msgchannel_recv over range ++++++++++++++++ rpos %u", unit->head.serial_number);
+            
+            // SN 在 rpos 方向越界，是重复的 SN
             free(unit);
+
+            ack.head.serial_number = channel->msgbuf->wpos - 1;
+            ack.head.maximal = ack.head.serial_number;
+            msgtransport_push_ack(channel->mtp, &ack);
         }
     }
 
-    msgtransport_push_ack(channel->mtp, &ack);
-
     index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
-
         if (channel->msgbuf->msg == NULL){
             channel->msgbuf->max_serial_number = channel->msgbuf->buf[index]->head.maximal;
             if (channel->msgbuf->max_serial_number == 0){
@@ -529,12 +564,7 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                 if (__transbuf_usable(channel->sendbuf) > 0){
 
                     sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
-                    if ((sendunit->head.serial_number % 2) == 0){
-                        result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
-                    }else {
-                        result = UNIT_HEAD_SIZE + sendunit->head.body_size;
-                    }
-                    
+                    result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                     if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                         channel->sendbuf->upos++;
                         ___mutex_notify(channel->mtx);
@@ -572,7 +602,9 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                         break;
 
                     }else {
-                        
+
+                        __logw("msgtransport_send_loop timeout %lld", timeout);
+
                         sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
                         sendunit->head.flag = 1;
                         result = mtp->device->sendto(mtp->device, &sendunit->channel->addr, 

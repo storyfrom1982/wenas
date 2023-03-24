@@ -42,8 +42,15 @@ static void listening(struct physics_socket *socket)
     select(server->socket + 1, &fds, NULL, NULL, NULL);
 }
 
+static uint64_t send_number = 0, lost_number;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
+    // send_number++;
+    // uint64_t randtime = ___sys_clock() / 1000000ULL;
+    // if ((send_number & 0x0f) == (randtime & 0x0f)){
+    //     // __logi("send_msg lost number %llu", ++lost_number);
+    //     return size;
+    // }
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);

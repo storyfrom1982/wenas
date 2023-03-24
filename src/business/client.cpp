@@ -54,9 +54,15 @@ static void listening(struct physics_socket *socket)
     select(client->socket + 1, &fds, NULL, NULL, NULL);
 }
 
+static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *data, size_t size)
 {
-    // __logi("send_msg ip: %u port: %u", remote_addr->ip, remote_addr->port);
+    // send_number++;
+    // uint64_t randtime = ___sys_clock() / 1000ULL;
+    // if ((send_number & 0xdf) == (randtime & 0xdf)){
+    //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
+    //     return size;
+    // }
     client_ptr client = (client_ptr)socket->ctx;
     ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t)remote_addr->addrlen);
     // __logi("send_msg result %d", result);
