@@ -179,15 +179,15 @@ int main(int argc, char *argv[])
 
     msgchannel_ptr channel = msgtransport_connect(client->mtp, remote_addr);
 
-    char str[4096];
+    char str[131072];
 
     // for (size_t x = 0; x < 10; x++)
     {
         for (size_t i = 0; i < 10000; i++)
         {
-            size_t len = rand() % 2048;
-            if (len < 1024){
-                len = 1024;
+            size_t len = rand() % 131072;
+            if (len < 65536){
+                len = 65536;
             }
             memset(str, i % 256, len);
             str[len] = '\0';

@@ -18,12 +18,13 @@ enum {
 };
 
 #define UNIT_HEAD_SIZE          8
-// #define UNIT_BODY_SIZE          1280
-#define UNIT_BODY_SIZE          8
-#define UNIT_BUFF_RANGE         256
+#define UNIT_BODY_SIZE          1280
+// #define UNIT_BODY_SIZE          8
 
+#define UNIT_BUF_RANGE          16
+#define UNIT_MSG_RANGE          8192
 
-#define TRANSMSG_SIZE           ( UNIT_BODY_SIZE * UNIT_BUFF_RANGE )
+#define TRANSMSG_SIZE           ( UNIT_BODY_SIZE * UNIT_MSG_RANGE )
 #define TRANSUNIT_SIZE          ( UNIT_BODY_SIZE + UNIT_HEAD_SIZE )
 
 
@@ -271,7 +272,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transack_ptr ack)
         } else {
 
             // __logi("msgchannel_pull recv interval SN: %u max: %u", ack->head.serial_number, ack->head.maximal);
-            index = ack->head.serial_number & (UNIT_BUFF_RANGE - 1);
+            index = ack->head.serial_number & (UNIT_BUF_RANGE - 1);
             unit = channel->sendbuf->buf[index];
 
             // 检测此 SN 是否未确认
@@ -288,7 +289,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transack_ptr ack)
             while (index != ack->head.serial_number) {
                 unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                 if (!unit->comfirmed && !unit->resending){
-                    // __logi("msgchannel_pull resend SN: %u", (index & (channel->sendbuf->range - 1)));
+                    __logi("msgchannel_pull resend SN: %u", (index & (channel->sendbuf->range - 1)));
                     unit->head.flag = 1;
                     if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
                         (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
@@ -322,7 +323,7 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
     ack.channel = channel;
     ack.head = unit->head;
 
-    uint16_t index = unit->head.serial_number & (UNIT_BUFF_RANGE - 1);
+    uint16_t index = unit->head.serial_number & (UNIT_BUF_RANGE - 1);
 
     // __logi("msgchannel_recv SN: %u wpos: %u rpos: %u", index, __transbuf_wpos(channel->msgbuf), __transbuf_rpos(channel->msgbuf));
     
@@ -386,7 +387,7 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
         if (channel->msgbuf->msg == NULL){
             channel->msgbuf->max_serial_number = channel->msgbuf->buf[index]->head.maximal;
             if (channel->msgbuf->max_serial_number == 0){
-                channel->msgbuf->max_serial_number = UNIT_BUFF_RANGE;
+                channel->msgbuf->max_serial_number = UNIT_BUF_RANGE;
             }
             channel->msgbuf->msg = (transmsg_ptr)malloc(sizeof(struct transmsg) + (channel->msgbuf->max_serial_number * UNIT_BODY_SIZE));
             channel->msgbuf->msg->size = 0;
@@ -419,11 +420,11 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
     channel->mtp = mtp;
     channel->addr = *addr;
     channel->mtx = ___mutex_create();
-    channel->msgbuf = (transmsgbuf_ptr) calloc(1, sizeof(struct transmsgbuf) + sizeof(transunit_ptr) * UNIT_BUFF_RANGE);
-    channel->msgbuf->range = UNIT_BUFF_RANGE;
-    channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUFF_RANGE);
-    channel->sendbuf->range = UNIT_BUFF_RANGE;
-    channel->timer = heap_create(UNIT_BUFF_RANGE);
+    channel->msgbuf = (transmsgbuf_ptr) calloc(1, sizeof(struct transmsgbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
+    channel->msgbuf->range = UNIT_BUF_RANGE;
+    channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
+    channel->sendbuf->range = UNIT_BUF_RANGE;
+    channel->timer = heap_create(UNIT_BUF_RANGE);
     return channel;
 }
 
@@ -790,13 +791,13 @@ static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channe
     for (int x = 0; x < msg_count; ++x){
         msg_size = TRANSMSG_SIZE;
         msg_data = ((char*)data) + x * TRANSMSG_SIZE;
-        for (size_t y = 0; y < UNIT_BUFF_RANGE; y++)
+        for (size_t y = 0; y < UNIT_MSG_RANGE; y++)
         {
             transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
             memcpy(unit->body, msg_data + (y * UNIT_BODY_SIZE), UNIT_BODY_SIZE);
             unit->head.type = TRANSUNIT_MSG;
             unit->head.body_size = UNIT_BODY_SIZE;
-            unit->head.maximal = UNIT_BUFF_RANGE - y;
+            unit->head.maximal = UNIT_MSG_RANGE - y;
             msgchannel_push(channel, unit);
         }
     }

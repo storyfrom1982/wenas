@@ -85,7 +85,8 @@ static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
 
 static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    // __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    __logi(">>>>---------------> recv msg: %llu", msg->size);
     free(msg);
 }
 
