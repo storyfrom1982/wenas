@@ -598,13 +598,13 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                     ___mutex_unlock(channel->mtx, lk);
                 }
 
-                while (channel->timer->pos > 0)
+                if (channel->timer->pos > 0)
                 {
                     if ((timeout = __heap_min(channel->timer)->key - ___sys_clock()) > 0){
+
                         if (timer > timeout){
                             timer = timeout;
                         }
-                        break;
 
                     }else {
 
@@ -614,14 +614,12 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                         sendunit->head.flag = 1;
                         result = mtp->device->sendto(mtp->device, &sendunit->channel->addr, 
                                 (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
-                        if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
-                            timenode = heap_pop(channel->timer);
-                            sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                            sendunit->ts.value = sendunit;
-                            heap_push(channel->timer, &sendunit->ts);
-                        }else {
-                            break;
-                        }
+                        // if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
+                        //     timenode = heap_pop(channel->timer);
+                        //     sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                        //     sendunit->ts.value = sendunit;
+                        //     heap_push(channel->timer, &sendunit->ts);
+                        // }
                     }
                 }
 
