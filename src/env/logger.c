@@ -13,6 +13,10 @@
 
 #include "task.h"
 
+#if defined( __ANDROID__ )
+# include <android/log.h>
+#endif
+
 #define __log_text_size			4096
 #define __log_file_size         1024 * 1024 * 8
 #define __log_pipe_size			1 << 14
@@ -24,8 +28,8 @@ static const char *s_log_level_strings[ENV_LOG_LEVEL_COUNT] = {"NONE", "F", "E",
 
 
 typedef struct env_logger {
-    __atombool inited;
-    __atombool writing;
+    ___atom_bool inited;
+    ___atom_bool writing;
     char *path;
     task_ptr task;
     env_logger_cb printer;
@@ -41,10 +45,10 @@ static void env_logger_write_loop(__ptr ctx)
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
-    __pass(buf != NULL);
+//    __pass(buf != NULL);
 
     if (!env_find_path(g_logger.path)){
-        __pass(env_make_path(g_logger.path));
+//        __pass(env_make_path(g_logger.path));
     }
 
     {
@@ -52,7 +56,7 @@ static void env_logger_write_loop(__ptr ctx)
         n = snprintf(filename, 1024, "%s/%s", g_logger.path, "0.log");
         filename[n] = '\0';
         fp = env_fopen(filename, "a+t");
-        __pass(fp != NULL);
+//        __pass(fp != NULL);
         uint64_t *a = (uint64_t*)(buf - 16);
         uint64_t *b = (uint64_t*)(buf - 8);
         n = snprintf(filename, 1024, "./build/%llu.%llu", *a, *b);
@@ -68,7 +72,7 @@ static void env_logger_write_loop(__ptr ctx)
 
         if (res > 0){
             n = env_fwrite(fp, buf, res);
-            __pass(n==res);
+//            __pass(n==res);
             if (env_ftell(fp) > __log_file_size){
                 env_fclose(fp);
                 char log0[1024];
@@ -77,19 +81,19 @@ static void env_logger_write_loop(__ptr ctx)
                 char log1[1024];
                 n = snprintf(log1, 1024, "%s/1.log", g_logger.path);
                 log1[n] = '\0';
-                __pass(env_move_path(log0, log1));
+//                __pass(env_move_path(log0, log1));
                 fp = env_fopen(log0, "a+t");
-                __pass(fp != NULL);
+//                __pass(fp != NULL);
             }
         }else {
-            if (__is_false(g_logger.inited)){
+            if (___is_false(&g_logger.inited)){
                 break;
             }
         }
     }
 
 Reset:
-    __set_false(g_logger.writing);
+    ___set_false(&g_logger.writing);
 
     if (fp){
         env_fclose(fp);
@@ -105,13 +109,13 @@ Reset:
 
 int env_logger_start(const char *path, env_logger_cb cb)
 {
-    if (__set_true(g_logger.inited)){
+    if (___set_true(&g_logger.inited)){
         g_logger.printer = cb;
         if (path){
             g_logger.path = strdup(path);
             g_logger.pipe = env_pipe_create(__log_pipe_size);
             assert(g_logger.pipe);
-            __set_true(g_logger.writing);
+            ___set_true(&g_logger.writing);
             g_logger.task = task_create();
             linekv_ptr ctx = linekv_create(1024);
             linekv_add_ptr(ctx, "ctx", &g_logger);
@@ -131,8 +135,8 @@ Reset:
 
 void env_logger_stop()
 {
-    if (__set_false(g_logger.inited) 
-        && __set_false(g_logger.writing)){
+    if (___set_false(&g_logger.inited)
+        && ___set_false(&g_logger.writing)){
         env_pipe_stop(g_logger.pipe);
         task_release(&g_logger.task);
         env_pipe_destroy(&g_logger.pipe);
@@ -148,8 +152,8 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     uint64_t n = 0;
     char text[__log_text_size];
 
-    uint64_t millisecond = env_time() / MICRO_SECONDS;
-    n = env_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
+    uint64_t millisecond = ___sys_time() / MICRO_SECONDS;
+    n = ___sys_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
                     ___thread_id(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
@@ -169,14 +173,27 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
         }
     }
 
-    if (__is_true(g_logger.writing) && g_logger.pipe != NULL){
+    if (___is_true(&g_logger.writing) && g_logger.pipe != NULL){
         env_pipe_write(g_logger.pipe, text, n);
     }
 
     if (g_logger.printer != NULL){
         g_logger.printer(level, text);
     }else {
+#if defined( __ANDROID__ )
+        if (level == ENV_LOG_LEVEL_INFO)
+            __android_log_print(ANDROID_LOG_INFO, "srk", "%s", text);
+        else if (level == ENV_LOG_LEVEL_WARN)
+            __android_log_print(ANDROID_LOG_WARN, "srk", "%s", text);
+        else if (level == ENV_LOG_LEVEL_ERROR)
+            __android_log_print(ANDROID_LOG_ERROR, "srk", "%s", text);
+        else if (level == ENV_LOG_LEVEL_FATAL)
+            __android_log_print(ANDROID_LOG_FATAL, "srk", "%s", text);
+        else
+            __android_log_print(ANDROID_LOG_DEBUG, "srk", "%s", text);
+#else
         fprintf(stdout, "%s", text);
+#endif
     }
 
 }

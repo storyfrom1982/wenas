@@ -2,7 +2,7 @@
 #define __MESSAGE_TRANSPORT_H__
 
 
-#include "env/env.h"
+#include <env/env.h>
 #include <env/task.h>
 #include <env/malloc.h>
 #include <sys/struct/heap.h>
@@ -470,7 +470,7 @@ static inline void msgtransport_recycle(msgtransport_ptr mtp)
 
 static inline void msgtransport_recv_loop(linekv_ptr ctx)
 {
-    __logw("msgtransport_recv_loop enter");
+    __logi("msgtransport_recv_loop enter");
 
     msgtransport_ptr mtp = (msgtransport_ptr)linekv_find_ptr(ctx, "ctx");
 
@@ -485,12 +485,12 @@ static inline void msgtransport_recv_loop(linekv_ptr ctx)
         }
     }
 
-    __logw("msgtransport_recv_loop exit");
+    __logi("msgtransport_recv_loop exit");
 }
 
 static inline void msgtransport_send_loop(linekv_ptr ctx)
 {
-    __logw("msgtransport_send_loop enter");
+    __logi("msgtransport_send_loop enter");
 
     int result;
     int64_t timeout;
@@ -701,6 +701,8 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
 
 static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, msglistener_ptr listener)
 {
+    __logi("msgtransport_create enter");
+
     msgtransport_ptr mtp = (msgtransport_ptr)calloc(1, sizeof(struct msgtransport));
 
     mtp->running = true;
@@ -733,6 +735,8 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
     linekv_add_ptr(mtp->send_func, "ctx", mtp);
     mtp->send_task = task_create();
     task_post(mtp->send_task, mtp->send_func);
+
+    __logi("msgtransport_create exit");
 
     return mtp;
 }

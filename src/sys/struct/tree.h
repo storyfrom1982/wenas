@@ -29,13 +29,13 @@ typedef struct __node_list {
 }__node_list;
 
 
-__tree tree_create()
+static inline __tree tree_create()
 {
     return (__tree)calloc(TREE_NODE_DIMENSION, sizeof(__ptr));
 }
 
 
-void tree_release(__tree *pptr)
+static inline void tree_release(__tree *pptr)
 {
     if (pptr && *pptr){
         __tree node = *pptr;
@@ -44,7 +44,7 @@ void tree_release(__tree *pptr)
     }
 }
 
-void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
+static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 {
     uint8_t i;
     __tree parent, tree = root;
@@ -88,7 +88,7 @@ void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
     __tree2node(parent)->leaves ++;
 }
 
-__ptr tree_find(__tree root, void *key, uint8_t keylen)
+static inline __ptr tree_find(__tree root, void *key, uint8_t keylen)
 {
     uint8_t len = 0;
     uint8_t *p = (uint8_t *)key;
@@ -118,7 +118,7 @@ __ptr tree_find(__tree root, void *key, uint8_t keylen)
 }
 
 
-__ptr tree_delete(__tree root, void *key, uint8_t keylen)
+static inline __ptr tree_delete(__tree root, void *key, uint8_t keylen)
 {
     __ptr mapping = NULL;
     __tree parent, tree = root;
@@ -184,7 +184,7 @@ __ptr tree_delete(__tree root, void *key, uint8_t keylen)
 }
 
 
-void tree_clear(__tree root, void(*free_ptr)(__ptr))
+static inline void tree_clear(__tree root, void(*free_ptr)(__ptr))
 {
     uint8_t i = 0;
     __tree tree = root, temp;
@@ -234,7 +234,7 @@ void tree_clear(__tree root, void(*free_ptr)(__ptr))
 }
 
 
-__ptr tree_min(__tree root)
+static inline __ptr tree_min(__tree root)
 {
     if (__tree2node(root)->route > 0){
 
@@ -262,7 +262,7 @@ __ptr tree_min(__tree root)
 }
 
 
-__ptr tree_max(__tree root)
+static inline __ptr tree_max(__tree root)
 {
     if (__tree2node(root)->route > 0){
 
@@ -289,7 +289,7 @@ __ptr tree_max(__tree root)
 }
 
 
-__node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
+static inline __node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
     uint8_t first = 0, i = 0;
     __tree parent, tree = root;
@@ -369,7 +369,7 @@ __node_list* tree_up(__tree root, void *key, uint8_t keylen, uint64_t count)
 }
 
 
-__node_list* tree_down(__tree root, void *key, uint8_t keylen, uint64_t count)
+static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uint64_t count)
 {
     uint8_t i = TREE_DIMENSION -1;
     __tree parent, tree = root;

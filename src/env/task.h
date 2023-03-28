@@ -463,13 +463,13 @@ static void* task_loop(void *p)
     
     while (___is_true(&ltq->running)) {
 
-        while (ltq->timer_list->pos > 0 && __heap_min(ltq->timer_list)->key <= env_time()){
+        while (ltq->timer_list->pos > 0 && __heap_min(ltq->timer_list)->key <= ___sys_time()){
             timer_ptr = heap_pop(ltq->timer_list);
             timer = (linekv_ptr) timer_ptr->value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
             timer_ptr->key = timer_func(timer); 
             if (timer_ptr->key != 0){
-                timer_ptr->key += env_time();
+                timer_ptr->key += ___sys_time();
                 timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
             }else {
                 free(timer_ptr);
@@ -488,7 +488,7 @@ static void* task_loop(void *p)
 
             ___atom_add(&ltq->pop_waiting, 1);
             if (ltq->timer_list->pos > 0){
-                timeout = __heap_min(ltq->timer_list)->key - env_time();
+                timeout = __heap_min(ltq->timer_list)->key - ___sys_time();
                 ___mutex_timer(ltq->mtx, lk, timeout);
             }else {
                 ___mutex_wait(ltq->mtx, lk);
@@ -507,7 +507,7 @@ static void* task_loop(void *p)
 
             if (task->flag & LINETASK_FALG_TIMER){
                 timer_ptr = (heapnode_ptr)malloc(sizeof(struct heapnode));
-                timer_ptr->key = linekv_find_uint64(task, "delay") + env_time();
+                timer_ptr->key = linekv_find_uint64(task, "delay") + ___sys_time();
                 timer_ptr->value = task;
                 timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
 

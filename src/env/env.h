@@ -19,43 +19,48 @@
 #include <string.h>
 
 
-typedef size_t	__atombool;
+//typedef size_t	__atombool;
 
-#define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
-#define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
-#define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
-#define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
+//#define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
+//#define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
+//#define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
+//#define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
 
-#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
-#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
+//#define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
+//#define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
 
-#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
-#define __atom_try_lock(x)		__set_true(x)
-#define __atom_unlock(x)		__set_false(x)
+//#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
+//#define __atom_try_lock(x)		__set_true(x)
+//#define __atom_unlock(x)		__set_false(x)
 
 
-///////////////////////////////////////////////////////
-///// 可变类型指针
-///////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////
+/////// 可变类型指针
+/////////////////////////////////////////////////////////
 typedef void*                   __ptr;
 
-///////////////////////////////////////////////////////
-///// 当前状态
-///////////////////////////////////////////////////////
-__env_export const char* env_check(void);
+/////////////////////////////////////////////////////////
+/////// 当前状态
+/////////////////////////////////////////////////////////
+//__env_export const char* env_check(void);
 
-///////////////////////////////////////////////////////
-///// 时间相关
-///////////////////////////////////////////////////////
-//好想在自己开发版上开发
+/////////////////////////////////////////////////////////
+/////// 时间相关
+/////////////////////////////////////////////////////////
+////好想在自己开发版上开发
 
 #define MILLI_SECONDS    1000ULL
 #define MICRO_SECONDS    1000000ULL
 #define NANO_SECONDS     1000000000ULL
 
-__env_export uint64_t env_time(void);
-__env_export uint64_t env_clock(void);
-__env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecond);
+//__env_export uint64_t env_time(void);
+//__env_export uint64_t env_clock(void);
+//__env_export uint64_t env_strftime(char *buf, uint64_t size, uint64_t millisecond);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 ///////////////////////////////////////////////////////
 ///// 存储相关
@@ -184,6 +189,8 @@ __env_export int32_t env_socket_recv(__socket sock, void* buf, uint64_t size);
 __env_export int32_t env_socket_sendto(__socket sock, const void* buf, uint64_t size, __sockaddr_ptr addr);
 __env_export int32_t env_socket_recvfrom(__socket sock, void* buf, uint64_t size, __sockaddr_ptr addr);
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif //__ENV_ENV_H__

@@ -9,22 +9,25 @@
 #include <string.h>
 #include <assert.h>
 
+#include "task.h"
+
 
 typedef struct env_pipe {
     char *buf;
     uint64_t len;
     uint64_t leftover;
 
-    __atombool writer;
-    __atombool reader;
+    ___atom_bool writer;
+    ___atom_bool reader;
 
-    __atombool write_waiting;
-    __atombool read_waiting;
+    ___atom_bool write_waiting;
+    ___atom_bool read_waiting;
 
-    __atombool stopped;
+    ___atom_bool stopped;
 
-    pthread_cond_t cond[1];
-    pthread_mutex_t mutex[1];
+//    pthread_cond_t cond[1];
+//    pthread_mutex_t mutex[1];
+    ___mutex_ptr mutex;
 }env_pipe_t;
 
 
@@ -53,10 +56,12 @@ env_pipe_t* env_pipe_create(uint64_t len)
     pipe->buf = (char *)malloc(pipe->len);
     assert(pipe->buf);
 
-    ret = pthread_mutex_init(pipe->mutex, NULL);
-    assert(ret == 0);
-    ret = pthread_cond_init(pipe->cond, NULL);
-    assert(ret == 0);
+    pipe->mutex = ___mutex_create();
+    assert(pipe->mutex);
+//    ret = pthread_mutex_init(pipe->mutex, NULL);
+//    assert(ret == 0);
+//    ret = pthread_cond_init(pipe->cond, NULL);
+//    assert(ret == 0);
 
     pipe->read_waiting = pipe->write_waiting = 0;
     pipe->reader = pipe->writer = 0;
@@ -72,8 +77,9 @@ void env_pipe_destroy(env_pipe_t **pptr)
         *pptr = NULL;
         env_pipe_clear(pipe);
         env_pipe_stop(pipe);
-        pthread_cond_destroy(pipe->cond);
-        pthread_mutex_destroy(pipe->mutex);
+        ___mutex_release(pipe->mutex);
+//        pthread_cond_destroy(pipe->cond);
+//        pthread_mutex_destroy(pipe->mutex);
         free(pipe->buf);
         free(pipe);
     }
@@ -85,11 +91,11 @@ uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len)
         return 0;
     }
 
-    if (__is_true(pipe->stopped)){
+    if (___is_true(&pipe->stopped)){
         return 0;
     }
 
-    pthread_mutex_lock(pipe->mutex);
+    ___lock lk = ___mutex_lock(pipe->mutex);
 
     uint64_t writable, pos = 0;
 
@@ -109,35 +115,35 @@ uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len)
                 memcpy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((char*)data) + pos, pipe->leftover);
                 memcpy(pipe->buf, ((char*)data) + (pos + pipe->leftover), writable - pipe->leftover);
             }
-            __atom_add(pipe->writer, writable);
+            ___atom_add(&pipe->writer, writable);
             pos += writable;
 
             if (pipe->read_waiting > 0){
-                pthread_cond_signal(pipe->cond);
+                ___mutex_notify(pipe->mutex);
             }
 
         }else {
 
-            if (__is_true(pipe->stopped)){
-                pthread_mutex_unlock(pipe->mutex);
+            if (___is_true(&pipe->stopped)){
+                ___mutex_unlock(pipe->mutex, lk);
                 return pos;
             }
 
-            __atom_add(pipe->write_waiting, 1);
-            pthread_cond_wait(pipe->cond, pipe->mutex);
-            __atom_sub(pipe->write_waiting, 1);
+            ___atom_add(&pipe->write_waiting, 1);
+            ___mutex_wait(pipe->mutex, lk);
+            ___atom_sub(&pipe->write_waiting, 1);
 
-            if (__is_true(pipe->stopped)){
-                pthread_mutex_unlock(pipe->mutex);
+            if (___is_true(&pipe->stopped)){
+                ___mutex_unlock(pipe->mutex, lk);
                 return pos;
             }  
         }
     }
 
     if (pipe->read_waiting > 0){
-        pthread_cond_signal(pipe->cond);
+        ___mutex_notify(pipe->mutex);
     }
-    pthread_mutex_unlock(pipe->mutex);
+    ___mutex_unlock(pipe->mutex, lk);
 
     return pos;
 }
@@ -148,7 +154,7 @@ uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len)
         return 0;
     }
 
-    pthread_mutex_lock(pipe->mutex);
+    ___lock lk = ___mutex_lock(pipe->mutex);
 
     uint64_t readable, pos = 0;
 
@@ -168,35 +174,35 @@ uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len)
                 memcpy(((char*)buf) + pos, pipe->buf + (pipe->reader & (pipe->len - 1)), pipe->leftover);
                 memcpy(((char*)buf) + (pos + pipe->leftover), pipe->buf, readable - pipe->leftover);
             }
-            __atom_add(pipe->reader, readable);
+            ___atom_add(&pipe->reader, readable);
             pos += readable;
 
             if (pipe->write_waiting > 0){
-                pthread_cond_signal(pipe->cond);
+                ___mutex_notify(pipe->mutex);
             }
 
         }else {
 
-            if (__is_true(pipe->stopped)){
-                pthread_mutex_unlock(pipe->mutex);
+            if (___is_true(&pipe->stopped)){
+                ___mutex_unlock(pipe->mutex, lk);
                 return pos;
             }
             
-            __atom_add(pipe->read_waiting, 1);
-            pthread_cond_wait(pipe->cond, pipe->mutex);
-            __atom_sub(pipe->read_waiting, 1);
+            ___atom_add(&pipe->read_waiting, 1);
+            ___mutex_wait(pipe->mutex, lk);
+            ___atom_sub(&pipe->read_waiting, 1);
 
-            if (__is_true(pipe->stopped)){
-                pthread_mutex_unlock(pipe->mutex);
+            if (___is_true(&pipe->stopped)){
+                ___mutex_unlock(pipe->mutex, lk);
                 return pos;
             } 
         }
     }
 
     if (pipe->write_waiting > 0){
-        pthread_cond_signal(pipe->cond);
+        ___mutex_notify(pipe->mutex);
     }
-    pthread_mutex_unlock(pipe->mutex);
+    ___mutex_unlock(pipe->mutex, lk);
 
     return pos;
 }
@@ -210,16 +216,16 @@ uint64_t env_pipe_writable(env_pipe_t *pipe){
 }
 
 void env_pipe_stop(env_pipe_t *pipe){
-    if (__set_true(pipe->stopped)){
+    if (___set_true(&pipe->stopped)){
         while (pipe->write_waiting > 0 || pipe->read_waiting > 0) {
-            pthread_mutex_lock(pipe->mutex);
-            pthread_cond_broadcast(pipe->cond);
-            pthread_mutex_unlock(pipe->mutex);
+            ___lock lk = ___mutex_lock(pipe->mutex);
+            ___mutex_broadcast(pipe->mutex);
+            ___mutex_unlock(pipe->mutex, lk);
         }
     }
 }
 
 void env_pipe_clear(env_pipe_t *pipe){
-    __atom_sub(pipe->reader, pipe->reader);
-    __atom_sub(pipe->writer, pipe->writer);
+    ___atom_sub(&pipe->reader, pipe->reader);
+    ___atom_sub(&pipe->writer, pipe->writer);
 }
