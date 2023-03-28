@@ -89,10 +89,9 @@ typedef struct transmsgbuf {
 struct msgchannel {
     msgchannel_ptr prev, next;
     bool sending;
+    uint8_t interval;
     ___atom_bool connection;
     struct heapnode timeout;
-    uint16_t interval;
-    // uint64_t timestamp;
     ___mutex_ptr mtx;
     heap_ptr timer;
     struct unithead ack;
@@ -113,10 +112,10 @@ struct channelqueue {
 
 struct msglistener {
     void *ctx;
-    void (*connected)(struct msglistener*, msgchannel_ptr channel);
-    void (*disconnected)(struct msglistener*, msgchannel_ptr channel);
+    void (*connection)(struct msglistener*, msgchannel_ptr channel);
+    void (*disconnection)(struct msglistener*, msgchannel_ptr channel);
     void (*message)(struct msglistener*, msgchannel_ptr channel, transmsg_ptr msg);
-    void (*status)(struct msglistener*, msgchannel_ptr channel);
+    void (*timeout)(struct msglistener*, msgchannel_ptr channel);
 };
 
 
@@ -422,7 +421,7 @@ static inline void msgchannel_start_timer(msgchannel_ptr channel)
         heapnode_ptr node = heap_pop(mtp->recycle);
         msgchannel_ptr ptr = (msgchannel_ptr)node->value;
         tree_delete(mtp->peers, ptr->addr.key, ptr->addr.keylen);
-        mtp->listener->status(mtp->listener, ptr);
+        mtp->listener->timeout(mtp->listener, ptr);
     }
     heap_push(mtp->recycle, &channel->timeout);
 }
@@ -437,23 +436,24 @@ static inline void msgchannel_update_timer(msgchannel_ptr channel)
     channel->timeout.key = ___sys_clock();
 }
 
-static inline void msgchannel_disconnect(msgchannel_ptr channel)
+static inline void msgchannel_remove(msgchannel_ptr channel)
 {
+    __logi("msgchannel_remove channel: 0x%x enter", channel);
     ___lock lk = ___mutex_lock(channel->mtx);
     if (channel->sending){
-        ___atom_lock(&channel->queue->lock);
         channel->next->prev = channel->prev;
         channel->prev->next = channel->next;
-        ___atom_unlock(&channel->queue->lock);
         ___atom_sub(&channel->queue->len, 1);
         channel->sending = false;
     }
-    if (channel->timeout.pos > 0){
-        heapnode_ptr node = heap_delete(channel->mtp->recycle, &channel->timeout);
-        assert(node->value == channel);
-    }
     ___mutex_unlock(channel->mtx, lk);
-    msgchannel_release(channel);
+    if (channel->timeout.pos > 0){
+        assert(channel->mtp->recycle->array[channel->timeout.pos] == &channel->timeout);
+        heap_delete(channel->mtp->recycle, &channel->timeout);
+        channel->timeout.pos = 0;
+    }
+    tree_delete(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
+    __logi("msgchannel_remove channel: 0x%x exit", channel);
 }
 
 static inline void msgtransport_recycle(msgtransport_ptr mtp)
@@ -463,7 +463,7 @@ static inline void msgtransport_recycle(msgtransport_ptr mtp)
             heapnode_ptr node = heap_pop(mtp->recycle);
             msgchannel_ptr channel = (msgchannel_ptr)node->value;
             tree_delete(mtp->peers, channel->addr.key, channel->addr.keylen);
-            mtp->listener->status(mtp->listener, channel);
+            mtp->listener->timeout(mtp->listener, channel);
         }
     }
 }
@@ -560,15 +560,15 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                 break;
             case TRANSUNIT_PONG:
                 msgchannel_pull(channel, recvunit);
+                mtp->listener->connection(mtp->listener, channel);
                 break;
             case TRANSUNIT_NONE:    
             default:
-                __logi("msgtransport_recv_loop disconnect channel 0x%x", channel);
                 if (___set_false(&channel->connection)){
-                    tree_delete(mtp->peers, addr.key, addr.keylen);
                     recvunit->head.type = TRANSUNIT_ACK;
-                    result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(recvunit->head), UNIT_HEAD_SIZE);
-                    msgchannel_disconnect(channel);
+                    mtp->device->sendto(mtp->device, &channel->addr, (void*)&(recvunit->head), UNIT_HEAD_SIZE);
+                    msgchannel_remove(channel);
+                    mtp->listener->disconnection(mtp->listener, channel);
                 }
             }
 
@@ -579,7 +579,11 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                 ___mutex_notify(mtp->mtx);
                 ___mutex_timer(mtp->mtx, lk, timer);
                 ___mutex_unlock(mtp->mtx, lk);
-                timer = 1000000000UL * 6UL;
+                if (mtp->recycle->pos > 0){
+                    timer = 1000000000ULL * 180 - (___sys_clock() - __heap_min(mtp->recycle)->key);
+                }else {
+                    timer = 1000000000ULL;
+                }
             }
         }
 
@@ -601,8 +605,6 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
             
             while (channel != &channelqueue->end)
             {
-                msgchannel_update_timer(channel);
-
                 if (__transbuf_usable(channel->sendbuf) > 0){
 
                     sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
@@ -617,11 +619,10 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                             heap_push(channel->timer, &sendunit->ts);
                             ___atom_sub(&channel->mtp->send_queue_length, 1);
                         }else {
-                            __logi("msgtransport_send_loop disconnect channel 0x%x", channel);
-                            tree_delete(mtp->peers, channel->addr.key, channel->addr.keylen);
                             msgchannel_ptr ptr = channel;
-                            channel = channel->next;
-                            msgchannel_release(ptr);
+                            msgchannel_remove(channel);
+                            mtp->listener->disconnection(mtp->listener, channel);
+                            channel = ptr->next;
                             continue;
                         }
                     }
@@ -630,7 +631,7 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
 
                     ___lock lk = ___mutex_lock(channel->mtx);
                     if (channel->timer->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
-                        if (___sys_clock() - channel->timeout.key >= (1000000000ULL * 10)){
+                        if (___sys_clock() - channel->timeout.key > (1000000000ULL * 10)){
                             msgchannel_ptr locked = channel;
                             __logi("msgtransport_send_loop dequeue channel 0x%x", channel);
                             channel->next->prev = channel->prev;
@@ -654,19 +655,27 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                             timer = timeout;
                         }
 
+                    }else if (timeout < -1000000000ULL * 10){
+
+                        msgchannel_ptr ptr = channel;
+                        msgchannel_remove(channel);
+                        mtp->listener->timeout(mtp->listener, channel);
+                        channel = ptr->next;
+                        continue;
+
                     }else {
 
                         sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
                         __logw("msgtransport_send_loop timeout %u", sendunit->head.sn);
                         result = mtp->device->sendto(mtp->device, &sendunit->channel->addr, 
                                 (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
-                        if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
-                            // timenode = heap_pop(channel->timer);
-                            // sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                            // sendunit->ts.value = sendunit;
-                            // heap_push(channel->timer, &sendunit->ts);
-                            __heap_min(channel->timer)->key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                        }
+                        // if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
+                        //     // timenode = heap_pop(channel->timer);
+                        //     // sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                        //     // sendunit->ts.value = sendunit;
+                        //     // heap_push(channel->timer, &sendunit->ts);
+                        //     __heap_min(channel->timer)->key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                        // }
                         timer = TRANSUNIT_TIMEOUT_INTERVAL;
                     }
                 }

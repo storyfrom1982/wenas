@@ -45,12 +45,12 @@ static void listening(struct physics_socket *socket)
 static uint64_t send_number = 0, lost_number;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    // send_number++;
-    // uint64_t randtime = ___sys_clock() / 1000000ULL;
-    // if ((send_number & 0x0f) == (randtime & 0x0f)){
-    //     // __logi("send_msg lost number %llu", ++lost_number);
-    //     return size;
-    // }
+    send_number++;
+    uint64_t randtime = ___sys_clock() / 1000000ULL;
+    if ((send_number & 0x0f) == (randtime & 0x0f)){
+        // __logi("send_msg lost number %llu", ++lost_number);
+        return size;
+    }
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
@@ -73,24 +73,24 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     return result;
 }
 
-static void connected(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
 
-static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
 
-static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
+static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
     // __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
     __logi(">>>>---------------> recv msg: %llu", msg->size);
     free(msg);
 }
 
-static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
 
 }
@@ -128,10 +128,10 @@ int main(int argc, char *argv[])
     addr->addr = &server.addr;
     addr->addrlen = sizeof(server.addr);
 
-    listener->connected = connected;
-    listener->disconnected = disconnected;
-    listener->message = message_arrived;
-    listener->status = update_status;
+    listener->connection = channel_connection;
+    listener->disconnection = channel_disconnection;
+    listener->message = channel_message;
+    listener->timeout = channel_timeout;
 
     int fd;
     int enable = 1;

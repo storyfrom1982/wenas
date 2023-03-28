@@ -57,12 +57,12 @@ static void listening(struct physics_socket *socket)
 static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *data, size_t size)
 {
-    // send_number++;
-    // uint64_t randtime = ___sys_clock() / 1000ULL;
-    // if ((send_number & 0xdf) == (randtime & 0xdf)){
-    //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
-    //     return size;
-    // }
+    send_number++;
+    uint64_t randtime = ___sys_clock() / 1000ULL;
+    if ((send_number & 0xdf) == (randtime & 0xdf)){
+        // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
+        return size;
+    }
     client_ptr client = (client_ptr)socket->ctx;
     ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t)remote_addr->addrlen);
     // __logi("send_msg result %d", result);
@@ -85,25 +85,27 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, v
     return result;
 }
 
-static void connected(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-
+    __logi(">>>>---------------> channel connection: 0x%x", channel);
 }
 
-static void disconnected(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-
+    __logi(">>>>---------------> channel disconnection: 0x%x", channel);
+    msgchannel_release(channel);
 }
 
-static void message_arrived(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
+static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> recv msg: %s", msg->data);
+    __logi(">>>>---------------> channel msg: %s", msg->data);
     free(msg);
 }
 
-static void update_status(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
-
+    __logi(">>>>---------------> channel timeout: 0x%x", channel);
+    msgchannel_release(channel);
 }
 
 
@@ -147,10 +149,10 @@ int main(int argc, char *argv[])
     remote_addr->addr = &client->remote_addr;
     remote_addr->addrlen = sizeof(client->remote_addr);
 
-    listener->connected = connected;
-    listener->disconnected = disconnected;
-    listener->message = message_arrived;
-    listener->status = update_status;
+    listener->connection = channel_connection;
+    listener->disconnection = channel_disconnection;
+    listener->message = channel_message;
+    listener->timeout = channel_timeout;
 
     int fd;
     int enable = 1;
@@ -179,15 +181,15 @@ int main(int argc, char *argv[])
 
     msgchannel_ptr channel = msgtransport_connect(client->mtp, remote_addr);
 
-    char str[131072];
+    char str[1024];
 
     // for (size_t x = 0; x < 10; x++)
     {
         for (size_t i = 0; i < 10000; i++)
         {
-            size_t len = rand() % 131072;
-            if (len < 65536){
-                len = 65536;
+            size_t len = rand() % 256;
+            if (len < 8){
+                len = 8;
             }
             memset(str, i % 256, len);
             str[len] = '\0';
