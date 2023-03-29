@@ -625,6 +625,9 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                             channel = ptr->next;
                             continue;
                         }
+
+                    }else {
+                        exit(0);
                     }
 
                 }else {
@@ -667,7 +670,7 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
 
                         sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
                         __logw("msgtransport_send_loop timeout %u", sendunit->head.sn);
-                        result = mtp->device->sendto(mtp->device, &sendunit->channel->addr, 
+                        result = mtp->device->sendto(mtp->device, &sendunit->channel->addr,
                                 (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                         // if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                         //     // timenode = heap_pop(channel->timer);
@@ -676,7 +679,7 @@ static inline void msgtransport_send_loop(linekv_ptr ctx)
                         //     // heap_push(channel->timer, &sendunit->ts);
                         //     __heap_min(channel->timer)->key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                         // }
-                        timer = TRANSUNIT_TIMEOUT_INTERVAL;
+                        timer = TRANSUNIT_TIMEOUT_INTERVAL * 10;
                     }
                 }
 
@@ -786,6 +789,7 @@ static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_
     // ___mutex_wait(channel->mtx, lk);
     // ___mutex_unlock(channel->mtx, lk);
     // __logi("msgtransport_connect exit");
+    __logi("msgtransport_connect exit");
     return channel;
 }
 

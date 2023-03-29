@@ -55,7 +55,7 @@ set(kzx_sources
     src/env/pipe.c 
     src/env/storage.c
     src/env/logger.c
-    src/env/socket.c
+    # src/env/socket.c
     # src/env/linetask.c
     # test/env/storage_test.c
     # test/env/logger_test.c

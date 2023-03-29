@@ -48,7 +48,7 @@ static void env_logger_write_loop(__ptr ctx)
 //    __pass(buf != NULL);
 
     if (!env_find_path(g_logger.path)){
-//        __pass(env_make_path(g_logger.path));
+       env_make_path(g_logger.path);
     }
 
     {
@@ -122,7 +122,7 @@ int env_logger_start(const char *path, env_logger_cb cb)
             linekv_add_ptr(ctx, "func", env_logger_write_loop);
             task_post(g_logger.task, ctx);
             __logi(">>>>-------------->\n");
-            __logi("Logger start >>>>-------------->\n");
+            __logi("Logger start >>>>--------------> %s\n", g_logger.path);
             __logi(">>>>-------------->\n");
         }
     }
@@ -193,6 +193,7 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
             __android_log_print(ANDROID_LOG_DEBUG, "srk", "%s", text);
 #else
         fprintf(stdout, "%s", text);
+        fflush(stdout);
 #endif
     }
 
