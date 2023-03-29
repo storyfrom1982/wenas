@@ -45,12 +45,12 @@ static void listening(struct physics_socket *socket)
 static uint64_t send_number = 0, lost_number;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    send_number++;
-    uint64_t randtime = ___sys_clock() / 1000000ULL;
-    if ((send_number & 0x0f) == (randtime & 0x0f)){
-        // __logi("send_msg lost number %llu", ++lost_number);
-        return size;
-    }
+    // send_number++;
+    // uint64_t randtime = ___sys_clock() / 1000000ULL;
+    // if ((send_number & 0x0f) == (randtime & 0x0f)){
+    //     // __logi("send_msg lost number %llu", ++lost_number);
+    //     return size;
+    // }
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
@@ -61,12 +61,15 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
 static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
     server_t *server = (server_t*)socket->ctx;
-    struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
+    if (addr->addr == NULL){
+        addr->addr = malloc(sizeof(struct sockaddr_in));
+    }
     addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)fromaddr, (socklen_t*)&addr->addrlen);
+    ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     if (result > 0){
-        addr->ip = fromaddr->sin_addr.s_addr;
-        addr->port = fromaddr->sin_port;
+        // struct sockaddr_in *addr_in = (struct sockaddr_in*)addr->addr;
+        addr->ip = ((struct sockaddr_in*)addr->addr)->sin_addr.s_addr;
+        addr->port = ((struct sockaddr_in*)addr->addr)->sin_port;
         addr->keylen = 6;
     }
     // __logi("error: %s", strerror(errno));
@@ -85,8 +88,9 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    // __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
-    __logi(">>>>---------------> recv msg: %llu", msg->size);
+    __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    // __logi(">>>>---------------> recv msg: %llu", msg->size);
+    msgtransport_send(channel->mtp, channel, msg->data, msg->size);
     free(msg);
 }
 
@@ -160,27 +164,7 @@ int main(int argc, char *argv[])
     
     listener->ctx = &server;
     server.mtp = msgtransport_create(device, &server.listener);
-
-    // msgchannel_ptr channel = msgtransport_connect(server.mtp, addr);
-
-    char str[100];
-
-    while (1)
-    {
-        __logi("Enter a value :\n");
-        fgets(str, 100, stdin);
-
-        if (str[0] == 'q'){
-            break;
-        }
-
-        uint16_t u = 0;
-        // printf( "\nsend msg len: %d", strlen(str));
-        printf( "\nsend 1 - 255: %hu\n", u-65535U);
-        // msgtransport_send(server.mtp, channel, str, strlen(str));
-    }
-
-    // msgtransport_disconnect(server.mtp, channel);
+    msgtransport_recv_loop(server.mtp);
 
     ___set_false(&server.mtp->running);
     int data = 0;

@@ -155,7 +155,7 @@ void env_logger_printf(enum env_log_level level, const char *file, int line, con
     uint64_t millisecond = ___sys_time() / MICRO_SECONDS;
     n = ___sys_strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%08X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
                     ___thread_id(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
