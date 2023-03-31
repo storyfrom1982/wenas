@@ -83,9 +83,22 @@ static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 
 }
 
+static void disconnect_task(linekv_ptr task)
+{
+    msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
+    __logi(">>>>---------------> disconnect_task channel: 0x%x", channel);
+    msgchannel_termination(&channel);
+    linekv_release(&task);
+}
+
 static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-
+    __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
+    server_t *server = (server_t*)listener->ctx;
+    linekv_ptr task = linekv_create(1024);
+    linekv_add_ptr(task, "func", (void*)disconnect_task);
+    linekv_add_ptr(task, "ctx", channel);
+    task_post(server->task, task);
 }
 
 static void recv_task(linekv_ptr task)
@@ -113,7 +126,12 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
-
+    __logi(">>>>---------------> channel_timeout channel: 0x%x", channel);
+    server_t *server = (server_t*)listener->ctx;
+    linekv_ptr task = linekv_create(1024);
+    linekv_add_ptr(task, "func", (void*)disconnect_task);
+    linekv_add_ptr(task, "ctx", channel);
+    task_post(server->task, task);
 }
 
 int main(int argc, char *argv[])

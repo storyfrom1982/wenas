@@ -97,7 +97,7 @@ static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
     __logi(">>>>---------------> channel disconnection: 0x%x", channel);
-    msgchannel_release(channel);
+    msgchannel_termination(&channel);
 }
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
@@ -109,7 +109,7 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
     __logi(">>>>---------------> channel timeout: 0x%x", channel);
-    msgchannel_release(channel);
+    msgchannel_termination(&channel);
 }
 
 
@@ -237,6 +237,8 @@ int main(int argc, char *argv[])
     free(client);
 
     close(fd);
+
+    thread.join();
 
     __logi("env_logger_stop");
     env_logger_stop();
