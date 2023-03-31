@@ -20,6 +20,8 @@ typedef struct server {
     struct sockaddr_in addr;
     struct msgaddr msgaddr;
     struct msglistener listener;
+    linekey_ptr func;
+    task_ptr task;
     msgtransport_ptr mtp;
 }server_t;
 
@@ -45,12 +47,12 @@ static void listening(struct physics_socket *socket)
 static uint64_t send_number = 0, lost_number;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    // send_number++;
-    // uint64_t randtime = ___sys_clock() / 1000000ULL;
-    // if ((send_number & 0x0f) == (randtime & 0x0f)){
-    //     // __logi("send_msg lost number %llu", ++lost_number);
-    //     return size;
-    // }
+    send_number++;
+    uint64_t randtime = ___sys_clock() / 1000000ULL;
+    if ((send_number & 0x0f) == (randtime & 0x0f)){
+        // __logi("send_msg lost number %llu", ++lost_number);
+        return size;
+    }
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
@@ -86,12 +88,27 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
 
 }
 
+static void recv_task(linekv_ptr task)
+{
+    msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
+    transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
+    __logi(">>>>---------------> recv_task msg: %llu >>>>--------> %s", msg->size, msg->data);
+    msgtransport_send(channel->mtp, channel, msg->data, msg->size);
+    // __logi(">>>>---------------> recv_task msg addr 0x%x", msg);
+    free(msg);
+    linekv_release(&task);
+}
+
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
-    // __logi(">>>>---------------> recv msg: %llu", msg->size);
-    msgtransport_send(channel->mtp, channel, msg->data, msg->size);
-    free(msg);
+    // __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    // __logi(">>>>---------------> recv msg addr 0x%x", msg);
+    server_t *server = (server_t*)listener->ctx;
+    linekv_ptr task = linekv_create(1024);
+    linekv_add_ptr(task, "func", (void*)recv_task);
+    linekv_add_ptr(task, "ctx", channel);
+    linekv_add_ptr(task, "msg", msg);
+    task_post(server->task, task);
 }
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
@@ -164,6 +181,9 @@ int main(int argc, char *argv[])
     
     listener->ctx = &server;
     server.mtp = msgtransport_create(device, &server.listener);
+
+    server.task = task_create();
+
     msgtransport_recv_loop(server.mtp);
 
     ___set_false(&server.mtp->running);

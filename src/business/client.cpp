@@ -69,16 +69,20 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, v
     return result;
 }
 
-static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *buf, size_t size)
+static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
 {
     client_ptr client = (client_ptr)socket->ctx;
-    struct sockaddr_in *fromaddr = (struct sockaddr_in *)remote_addr->addr;
-    remote_addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t*)&remote_addr->addrlen);
+    if (addr->addr == NULL){
+        addr->addr = malloc(sizeof(struct sockaddr_in));
+        addr->keylen = 6;
+    }    
+    struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
+    addr->addrlen = sizeof(struct sockaddr_in);
+    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     if (result > 0){
-        remote_addr->ip = fromaddr->sin_addr.s_addr;
-        remote_addr->port = fromaddr->sin_port;
-        remote_addr->keylen = 6;
+        addr->ip = fromaddr->sin_addr.s_addr;
+        addr->port = fromaddr->sin_port;
+        addr->keylen = 6;
     }
     // __logi("recv_msg ip: %u port: %u", remote_addr->ip, remote_addr->port);
     // __logi("recv_msg result %d", result);
@@ -98,7 +102,7 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> channel msg: %s", msg->data);
+    __logi(">>>>---------------> channel msg: %llu  content %s", msg->size, msg->data);
     free(msg);
 }
 
@@ -179,23 +183,27 @@ int main(int argc, char *argv[])
     listener->ctx = client;
     client->mtp = msgtransport_create(device, &client->listener);
 
+    std::thread thread([&](){
+        msgtransport_recv_loop(client->mtp);
+    });
+
     msgchannel_ptr channel = msgtransport_connect(client->mtp, remote_addr);
 
     char str[1024];
 
-    // for (size_t x = 0; x < 10; x++)
-    {
-        for (size_t i = 0; i < 10000; i++)
-        {
-            size_t len = rand() % 256;
-            if (len < 8){
-                len = 8;
-            }
-            memset(str, i % 256, len);
-            str[len] = '\0';
-            msgtransport_send(client->mtp, channel, str, len);
-        }
-    }
+    // // for (size_t x = 0; x < 10; x++)
+    // {
+    //     for (size_t i = 0; i < 10000; i++)
+    //     {
+    //         size_t len = rand() % 256;
+    //         if (len < 8){
+    //             len = 8;
+    //         }
+    //         memset(str, i % 256, len);
+    //         str[len] = '\0';
+    //         msgtransport_send(client->mtp, channel, str, len);
+    //     }
+    // }
     
     while (1)
     {
