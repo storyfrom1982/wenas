@@ -469,6 +469,7 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
     channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
     channel->sendbuf->range = UNIT_BUF_RANGE;
     channel->timer = heap_create(UNIT_BUF_RANGE);
+    channel->queue = NULL;
     return channel;
 }
 
@@ -622,7 +623,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
         }else {
 
-            __logi("msgtransport_main_loop send_queue_length %llu", mtp->send_queue_length + 0);
+            __logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu", mtp->send_queue_length + 0,
+                mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
             __logi("msgtransport_main_loop timer %llu", timer);
             if (mtp->send_queue_length == 0){
                 if (timer <= 0){
