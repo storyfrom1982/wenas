@@ -251,11 +251,13 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
         }
     }
 
+    // 先将 channel 入队
+    msgchannel_enqueue(channel);
+
+    // 再将 unit 放入缓冲区 
     unit->head.sn = channel->sendbuf->wpos;
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
-
-    msgchannel_enqueue(channel);
 
     ___mutex_unlock(channel->mtx, lk);
 
@@ -675,6 +677,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                         continue;
 
                     }else if (___is_true(&channel->connected) || sendunit->head.type == TRANSUNIT_HELLO){
+
+                        __logi("msgtransport_main_loop sendto addr: %u", channel->addr.ip);
 
                         if (sendunit->head.type == TRANSUNIT_HELLO){
                             tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
