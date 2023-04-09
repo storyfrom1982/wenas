@@ -21,7 +21,7 @@ typedef struct server {
     struct msgaddr msgaddr;
     struct msglistener listener;
     linekey_ptr func;
-    task_ptr task;
+    taskqueue_ptr task;
     msgtransport_ptr mtp;
 }server_t;
 
@@ -98,7 +98,7 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)disconnect_task);
     linekv_add_ptr(task, "ctx", channel);
-    task_post(server->task, task);
+    taskqueue_post(server->task, task);
 }
 
 static void recv_task(linekv_ptr task)
@@ -121,7 +121,7 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
     linekv_add_ptr(task, "func", (void*)recv_task);
     linekv_add_ptr(task, "ctx", channel);
     linekv_add_ptr(task, "msg", msg);
-    task_post(server->task, task);
+    taskqueue_post(server->task, task);
 }
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
@@ -131,7 +131,7 @@ static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)disconnect_task);
     linekv_add_ptr(task, "ctx", channel);
-    task_post(server->task, task);
+    taskqueue_post(server->task, task);
 }
 
 int main(int argc, char *argv[])
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
     listener->ctx = &server;
     server.mtp = msgtransport_create(device, &server.listener);
 
-    server.task = task_create();
+    server.task = taskqueue_create();
 
     msgtransport_recv_loop(server.mtp);
 

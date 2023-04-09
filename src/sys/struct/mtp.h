@@ -153,7 +153,7 @@ struct msgtransport {
     msglistener_ptr listener;
     physics_socket_ptr device;
     linekv_ptr mainloop_func;
-    task_ptr mainloop_task;
+    taskqueue_ptr mainloop_task;
     ___atom_size send_queue_length;
     struct channelqueue channels[MSGCHANNELQUEUE_ARRAY_RANGE];
 };
@@ -652,12 +652,11 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         {
             channelqueue = &mtp->channels[i];
 
-            if (!___atom_try_lock(&channelqueue->lock)){
+            if (channelqueue->len == 0){
                 continue;
             }
 
-            if (channelqueue->len == 0){
-                ___atom_unlock(&channelqueue->lock);
+            if (!___atom_try_lock(&channelqueue->lock)){
                 continue;
             }
 
@@ -794,11 +793,13 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
         queueptr->end.prev = &queueptr->head;
     }
 
-    mtp->mainloop_func = linekv_create(1024);
-    linekv_add_ptr(mtp->mainloop_func, "func", (void*)msgtransport_main_loop);
-    linekv_add_ptr(mtp->mainloop_func, "ctx", mtp);
-    mtp->mainloop_task = task_create();
-    task_post(mtp->mainloop_task, mtp->mainloop_func);
+//    mtp->mainloop_func = linekv_create(1024);
+//    linekv_add_ptr(mtp->mainloop_func, "func", (void*)msgtransport_main_loop);
+//    linekv_add_ptr(mtp->mainloop_func, "ctx", mtp);
+//    mtp->mainloop_task = taskqueue_create();
+//    taskqueue_post(mtp->mainloop_task, mtp->mainloop_func);
+
+    mtp->mainloop_task = taskqueue_run_loop(msgtransport_main_loop, mtp);
 
     __logi("msgtransport_create exit");
 
@@ -819,7 +820,7 @@ static inline void msgtransport_release(msgtransport_ptr *pptr)
         *pptr = NULL;
         ___set_false(&mtp->running);
         ___mutex_broadcast(mtp->mtx);
-        task_release(&mtp->mainloop_task);
+        taskqueue_release(&mtp->mainloop_task);
         linekv_release(&mtp->mainloop_func);
         tree_clear(mtp->peers, free_channel);
         tree_release(&mtp->peers);
@@ -860,6 +861,21 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
     unit->head.msg_range = 1;
     msgchannel_push(channel, unit);
     __logi("msgtransport_disconnect exit");
+}
+
+static inline void msgtransport_ping(msgchannel_ptr channel)
+{
+    __logi("msgtransport_ping enter");
+    transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
+    unit->head.type = TRANSUNIT_MSG;
+    unit->head.body_size = 4;
+    unit->head.msg_range = 1;
+    unit->body[0] = 'a';
+    unit->body[1] = 'b';
+    unit->body[2] = 'c';
+    unit->body[3] = '\0';
+    msgchannel_push(channel, unit);
+    __logi("msgtransport_ping exit");
 }
 
 static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channel, void *data, size_t size)

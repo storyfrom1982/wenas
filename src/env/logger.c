@@ -31,7 +31,7 @@ typedef struct env_logger {
     ___atom_bool inited;
     ___atom_bool writing;
     char *path;
-    task_ptr task;
+    taskqueue_ptr task;
     env_logger_cb printer;
     env_pipe_t *pipe;
 }env_logger_t;
@@ -116,11 +116,11 @@ int env_logger_start(const char *path, env_logger_cb cb)
             g_logger.pipe = env_pipe_create(__log_pipe_size);
             assert(g_logger.pipe);
             ___set_true(&g_logger.writing);
-            g_logger.task = task_create();
+            g_logger.task = taskqueue_create();
             linekv_ptr ctx = linekv_create(1024);
             linekv_add_ptr(ctx, "ctx", &g_logger);
             linekv_add_ptr(ctx, "func", env_logger_write_loop);
-            task_post(g_logger.task, ctx);
+            taskqueue_post(g_logger.task, ctx);
             __logi(">>>>-------------->\n");
             __logi("Logger start >>>>--------------> %s\n", g_logger.path);
             __logi(">>>>-------------->\n");
@@ -138,7 +138,7 @@ void env_logger_stop()
     if (___set_false(&g_logger.inited)
         && ___set_false(&g_logger.writing)){
         env_pipe_stop(g_logger.pipe);
-        task_release(&g_logger.task);
+        taskqueue_release(&g_logger.task);
         env_pipe_destroy(&g_logger.pipe);
         if (g_logger.path){
             free(g_logger.path);

@@ -376,11 +376,21 @@ extern "C" {
 #define LINETASK_FALG_POST          (LINEKV_FLAG_EXPANDED << 1)
 #define LINETASK_FALG_TIMER         (LINEKV_FLAG_EXPANDED << 2)
 
-typedef struct task* task_ptr;
-typedef void (*linetask_post_func)(linekv_ptr ctx);
-typedef uint64_t (*linetask_timer_func)(linekv_ptr ctx);
+typedef struct linekv* taskctx_ptr;
+typedef struct taskqueue* taskqueue_ptr;
+typedef void (*linetask_post_func)(taskctx_ptr ctx);
+typedef uint64_t (*linetask_timer_func)(taskctx_ptr ctx);
 
-struct task {
+typedef struct tasklist {
+    ___atom_size len;
+    ___atom_bool lock;
+    struct linekv head, end;
+}*tasklist_ptr;
+
+#define TASKQUEUE_ARRAY_RANGE    3
+
+
+struct taskqueue {
     ___atom_bool running;
     ___atom_size length;
     ___atom_size push_waiting;
@@ -388,128 +398,167 @@ struct task {
     ___mutex_ptr mtx;
     ___thread_ptr tid;
     heap_ptr timer_list;
-    struct linekv head, end;
+    taskctx_ptr run_loop_ctx;
+    struct tasklist task_array[TASKQUEUE_ARRAY_RANGE];
 };
 
-typedef struct task* task_ptr;
+typedef struct taskqueue* taskqueue_ptr;
 
 
-static inline int task_push_front(task_ptr queue, linekv_ptr node)
+static inline int taskqueue_push_front(taskqueue_ptr queue, taskctx_ptr node)
 {
     assert(queue != NULL && node != NULL);
-    if (queue->length == UINT16_MAX){
-        return -1;
-    }    
-    node->next = queue->head.next;
-    node->next->prev = node;
-    node->prev = &(queue->head);
-    queue->head.next = node;
-    ___atom_add(&queue->length, 1);
+    for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i = ((i+1) % TASKQUEUE_ARRAY_RANGE))
+    {
+        tasklist_ptr listptr = &queue->task_array[i];
+        if (queue->length == UINT16_MAX){
+            return -1;
+        }
+        if (___atom_try_lock(&listptr->lock)){
+            node->prev = &(listptr->head);
+            node->next = listptr->head.next;
+            node->prev->next = node;
+            node->next->prev = node;
+            ___atom_add(&listptr->len, 1);
+            ___atom_unlock(&listptr->lock);
+            ___atom_add(&queue->length, 1);
+            break;
+        }
+    }
     return queue->length;
 }
 
-static inline int task_push_back(task_ptr queue, linekv_ptr node)
+static inline int taskqueue_push_back(taskqueue_ptr queue, taskctx_ptr node)
 {
     assert(queue != NULL && node != NULL);
-    if (queue->length == UINT16_MAX){
+    for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i = ((i+1) % TASKQUEUE_ARRAY_RANGE))
+    {
+        tasklist_ptr listptr = &queue->task_array[i];
+        if (queue->length == UINT16_MAX){
+            return -1;
+        }
+        if (___atom_try_lock(&listptr->lock)){
+            node->next = &(listptr->end);
+            node->prev = listptr->end.prev;
+            node->prev->next = node;
+            node->next->prev = node;
+            ___atom_add(&listptr->len, 1);
+            ___atom_unlock(&listptr->lock);
+            ___atom_add(&queue->length, 1);
+            break;
+        }
+    }
+    return queue->length;
+}
+
+static inline int taskqueue_pop_front(taskqueue_ptr queue, taskctx_ptr *pp_node)
+{
+    if (queue->length == 0){
         return -1;
     }
-    node->prev = queue->end.prev;
-    node->next = &(queue->end);
-    node->prev->next = node;
-    queue->end.prev = node;
-    ___atom_add(&queue->length, 1);
+    for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i = ((i+1) % TASKQUEUE_ARRAY_RANGE))
+    {
+        tasklist_ptr listptr = &queue->task_array[i];
+        if (listptr->len == 0){
+            continue;
+        }
+        if (___atom_try_lock(&listptr->lock)){
+            (*pp_node) = listptr->head.next;
+            listptr->head.next = (*pp_node)->next;
+            (*pp_node)->next->prev = &(listptr->head);
+            ___atom_sub(&listptr->len, 1);
+            ___atom_unlock(&listptr->lock);
+            ___atom_sub(&queue->length, 1);
+            break;
+        }
+    }
+
     return queue->length;
 }
 
-static inline int task_pop_front(task_ptr queue, linekv_ptr *pp_node)
+static inline int taskqueue_pop_back(taskqueue_ptr queue, taskctx_ptr *pp_node)
 {
     assert(queue != NULL && pp_node != NULL);
     if (queue->length == 0){
         return -1;
     }
-    (*pp_node) = queue->head.next;
-    queue->head.next = (*pp_node)->next;
-    (*pp_node)->next->prev = &(queue->head);
-    ___atom_sub(&queue->length, 1);
-    return queue->length;
-}
-
-static inline int task_pop_back(task_ptr queue, linekv_ptr *pp_node)
-{
-    assert(queue != NULL && pp_node != NULL);
-    if (queue->length == 0){
-        return -1;
+    for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i = ((i+1) % TASKQUEUE_ARRAY_RANGE))
+    {
+        tasklist_ptr listptr = &queue->task_array[i];
+        if (listptr->len == 0){
+            continue;
+        }
+        if (___atom_try_lock(&listptr->lock)){
+            (*pp_node) = listptr->end.prev;
+            listptr->end.prev = (*pp_node)->prev;
+            (*pp_node)->prev->next = &(listptr->end);
+            ___atom_sub(&listptr->len, 1);
+            ___atom_unlock(&listptr->lock);
+            break;
+        }
     }
-    (*pp_node) = queue->end.prev;
-    queue->end.prev = (*pp_node)->prev;
-    (*pp_node)->prev->next = &(queue->end);
     ___atom_sub(&queue->length, 1);
     return queue->length;
 }
 
 
-static void* task_loop(void *p)
+static void* taskqueue_mainloop(void *p)
 {
-    uint64_t timeout = 0;
-    linekv_ptr timer;
-    linekv_ptr task;
+    int64_t timeout = 0;
+    taskctx_ptr timer;
+    taskctx_ptr task;
     heapnode_ptr timer_ptr;
     linetask_post_func post_func;
     linetask_timer_func timer_func;
-    task_ptr ltq = (task_ptr)p;
+    taskqueue_ptr tq = (taskqueue_ptr)p;
 
-    __logi("task_loop(0x%X) enter\n", ___thread_id());
+    __logi("taskqueue_mainloop(0x%X) enter", ___thread_id());
     
-    while (___is_true(&ltq->running)) {
+    while (___is_true(&tq->running)) {
 
-        while (ltq->timer_list->pos > 0 && __heap_min(ltq->timer_list)->key <= ___sys_time()){
-            timer_ptr = heap_pop(ltq->timer_list);
-            timer = (linekv_ptr) timer_ptr->value;
+        while (tq->timer_list->pos > 0 && __heap_min(tq->timer_list)->key <= ___sys_time()){
+            timer_ptr = heap_pop(tq->timer_list);
+            timer = (taskctx_ptr) timer_ptr->value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
             timer_ptr->key = timer_func(timer); 
             if (timer_ptr->key != 0){
                 timer_ptr->key += ___sys_time();
-                timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
+                timer_ptr->pos = heap_push(tq->timer_list, timer_ptr);
             }else {
                 free(timer_ptr);
                 timer_ptr = NULL;
             }
         }
 
-        ___lock lk = ___mutex_lock(ltq->mtx);
 
-        if (task_pop_front(ltq, &task) == -1){
+        if (taskqueue_pop_front(tq, &task) == -1){
 
-            if (___is_false(&ltq->running)){
-                ___mutex_unlock(ltq->mtx, lk);
+            if (___is_false(&tq->running)){
                 break;
             }
 
-            ___atom_add(&ltq->pop_waiting, 1);
-            if (ltq->timer_list->pos > 0){
-                timeout = __heap_min(ltq->timer_list)->key - ___sys_time();
-                ___mutex_timer(ltq->mtx, lk, timeout);
+            ___lock lk = ___mutex_lock(tq->mtx);
+            ___atom_add(&tq->pop_waiting, 1);
+            if (tq->timer_list->pos > 0){
+                timeout = __heap_min(tq->timer_list)->key - ___sys_time();
+                if (timeout > 0){
+                    ___mutex_timer(tq->mtx, lk, timeout);
+                }
             }else {
-                ___mutex_wait(ltq->mtx, lk);
+                ___mutex_wait(tq->mtx, lk);
             }
-            ___atom_sub(&ltq->pop_waiting, 1);
-
-            ___mutex_unlock(ltq->mtx, lk);
+            ___atom_sub(&tq->pop_waiting, 1);
+            ___mutex_unlock(tq->mtx, lk);
 
         }else {
 
-            if (ltq->push_waiting){
-                ___mutex_notify(ltq->mtx);
-            }
-
-            ___mutex_unlock(ltq->mtx, lk);
+            ___mutex_notify(tq->mtx);
 
             if (task->flag & LINETASK_FALG_TIMER){
                 timer_ptr = (heapnode_ptr)malloc(sizeof(struct heapnode));
                 timer_ptr->key = linekv_find_uint64(task, "delay") + ___sys_time();
                 timer_ptr->value = task;
-                timer_ptr->pos = heap_push(ltq->timer_list, timer_ptr);
+                timer_ptr->pos = heap_push(tq->timer_list, timer_ptr);
 
             }else {
 
@@ -519,43 +568,49 @@ static void* task_loop(void *p)
         }
     }
 
-    __logi("task_loop(0x%X) exit\n", ___thread_id());
+    __logi("taskqueue_mainloop(0x%X) exit", ___thread_id());
 
     return NULL;
 }
 
 
-static inline task_ptr task_create()
+static inline taskqueue_ptr taskqueue_create()
 {
     int ret;
-    task_ptr ltq = (task_ptr)malloc(sizeof(struct task));
-    assert(ltq);
-    ltq->mtx = ___mutex_create();
-    assert(ltq->mtx);
+    taskqueue_ptr tq = (taskqueue_ptr)malloc(sizeof(struct taskqueue));
+    assert(tq);
+    tq->mtx = ___mutex_create();
+    assert(tq->mtx);
 
-    ltq->length = 0;
-    ltq->push_waiting = 0;
-    ltq->pop_waiting = 0;
+    tq->length = 0;
+    tq->push_waiting = 0;
+    tq->pop_waiting = 0;
 
-    ltq->head.prev = NULL;
-    ltq->head.next = &(ltq->end);
-    ltq->end.next = NULL;
-    ltq->end.prev = &(ltq->head);
+    for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i++)
+    {
+        tasklist_ptr listptr = &tq->task_array[i];
+        listptr->len = 0;
+        listptr->lock = false;
+        listptr->head.prev = NULL;
+        listptr->end.next = NULL;
+        listptr->head.next = &listptr->end;
+        listptr->end.prev = &listptr->head;
+    }
 
-    ltq->timer_list = heap_create(UINT8_MAX);
-    assert(ltq->timer_list);
+    tq->timer_list = heap_create(UINT8_MAX);
+    assert(tq->timer_list);
 
-    ltq->running = true;
-    ltq->tid = ___thread_create(task_loop, ltq);
-    assert(ltq->tid);
+    tq->running = true;
+    tq->tid = ___thread_create(taskqueue_mainloop, tq);
+    assert(tq->tid);
 
-    return ltq;
+    return tq;
 }
 
-static inline void task_release(task_ptr *pptr)
+static inline void taskqueue_release(taskqueue_ptr *pptr)
 {
     if (pptr && *pptr) {
-        task_ptr ptr = *pptr;
+        taskqueue_ptr ptr = *pptr;
         *pptr = NULL;
         ___set_false(&ptr->running);
 
@@ -569,88 +624,94 @@ static inline void task_release(task_ptr *pptr)
         ___thread_join(ptr->tid);
         ___mutex_release(ptr->mtx);
 
-        while ((ptr)->head.next != &((ptr)->end)){
-            (ptr)->head.prev = (ptr)->head.next;
-            (ptr)->head.next = (ptr)->head.next->next;
-            linekv_release(&(ptr->head.prev));
+        taskctx_ptr kv;
+        while (taskqueue_pop_front(ptr, &kv) > 0){
+            linekv_release(&kv);
         }
 
         while (ptr->timer_list->pos > 0){
             heapnode_ptr node = heap_pop(ptr->timer_list);
             if (node->value){
-                linekv_release((linekv_ptr*)&(node->value));
+                linekv_release((taskctx_ptr*)&(node->value));
                 free(node);
             }
         }
 
         heap_destroy(&ptr->timer_list);
 
+        if (ptr->run_loop_ctx){
+            linekv_release(&ptr->run_loop_ctx);
+        }
+
         free(ptr);
     }
 }
 
 
-static inline int task_post(task_ptr ptr, linekv_ptr ctx)
+static inline int taskqueue_post(taskqueue_ptr ptr, taskctx_ptr ctx)
 {
     ctx->flag |= LINETASK_FALG_POST;
-    ___lock lk = ___mutex_lock(ptr->mtx);
-    while (task_push_back(ptr, ctx) == -1){
+    while (taskqueue_push_back(ptr, ctx) == -1){
         if (___is_true(&ptr->running)){
+            ___lock lk = ___mutex_lock(ptr->mtx);
             ___atom_add(&ptr->push_waiting, 1);
             ___mutex_wait(ptr->mtx, lk);
             ___atom_sub(&ptr->push_waiting, 1);
-        }else {
             ___mutex_unlock(ptr->mtx, lk);
+        }else {
             return -1;
         }
     }
-    if (ptr->pop_waiting){
-        ___mutex_notify(ptr->mtx);
-    }
-    ___mutex_unlock(ptr->mtx, lk);
+    ___mutex_notify(ptr->mtx);
     return ptr->length;
 }
 
-static inline int task_timer(task_ptr ptr, linekv_ptr ctx)
+static inline int taskqueue_timer(taskqueue_ptr ptr, taskctx_ptr ctx)
 {
     ctx->flag |= LINETASK_FALG_TIMER;
-    ___lock lk = ___mutex_lock(ptr->mtx);
-    while (task_push_back(ptr, ctx) == -1){
+
+    while (taskqueue_push_back(ptr, ctx) == -1){
         if (___is_true(&ptr->running)){
+            ___lock lk = ___mutex_lock(ptr->mtx);
             ___atom_add(&ptr->push_waiting, 1);
             ___mutex_wait(ptr->mtx, lk);
             ___atom_sub(&ptr->push_waiting, 1);
-        }else {
             ___mutex_unlock(ptr->mtx, lk);
+        }else {
             return -1;
         }
     }
-    if (ptr->pop_waiting){
-        ___mutex_notify(ptr->mtx);
-    }
-    ___mutex_unlock(ptr->mtx, lk);
+    ___mutex_notify(ptr->mtx);
     return ptr->length;
 }
 
-static inline int task_immediately(task_ptr ptr, linekv_ptr ctx)
+static inline int taskqueue_immediately(taskqueue_ptr ptr, taskctx_ptr ctx)
 {
     ctx->flag |= LINETASK_FALG_POST;
-    ___lock lk = ___mutex_lock(ptr->mtx);
-    while (task_push_front(ptr, ctx) == -1){
+    while (taskqueue_push_front(ptr, ctx) == -1){
         if (___is_true(&ptr->running)){
+            ___lock lk = ___mutex_lock(ptr->mtx);
             ___atom_add(&ptr->push_waiting, 1);
             ___mutex_wait(ptr->mtx, lk);
             ___atom_sub(&ptr->push_waiting, 1);
-        }else {
             ___mutex_unlock(ptr->mtx, lk);
+        }else {
             return -1;
         }
     }
-    if (ptr->pop_waiting){
-        ___mutex_notify(ptr->mtx);
-    }
-    ___mutex_unlock(ptr->mtx, lk);
+    ___mutex_notify(ptr->mtx);
     return ptr->length;
+}
+
+
+static inline taskqueue_ptr taskqueue_run_loop(linetask_post_func func, void *user_ctx)
+{
+    taskqueue_ptr taskqueue = taskqueue_create();
+    taskqueue->run_loop_ctx = linekv_create(64);
+    linekv_add_ptr(taskqueue->run_loop_ctx, "func", (void*)func);
+    linekv_add_ptr(taskqueue->run_loop_ctx, "ctx", user_ctx);
+    taskqueue_post(taskqueue, taskqueue->run_loop_ctx);
+    return taskqueue;
 }
 
 

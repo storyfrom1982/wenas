@@ -121,7 +121,8 @@ int main(int argc, char *argv[])
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
-    const char *host = "127.0.0.1";
+    // const char *host = "127.0.0.1";
+    const char *host = "47.98.176.55";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
