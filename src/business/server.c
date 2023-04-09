@@ -107,7 +107,7 @@ static void recv_task(linekv_ptr task)
     transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
     __logi(">>>>---------------> recv_task msg: %llu >>>>--------> %s", msg->size, msg->data);
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
-    // __logi(">>>>---------------> recv_task msg addr 0x%x", msg);
+    __logi(">>>>---------------> recv_task msg exit");
     free(msg);
     linekv_release(&task);
 }

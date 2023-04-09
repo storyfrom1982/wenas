@@ -440,8 +440,10 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
             channel->msgbuf->buf[index]->head.body_size);
         channel->msgbuf->msg->size += channel->msgbuf->buf[index]->head.body_size;
         channel->msgbuf->msg_range--;
+        __logi("msgchannel_recv msg_range %u", channel->msgbuf->msg_range);
         if (channel->msgbuf->msg_range == 0){
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
+            __logi("msgchannel_recv process msg %s", channel->msgbuf->msg->data);
             channel->mtp->listener->message(channel->mtp->listener, channel, channel->msgbuf->msg);
             channel->msgbuf->msg = NULL;
         }
@@ -731,7 +733,15 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                         __logi("msgtransport_main_loop timeout resend %u", sendunit->head.sn);
                         mtp->device->sendto(mtp->device, &sendunit->channel->addr,
                                 (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
-                        timer = TRANSUNIT_TIMEOUT_INTERVAL;
+                        if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
+                            heap_pop(channel->timer);
+                            sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                            sendunit->ts.value = sendunit;
+                            heap_push(channel->timer, &sendunit->ts);
+                        }else {
+                            __logi("msgtransport_main_loop send try again");
+                            timer = TRANSUNIT_TIMEOUT_INTERVAL;
+                        }
 
                     }else {
 
