@@ -584,8 +584,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             if (recvunit->head.type == TRANSUNIT_HELLO){
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                __logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x", channel);
+
                 if (channel != NULL){
-                    __logi("msgtransport_main_loop reconnection channel disconnected: 0x%x", channel);
                     if (___set_true(&channel->disconnected)){
                         __logi("msgtransport_main_loop reconnection channel clear: 0x%x", channel);
                         msgchannel_clear(channel);
