@@ -583,6 +583,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             if (recvunit->head.type == TRANSUNIT_HELLO){
 
+                __logi("msgtransport_main_loop recv ip: %u port: %u keylen: %u", addr.ip, addr.port, addr.keylen);
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
                 __logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x", channel);
 
@@ -692,7 +693,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                     }else if (___is_true(&channel->connected) || sendunit->head.type == TRANSUNIT_HELLO){
 
-                        __logi("msgtransport_main_loop sendto addr: %u", channel->addr.ip);
+                        __logi("msgtransport_main_loop sendto addr ip: %u port: %u", channel->addr.ip, channel->addr.port);
 
                         if (sendunit->head.type == TRANSUNIT_HELLO){
                             tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
@@ -758,7 +759,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                         }else {
 
-                            __logi("msgtransport_main_loop ***timeout*** termination 0x%x", channel);
+                            __logi("msgtransport_main_loop ***timeout*** termination 0x%x addr: ip: %u port: %u", channel, channel->addr.ip, channel->addr.port);
                             mtp->listener->timeout(mtp->listener, channel);
                         }
                     }
@@ -773,7 +774,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         if (mtp->recycle->pos > 0){
             if ((timeout = __heap_min(mtp->recycle)->key - ___sys_clock()) < 0){
                 channel = (msgchannel_ptr)heap_pop(mtp->recycle)->value;
-                __logi("msgtransport_main_loop ***timeout*** recycle pos: %llu", mtp->recycle->pos);
+                __logi("msgtransport_main_loop ***timeout*** recycle channel: 0x%x addr: ip: %u port: %u", channel, channel->addr.ip, channel->addr.port);
                 channel->timeout.pos = 0;
                 mtp->listener->timeout(mtp->listener, channel);
             }
