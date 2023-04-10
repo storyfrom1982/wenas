@@ -493,9 +493,16 @@ static inline void msgchannel_clear(msgchannel_ptr channel)
         ___atom_sub(&channel->queue->len, 1);
         channel->queue = NULL;
     }
+    ___mutex_notify(channel->mtx);
     ___mutex_unlock(channel->mtx, lk);
+
     msgchannel_timer_update(channel);
-    tree_delete(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
+
+    if (channel->addr.ip != 0 && channel->addr.port != 0){
+        tree_delete(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
+        channel->addr.ip = 0;
+        channel->addr.port = 0;
+    }
 }
 
 static inline void msgchannel_termination(msgchannel_ptr *pptr)
@@ -571,23 +578,19 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             if (recvunit->head.type == TRANSUNIT_HELLO){
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                if (channel == NULL){
-                    channel = msgchannel_create(mtp, &addr);
-                    __logi("msgtransport_main_loop new connections channel: 0x%x", channel);
-                    tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
-                    ___set_true(&channel->connected);
-                    channel->mtp->listener->connection(channel->mtp->listener, channel);
-
-                }else {
-                    // 清空缓冲区，设置索引从创建连接的 SN 开始
-                    __logi("msgtransport_main_loop reconnections channel: 0x%x", channel);
-                    channel->msgbuf->rpos = channel->msgbuf->wpos = channel->msgbuf->upos = recvunit->head.sn;
-                    for (uint8_t i = 0; i < channel->msgbuf->range; ++i) {
-                        channel->msgbuf->buf[i] = NULL;
+                if (channel != NULL){
+                    if (___set_true(&channel->disconnected)){
+                        __logi("msgtransport_main_loop reconnection channel: 0x%x", channel);
+                        msgchannel_clear(channel);
+                        mtp->listener->disconnection(mtp->listener, channel);
                     }
-                    ___set_true(&channel->connected);
-                    channel->mtp->listener->connection(channel->mtp->listener, channel);
                 }
+
+                channel = msgchannel_create(mtp, &addr);
+                __logi("msgtransport_main_loop new connections channel: 0x%x", channel);
+                tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
+                ___set_true(&channel->connected);
+                channel->mtp->listener->connection(channel->mtp->listener, channel);
 
             }else if (recvunit->head.type == TRANSUNIT_BYE) {
 

@@ -114,7 +114,7 @@ static void recv_task(linekv_ptr task)
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    // __logi(">>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    __logi("channel_message >>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
     // __logi(">>>>---------------> recv msg addr 0x%x", msg);
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);
