@@ -487,6 +487,10 @@ static inline void msgchannel_release(msgchannel_ptr channel)
 static inline void msgchannel_clear(msgchannel_ptr channel)
 {
     ___lock lk = ___mutex_lock(channel->mtx);
+    channel->msgbuf->rpos = channel->msgbuf->wpos = channel->msgbuf->upos = 0;
+    memset(channel->msgbuf->buf, 0, channel->msgbuf->range);
+    channel->sendbuf->rpos = channel->sendbuf->wpos = channel->sendbuf->upos = 0;
+    memset(channel->sendbuf->buf, 0, channel->sendbuf->range);    
     if (channel->queue != NULL){
         channel->next->prev = channel->prev;
         channel->prev->next = channel->next;
