@@ -635,9 +635,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
         }else {
 
-            __logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu", mtp->send_queue_length + 0,
-                mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
-            __logi("msgtransport_main_loop timer %llu", timer);
+            // __logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu", mtp->send_queue_length + 0,
+            //     mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
+            // __logi("msgtransport_main_loop timer %llu", timer);
             if (mtp->send_queue_length == 0){
                 if (timer <= 0){
                     exit(0);
@@ -650,7 +650,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             if (mtp->recycle->pos > 0){
                 timeout = __heap_min(mtp->recycle)->key - ___sys_clock();
-                __logi("msgtransport_main_loop ------ timer %lld", timeout);
+                // __logi("msgtransport_main_loop ------ timer %lld", timeout);
                 if (timeout > 0){
                     timer = timeout;
                 }
@@ -757,7 +757,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                         }else {
 
-                            __logi("msgtransport_main_loop timeout termination 0x%x", channel);
+                            __logi("msgtransport_main_loop ***timeout*** termination 0x%x", channel);
                             mtp->listener->timeout(mtp->listener, channel);
                         }
                     }
@@ -772,11 +772,11 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         if (mtp->recycle->pos > 0){
             if ((timeout = __heap_min(mtp->recycle)->key - ___sys_clock()) < 0){
                 channel = (msgchannel_ptr)heap_pop(mtp->recycle)->value;
-                __logi("msgtransport_main_loop timeout recycle pos: %llu", mtp->recycle->pos);
+                __logi("msgtransport_main_loop ***timeout*** recycle pos: %llu", mtp->recycle->pos);
                 channel->timeout.pos = 0;
                 mtp->listener->timeout(mtp->listener, channel);
             }
-            __logi("msgtransport_main_loop ------ timer out %lld", timeout);
+            // __logi("msgtransport_main_loop ------ timer out %lld", timeout);
         }
     }
 
