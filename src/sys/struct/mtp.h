@@ -511,6 +511,7 @@ static inline void msgchannel_clear(msgchannel_ptr channel)
 
 static inline void msgchannel_termination(msgchannel_ptr *pptr)
 {
+    __logi("msgchannel_termination enter");
     if (pptr && *pptr){
         msgchannel_ptr channel = *pptr;
         *pptr = NULL;
@@ -520,6 +521,7 @@ static inline void msgchannel_termination(msgchannel_ptr *pptr)
         unit->head.msg_range = 1;
         msgchannel_push(channel, unit);
     }
+    __logi("msgchannel_termination exit");
 }
 
 static inline void msgtransport_recv_loop(msgtransport_ptr mtp)
@@ -583,8 +585,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
                 if (channel != NULL){
+                    __logi("msgtransport_main_loop reconnection channel disconnected: 0x%x", channel);
                     if (___set_true(&channel->disconnected)){
-                        __logi("msgtransport_main_loop reconnection channel: 0x%x", channel);
+                        __logi("msgtransport_main_loop reconnection channel clear: 0x%x", channel);
                         msgchannel_clear(channel);
                         mtp->listener->disconnection(mtp->listener, channel);
                     }
