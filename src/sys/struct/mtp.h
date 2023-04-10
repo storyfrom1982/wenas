@@ -59,7 +59,7 @@ typedef struct unithead {
 
 typedef struct transunit {
     bool comfirmed;
-    bool resending;
+    uint8_t resending;
     struct heapnode ts;
     msgchannel_ptr channel;
     struct unithead head;
@@ -231,7 +231,7 @@ static inline void msgchannel_timer_update(msgchannel_ptr channel)
 static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
 {
     unit->channel = channel;
-    unit->resending = false;
+    unit->resending = 0;
     unit->comfirmed = false;
 
     ___lock lk = ___mutex_lock(channel->mtx);
@@ -359,11 +359,11 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 index = channel->sendbuf->rpos;
                 while (index != ack->head.sn) {
                     unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
-                    if (!unit->comfirmed && !unit->resending){
+                    if (!unit->comfirmed && unit->resending == 0){
                         __logi("msgchannel_pull resend sn: %u", index);
                         if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
                             (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
-                            unit->resending = true;
+                            unit->resending++;
                         }
                     }
                     index++;
@@ -736,25 +736,27 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                     }else if (timeout > (-1000000000ULL * 30)){
 
-                        sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
                         __logi("msgtransport_main_loop timeout resend %u", sendunit->head.sn);
-                        mtp->device->sendto(mtp->device, &sendunit->channel->addr,
-                                (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
-                        if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
-                            heap_pop(channel->timer);
-                            sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                            sendunit->ts.value = sendunit;
-                            heap_push(channel->timer, &sendunit->ts);
+                        sendunit = (transunit_ptr)__heap_min(channel->timer)->value;
+                        if (sendunit->resending < 5){
+                            mtp->device->sendto(mtp->device, &sendunit->channel->addr,
+                                                (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
+                            if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
+                                heap_pop(channel->timer);
+                                sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                                sendunit->ts.value = sendunit;
+                                heap_push(channel->timer, &sendunit->ts);
+                                sendunit->resending++;
+                            }else {
+                                __logi("msgtransport_main_loop send try again");
+                                timer = TRANSUNIT_TIMEOUT_INTERVAL;
+                            }
+
                         }else {
-                            __logi("msgtransport_main_loop send try again");
-                            timer = TRANSUNIT_TIMEOUT_INTERVAL;
+
+                            __logi("msgtransport_main_loop timeout termination 0x%x", channel);
+                            mtp->listener->timeout(mtp->listener, channel);
                         }
-
-                    }else {
-
-                        __logi("msgtransport_main_loop timeout termination 0x%x", channel);
-                        mtp->listener->timeout(mtp->listener, channel);
-
                     }
                 }
 
@@ -883,15 +885,17 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
 static inline void msgtransport_ping(msgchannel_ptr channel)
 {
     __logi("msgtransport_ping enter");
-    transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
-    unit->head.type = TRANSUNIT_MSG;
-    unit->head.body_size = 4;
-    unit->head.msg_range = 1;
-    unit->body[0] = 'a';
-    unit->body[1] = 'b';
-    unit->body[2] = 'c';
-    unit->body[3] = '\0';
-    msgchannel_push(channel, unit);
+    if (___sys_clock() - channel->timeout.key >= 1000000000ULL * 10){
+        transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
+        unit->head.type = TRANSUNIT_MSG;
+        unit->head.body_size = 4;
+        unit->head.msg_range = 1;
+        unit->body[0] = 'a';
+        unit->body[1] = 'b';
+        unit->body[2] = 'c';
+        unit->body[3] = '\0';
+        msgchannel_push(channel, unit);
+    }
     __logi("msgtransport_ping exit");
 }
 

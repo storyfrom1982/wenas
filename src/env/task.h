@@ -516,13 +516,13 @@ static void* taskqueue_mainloop(void *p)
     
     while (___is_true(&tq->running)) {
 
-        while (tq->timer_list->pos > 0 && __heap_min(tq->timer_list)->key <= ___sys_time()){
+        while (tq->timer_list->pos > 0 && __heap_min(tq->timer_list)->key <= ___sys_clock()){
             timer_ptr = heap_pop(tq->timer_list);
             timer = (taskctx_ptr) timer_ptr->value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
             timer_ptr->key = timer_func(timer); 
             if (timer_ptr->key != 0){
-                timer_ptr->key += ___sys_time();
+                timer_ptr->key += ___sys_clock();
                 timer_ptr->pos = heap_push(tq->timer_list, timer_ptr);
             }else {
                 free(timer_ptr);
@@ -540,7 +540,7 @@ static void* taskqueue_mainloop(void *p)
             ___lock lk = ___mutex_lock(tq->mtx);
             ___atom_add(&tq->pop_waiting, 1);
             if (tq->timer_list->pos > 0){
-                timeout = __heap_min(tq->timer_list)->key - ___sys_time();
+                timeout = __heap_min(tq->timer_list)->key - ___sys_clock();
                 if (timeout > 0){
                     ___mutex_timer(tq->mtx, lk, timeout);
                 }
@@ -556,7 +556,7 @@ static void* taskqueue_mainloop(void *p)
 
             if (task->flag & LINETASK_FALG_TIMER){
                 timer_ptr = (heapnode_ptr)malloc(sizeof(struct heapnode));
-                timer_ptr->key = linekv_find_uint64(task, "delay") + ___sys_time();
+                timer_ptr->key = linekv_find_uint64(task, "delay") + ___sys_clock();
                 timer_ptr->value = task;
                 timer_ptr->pos = heap_push(tq->timer_list, timer_ptr);
 
