@@ -278,6 +278,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                     }
                 }else if (unit->head.type == TRANSUNIT_BYE){
                     if (___set_true(&channel->disconnected)){
+                        msgchannel_clear(channel);
                         channel->mtp->listener->disconnection(channel->mtp->listener, channel);
                     }
                 }
@@ -448,11 +449,11 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
 static inline void msgchannel_release(msgchannel_ptr channel)
 {
     __logi("msgchannel_release enter");
+    ___mutex_release(channel->mtx);
     heap_destroy(&channel->timerheap);
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
-    ___mutex_release(channel->mtx);
     __logi("msgchannel_release exit");
 }
 
@@ -570,6 +571,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 if (recvunit->head.type == TRANSUNIT_BYE){
                     if (___set_true(&channel->disconnected)){
                         __logi("msgtransport_main_loop disconnection channel: 0x%x", channel);
+                        msgchannel_clear(channel);
                         mtp->listener->disconnection(mtp->listener, channel);
                     }
                 }
