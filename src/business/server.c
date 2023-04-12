@@ -107,22 +107,23 @@ static void recv_task(linekv_ptr task)
     transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
-    __logi(">>>>---------------------------------------------------> recv msg: %s", linekv_find_string(&parser, "msg"));
+    __logi(">>>>---------------------------------------------------> recv msg enter: %s", linekv_find_string(&parser, "msg"));
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
+    __logi(">>>>---------------------------------------------------> recv msg exit");
     free(msg);
     linekv_release(&task);
 }
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    // __logi("channel_message >>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
-    // __logi(">>>>---------------> recv msg addr 0x%x", msg);
+    __logi(">>>>---------------------------------------------------> recv msg --- enter");
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)recv_task);
     linekv_add_ptr(task, "ctx", channel);
     linekv_add_ptr(task, "msg", msg);
     taskqueue_post(server->task, task);
+    __logi(">>>>---------------------------------------------------> recv msg --- exit");
 }
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
