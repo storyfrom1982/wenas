@@ -523,6 +523,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
     heapnode_ptr timenode;
     transunit_ptr sendunit = NULL;
     msgchannel_ptr channel = NULL;
+    msgchannel_ptr next = NULL;
 
     msgtransport_ptr mtp = (msgtransport_ptr)linekv_find_ptr(ctx, "ctx");
 
@@ -619,6 +620,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         channel = mtp->sendqueue->head.next;
         while (channel != &mtp->sendqueue->end)
         {
+            next = channel->next;
             if (__transbuf_usable(channel->sendbuf) > 0){
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                 __logi("msgtransport_main_loop ############ sendto addr ip: %u port: %u SN: %u msg: %s", channel->addr.ip, channel->addr.port,
@@ -692,7 +694,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 }
             }
 
-            channel = channel->next;
+            channel = next;
         }
 
         if (mtp->disconnctionqueue->len > 0){
