@@ -44,13 +44,13 @@ static void listening(struct physics_socket *socket)
     select(server->socket + 1, &fds, NULL, NULL, NULL);
 }
 
-static uint64_t send_number = 0, lost_number;
+static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
     send_number++;
     uint64_t randtime = ___sys_clock() / 1000000ULL;
     if ((send_number & 0x0f) == (randtime & 0x0f)){
-        // __logi("send_msg lost number %llu", ++lost_number);
+        __logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu", ++lost_number);
         return size;
     }
     server_t *server = (server_t*)socket->ctx;
@@ -105,7 +105,9 @@ static void recv_task(linekv_ptr task)
 {
     msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
     transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
-    __logi(">>>>---------------> recv_task msg: %llu >>>>--------> %s", msg->size, msg->data);
+    struct linekv parser;
+    linekv_parser(&parser, msg->data, msg->size);
+    __logi(">>>>---------------> recv_task msg: %llu >>>>--------> %s", msg->size, linekv_find_string(&parser, "msg"));
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
     __logi(">>>>---------------> recv_task msg exit");
     free(msg);
@@ -114,7 +116,7 @@ static void recv_task(linekv_ptr task)
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi("channel_message >>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
+    // __logi("channel_message >>>>---------------> recv msg: %llu: %s", msg->size, msg->data);
     // __logi(">>>>---------------> recv msg addr 0x%x", msg);
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);

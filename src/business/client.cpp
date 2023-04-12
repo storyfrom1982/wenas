@@ -102,7 +102,9 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------> channel msg: %llu  content %s", msg->size, msg->data);
+    struct linekv parser;
+    linekv_parser(&parser, msg->data, msg->size);
+    __logi(">>>>---------------> channel msg: %llu  content %s", msg->size, linekv_find_string(&parser, "msg"));
     free(msg);
 }
 
@@ -121,8 +123,8 @@ int main(int argc, char *argv[])
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
-    // const char *host = "127.0.0.1";
-    const char *host = "47.98.176.55";
+    const char *host = "127.0.0.1";
+    // const char *host = "47.98.176.55";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
     physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
@@ -214,8 +216,10 @@ int main(int argc, char *argv[])
         if (len == 2 && str[0] == 'q'){
             break;
         }
-
-        msgtransport_send(client->mtp, channel, str, strlen(str));
+        linekv_ptr msg = linekv_create(1024);
+        linekv_add_string(msg, "msg", str);
+        msgtransport_send(client->mtp, channel, msg->head, msg->pos);
+        linekv_release(&msg);
     }
 
 

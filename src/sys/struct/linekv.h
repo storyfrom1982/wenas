@@ -171,7 +171,17 @@ static inline void linekv_release(linekv_ptr *pptr)
     }
 }
 
-static inline void linekv_load(linekv_ptr lkv, void *data, uint64_t size)
+static inline void linekv_bind(linekv_ptr lkv, void *data, uint64_t size)
+{
+    lkv->flag = LINEKV_FLAG_NONE;
+    lkv->pos = 0;
+    lkv->len = size;
+    lkv->head = (uint8_t*)data;
+    lkv->key = (linekey_ptr)(lkv->head);
+    lkv->val = NULL;
+}
+
+static inline void linekv_parser(linekv_ptr lkv, void *data, uint64_t size)
 {
     lkv->flag = LINEKV_FLAG_NONE;
     lkv->len = lkv->pos = size;
