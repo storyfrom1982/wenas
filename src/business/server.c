@@ -86,14 +86,14 @@ static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 static void disconnect_task(linekv_ptr task)
 {
     msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
-    __logi(">>>>---------------> disconnect_task channel: 0x%x", channel);
+    // __logi(">>>>---------------> disconnect_task channel: 0x%x", channel);
     msgchannel_termination(&channel);
     linekv_release(&task);
 }
 
 static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-    __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
+    // __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)disconnect_task);
@@ -107,9 +107,8 @@ static void recv_task(linekv_ptr task)
     transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
-    __logi(">>>>---------------> recv_task msg: %llu >>>>--------> %s", msg->size, linekv_find_string(&parser, "msg"));
+    __logi(">>>>---------------------------------------------------> recv msg: %s", linekv_find_string(&parser, "msg"));
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
-    __logi(">>>>---------------> recv_task msg exit");
     free(msg);
     linekv_release(&task);
 }
@@ -128,7 +127,7 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
-    __logi(">>>>---------------> channel_timeout channel: 0x%x", channel);
+    // __logi(">>>>---------------> channel_timeout channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)disconnect_task);

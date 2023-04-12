@@ -216,6 +216,7 @@ int main(int argc, char *argv[])
         if (len == 2 && str[0] == 'q'){
             break;
         }
+        str[len-1] = '\0';
         linekv_ptr msg = linekv_create(1024);
         linekv_add_string(msg, "msg", str);
         msgtransport_send(client->mtp, channel, msg->head, msg->pos);
