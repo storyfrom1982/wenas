@@ -407,11 +407,13 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
         }
     }
 
+    __logi("msgchannel_recv sendto enter");
     if ((channel->mtp->device->sendto(channel->mtp->device, &channel->addr, (void*)&(channel->ack), UNIT_HEAD_SIZE)) == UNIT_HEAD_SIZE) {
         __logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u msg: [%s]",
                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
         channel->ack.type = TRANSUNIT_NONE;
     }
+    __logi("msgchannel_recv sendto exit");
 
     index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
@@ -428,11 +430,13 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
             channel->msgbuf->buf[index]->head.body_size);
         channel->msgbuf->msg->size += channel->msgbuf->buf[index]->head.body_size;
         channel->msgbuf->msg_range--;
-//        __logi("msgchannel_recv msg_range %u", channel->msgbuf->msg_range);
+        __logi("msgchannel_recv msg_range %u", channel->msgbuf->msg_range);
         if (channel->msgbuf->msg_range == 0){
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
 //            __logi("msgchannel_recv process msg %s", channel->msgbuf->msg->data);
+            __logi("msgchannel_recv message enter");
             channel->mtp->listener->message(channel->mtp->listener, channel, channel->msgbuf->msg);
+            __logi("msgchannel_recv message exit");
             channel->msgbuf->msg = NULL;
         }
         free(channel->msgbuf->buf[index]);
