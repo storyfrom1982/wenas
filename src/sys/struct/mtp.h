@@ -409,6 +409,7 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
 
     __logi("msgchannel_recv sendto enter");
     if ((channel->mtp->device->sendto(channel->mtp->device, &channel->addr, (void*)&(channel->ack), UNIT_HEAD_SIZE)) == UNIT_HEAD_SIZE) {
+        __logi("msgchannel_recv sendto return ----------->");
         __logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u msg: [%s]",
                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
         channel->ack.type = TRANSUNIT_NONE;
