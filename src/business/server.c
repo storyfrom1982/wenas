@@ -47,7 +47,7 @@ static void listening(struct physics_socket *socket)
 static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
 {
-    __logi("send_msg enter");
+    // __logi("send_msg enter");
     send_number++;
     uint64_t randtime = ___sys_clock() / 1000000ULL;
     if ((send_number & 0x0f) == (randtime & 0x0f)){
@@ -57,10 +57,10 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
-    __logi("send_msg sendto enter");
+    // __logi("send_msg sendto enter");
     ssize_t result = sendto(server->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
-    __logi("send_msg sendto exit");
-    __logi("send_msg exit");
+    // __logi("send_msg sendto exit");
+    // __logi("send_msg exit");
     return result;
 }
 
