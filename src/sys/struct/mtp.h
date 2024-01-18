@@ -116,6 +116,12 @@ typedef struct channelqueue {
 
 struct msglistener {
     void *ctx;
+    void (*onConnectionToPeer)(struct msglistener*, msgchannel_ptr channel);
+    void (*onConnectionFromPeer)(struct msglistener*, msgchannel_ptr channel);
+    void (*onMessage)(struct msglistener*, msgchannel_ptr channel, transmsg_ptr msg);
+    //没有数据接收或发送，通知用户监听网络接口，有数据可读时，通知messenger
+    void (*onIdle)(struct msglistener*, msgchannel_ptr channel);
+    void (*onDisconnection)(struct msglistener*, msgchannel_ptr channel);
     void (*connection)(struct msglistener*, msgchannel_ptr channel);
     void (*disconnection)(struct msglistener*, msgchannel_ptr channel);
     void (*message)(struct msglistener*, msgchannel_ptr channel, transmsg_ptr msg);
@@ -125,6 +131,7 @@ struct msglistener {
 
 typedef struct physics_socket {
     void *ctx;
+    //不需要内部监听，监听网络接口由用户层的线程处理
     void (*listening)(struct physics_socket *socket);
     size_t (*sendto)(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size);
     size_t (*recvfrom)(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size);
@@ -137,8 +144,12 @@ typedef struct physics_socket {
 
 struct msgtransport {
     __tree peers;
+    //所有待重传的 pack 的定时器，不区分链接
+    __tree timers;
     ___mutex_ptr mtx;
     ___atom_bool running;
+    //socket可读或者有数据待发送时为true
+    ___atom_bool working;
     msglistener_ptr listener;
     physics_socket_ptr device;
     linekv_ptr mainloop_func;
@@ -264,6 +275,8 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
             // 收到连续的 ACK，连续的最大序列号是 maximal
 
             do {
+                //TODO 计算往返延时
+                //TODO 统计丢包率
                 // rpos 对应的 ACK 可能丢失了，现在更新 rpos 并且释放资源
                 assert(__transbuf_inuse(channel->sendbuf) > 0);
                 // 释放所有已经确认的 SN
@@ -494,6 +507,8 @@ static inline void msgchannel_termination(msgchannel_ptr *pptr)
     __logi("msgchannel_termination exit");
 }
 
+
+//提供给用户一个从Idle状态唤醒主循环的接口
 static inline void msgtransport_recv_loop(msgtransport_ptr mtp)
 {
     __logi("msgtransport_recv_loop enter");
@@ -555,15 +570,21 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
                 __logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
-
                 if (channel != NULL){
+                    //回复建立连接成功消息
+                    //continue
+                    //TODO 删除进行重连的逻辑
                     if (___set_true(&channel->disconnected)){
                         __logi("msgtransport_main_loop reconnection channel clear: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                         msgchannel_clear(channel);
                         mtp->listener->disconnection(mtp->listener, channel);
                     }
                 }
-
+                //定期向中心服务器更新密文，并记录中心服务器的更新时间戳。
+                //在这里进行验证，首先检测（密文）的生成时间戳，确定使用当前的KEY解密，还是上一次的KEY解密。
+                //解密失败，把所有非法连接挡在这里。
+                //解密成功，创建连接。
+                //回复建立连接成功消息。
                 channel = msgchannel_create(mtp, &addr);
                 __logi("msgtransport_main_loop new connections channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                 msgchannel_enqueue(channel, mtp->sendqueue);
@@ -596,7 +617,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 }
 
             }else {
-
+                //忽略非法连接
                 __logi("msgtransport_main_loop recv a invalid transunit: %u ip: %u port: %u", recvunit->head.type, addr.ip, addr.port);
             }
 
@@ -606,7 +627,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
              __logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu",
                    mtp->send_queue_length + 0, mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
-
+            //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
+            //主动创建连接，最多需要10毫秒。
             if (mtp->send_queue_length == 0 && (mtp->connectionqueue->len + mtp->disconnctionqueue->len) == 0){
                 ___lock lk = ___mutex_lock(mtp->mtx);
                 ___mutex_notify(mtp->mtx);
@@ -617,6 +639,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         }
 
 
+        //使用IP地址队列，channel在主循环中创建，在主循环中回收。
         channel = msgchannel_dequeue(mtp->connectionqueue);
         if (channel != NULL){
             tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
@@ -637,7 +660,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                 if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                     channel->sendbuf->upos++;
+                    //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
                     ___mutex_notify(channel->mtx);//TODO
+                    //检测队列为空，才开启定时器
                     sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
                     heap_push(channel->timerheap, &sendunit->ts);
@@ -645,8 +670,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     sendunit->resending = 0;
                 }else {
                     sendunit->resending++;
+                    //重新加入定时器，间隔递增。
                     if (sendunit->resending > 5){
-
+                        //抛出断开连接事件，区分正常断开和超时断开。
                         __logi("msgtransport_main_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
 
@@ -657,6 +683,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             }else {
 
+                //所有channel统一使用一个定时器。
+                //用tree实现定时器。
                 if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
                     if (___sys_clock() - channel->update > (1000000000ULL * 30)){
                         __logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
@@ -798,6 +826,8 @@ static inline void msgtransport_release(msgtransport_ptr *pptr)
     __logi("msgtransport_release exit");
 }
 
+//TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
+//TODO 增加一个加密验证数据，messenger 只负责将消息发送到对端，连接能否建立，取决于对端验证结果。
 static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_ptr addr)
 {
     __logi("msgtransport_connect enter");
@@ -833,6 +863,7 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
     __logi("msgtransport_disconnect exit");
 }
 
+//ping 需要发送加密验证，如果此时链接已经断开，ping 消息可以进行重连。
 static inline void msgtransport_ping(msgchannel_ptr channel)
 {
     __logi("msgtransport_ping enter");

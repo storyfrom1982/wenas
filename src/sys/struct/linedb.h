@@ -4,7 +4,7 @@
 
 #include <env/env.h>
 
-
+// 加入 4bit 数据，LINEDB_HEAD_MASK 将增加一位掩码
 // #define LINEDB_HEAD_MASK     0x1f
 #define LINEDB_HEAD_MASK     0x0f
 #define LINEDB_TYPE_MASK     0xc0
@@ -16,20 +16,31 @@ enum {
     LINEDB_TYPE_32BIT = 0x04,
     LINEDB_TYPE_64BIT = 0x08,
     LINEDB_TYPE_OBJECT = 0x10
+    // 加入 4bit 数据，LINEDB_TYPE_OBJECT 将递增到 0x20
     // LINEDB_TYPE_OBJECT = 0x20
 };
 
 enum {
+    // XLINE_NUMBER_TYPE_BOOL = 0x00,
+    // XLINE_NUMBER_TYPE_INTEGER = 0x40,
+    // XLINE_NUMBER_TYPE_UNSIGNED = 0x80,
+    // XLINE_NUMBER_TYPE_FLOAT = 0xc0
     LINEDB_NUMBER_INTEGER = 0x00,
     LINEDB_NUMBER_UNSIGNED = 0x40,
     LINEDB_NUMBER_FLOAT = 0x80,
+    //TODO 如果位置不够用了，可以用无符号整数代替boolean
     LINEDB_NUMBER_BOOLEAN = 0xc0
 };
 
 enum {
+    // XLINE_OBJECT_TYPE_STRING = 0x00,
+    // XLINE_OBJECT_TYPE_MAP = 0x40,
+    // XLINE_OBJECT_TYPE_LIST = 0x80,
+    // XLINE_OBJECT_TYPE_BINARY = 0xc0
     LINEDB_OBJECT_CUSTOM = 0x00,
     LINEDB_OBJECT_STRING = 0x40,
     LINEDB_OBJECT_ARRAY = 0x80,
+    //TODO 如果位置不够用了，可以合并string与binary
     LINEDB_OBJECT_BINARY = 0xc0
 };
 
@@ -167,18 +178,29 @@ static inline float __byte_to_float_64bit(linedb_ptr db)
 #define __bool_to_byte(b)       __number_to_byte_8bit(b, LINEDB_NUMBER_BOOLEAN)
 #define __byte_to_bool(b)       __byte_to_number_8bit(b, uint8_t)
 
+//__xline_typeif_object
 #define __typeis_object(b)      ((b)->byte[0] & LINEDB_TYPE_OBJECT)
+//__xline_typeif_number
 #define __typeis_number(b)      (!((b)->byte[0] & LINEDB_TYPE_OBJECT))
+//__xline_typeif
 #define __typeof_linedb(b)      ((b)->byte[0] & LINEDB_TYPE_MASK)
 
+//__xline_obj_typeif_map
 #define __objectis_custom(b)    (__typeof_linedb(b) == LINEDB_OBJECT_CUSTOM)
+//__xline_obj_typeif_string
 #define __objectis_string(b)    (__typeof_linedb(b) == LINEDB_OBJECT_STRING)
+//__xline_obj_typeif_list
 #define __objectis_array(b)     (__typeof_linedb(b) == LINEDB_OBJECT_ARRAY)
+//__xline_obj_typeif_binary
 #define __objectis_binary(b)    (__typeof_linedb(b) == LINEDB_OBJECT_BINARY)
 
+//__xline_num_typeif_integer
 #define __numberis_integer(b)   (__typeof_linedb(b) == LINEDB_NUMBER_INTEGER)
+//__xline_num_typeif_unsigned
 #define __numberis_unsigned(b)  (__typeof_linedb(b) == LINEDB_NUMBER_UNSIGNED)
+//__xline_num_typeif_real
 #define __numberis_float(b)     (__typeof_linedb(b) == LINEDB_NUMBER_FLOAT)
+//__xline_num_typeif_boolean
 #define __numberis_boolean(b)   (__typeof_linedb(b) == LINEDB_NUMBER_BOOLEAN)
 
 #define __numberis_8bit(b)      ((b)->byte[0] & LINEDB_TYPE_8BIT)
@@ -187,12 +209,13 @@ static inline float __byte_to_float_64bit(linedb_ptr db)
 #define __numberis_64bit(b)     ((b)->byte[0] & LINEDB_TYPE_64BIT)
 
 
-
+//__xline_sizeof_head
 #define __sizeof_head(b) \
         (uint64_t)( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
         ? 1 + (((b)->byte[0]) & LINEDB_HEAD_MASK) \
         : 1 )
 
+//__xline_sizeof_data
 #define __sizeof_data(b) \
         (uint64_t)( (((b)->byte[0] & LINEDB_TYPE_OBJECT)) \
         ? (((b)->byte[0] & LINEDB_TYPE_8BIT)) ? __b2u8(b) \
@@ -200,9 +223,13 @@ static inline float __byte_to_float_64bit(linedb_ptr db)
         : (((b)->byte[0] & LINEDB_TYPE_32BIT)) ? __b2u32(b) \
         : __b2u64(b) : (((b)->byte[0]) & LINEDB_HEAD_MASK) )
 
+//__xline_sizeof
 #define __sizeof_linedb(b)        (( __sizeof_head(b) + __sizeof_data(b)))
+
+//__xline_to_data
 #define __dataof_linedb(b)        (&((b)->byte[0]) + __sizeof_head(b))
 
+//__xline_sizeif_object
 #define __planof_malloc(size) \
         ( (size) < 0x100 ? (2 + (size)) \
         : (size) < 0x10000 ? (3 + (size)) \
