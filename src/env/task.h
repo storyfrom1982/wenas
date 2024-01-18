@@ -456,6 +456,7 @@ static inline int taskqueue_pop_front(taskqueue_ptr queue, taskctx_ptr *pp_node)
     if (queue->length == 0){
         return -1;
     }
+    //TODO 这里不能严格的按照入队的顺序进行出队，这是一个无锁的无序队列。
     for (size_t i = 0; i < TASKQUEUE_ARRAY_RANGE; i = ((i+1) % TASKQUEUE_ARRAY_RANGE))
     {
         tasklist_ptr listptr = &queue->task_array[i];
@@ -687,6 +688,7 @@ static inline int taskqueue_timer(taskqueue_ptr ptr, taskctx_ptr ctx)
 
 static inline int taskqueue_immediately(taskqueue_ptr ptr, taskctx_ptr ctx)
 {
+    //TODO 要确保任务首先被执行，要确保入队到第一个队列的最前面
     ctx->flag |= LINETASK_FALG_POST;
     while (taskqueue_push_front(ptr, ctx) == -1){
         if (___is_true(&ptr->running)){

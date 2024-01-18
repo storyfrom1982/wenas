@@ -10,13 +10,16 @@
 
 
 enum {
+    //TRANSUNIT_BYE = 0x00,
     TRANSUNIT_NONE = 0x00,
     TRANSUNIT_MSG = 0x01,
     TRANSUNIT_ACK = 0x02,
     TRANSUNIT_PING = 0x04,
+    //TRANSUNIT_PING = 0x04,
     TRANSUNIT_HELLO = 0x08,
     TRANSUNIT_BYE = 0x10,
-    TRANSUNIT_UNKNOWN = 0x20
+    TRANSUNIT_UNKNOWN = 0x20,
+    TRANSUNIT_FINAL
 };
 
 #define UNIT_HEAD_SIZE          8
@@ -92,6 +95,8 @@ struct msgchannel {
     msgchannel_ptr prev, next;
     int status;
     ___mutex_ptr mtx;
+    ___atom_bool is_connected;
+    ___atom_bool is_channel_breaker;
     ___atom_bool connected;
     ___atom_bool disconnected;
     ___atom_bool termination;
@@ -296,9 +301,11 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
 
                 if (unit->head.type == TRANSUNIT_HELLO){
                     if (___set_true(&channel->connected)){
+                        //TODO 这里是主动发起连接 onConnectionToPeer
                         channel->mtp->listener->connection(channel->mtp->listener, channel);
                     }
                 }else if (unit->head.type == TRANSUNIT_BYE){
+                    //TODO 不会处理 BEY 的 ACK，BEY 在释放连接之前，会一直重传。
                     if (___set_true(&channel->disconnected)){
                         msgchannel_clear(channel);
                         channel->mtp->listener->disconnection(channel->mtp->listener, channel);
@@ -566,7 +573,35 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
 //            __logi("msgtransport_main_loop recv ip: %u port: %u msg: %s", addr.ip, addr.port, get_transunit_msg(recvunit));
 
-            if (recvunit->head.type == TRANSUNIT_HELLO){
+            //TODO 先检测是否为 BEY。
+            if (recvunit->head.type == TRANSUNIT_BYE){
+                //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
+                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                if (channel != NULL){
+                    if (___set_true(&channel->disconnected)){
+                        //被动断开的一端，收到第一个 BEY，回复第一个 BEY，并且启动超时重传。
+                        msgchannel_push(channel, recvunit);
+                    }else {
+                        if (___is_true(&channel->is_channel_breaker)){
+                            //主动方收到第一个 BEY，直接 sendto 发送第二个 BEY。
+                        }
+                        //被动方收到第二个 BEY。
+                        //释放连接，结束超时重传。
+                        mtp->listener->disconnection(mtp->listener, channel);
+                    }
+                }else {
+                    //回复的第二个 BEY 可能丢包了
+                    //直接 sendto 回复 FINAL
+                }
+
+            }else if (recvunit->head.type == TRANSUNIT_FINAL){
+                //被动方收到 FINAL，释放连接，结束超时重传。
+                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                if (channel){
+                    mtp->listener->disconnection(mtp->listener, channel);
+                }
+
+            }else if (recvunit->head.type == TRANSUNIT_HELLO){
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
                 __logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
@@ -590,6 +625,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 msgchannel_enqueue(channel, mtp->sendqueue);
                 tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
                 ___set_true(&channel->connected);
+                //TODO 这里是被动建立连接 onConnectionFromPeer
                 channel->mtp->listener->connection(channel->mtp->listener, channel);
 
             }else {
@@ -604,13 +640,17 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                 if (recvunit->head.type == TRANSUNIT_ACK){
                     msgchannel_pull(channel, recvunit);
-                }else if (recvunit->head.type > TRANSUNIT_NONE && recvunit->head.type < TRANSUNIT_UNKNOWN){
+                }else if (/*recvunit->head.type == TRANSUNIT_MSG*/ recvunit->head.type > TRANSUNIT_NONE && recvunit->head.type < TRANSUNIT_UNKNOWN){
                     msgchannel_recv(channel, recvunit);
                     if (recvunit->head.type == TRANSUNIT_BYE){
+                        //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
                         if (___set_true(&channel->disconnected)){
                             __logi("msgtransport_main_loop disconnection channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                             msgchannel_clear(channel);
                             mtp->listener->disconnection(mtp->listener, channel);
+                        }else {
+                            //如果当前不是断开连接中状态，说明是对方主动起 BEY，需要回复 ACK。
+                            //等收到 BEY 的 ACK 再释放连接。
                         }
                     }
                     recvunit = NULL;
@@ -639,7 +679,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         }
 
 
-        //使用IP地址队列，channel在主循环中创建，在主循环中回收。
+        //to peer channel 在外部线程中创建，在主循环中回收。
         channel = msgchannel_dequeue(mtp->connectionqueue);
         if (channel != NULL){
             tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
@@ -653,6 +693,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             next = channel->next;
             if (__transbuf_usable(channel->sendbuf) > 0){
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
+                //不要插手 pack 类型，这里只管发送。
 
                 __logi("msgtransport_main_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                        channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
@@ -663,6 +704,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
                     ___mutex_notify(channel->mtx);//TODO
                     //检测队列为空，才开启定时器
+                    //所有channel统一使用一个定时器。
+                    //用tree实现定时器。
                     sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
                     heap_push(channel->timerheap, &sendunit->ts);
@@ -682,9 +725,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 }
 
             }else {
-
-                //所有channel统一使用一个定时器。
-                //用tree实现定时器。
+                //TODO 检测 channel 空闲时间，如果连接超时，就断开连接。清理僵尸连接。
+                //onDisconnect 回调要区分发送超时和连接超时
                 if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
                     if (___sys_clock() - channel->update > (1000000000ULL * 30)){
                         __logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
@@ -735,6 +777,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             channel = next;
         }
 
+        //TODO 不再需要断开连接队列，让用户收到 onDisconntion 事件后，调用 disconnect 方法，发送一个 BEY pack，主循环会释放 channel 的相关资源。
         if (mtp->disconnctionqueue->len > 0){
             if (___atom_try_lock(&mtp->disconnctionqueue->lock)){
                 channel = mtp->disconnctionqueue->head.next;
@@ -833,14 +876,18 @@ static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_
     __logi("msgtransport_connect enter");
     msgchannel_ptr channel = msgchannel_create(mtp, addr);
     transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
+    //TODO 以PING消息建立连接。
+    // unit->head.type = TRANSUNIT_PING;
     unit->head.type = TRANSUNIT_HELLO;
     unit->head.msg_range = 1;
 
     struct linekv kv;
     linekv_bind(&kv, unit->body, UNIT_BODY_SIZE);
+    //TODO 加密数据，需要对端验证
     linekv_add_string(&kv, "msg", "HELLO");
     unit->head.body_size = kv.pos;
 
+    //TODO 先 push pack，再入队。
     msgchannel_enqueue(channel, mtp->connectionqueue);
     msgchannel_push(channel, unit);
 
@@ -859,6 +906,11 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
     unit->head.type = TRANSUNIT_BYE;
     unit->head.body_size = 0;
     unit->head.msg_range = 1;
+    //主动发送 BEY，要设置 channel 主动状态。
+    ___set_true(&channel->is_channel_breaker);
+    //向对方发送 BEY，对方回应后，再移除 channel。
+    ___set_true(&channel->disconnected);
+    //主动断开的一端，发送第一个 BEY，并且启动超时重传。
     msgchannel_push(channel, unit);
     __logi("msgtransport_disconnect exit");
 }
