@@ -23,11 +23,13 @@ enum {
 };
 
 #define UNIT_HEAD_SIZE          8
-#define UNIT_BODY_SIZE          1280
+#define UNIT_BODY_SIZE          1280 // 1024 + 256
 // #define UNIT_BODY_SIZE          8
 
 #define UNIT_BUF_RANGE          16
-#define UNIT_MSG_RANGE          8192
+// #define PACK_BUF_RANGE          16
+#define UNIT_MSG_RANGE          8192 // 1K*8K=8M 0.4K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
+// #define PACK_MSG_RANGE
 
 #define TRANSMSG_SIZE           ( UNIT_BODY_SIZE * UNIT_MSG_RANGE )
 #define TRANSUNIT_SIZE          ( UNIT_BODY_SIZE + UNIT_HEAD_SIZE )
@@ -53,17 +55,19 @@ typedef struct msgaddr {
 
 typedef struct unithead {
     uint8_t type;
-    uint8_t sn;
-    uint8_t ack_sn;
-    uint8_t ack_range;
-    uint16_t msg_range;
-    uint16_t body_size;
+    uint8_t sn; //serial number 包序列号
+    uint8_t ack_sn; //ack 单个包的 ACK
+    uint8_t ack_range; //acks 这个包和它之前的所有包的 ACK
+    //uint8_t resend; //这个包的重传计数
+    uint16_t msg_range; // message fragment count 消息分段数量
+    uint16_t body_size; // message fragment length 这个分段的长度
 }*unithead_ptr;
 
 typedef struct transunit {
     bool comfirmed;
     uint8_t resending;
     struct heapnode ts;
+    // uint32_t timestamp; //计算往返耗时
     msgchannel_ptr channel;
     struct unithead head;
     uint8_t body[UNIT_BODY_SIZE];
@@ -111,7 +115,7 @@ struct msgchannel {
     msgtransport_ptr mtp;
 };
 
-
+//channellist
 typedef struct channelqueue {
     ___atom_size len;
     ___atom_bool lock;
@@ -123,10 +127,11 @@ struct msglistener {
     void *ctx;
     void (*onConnectionToPeer)(struct msglistener*, msgchannel_ptr channel);
     void (*onConnectionFromPeer)(struct msglistener*, msgchannel_ptr channel);
+    void (*onDisconnection)(struct msglistener*, msgchannel_ptr channel);
     void (*onMessage)(struct msglistener*, msgchannel_ptr channel, transmsg_ptr msg);
     //没有数据接收或发送，通知用户监听网络接口，有数据可读时，通知messenger
     void (*onIdle)(struct msglistener*, msgchannel_ptr channel);
-    void (*onDisconnection)(struct msglistener*, msgchannel_ptr channel);
+    void (*onSendable)(struct msglistener*, msgchannel_ptr channel);
     void (*connection)(struct msglistener*, msgchannel_ptr channel);
     void (*disconnection)(struct msglistener*, msgchannel_ptr channel);
     void (*message)(struct msglistener*, msgchannel_ptr channel, transmsg_ptr msg);
@@ -232,6 +237,8 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     }
 
     while (__transbuf_writable(channel->sendbuf) == 0){
+        // 不进行阻塞，添加续传逻辑
+        // TODO 设置当前 channel 的等待写入标志
         ___lock lk = ___mutex_lock(channel->mtx);
         if (___is_true(&channel->disconnected)){
             ___mutex_unlock(channel->mtx, lk);
@@ -250,6 +257,8 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
 
+    // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
+    // 是否统计所有 channel 的待发送包数量？
     if (___atom_add(&channel->mtp->send_queue_length, 1) == 1){
         ___lock lk = ___mutex_lock(channel->mtp->mtx);
         ___mutex_notify(channel->mtp->mtx);
@@ -321,6 +330,8 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 ___mutex_notify(channel->mtx);
 
             } while ((uint8_t)(ack->head.ack_range - channel->sendbuf->rpos) <= 0);
+
+            //TODO 如果当前 channel 设置了待写入标志 与 缓冲区可写，则通知用户可写入。
 
 //            assert(__transbuf_inuse(channel->sendbuf) > 0);
 //            index = __transbuf_rpos(channel->sendbuf);
@@ -691,6 +702,9 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         while (channel != &mtp->sendqueue->end)
         {
             next = channel->next;
+
+            //TODO 如果当前 channel 设置了待写入标志 与 缓冲区可写，则通知用户可写入。
+
             if (__transbuf_usable(channel->sendbuf) > 0){
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                 //不要插手 pack 类型，这里只管发送。
@@ -934,6 +948,7 @@ static inline void msgtransport_ping(msgchannel_ptr channel)
 
 static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channel, void *data, size_t size)
 {
+    // 非阻塞发送，当网络可发送时，通知用户层。
     char *msg_data;
     size_t msg_size;
     size_t msg_count = size / (TRANSMSG_SIZE);
@@ -989,6 +1004,9 @@ static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channe
     }
 }
 
+
+//make_channel(addr, 验证数据) //channel 在外部线程创建
+//clear_channel(ChannelPtr) //在外部线程销毁
 
 
 #endif //__MESSAGE_TRANSPORT_H__
