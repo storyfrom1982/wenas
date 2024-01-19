@@ -703,8 +703,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         {
             next = channel->next;
 
-            //TODO 如果当前 channel 设置了待写入标志 与 缓冲区可写，则通知用户可写入。
-
+            //TODO 一次发送一个包，还是全部发送，还是指定每次发送数量？
             if (__transbuf_usable(channel->sendbuf) > 0){
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                 //不要插手 pack 类型，这里只管发送。
@@ -718,8 +717,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
                     ___mutex_notify(channel->mtx);//TODO
                     //检测队列为空，才开启定时器
-                    //所有channel统一使用一个定时器。
-                    //用tree实现定时器。
+                    //所有channel统一使用一个定时器（还是每个channel各自维护定时器逻辑比较简单）。
+                    //定时器的堆越小，操作效率越高。
                     sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
                     heap_push(channel->timerheap, &sendunit->ts);
@@ -787,6 +786,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     }
                 }
             }
+
+            //TODO 如果当前 channel 设置了待写入标志 与 缓冲区可写，则通知用户可写入（因为设置待写入标志时没有加锁，所以需要重复检测状态）。
 
             channel = next;
         }

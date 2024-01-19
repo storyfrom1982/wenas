@@ -44,6 +44,8 @@ static inline void tree_release(__tree *pptr)
     }
 }
 
+//TODO 返回 mapping 的地址，允许用户自定义操作。
+//static inline __ptr* xtree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr mapping)
 {
     uint8_t i;
@@ -86,8 +88,10 @@ static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr ma
     
     node->mapping = mapping;
     __tree2node(parent)->leaves ++;
+    // return &node->mapping;
 }
 
+// static inline __ptr* xtree_find(__tree root, void *key, uint8_t keylen)
 static inline __ptr tree_find(__tree root, void *key, uint8_t keylen)
 {
     uint8_t len = 0;
