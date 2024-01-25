@@ -16,8 +16,8 @@
 #define __log_text_size			4096
 #define __log_text_end			( __log_text_size - 2 )
 #define __log_file_size         1024 * 1024 * 8
-// #define __log_pipe_size			1 << 14
-#define __log_pipe_size			1 << 8
+#define __log_pipe_size			1 << 14
+// #define __log_pipe_size			1 << 8
 
 #define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
@@ -26,8 +26,12 @@ static const char *s_log_level_strings[EX_LOG_LEVEL_COUNT] = {"NONE", "F", "E", 
 
 
 typedef struct ex_log_file {
+    ___atom_bool lock;
+    ___atom_bool running;
     ___atom_bool opened;
-    char *path;
+    ___atom_bool writing;
+    char *log0, *log1;
+    __ex_fp fp;
     taskqueue_ptr task;
     __ex_log_cb print_cb;
     __ex_pipe *pipe;
@@ -37,58 +41,40 @@ static __ex_log_file g_log_file = {0};
 
 static void ex_log_file_write_loop(xline_object_ptr ctx)
 {
-    printf("ex_logger_write_loop enter\n");
-    __ex_fp fp = NULL;
+    __ex_logd("ex_log_file_write_loop enter\n");
+
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
 //    __pass(buf != NULL);
-    printf("ex_logger_write_loop -------------------------------- 1\n");
-
-    if (!__ex_find_path(g_log_file.path)){
-       __ex_make_path(g_log_file.path);
-    }
 
     {
-        char filename[1024];
-        n = snprintf(filename, 1024, "%s/%s", g_log_file.path, "0.log");
-        filename[n] = '\0';
-        fp = __ex_fopen(filename, "a+t");
-//        __pass(fp != NULL);
+        // 只有在 Release 模式下才能获取到指针的信息
         uint64_t *a = (uint64_t*)(buf - 16);
         uint64_t *b = (uint64_t*)(buf - 8);
-        n = snprintf(filename, 1024, "./build/%llu.%llu", *a, *b);
-        __ex_make_path(filename);
+        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
     }
 
+    ___set_true(&g_log_file.writing);
+    
     while (1)
     {
-        printf("ex_logger_write_loop read enter\n");
         if ((res = __ex_pipe_read(g_log_file.pipe, buf, 1)) == 1){
             n = __ex_pipe_readable(g_log_file.pipe);
             res += __ex_pipe_read(g_log_file.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
         }
-        printf("ex_logger_write_loop read exit\n");
 
         if (res > 0){
-            n = __ex_fwrite(fp, buf, res);
+            n = __ex_fwrite(g_log_file.fp, buf, res);
 //            __pass(n==res);
-            if (__ex_ftell(fp) > __log_file_size){
-                __ex_fclose(fp);
-                char log0[1024];
-                n = snprintf(log0, 1024, "%s/0.log", g_log_file.path);
-                log0[n] = '\0';
-                char log1[1024];
-                n = snprintf(log1, 1024, "%s/1.log", g_log_file.path);
-                log1[n] = '\0';
-//                __pass(env_move_path(log0, log1));
-                fp = __ex_fopen(log0, "a+t");
+            if (__ex_ftell(g_log_file.fp) > __log_file_size){
+                __ex_fclose(g_log_file.fp);
+                __ex_move_path(g_log_file.log0, g_log_file.log1);
+                g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
 //                __pass(fp != NULL);
             }
         }else {
-            printf("ex_logger_write_loop read failed\n");
-            if (___is_false(&g_log_file.opened)){
-                printf("ex_logger_write_loop read break\n");
+            if (___is_false(&g_log_file.running)){
                 break;
             }
         }
@@ -96,17 +82,15 @@ static void ex_log_file_write_loop(xline_object_ptr ctx)
 
 Reset:
 
-    if (fp){
-        __ex_fclose(fp);
-    }
     if (buf){
         uint64_t *a = (uint64_t*)(buf - 16);
         uint64_t *b = (uint64_t*)(buf - 8);
-        printf("buf addr: %llu.%llu\n", *a, *b);
+        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
         free(buf);
-        printf("buf addr: %llu.%llu\n", *a, *b);
+        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
     }
-    printf("ex_logger_write_loop exit\n");
+
+    __ex_logd("ex_log_file_write_loop exit\n");
 }
 
 void test3()
@@ -134,44 +118,76 @@ void test(){
     test1();
 }
 
+static void malloc_debug_cb(const char *debug)
+{
+    __ex_logw("%s\n", debug);
+}
+
 void __ex_log_file_close()
 {
-    //先设置关闭状态
-    if (___set_false(&g_log_file.opened)){
+    //先设置关闭状态    
+    if (___set_false(&g_log_file.running)){
+        ___set_false(&g_log_file.writing);      
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
-        printf("__ex_log_file_close enter\n");
         __ex_pipe_stop(g_log_file.pipe);
         taskqueue_release(&g_log_file.task);
-        __ex_pipe_destroy(&g_log_file.pipe);
-        if (g_log_file.path){
-            free(g_log_file.path);
+        __ex_pipe_destroy(&g_log_file.pipe);        
+        free(g_log_file.log0);
+        free(g_log_file.log1);
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(malloc_debug_cb);
+#endif
+
+        __ex_logi(">>>>-------------->\n");
+        __ex_logi("Log stop >>>>-------------->\n");
+        __ex_logi(">>>>-------------->\n");
+
+        while (!___set_true(&g_log_file.lock)){
+            usleep(10);
         }
+        __ex_fclose(g_log_file.fp);
+        ___set_false(&g_log_file.lock);
+
         memset(&g_log_file, 0, sizeof(g_log_file));
-        printf("__ex_log_file_close exit\n");
     }
 }
 
 int __ex_log_file_open(const char *path, __ex_log_cb cb)
 {
 
-    test();
+    // test();
     __ex_log_file_close();
 
     g_log_file.print_cb = cb;
-    if (path){
-        g_log_file.path = strdup(path);
-        g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
-        assert(g_log_file.pipe);
-        g_log_file.task = taskqueue_run(ex_log_file_write_loop, &g_log_file);
-        ___set_true(&g_log_file.opened);
-        // __ex_logi(">>>>-------------->\n");
-        // __ex_logi("Log start >>>>--------------> %s\n", g_log_file.path);
-        // __ex_logi(">>>>-------------->\n");
+
+    int len = strlen(path) + strlen("/0.log") + 1;
+    if (!__ex_find_path(path)){
+        __ex_make_path(path);
     }
+    g_log_file.log0 = calloc(1, len);
+    g_log_file.log1 = calloc(1, len);
+    snprintf(g_log_file.log0, len, "%s/0.log", path);
+    snprintf(g_log_file.log1, len, "%s/1.log", path);
+
+    while (!___set_true(&g_log_file.lock)){
+        usleep(10);
+    }
+    g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
+    ___set_false(&g_log_file.lock);
+
+    __ex_logi(">>>>-------------->\n");
+    __ex_logi("Log start >>>>--------------> %s\n", g_log_file.log0);
+    __ex_logi(">>>>-------------->\n");  
+
+    g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
+    assert(g_log_file.pipe);
+    g_log_file.task = taskqueue_run(ex_log_file_write_loop, &g_log_file);
+    ___set_true(&g_log_file.running);
 
     return 0;
 Reset:
-    if (g_log_file.path) free(g_log_file.path);
+    if (g_log_file.log0) free(g_log_file.log0);
     __ex_pipe_destroy(&g_log_file.pipe);
     return -1;
 }
@@ -185,19 +201,32 @@ void __ex_log_printf(enum env_log_level level, const char *file, int line, const
     // memory leak
     // n = ___sys_strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
 
-    n += snprintf(text + n, __log_text_end - n, ".%03u [0x%08X] %4d %-21s [%s] ", (unsigned int)(millisecond % 1000),
-                    ___thread_id(), line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
+    n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
+                    ___thread_id(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
+                    line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
     va_start (args, fmt);
     n += vsnprintf(text + n, __log_text_end - n, fmt, args);
     va_end (args);
 
-    if (___is_true(&g_log_file.opened)){
-        // 这里只向文件写入实际的输入的内容
-        // 最大输入内容 0-4094=4095
-        __ex_pipe_write(g_log_file.pipe, text, n);
+    while (!___set_true(&g_log_file.lock)){
+        usleep(10);
     }
+
+    // 这里只向文件写入实际的输入的内容
+    // 最大输入内容 0-4094=4095
+    if (___is_true(&g_log_file.writing)){
+        // 写入管道
+        __ex_pipe_write(g_log_file.pipe, text, n);
+    }else {
+        // 直接写文件
+        if (g_log_file.fp){
+            __ex_fwrite(g_log_file.fp, text, n);
+        }
+    }
+
+    ___set_false(&g_log_file.lock);
 
     // 长度 n 不会越界，因为 snprintf 限制了写入长度
     if (text[n] != '\0'){

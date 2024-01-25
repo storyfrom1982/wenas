@@ -10,11 +10,6 @@ struct targs {
     ___atom_bool *testTrue;
 };
 
-static void malloc_debug_cb(const char *debug)
-{
-    __ex_logw("%s\n", debug);
-}
-
 static void mutex_task(xline_object_ptr kv)
 {
     struct targs *targ = (struct targs *)xline_object_find_ptr(kv, "ctx");
@@ -35,7 +30,7 @@ static void mutex_task(xline_object_ptr kv)
     ___lock lk = ___mutex_lock(targ->mtx);
     __ex_logi("sleep_until\n");
     
-    ___mutex_timer(targ->mtx, lk, 3000000000);
+    ___mutex_timer(targ->mtx, lk, 3000000);
 
     ___mutex_notify(targ->mtx);
     __ex_logi("notify\n");
@@ -50,11 +45,10 @@ int main(int argc, char *argv[])
 {
     char buf[BUFSIZ];
     setvbuf(stdout, buf, _IONBF, BUFSIZ);
-
+    __ex_log_file_open("./tmp/log", NULL);
     env_backtrace_setup();
 
-    __ex_log_file_open("./tmp/log", NULL);
-#if 0
+#if 1
     char text[1024] = {0};
 
     uint64_t millisecond = ___sys_time();
@@ -133,10 +127,6 @@ int main(int argc, char *argv[])
 #endif
     __ex_log_file_close();
     __ex_logi("exit\n");
-
-#if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(malloc_debug_cb);
-#endif
 
 	return 0;
 }
