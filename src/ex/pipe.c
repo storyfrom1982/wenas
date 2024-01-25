@@ -1,4 +1,4 @@
-#include "env/env.h"
+#include "ex/ex.h"
 
 
 #include <errno.h>
@@ -12,7 +12,7 @@
 #include "task.h"
 
 
-typedef struct env_pipe {
+typedef struct ex_pipe {
     char *buf;
     uint64_t len;
     uint64_t leftover;
@@ -28,14 +28,14 @@ typedef struct env_pipe {
 //    pthread_cond_t cond[1];
 //    pthread_mutex_t mutex[1];
     ___mutex_ptr mutex;
-}env_pipe_t;
+}__ex_pipe;
 
 
-env_pipe_t* env_pipe_create(uint64_t len)
+__ex_pipe* __ex_pipe_create(uint64_t len)
 {
     int ret;
 
-    env_pipe_t *pipe = (env_pipe_t *)malloc(sizeof(env_pipe_t));
+    __ex_pipe *pipe = (__ex_pipe *)malloc(sizeof(__ex_pipe));
     assert(pipe);
 
    if ((len & (len - 1)) == 0){
@@ -70,13 +70,13 @@ env_pipe_t* env_pipe_create(uint64_t len)
     return pipe;
 }
 
-void env_pipe_destroy(env_pipe_t **pptr)
+void __ex_pipe_destroy(__ex_pipe **pptr)
 {
     if (pptr && *pptr){
-        env_pipe_t *pipe = *pptr;
+        __ex_pipe *pipe = *pptr;
         *pptr = NULL;
-        env_pipe_clear(pipe);
-        env_pipe_stop(pipe);
+        __ex_pipe_clear(pipe);
+        __ex_pipe_stop(pipe);
         ___mutex_release(pipe->mutex);
 //        pthread_cond_destroy(pipe->cond);
 //        pthread_mutex_destroy(pipe->mutex);
@@ -85,7 +85,7 @@ void env_pipe_destroy(env_pipe_t **pptr)
     }
 }
 
-uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len)
+uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
 {
     if (pipe->buf == NULL || data == NULL || len == 0){
         return 0;
@@ -148,7 +148,7 @@ uint64_t env_pipe_write(env_pipe_t *pipe, __ptr data, uint64_t len)
     return pos;
 }
 
-uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len)
+uint64_t __ex_pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
 {
     if (pipe->buf == NULL || buf == NULL || len == 0){
         return 0;
@@ -207,15 +207,15 @@ uint64_t env_pipe_read(env_pipe_t *pipe, __ptr buf, uint64_t len)
     return pos;
 }
 
-uint64_t env_pipe_readable(env_pipe_t *pipe){
+uint64_t __ex_pipe_readable(__ex_pipe *pipe){
     return pipe->writer - pipe->reader;
 }
 
-uint64_t env_pipe_writable(env_pipe_t *pipe){
+uint64_t __ex_pipe_writable(__ex_pipe *pipe){
     return pipe->len - pipe->writer + pipe->reader;
 }
 
-void env_pipe_stop(env_pipe_t *pipe){
+void __ex_pipe_stop(__ex_pipe *pipe){
     if (___set_true(&pipe->stopped)){
         while (pipe->write_waiting > 0 || pipe->read_waiting > 0) {
             ___lock lk = ___mutex_lock(pipe->mutex);
@@ -225,7 +225,7 @@ void env_pipe_stop(env_pipe_t *pipe){
     }
 }
 
-void env_pipe_clear(env_pipe_t *pipe){
+void __ex_pipe_clear(__ex_pipe *pipe){
     ___atom_sub(&pipe->reader, pipe->reader);
     ___atom_sub(&pipe->writer, pipe->writer);
 }

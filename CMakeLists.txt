@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.4)
 
 project(kangzixin LANGUAGES C CXX)
-set(LIBRARY_NAME "kang")
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
@@ -50,11 +49,11 @@ check_c_source_compiles("
 
 set(kzx_sources
     # src/main.c
-    src/env/malloc.c
-    src/env/time.c
-    src/env/pipe.c 
-    src/env/storage.c
-    src/env/logger.c
+    # src/sys/struct/xline.c
+    src/ex/malloc.c
+    src/ex/pipe.c 
+    src/ex/storage.c
+    src/ex/logger.c
     # src/env/socket.c
     # src/env/linetask.c
     # test/env/storage_test.c
@@ -75,9 +74,10 @@ set(kzx_ldflags "")
 set(kzx_inclides "")
 set(kzx_directories "")
 
-set(kzx_cflags "-Wno-format")
+set(kzx_ldflags "-Wl,--export-dynamic;")
+set(kzx_cflags "-m64;-O0;-g;")
 # set(kzx_cflags "-Wformat")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -Wno-c++11-narrowing")
+# set(CMAKE_CXX_FLAGS "-Wl,--export-dynamic")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND kzx_ldflags pthread dl)
@@ -89,7 +89,7 @@ if(ENV_CHECK_BACKTRACE)
         list(APPEND kzx_defines -DENV_MALLOC_PAGE_SIZE=0xA000000 -DENV_MALLOC_MAX_POOL=8)
     endif()
     list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-    list(APPEND kzx_sources src/env/backtrace.c)
+    list(APPEND kzx_sources src/ex/backtrace.c)
 endif()
 
 
@@ -102,7 +102,7 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-# build_executable(kang src/main.cpp)
-build_executable(server src/business/server.c)
-build_executable(client src/business/client.cpp)
+build_executable(kang src/main.c)
+# build_executable(server src/business/server.c)
+# build_executable(client src/business/client.cpp)
 # build_executable(tree test/sys/struct/tree_test.c)

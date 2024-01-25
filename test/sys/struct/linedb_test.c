@@ -1,4 +1,4 @@
-#include "sys/struct/linedb.h"
+#include "sys/struct/xline.h"
 #include <stdio.h>
 
 static void test_byte_order()
@@ -85,18 +85,18 @@ static void test_byte_order()
 static void number16_to_ldb()
 {
     int16_t n16, i16 = -12345; // big endian 14640 <=> little endian 12345, -14385 <=> -12345;
-    struct linedb ldb = __n2b16(i16);
-    n16 = __b2n16(&ldb);
+    struct xline x = __n2b16(i16);
+    n16 = __b2n16(&x);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
-        ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
+        x.byte[0], (char)(x.byte[0] >> 7), x.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_linedb(&ldb);
+    uint32_t size = __xline_sizeof(&x);
     __logd("int16_t %d to linear block %d sizeof(block)=%u\n", i16, n16, size);
 
     uint16_t u16, iu16 = 12345;
-    ldb = __n2b16(iu16);
-    u16 = __b2n16(&ldb);
-    size = __sizeof_linedb(&ldb);
+    x = __n2b16(iu16);
+    u16 = __b2n16(&x);
+    size = __xline_sizeof(&x);
     __logd("uint16_t %u to linear block %u sizeof(block)=%u\n", iu16, u16, size);
 
     __logd(">>>>------------>\n");
@@ -105,18 +105,18 @@ static void number16_to_ldb()
 static void number32_to_ldb()
 {
     int32_t n32, i32 = -12345;
-    struct linedb ldb = __n2b32(i32);
+    struct xline x = __n2b32(i32);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
-        ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
+        x.byte[0], (char)(x.byte[0] >> 7), x.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_linedb(&ldb);
-    n32 = __b2n32(&ldb);
+    uint32_t size = __xline_sizeof(&x);
+    n32 = __b2n32(&x);
     __logd("__sint32 %d to linear block %d sizeof(block)=%u\n", i32, n32, size);
 
     uint32_t u32, iu32 = 12345;
-    ldb = __n2b32(iu32);
-    size = __sizeof_linedb(&ldb);
-    u32 = __b2n32(&ldb);
+    x = __n2b32(iu32);
+    size = __xline_sizeof(&x);
+    u32 = __b2n32(&x);
     __logd("uint32_t %u to linear block %u sizeof(block)=%u\n", iu32, u32, size);
 
     __logd(">>>>------------>\n");
@@ -125,17 +125,17 @@ static void number32_to_ldb()
 static void number64_to_ldb()
 {
     int64_t n64, i64 = -12345;
-    struct linedb ldb = __n2b64(i64);
+    struct xline ldb = __n2b64(i64);
     __logd("block head = 0x%x ldb.byte[0] >> 7 = 0x%x ldb.byte[0] & 0x80 = 0x%x\n", 
         ldb.byte[0], (char)(ldb.byte[0] >> 7), ldb.byte[0] & 0x80);
 
-    uint32_t size = __sizeof_linedb(&ldb);
+    uint32_t size = __xline_sizeof(&ldb);
     n64 = __b2n64(&ldb);
     __logd("int64_t %ld to linear block %ld sizeof(block)=%u\n", i64, n64, size);
 
     uint64_t u64, iu64 = 12345;
     ldb = __n2b64(iu64);
-    size = __sizeof_linedb(&ldb);
+    size = __xline_sizeof(&ldb);
     u64 = __b2n64(&ldb);
     __logd("__uint64 %lu to linear block %lu sizeof(block)=%u\n", iu64, u64, size);
 
@@ -146,10 +146,10 @@ static void number64_to_ldb()
 static void string_to_ldb()
 {
     const char *string8bit = "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
-    linedb_ptr ldb = linedb_from_string(string8bit);
-    __logd("ldb type = %u\n", __typeof_linedb(ldb));
+    xline_ptr ldb = xline_from_text(string8bit);
+    __logd("ldb type = %u\n", __xline_sizeof(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string8bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
+        string8bit, __dataof_linedb(ldb), __sizeof_head(ldb), __xline_sizeof(ldb));
     __linedb_free(ldb);
 
     __logd(">>>>------------>\n");
@@ -161,19 +161,19 @@ static void string_to_ldb()
                                 "Hello World !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
 
     ldb = linedb_from_string(string16bit);
-    __logd("ldb type = %u\n", __typeof_linedb(ldb));
+    __logd("ldb type = %u\n", __xline_sizeof(ldb));
     __logd("string %s\n>>>>------------> to linear byteof(block) %s sizeof(head)=%u sizeof(block)=%u\n", 
-        string16bit, __dataof_linedb(ldb), __sizeof_head(ldb), __sizeof_linedb(ldb));
+        string16bit, __dataof_linedb(ldb), __sizeof_head(ldb), __xline_sizeof(ldb));
     __linedb_free(ldb);
 
     __logd(">>>>------------>\n");
 
     uint32_t len = 0xabcdef;
     void *obj = malloc(len);
-    ldb = linedb_from_object(obj, len, LINEDB_TYPE_OBJECT | LINEDB_OBJECT_BINARY);
+    ldb = linedb_from_object(obj, len, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
 
-    __logd("ldb type = %u\n", __typeof_linedb(ldb));
-    __logd("data size=%lu + %u sizeof(block)=%lu\n", len, __sizeof_head(ldb), __sizeof_linedb(ldb));
+    __logd("ldb type = %u\n", __xline_sizeof(ldb));
+    __logd("data size=%lu + %u sizeof(block)=%lu\n", len, __sizeof_head(ldb), __xline_sizeof(ldb));
     free(obj);
     __linedb_free(ldb);
 
@@ -184,8 +184,8 @@ static void string_to_ldb()
 static void float_to_ldb()
 {
     float f32 = 12345.12345f, fn32;
-    struct linedb ldb = __f2b32(f32);
-    __logd("ldb type %u\n", __typeof_linedb(&ldb));
+    struct xline ldb = __f2b32(f32);
+    __logd("ldb type %u\n", __xline_sizeof(&ldb));
 
     fn32 = __b2f32(&ldb);
     __logd("float=%f ldb=%f\n", f32, fn32);
@@ -194,25 +194,25 @@ static void float_to_ldb()
 
     double f64 = 123456.123456f, fn64;
     ldb = __f2b64(f64);
-    __logd("ldb type %u\n", __typeof_linedb(&ldb));
+    __logd("ldb type %u\n", __xline_sizeof(&ldb));
     fn64 = __b2f64(&ldb);
     __logd("double=%lf ldb=%lf\n", f64, fn64);
 
     __logd(">>>>------------>\n");
 }
 
-static void test_lineardb_header()
+static void test_xline_header()
 {
-    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER=0x%x\n", (LINEDB_NUMBER_INTEGER) & LINEDB_TYPE_MASK);
-    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_UNSIGNED=0x%x\n", (LINEDB_NUMBER_UNSIGNED) & LINEDB_TYPE_MASK);
-    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_FLOAT=0x%x\n", (LINEDB_NUMBER_FLOAT) & LINEDB_TYPE_MASK);
-    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_BOOLEAN=0x%x\n", (LINEDB_NUMBER_BOOLEAN) & LINEDB_TYPE_MASK);
+    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER=0x%x\n", (XLINE_NUMBER_TYPE_INTEGER) & XLINE_OBJECT_TYPE_MASK);
+    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_UNSIGNED=0x%x\n", (XLINE_NUMBER_TYPE_NATURAL) & XLINE_OBJECT_TYPE_MASK);
+    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_FLOAT=0x%x\n", (XLINE_NUMBER_TYPE_REAL) & XLINE_OBJECT_TYPE_MASK);
+    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_BOOLEAN=0x%x\n", (XLINE_NUMBER_TYPE_BOOL) & XLINE_OBJECT_TYPE_MASK);
     __logd(">>>>------------>\n");
 
-    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER=0x%x\n", (LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER) >> 6);
-    __logd("LINEDB_TYPE_16BIT | LINEDB_NUMBER_UNSIGNED=0x%x\n", (LINEDB_TYPE_16BIT | LINEDB_NUMBER_UNSIGNED) >> 6);
-    __logd("LINEDB_TYPE_32BIT | LINEDB_NUMBER_FLOAT=0x%x\n", (LINEDB_TYPE_32BIT | LINEDB_NUMBER_FLOAT) >> 6);
-    __logd("LINEDB_TYPE_64BIT | LINEDB_NUMBER_BOOLEAN=0x%x\n", (LINEDB_TYPE_64BIT | LINEDB_NUMBER_BOOLEAN) >> 6);
+    __logd("LINEDB_TYPE_8BIT | LINEDB_NUMBER_INTEGER=0x%x\n", (XLINE_TYPE_8BIT | XLINE_NUMBER_TYPE_INTEGER) >> 6);
+    __logd("LINEDB_TYPE_16BIT | LINEDB_NUMBER_UNSIGNED=0x%x\n", (XLINE_TYPE_16BIT | XLINE_NUMBER_TYPE_NATURAL) >> 6);
+    __logd("LINEDB_TYPE_32BIT | LINEDB_NUMBER_FLOAT=0x%x\n", (XLINE_TYPE_32BIT | XLINE_NUMBER_TYPE_REAL) >> 6);
+    __logd("LINEDB_TYPE_64BIT | LINEDB_NUMBER_BOOLEAN=0x%x\n", (XLINE_TYPE_64BIT | XLINE_NUMBER_TYPE_BOOL) >> 6);
     __logd(">>>>------------>\n");
 }
 

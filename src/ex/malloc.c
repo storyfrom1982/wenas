@@ -27,6 +27,7 @@ static inline _Unwind_Reason_Code __unwind_backtrace_callback(struct _Unwind_Con
 {
     struct backtrace_stack* stack = (struct backtrace_stack*)vp;
     if (stack->head == stack->end) {
+		//数组已满
         return _URC_END_OF_STACK;
     }
     *stack->head = (void*)_Unwind_GetIP(unwind_context);
@@ -611,14 +612,33 @@ void* malloc(size_t size)
 void* calloc(size_t number, size_t size)
 {
 	size *= number;
-	void *pointer = malloc(size);
+	size += 3;
+	printf("number=%lu size=%lu\n", number, size);
+	
+	void *ptr = malloc(size);
 
-	if (pointer != NULL){
-    	memset(pointer, 0, size);
-    	return pointer;
+	if (ptr != NULL){
+		size_t l = size >> 3;
+		for (size_t i = 0; i < l; ++i){
+			*(((size_t*)ptr) + i) = 0;
+		}
+		for (size_t r = size % 8; r > 0; r--){
+			*(((char*)ptr) + (size - r)) = 0;
+		}
+
+		char *c = (char*)ptr;
+		for (size_t t = 0; t < size; ++t){
+			if (c[t] != 0){
+				printf("memset failed\n");
+				exit(0);
+			}
+		}
+
+    	// memset(pointer, 0, len);
+    	// return pointer;
 	}
 
-	return NULL;
+	return ptr;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -845,7 +865,7 @@ void env_malloc_debug(void (*cb)(const char *debug))
 			if (pool->page[page_id].start_address
 				&& pool->page[page_id].ptr->size
 				!= pool->page[page_id].size - __free_pointer_size * 2){
-				cb("[!!! Found a memory leak !!!]\n");
+				cb("[!!! Found a memory leak !!!]");
 				ptr = (__next_pointer(pool->page[page_id].head));
 				while(ptr != pool->page[page_id].end){
 #ifdef ENV_MALLOC_BACKTRACE

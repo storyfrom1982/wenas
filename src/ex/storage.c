@@ -2,7 +2,7 @@
 #define __ENV_DISK_H__
 
 
-#include "env/env.h"
+#include "ex/ex.h"
 
 #include <unistd.h>
 #include <limits.h>
@@ -16,37 +16,37 @@
 #include <sys/stat.h>
 
 
-__fp env_fopen(const char* path, const char* mode)
+__ex_fp __ex_fopen(const char* path, const char* mode)
 {
 	return fopen(path, mode);
 }
 
-bool env_fclose(__fp fp)
+bool __ex_fclose(__ex_fp fp)
 {
 	return fclose((FILE*)fp) == 0 ? true : false;
 }
 
-int64_t env_ftell(__fp fp)
+int64_t __ex_ftell(__ex_fp fp)
 {
 	return ftello((FILE*)fp);
 }
 
-int64_t env_fflush(__fp fp)
+int64_t __ex_fflush(__ex_fp fp)
 {
 	return fflush((FILE*)fp);
 }
 
-int64_t env_fwrite(__fp fp, __ptr data, uint64_t size)
+int64_t __ex_fwrite(__ex_fp fp, __ptr data, uint64_t size)
 {
 	return fwrite(data, 1, size, (FILE*)fp);
 }
 
-int64_t env_fread(__fp fp, __ptr buf, uint64_t size)
+int64_t __ex_fread(__ex_fp fp, __ptr buf, uint64_t size)
 {
 	return fread(buf, 1, size, (FILE*)fp);
 }
 
-int64_t env_fseek(__fp fp, int64_t offset, int32_t whence)
+int64_t __ex_fseek(__ex_fp fp, int64_t offset, int32_t whence)
 {
 	return fseeko((FILE*)fp, offset, whence);
 }
@@ -54,7 +54,7 @@ int64_t env_fseek(__fp fp, int64_t offset, int32_t whence)
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-bool env_find_file(const char* path)
+bool __ex_find_file(const char* path)
 {
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFREG)) ? true : false;
@@ -70,7 +70,7 @@ uint64_t env_file_size(const char* filename)
 	return -1;
 }
 
-bool env_find_path(const char* path)
+bool __ex_find_path(const char* path)
 {
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
@@ -82,7 +82,7 @@ static bool env_mkdir(const char* path)
 	return 0 == r ? true : false;
 }
 
-bool env_remove_path(const char* path)
+bool __ex_remove_path(const char* path)
 {
 	int r = rmdir(path);
 	return 0 == r ? true : false;
@@ -96,7 +96,7 @@ bool env_realpath(const char* path, char resolved_path[PATH_MAX])
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-bool env_remove_file(const char* path)
+bool __ex_remove_file(const char* path)
 {
 	int r = remove(path);
 	return 0 == r ? true : false;
@@ -104,13 +104,13 @@ bool env_remove_file(const char* path)
 
 /// change the name or location of a file
 /// 0-ok, other-error
-bool env_move_path(const char* from, const char* to)
+bool __ex_move_path(const char* from, const char* to)
 {
 	int r = rename(from, to);
 	return 0 == r ? true : false;
 }
 
-bool env_make_path(const char* path)
+bool __ex_make_path(const char* path)
 {
     if (path == NULL || path[0] == '\0'){
         return false;
@@ -119,7 +119,7 @@ bool env_make_path(const char* path)
     bool ret = true;
     uint64_t len = strlen(path);
 
-    if (!env_find_path(path)){
+    if (!__ex_find_path(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -128,7 +128,7 @@ bool env_make_path(const char* path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!env_find_path(buf)){
+                if (!__ex_find_path(buf)){
                     ret = env_mkdir(buf);
                     if (!ret){
                         break;

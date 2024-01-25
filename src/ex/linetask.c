@@ -90,7 +90,7 @@ static void* task_loop(void *p)
     linetask_timer_func timer_func;
     linetask_ptr ltq = (linetask_ptr)p;
 
-    __logi("linetask_loop(0x%X) enter\n", pthread_self());
+    __ex_logi("linetask_loop(0x%X) enter\n", pthread_self());
     
     while (__is_true(ltq->running)) {
 
@@ -147,7 +147,7 @@ static void* task_loop(void *p)
         }
     }
 
-    __logi("linetask_loop(0x%X) exit\n", pthread_self());
+    __ex_logi("linetask_loop(0x%X) exit\n", pthread_self());
 
     return NULL;
 }

@@ -28,7 +28,7 @@ typedef struct server {
 
 static void malloc_debug_cb(const char *debug)
 {
-    __logw("%s\n", debug);
+    __ex_logw("%s\n", debug);
 }
 
 static void listening(struct physics_socket *socket)
@@ -51,7 +51,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
     send_number++;
     uint64_t randtime = ___sys_clock() / 1000000ULL;
     if ((send_number & 0x0f) == (randtime & 0x0f)){
-        __logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu", ++lost_number);
+        __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu", ++lost_number);
         return size;
     }
     server_t *server = (server_t*)socket->ctx;
@@ -111,23 +111,23 @@ static void recv_task(linekv_ptr task)
     transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
-    __logi(">>>>---------------------------------------------------> recv msg enter: %s", linekv_find_string(&parser, "msg"));
+    __ex_logi(">>>>---------------------------------------------------> recv msg enter: %s", linekv_find_string(&parser, "msg"));
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
-    __logi(">>>>---------------------------------------------------> recv msg exit");
+    __ex_logi(">>>>---------------------------------------------------> recv msg exit");
     free(msg);
     linekv_release(&task);
 }
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
-    __logi(">>>>---------------------------------------------------> recv msg --- enter");
+    __ex_logi(">>>>---------------------------------------------------> recv msg --- enter");
     server_t *server = (server_t*)listener->ctx;
     linekv_ptr task = linekv_create(1024);
     linekv_add_ptr(task, "func", (void*)recv_task);
     linekv_add_ptr(task, "ctx", channel);
     linekv_add_ptr(task, "msg", msg);
     taskqueue_post(server->task, task);
-    __logi(">>>>---------------------------------------------------> recv msg --- exit");
+    __ex_logi(">>>>---------------------------------------------------> recv msg --- exit");
 }
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
@@ -143,8 +143,8 @@ static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 int main(int argc, char *argv[])
 {
     env_backtrace_setup();
-    env_logger_start("./tmp/server/log", NULL);
-    __logi("start server");
+    __ex_log_file_open("./tmp/server/log", NULL);
+    __ex_logi("start server");
 
     const char *host = "127.0.0.1";
     // uint16_t port = atoi(argv[1]);
@@ -181,20 +181,20 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __loge("socket error");
+        __ex_loge("socket error");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
-        __loge("setsockopt error");
+        __ex_loge("setsockopt error");
     }
 	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
-        __loge("setsockopt error");
+        __ex_loge("setsockopt error");
     }
     if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
-        __loge("bind error");
+        __ex_loge("bind error");
     }
 	int flags = fcntl(fd, F_GETFL, 0);
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
-        __loge("set no block failed");
+        __ex_loge("set no block failed");
     }
 
     server.socket = fd;
@@ -213,23 +213,23 @@ int main(int argc, char *argv[])
     ___set_false(&server.mtp->running);
     int data = 0;
     ssize_t result = sendto(server.socket, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
-    __logi("msgtransport_disconnect");
+    __ex_logi("msgtransport_disconnect");
     msgtransport_release(&server.mtp);
-    __logi("msgtransport_release");
+    __ex_logi("msgtransport_release");
 
-    __logi("free device");
+    __ex_logi("free device");
     free(device);
 
     close(fd);
 
-    __logi("env_logger_stop");
-    env_logger_stop();
+    __ex_logi("env_logger_stop");
+    __ex_log_file_close();
 
-    __logi("env_malloc_debug");
+    __ex_logi("env_malloc_debug");
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
 
-    __logi("exit");
+    __ex_logi("exit");
     return 0;
 }

@@ -275,7 +275,7 @@ static const char* get_transunit_msg(transunit_ptr unit)
 
 static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
 {
-    __logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u",
+    __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u",
            ack->head.ack_range, ack->head.ack_sn, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0);
 
     // 只处理 sn 在 rpos 与 upos 之间的 transunit
@@ -297,7 +297,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 index = __transbuf_rpos(channel->sendbuf);
                 unit = channel->sendbuf->buf[index];
 
-                __logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
+                __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
                        ack->head.ack_range, ack->head.ack_sn, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0, get_transunit_msg(unit));
 
                 if (!unit->comfirmed){
@@ -358,7 +358,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
             index = ack->head.ack_sn & (UNIT_BUF_RANGE - 1);
             unit = channel->sendbuf->buf[index];
 
-            __logi("msgchannel_pull >>>>>>---------->>> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
+            __ex_logi("msgchannel_pull >>>>>>---------->>> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
                    ack->head.ack_range, ack->head.ack_sn, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0, get_transunit_msg(unit));
 
             // 检测此 SN 是否未确认
@@ -376,7 +376,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 while (index != ack->head.sn) {
                     unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                     if (!unit->comfirmed && unit->resending == 0){
-                        __logi("msgchannel_pull ############################### resend sn: %u", index);
+                        __ex_logi("msgchannel_pull ############################### resend sn: %u", index);
                         if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
                             (void*)&(unit->head), UNIT_HEAD_SIZE + unit->head.body_size) == UNIT_HEAD_SIZE + unit->head.body_size){
                             unit->resending++;
@@ -396,7 +396,7 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
     channel->ack.body_size = 0;
     uint16_t index = unit->head.sn & (UNIT_BUF_RANGE - 1);
     
-    __logi("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]",
+    __ex_logi("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]",
            unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
     
     if (unit->head.sn == channel->msgbuf->wpos){
@@ -441,7 +441,7 @@ static inline void msgchannel_recv(msgchannel_ptr channel, transunit_ptr unit)
 //    __logi("msgchannel_recv sendto enter");
     if ((channel->mtp->device->sendto(channel->mtp->device, &channel->addr, (void*)&(channel->ack), UNIT_HEAD_SIZE)) == UNIT_HEAD_SIZE) {
 //        __logi("msgchannel_recv sendto return ----------->");
-        __logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u",
+        __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u",
                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
         channel->ack.type = TRANSUNIT_NONE;
     }
@@ -499,18 +499,18 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
 
 static inline void msgchannel_release(msgchannel_ptr channel)
 {
-    __logi("msgchannel_release enter");
+    __ex_logi("msgchannel_release enter");
     ___mutex_release(channel->mtx);
     heap_destroy(&channel->timerheap);
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
-    __logi("msgchannel_release exit");
+    __ex_logi("msgchannel_release exit");
 }
 
 static inline void msgchannel_termination(msgchannel_ptr *pptr)
 {
-    __logi("msgchannel_termination enter");
+    __ex_logi("msgchannel_termination enter");
     if (pptr && *pptr){
         msgchannel_ptr channel = *pptr;
         *pptr = NULL;
@@ -522,14 +522,14 @@ static inline void msgchannel_termination(msgchannel_ptr *pptr)
         ___atom_add(&channel->mtp->disconnctionqueue->len, 1);
         ___atom_unlock(&channel->mtp->disconnctionqueue->lock);
     }
-    __logi("msgchannel_termination exit");
+    __ex_logi("msgchannel_termination exit");
 }
 
 
 //提供给用户一个从Idle状态唤醒主循环的接口
 static inline void msgtransport_recv_loop(msgtransport_ptr mtp)
 {
-    __logi("msgtransport_recv_loop enter");
+    __ex_logi("msgtransport_recv_loop enter");
 
     while (___is_true(&mtp->running))
     {
@@ -543,12 +543,12 @@ static inline void msgtransport_recv_loop(msgtransport_ptr mtp)
         }
     }
 
-    __logi("msgtransport_recv_loop exit");
+    __ex_logi("msgtransport_recv_loop exit");
 }
 
 static inline void msgtransport_main_loop(linekv_ptr ctx)
 {
-    __logi("msgtransport_main_loop enter");
+    __ex_logi("msgtransport_main_loop enter");
 
     int result;
     int64_t timeout;
@@ -571,7 +571,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         if (recvunit == NULL){
             recvunit = (transunit_ptr)malloc(sizeof(struct transunit));
             if (recvunit == NULL){
-                __logi("msgtransport_recv_loop malloc failed");
+                __ex_logi("msgtransport_recv_loop malloc failed");
                 exit(0);
             }
         }
@@ -615,13 +615,13 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             }else if (recvunit->head.type == TRANSUNIT_HELLO){
 
                 channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
-                __logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                __ex_logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                 if (channel != NULL){
                     //回复建立连接成功消息
                     //continue
                     //TODO 删除进行重连的逻辑
                     if (___set_true(&channel->disconnected)){
-                        __logi("msgtransport_main_loop reconnection channel clear: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                        __ex_logi("msgtransport_main_loop reconnection channel clear: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                         msgchannel_clear(channel);
                         mtp->listener->disconnection(mtp->listener, channel);
                     }
@@ -632,7 +632,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 //解密成功，创建连接。
                 //回复建立连接成功消息。
                 channel = msgchannel_create(mtp, &addr);
-                __logi("msgtransport_main_loop new connections channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                __ex_logi("msgtransport_main_loop new connections channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                 msgchannel_enqueue(channel, mtp->sendqueue);
                 tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
                 ___set_true(&channel->connected);
@@ -656,7 +656,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     if (recvunit->head.type == TRANSUNIT_BYE){
                         //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
                         if (___set_true(&channel->disconnected)){
-                            __logi("msgtransport_main_loop disconnection channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                            __ex_logi("msgtransport_main_loop disconnection channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                             msgchannel_clear(channel);
                             mtp->listener->disconnection(mtp->listener, channel);
                         }else {
@@ -669,14 +669,14 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             }else {
                 //忽略非法连接
-                __logi("msgtransport_main_loop recv a invalid transunit: %u ip: %u port: %u", recvunit->head.type, addr.ip, addr.port);
+                __ex_logi("msgtransport_main_loop recv a invalid transunit: %u ip: %u port: %u", recvunit->head.type, addr.ip, addr.port);
             }
 
 
 
         }else {
 
-             __logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu",
+             __ex_logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu",
                    mtp->send_queue_length + 0, mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
@@ -708,7 +708,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                 //不要插手 pack 类型，这里只管发送。
 
-                __logi("msgtransport_main_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                __ex_logi("msgtransport_main_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                        channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
 
                 result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
@@ -729,7 +729,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     //重新加入定时器，间隔递增。
                     if (sendunit->resending > 5){
                         //抛出断开连接事件，区分正常断开和超时断开。
-                        __logi("msgtransport_main_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("msgtransport_main_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
 
                         msgchannel_clear(channel);
@@ -742,7 +742,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 //onDisconnect 回调要区分发送超时和连接超时
                 if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
                     if (___sys_clock() - channel->update > (1000000000ULL * 30)){
-                        __logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
+                        __ex_logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
                         msgchannel_clear(channel);
                         mtp->listener->timeout(mtp->listener, channel);
                     }
@@ -763,7 +763,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                     sendunit = (transunit_ptr)__heap_min(channel->timerheap)->value;
                     if (sendunit->resending < 5){
-                        __logi("msgtransport_main_loop resend ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("msgtransport_main_loop resend ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
                         mtp->device->sendto(mtp->device, &sendunit->channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                         if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
@@ -779,7 +779,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
                     }else {
 
-                        __logi("msgtransport_main_loop ***resend timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("msgtransport_main_loop ***resend timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
                         msgchannel_clear(channel);
                         mtp->listener->timeout(mtp->listener, channel);
@@ -797,7 +797,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             if (___atom_try_lock(&mtp->disconnctionqueue->lock)){
                 channel = mtp->disconnctionqueue->head.next;
                 do {
-                    __logi("msgtransport_main_loop ----------------------------------------- delete channel 0x%x", channel);
+                    __ex_logi("msgtransport_main_loop ----------------------------------------- delete channel 0x%x", channel);
                     channel->next->prev = channel->prev;
                     channel->prev->next = channel->next;
                     ___atom_sub(&mtp->disconnctionqueue->len, 1);
@@ -816,12 +816,12 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
     free(addr.addr);
 
-    __logi("msgtransport_main_loop exit");
+    __ex_logi("msgtransport_main_loop exit");
 }
 
 static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, msglistener_ptr listener)
 {
-    __logi("msgtransport_create enter");
+    __ex_logi("msgtransport_create enter");
 
     msgtransport_ptr mtp = (msgtransport_ptr)calloc(1, sizeof(struct msgtransport));
 
@@ -855,20 +855,20 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
 
     mtp->mainloop_task = taskqueue_run_loop(msgtransport_main_loop, mtp);
 
-    __logi("msgtransport_create exit");
+    __ex_logi("msgtransport_create exit");
 
     return mtp;
 }
 
 static void free_channel(__ptr val)
 {
-    __logi(">>>>------------> free channel 0x%x", val);
+    __ex_logi(">>>>------------> free channel 0x%x", val);
     msgchannel_release((msgchannel_ptr)val);
 }
 
 static inline void msgtransport_release(msgtransport_ptr *pptr)
 {
-    __logi("msgtransport_release enter");
+    __ex_logi("msgtransport_release enter");
     if (pptr && *pptr){        
         msgtransport_ptr mtp = *pptr;
         *pptr = NULL;
@@ -881,14 +881,14 @@ static inline void msgtransport_release(msgtransport_ptr *pptr)
         ___mutex_release(mtp->mtx);
         free(mtp);
     }
-    __logi("msgtransport_release exit");
+    __ex_logi("msgtransport_release exit");
 }
 
 //TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
 //TODO 增加一个加密验证数据，messenger 只负责将消息发送到对端，连接能否建立，取决于对端验证结果。
 static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_ptr addr)
 {
-    __logi("msgtransport_connect enter");
+    __ex_logi("msgtransport_connect enter");
     msgchannel_ptr channel = msgchannel_create(mtp, addr);
     transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
     //TODO 以PING消息建立连接。
@@ -910,13 +910,13 @@ static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_
     // ___mutex_wait(channel->mtx, lk);
     // ___mutex_unlock(channel->mtx, lk);
     // __logi("msgtransport_connect exit");
-    __logi("msgtransport_connect exit");
+    __ex_logi("msgtransport_connect exit");
     return channel;
 }
 
 static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr channel)
 {
-    __logi("msgtransport_disconnect enter");
+    __ex_logi("msgtransport_disconnect enter");
     transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
     unit->head.type = TRANSUNIT_BYE;
     unit->head.body_size = 0;
@@ -927,13 +927,13 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
     ___set_true(&channel->disconnected);
     //主动断开的一端，发送第一个 BEY，并且启动超时重传。
     msgchannel_push(channel, unit);
-    __logi("msgtransport_disconnect exit");
+    __ex_logi("msgtransport_disconnect exit");
 }
 
 //ping 需要发送加密验证，如果此时链接已经断开，ping 消息可以进行重连。
 static inline void msgtransport_ping(msgchannel_ptr channel)
 {
-    __logi("msgtransport_ping enter");
+    __ex_logi("msgtransport_ping enter");
     if (___sys_clock() - channel->update >= 1000000000ULL * 10){
         transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
         unit->head.type = TRANSUNIT_PING;
@@ -944,7 +944,7 @@ static inline void msgtransport_ping(msgchannel_ptr channel)
         unit->head.body_size = kv.pos;
         msgchannel_push(channel, unit);
     }
-    __logi("msgtransport_ping exit");
+    __ex_logi("msgtransport_ping exit");
 }
 
 static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channel, void *data, size_t size)

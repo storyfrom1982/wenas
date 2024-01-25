@@ -37,7 +37,7 @@ typedef struct client{
 
 static void malloc_debug_cb(const char *debug)
 {
-    __logw("%s\n", debug);
+    __ex_logw("%s\n", debug);
 }
 
 static void listening(struct physics_socket *socket)
@@ -91,12 +91,12 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
 
 static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-    __logi(">>>>---------------> channel connection: 0x%x", channel);
+    __ex_logi(">>>>---------------> channel connection: 0x%x", channel);
 }
 
 static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
-    __logi(">>>>---------------> channel disconnection: 0x%x", channel);
+    __ex_logi(">>>>---------------> channel disconnection: 0x%x", channel);
     msgchannel_termination(&channel);
 }
 
@@ -104,13 +104,13 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
 {
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
-    __logi(">>>>---------------> channel msg: %llu  content %s", msg->size, linekv_find_string(&parser, "msg"));
+    __ex_logi(">>>>---------------> channel msg: %llu  content %s", msg->size, linekv_find_string(&parser, "msg"));
     free(msg);
 }
 
 static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
-    __logi(">>>>---------------> channel timeout: 0x%x", channel);
+    __ex_logi(">>>>---------------> channel timeout: 0x%x", channel);
     msgchannel_termination(&channel);
 }
 
@@ -118,8 +118,8 @@ static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 int main(int argc, char *argv[])
 {
     env_backtrace_setup();
-    env_logger_start("./tmp/client/log", NULL);
-    __logi("start client");
+    __ex_log_file_open("./tmp/client/log", NULL);
+    __ex_logi("start client");
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
@@ -135,14 +135,14 @@ int main(int argc, char *argv[])
     client->local_addr.sin_port = htons(3721);
     client->local_addr.sin_addr.s_addr = INADDR_ANY;
     if((client->local_socket = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __loge("socket error");
+        __ex_loge("socket error");
     }
     if (bind(client->local_socket, (const struct sockaddr *)&client->local_addr, sizeof(client->local_addr)) == -1){
-        __loge("bind error");
+        __ex_loge("bind error");
     }    
 	int event_flags = fcntl(client->local_socket, F_GETFL, 0);
     if (fcntl(client->local_socket, F_SETFL, event_flags | O_NONBLOCK) == -1){
-        __loge("set no block failed");
+        __ex_loge("set no block failed");
     }
 
     client->remote_addr.sin_family = AF_INET;
@@ -164,17 +164,17 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __loge("socket error");
+        __ex_loge("socket error");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
-        __loge("setsockopt error");
+        __ex_loge("setsockopt error");
     }
 	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
-        __loge("setsockopt error");
+        __ex_loge("setsockopt error");
     }
 	int flags = fcntl(fd, F_GETFL, 0);
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
-        __loge("set no block failed");
+        __ex_loge("set no block failed");
     }
 
     client->socket = fd;
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
     
     while (1)
     {
-        __logi("Enter a value :\n");
+        __ex_logi("Enter a value :\n");
         fgets(str, 100, stdin);
         size_t len = strlen(str);
         if (len == 2 && str[0] == 'q'){
@@ -224,36 +224,36 @@ int main(int argc, char *argv[])
     }
 
 
-    __loge("msgtransport_send finish");
+    __ex_loge("msgtransport_send finish");
 
-    __logi("msgtransport_disconnect");
+    __ex_logi("msgtransport_disconnect");
     msgtransport_disconnect(client->mtp, channel);
 
     ___set_false(&client->mtp->running);
     int data = 0;
     ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
-    __logi("msgtransport_release");
+    __ex_logi("msgtransport_release");
     msgtransport_release(&client->mtp);
 
-    __logi("free device");
+    __ex_logi("free device");
     free(device);
     
-    __logi("free client");
+    __ex_logi("free client");
     free(client);
 
     close(fd);
 
     thread.join();
 
-    __logi("env_logger_stop");
-    env_logger_stop();
+    __ex_logi("env_logger_stop");
+    __ex_log_file_close();
 
-    __logi("env_malloc_debug");
+    __ex_logi("env_malloc_debug");
 #if defined(ENV_MALLOC_BACKTRACE)
     env_malloc_debug(malloc_debug_cb);
 #endif
 
-    __logi("exit");
+    __ex_logi("exit");
     return 0;
 }

@@ -29,11 +29,11 @@ void heap_test()
         heap_push(h, hm);
     }
 
-    __logd("len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
+    __ex_logd("len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
 
     for (int32_t i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         hm = heap_pop(h);
-        __logd("heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
+        __ex_logd("heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
     }
 
     heap_destroy(&h);

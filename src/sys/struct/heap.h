@@ -2,7 +2,7 @@
 #define __HEAP_H__
 
 
-#include <env/env.h>
+#include <ex/ex.h>
 
 
 struct heapnode {
@@ -65,7 +65,7 @@ static inline size_t heap_push(heap_ptr h, heapnode_ptr node)
         h->array[i] = node;
         h->array[i]->pos = i;
         if (i <= 0){
-            __logi("heap_push %llu", i);
+            __ex_logi("heap_push %llu", i);
             exit(0);
         }
         return i;
@@ -157,7 +157,7 @@ static inline heapnode_ptr heap_delete(heap_ptr h, heapnode_ptr node)
     }
 
     if (h->array[smallest]->key != node->key){
-        __logi("heap_delete h->array[smallest]->key != node->key");
+        __ex_logi("heap_delete h->array[smallest]->key != node->key");
         exit(0);
     }
 
