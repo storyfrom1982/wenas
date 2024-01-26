@@ -22,19 +22,18 @@
 #define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
 
-static const char *s_log_level_strings[EX_LOG_LEVEL_COUNT] = {"NONE", "F", "E", "W", "I", "D", "T"};
+static const char *s_log_level_strings[EX_LOG_LEVEL_ERROR + 1] = {"D", "I", "E"};
 
 
 typedef struct ex_log_file {
     ___atom_bool lock;
     ___atom_bool running;
-    ___atom_bool opened;
     ___atom_bool writing;
     char *log0, *log1;
     __ex_fp fp;
+    __ex_pipe *pipe;
     taskqueue_ptr task;
     __ex_log_cb print_cb;
-    __ex_pipe *pipe;
 }__ex_log_file;
 
 static __ex_log_file g_log_file = {0};
@@ -46,7 +45,7 @@ static void ex_log_file_write_loop(xline_object_ptr ctx)
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
-//    __pass(buf != NULL);
+    __ex_check(buf != NULL);
 
     {
         // 只有在 Release 模式下才能获取到指针的信息
@@ -66,12 +65,12 @@ static void ex_log_file_write_loop(xline_object_ptr ctx)
 
         if (res > 0){
             n = __ex_fwrite(g_log_file.fp, buf, res);
-//            __pass(n==res);
+           __ex_check(n == res);
             if (__ex_ftell(g_log_file.fp) > __log_file_size){
                 __ex_fclose(g_log_file.fp);
                 __ex_move_path(g_log_file.log0, g_log_file.log1);
                 g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
-//                __pass(fp != NULL);
+               __ex_check(g_log_file.fp != NULL);
             }
         }else {
             if (___is_false(&g_log_file.running)){
@@ -80,7 +79,7 @@ static void ex_log_file_write_loop(xline_object_ptr ctx)
         }
     }
 
-Reset:
+Clean:
 
     if (buf){
         uint64_t *a = (uint64_t*)(buf - 16);
@@ -118,39 +117,37 @@ void test(){
     test1();
 }
 
-static void malloc_debug_cb(const char *debug)
+static void memory_leak_cb(const char *leak_location)
 {
-    __ex_logw("%s\n", debug);
+    __ex_loge("%s\n", leak_location);
 }
 
 void __ex_log_file_close()
 {
     //先设置关闭状态    
     if (___set_false(&g_log_file.running)){
-        ___set_false(&g_log_file.writing);      
+        ___set_false(&g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         __ex_pipe_stop(g_log_file.pipe);
         taskqueue_release(&g_log_file.task);
-        __ex_pipe_destroy(&g_log_file.pipe);        
+        __ex_pipe_destroy(&g_log_file.pipe);     
         free(g_log_file.log0);
         free(g_log_file.log1);
-
-#if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(malloc_debug_cb);
-#endif
 
         __ex_logi(">>>>-------------->\n");
         __ex_logi("Log stop >>>>-------------->\n");
         __ex_logi(">>>>-------------->\n");
 
-        while (!___set_true(&g_log_file.lock)){
-            usleep(10);
-        }
+        ___atom_lock(&g_log_file.lock);
         __ex_fclose(g_log_file.fp);
-        ___set_false(&g_log_file.lock);
+        ___atom_unlock(&g_log_file.lock);
 
         memset(&g_log_file, 0, sizeof(g_log_file));
     }
+
+#if defined(ENV_MALLOC_BACKTRACE)
+    env_malloc_debug(memory_leak_cb);
+#endif
 }
 
 int __ex_log_file_open(const char *path, __ex_log_cb cb)
@@ -163,36 +160,67 @@ int __ex_log_file_open(const char *path, __ex_log_cb cb)
 
     int len = strlen(path) + strlen("/0.log") + 1;
     if (!__ex_find_path(path)){
-        __ex_make_path(path);
+        __ex_check(__ex_make_path(path));
     }
+
     g_log_file.log0 = calloc(1, len);
+    __ex_check(g_log_file.log0);
     g_log_file.log1 = calloc(1, len);
+    __ex_check(g_log_file.log1);
+
     snprintf(g_log_file.log0, len, "%s/0.log", path);
     snprintf(g_log_file.log1, len, "%s/1.log", path);
 
-    while (!___set_true(&g_log_file.lock)){
-        usleep(10);
-    }
+    ___atom_lock(&g_log_file.lock);
     g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
-    ___set_false(&g_log_file.lock);
+    ___atom_unlock(&g_log_file.lock);
 
+    __ex_check(g_log_file.fp);
+    
     __ex_logi(">>>>-------------->\n");
     __ex_logi("Log start >>>>--------------> %s\n", g_log_file.log0);
     __ex_logi(">>>>-------------->\n");  
 
     g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
-    assert(g_log_file.pipe);
+    __ex_check(g_log_file.pipe);
+
     g_log_file.task = taskqueue_run(ex_log_file_write_loop, &g_log_file);
+    __ex_check(g_log_file.task);
+
     ___set_true(&g_log_file.running);
 
     return 0;
-Reset:
-    if (g_log_file.log0) free(g_log_file.log0);
-    __ex_pipe_destroy(&g_log_file.pipe);
+
+Clean:
+
+    if (g_log_file.log0){
+        free(g_log_file.log0);
+        g_log_file.log0 = NULL;
+    }
+    if (g_log_file.log1){
+        free(g_log_file.log1);
+        g_log_file.log1 = NULL;
+    }
+    if (g_log_file.pipe){
+        __ex_pipe_destroy(&g_log_file.pipe);
+        g_log_file.pipe = NULL;
+    }
+    if (g_log_file.task){
+        taskqueue_release(&g_log_file.task);
+        g_log_file.task = NULL;
+    }
+    if (g_log_file.fp){
+        __ex_fclose(g_log_file.fp);
+        g_log_file.fp = NULL;
+    }
+    ___set_false(&g_log_file.running);
+    ___set_false(&g_log_file.writing);
+    ___set_false(&g_log_file.lock);
+
     return -1;
 }
 
-void __ex_log_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...)
+void __ex_log_printf(enum __ex_log_level level, const char *file, int line, const char *fmt, ...)
 {
     uint64_t n = 0;
     char text[__log_text_size];
@@ -210,9 +238,7 @@ void __ex_log_printf(enum env_log_level level, const char *file, int line, const
     n += vsnprintf(text + n, __log_text_end - n, fmt, args);
     va_end (args);
 
-    while (!___set_true(&g_log_file.lock)){
-        usleep(10);
-    }
+    ___atom_lock(&g_log_file.lock);
 
     // 这里只向文件写入实际的输入的内容
     // 最大输入内容 0-4094=4095
@@ -226,7 +252,7 @@ void __ex_log_printf(enum env_log_level level, const char *file, int line, const
         }
     }
 
-    ___set_false(&g_log_file.lock);
+    ___atom_unlock(&g_log_file.lock);
 
     // 长度 n 不会越界，因为 snprintf 限制了写入长度
     if (text[n] != '\0'){

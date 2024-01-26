@@ -79,21 +79,17 @@ __ex_export void __ex_pipe_clear(__ex_pipe *pipe);
 ///////////////////////////////////////////////////////
 ///// 日志存储
 ///////////////////////////////////////////////////////
-enum env_log_level {
-    EX_LOG_LEVEL_NONE = 0,
-    EX_LOG_LEVEL_FATAL,
-    EX_LOG_LEVEL_ERROR,
-    EX_LOG_LEVEL_WARN,
-    EX_LOG_LEVEL_INFO,
-    EX_LOG_LEVEL_DEBUG,
-    EX_LOG_LEVEL_TRACE,
-    EX_LOG_LEVEL_COUNT
+enum __ex_log_level 
+{
+        EX_LOG_LEVEL_DEBUG,
+        EX_LOG_LEVEL_INFO,
+        EX_LOG_LEVEL_ERROR
 };
 
 typedef void (*__ex_log_cb) (int32_t level, const char *log);
 __ex_export int __ex_log_file_open(const char *path, __ex_log_cb cb);
 __ex_export void __ex_log_file_close();
-__ex_export void __ex_log_printf(enum env_log_level level, const char *file, int line, const char *fmt, ...);
+__ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, int line, const char *fmt, ...);
 
 #define __ex_logd(__FORMAT__, ...) \
         __ex_log_printf(EX_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
@@ -101,25 +97,16 @@ __ex_export void __ex_log_printf(enum env_log_level level, const char *file, int
 #define __ex_logi(__FORMAT__, ...) \
         __ex_log_printf(EX_LOG_LEVEL_INFO, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
 
-#define __ex_logw(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_WARN, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
-
 #define __ex_loge(__FORMAT__, ...) \
         __ex_log_printf(EX_LOG_LEVEL_ERROR, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
 
-#define __ex_logf(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_FATAL, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
-
-#define __ex_logt(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_TRACE, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
-
-// #define __pass(condition) \
-//     do { \
-//         if (!(condition)) { \
-//             __ex_loge("Check condition failed: %s, %s\n", #condition, env_check()); \
-//             goto Reset; \
-//         } \
-//     } while (false)
+#define __ex_check(condition) \
+    do { \
+        if (!(condition)) { \
+            __ex_loge("CHECK FAILED: %s, %s\n", #condition, strerror(errno)); \
+            goto Clean; \
+        } \
+    } while (false)
 
 
 #ifdef __cplusplus
