@@ -1,26 +1,27 @@
-#include "env/task.h"
-
-extern "C" {
-    #include "env/env.h"
-    #include "env/malloc.h"
-}
-
 #include <iostream>
 
+#include "ex/ex.h"
+#include "ex/malloc.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "sys/struct/xline.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 struct targs {
-    ___mutex_ptr mtx;
+    __ex_lock_ptr mtx;
     ___atom_bool *testTrue;
 };
 
-static void malloc_debug_cb(const char *debug)
+static void mutex_task(xline_object_ptr kv)
 {
-    __logw("%s\n", debug);
-}
+    struct targs *targ = (struct targs *)xline_object_find_ptr(kv, "ctx");
 
-static void mutex_task(linekv_ptr kv)
-{
-    struct targs *targ = (struct targs *)linekv_find_ptr(kv, "ctx");
     std::cout << "tt: " << *targ->testTrue << std::endl;
     while (1)
     {
@@ -34,14 +35,14 @@ static void mutex_task(linekv_ptr kv)
     std::cout << "tt: " << *targ->testTrue << std::endl;
 
     std::cout << "thread enter\n";
-    auto lk = ___mutex_lock(targ->mtx);
+    auto lk = __ex_lock(targ->mtx);
     std::cout << "sleep_until\n";
-    ___mutex_timer(targ->mtx, *(CxxMutex::CxxLock*)(&lk), 3000000000);
+    __ex_timed_wait(targ->mtx, *(___lock*)(&lk), 3000000000);
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
-    ___mutex_notify(targ->mtx);
+    __ex_notify(targ->mtx);
     std::cout << "notify\n";
-    ___mutex_wait(targ->mtx, lk);
-    ___mutex_unlock(targ->mtx, lk);
+    __ex_wait(targ->mtx, lk);
+    __ex_unlock(targ->mtx, lk);
     std::cout << "exit\n";
     // return nullptr;
 }
@@ -49,24 +50,9 @@ static void mutex_task(linekv_ptr kv)
 
 int main(int argc, char *argv[])
 {
-    char text[1024] = {0};
-
-    uint64_t millisecond = env_time();
-    ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-    std::cout << "c time: " << text << std::endl;
-
-    millisecond = ___sys_time();
-    ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-    std::cout << "cxx time: " << text << std::endl;
-
-    millisecond = env_clock();
-    ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-
-    std::cout << "c clock: " << text << std::endl;
-
-    millisecond = ___sys_clock();
-    ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-    std::cout << "cxx clock: " << text << std::endl;
+    __ex_log_file_open("./tmp/log", NULL);
+#if 1
+    __ex_backtrace_setup();
 
     ___atom_size size = 10;
     ___atom_set(&size, 10);
@@ -98,9 +84,9 @@ int main(int argc, char *argv[])
     ___atom_lock(&testTrue);
     std::cout << "is lock: " << testTrue << std::endl;
 
-    ___mutex_ptr mtx = ___mutex_create();
+    __ex_lock_ptr mtx = __ex_lock_create();
 
-    auto lk = ___mutex_lock(mtx);
+    auto lk = __ex_lock(mtx);
 
     // ___atom_bool *tt = &testTrue;
     // std::cout << "testTrue: " << *tt << std::endl;
@@ -109,37 +95,34 @@ int main(int argc, char *argv[])
     targ.mtx = mtx;
     targ.testTrue = &testTrue;
 
-    task_ptr task = task_create();
-    linekv_ptr kv = linekv_create(1024);
-    linekv_add_ptr(kv, "func", (void*)mutex_task);
-    linekv_add_ptr(kv, "ctx", (void*)&targ);
-    task_post(task, kv);
+    __ex_task_ptr task = __ex_task_create();
+    struct xline_object kv;
+    xline_make_object(&kv, 1024);
+    xline_object_add_ptr(&kv, "func", (void*)mutex_task);
+    xline_object_add_ptr(&kv, "ctx", (void*)&targ);
+    __ex_task_post(task, &kv);
 
     // ___thread_ptr tid = ___thread_create(mutex_task, &targ);
 
-    ___mutex_timer(mtx, *(CxxMutex::CxxLock*)(&lk), 3000000000);
+    __ex_timed_wait(mtx, *(CxxMutex::CxxLock*)(&lk), 3000000);
     ___atom_unlock(&testTrue);
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
     std::cout << "waitting\n";
-    ___mutex_wait(mtx, lk);
+    __ex_wait(mtx, lk);
     std::cout << "wake\n";
-    ___mutex_broadcast(mtx);
-    ___mutex_unlock(mtx, lk);
+    __ex_broadcast(mtx);
+    __ex_unlock(mtx, lk);
 
-    std::cout << "join thread " << ___thread_id() << std::endl;
+    std::cout << "join thread " << __ex_thread_id() << std::endl;
     // ___thread_join(tid);
-    task_release(&task);
+    __ex_task_destroy(&task);
 
-    ___mutex_release(mtx);
-
-    linekv_release(&kv);
+    __ex_lock_destroy(mtx);
+#endif
+    __ex_log_file_close();
 
     std::cout << "exit\n";
-
-#if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(malloc_debug_cb);
-#endif
 
 	return 0;
 }

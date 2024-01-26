@@ -31,13 +31,13 @@ typedef struct ex_log_file {
     char *log0, *log1;
     __ex_fp fp;
     __ex_pipe *pipe;
-    taskqueue_ptr task;
+    __ex_task_ptr task;
     __ex_log_cb print_cb;
 }__ex_log_file;
 
 static __ex_log_file g_log_file = {0};
 
-static void ex_log_file_write_loop(xline_object_ptr ctx)
+static void ex_log_file_write_loop(__ex_task_ctx_ptr ctx)
 {
     __ex_logd("ex_log_file_write_loop enter\n");
 
@@ -137,7 +137,7 @@ void __ex_log_file_close()
         ___set_false(&g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         __ex_pipe_break(g_log_file.pipe);
-        taskqueue_release(&g_log_file.task);
+        __ex_task_destroy(&g_log_file.task);
         __ex_pipe_destroy(&g_log_file.pipe);     
         free(g_log_file.log0);
         free(g_log_file.log1);
@@ -154,13 +154,16 @@ void __ex_log_file_close()
     }
 
 #if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(memory_leak_cb);
+    __ex_memory_leak_trace(memory_leak_cb);
 #endif
 }
 
 int __ex_log_file_open(const char *path, __ex_log_cb cb)
 {
     // test();
+
+    static char buf[BUFSIZ];
+    setvbuf(stdout, buf, _IONBF, BUFSIZ);
 
     __ex_log_file_close();
 
@@ -192,7 +195,7 @@ int __ex_log_file_open(const char *path, __ex_log_cb cb)
     g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
     __ex_check(g_log_file.pipe);
 
-    g_log_file.task = taskqueue_run(ex_log_file_write_loop, &g_log_file);
+    g_log_file.task = __ex_task_run(ex_log_file_write_loop, &g_log_file);
     __ex_check(g_log_file.task);
 
     ___set_true(&g_log_file.running);
@@ -214,7 +217,7 @@ Clean:
         g_log_file.pipe = NULL;
     }
     if (g_log_file.task){
-        taskqueue_release(&g_log_file.task);
+        __ex_task_destroy(&g_log_file.task);
         g_log_file.task = NULL;
     }
     if (g_log_file.fp){
@@ -233,12 +236,12 @@ void __ex_log_printf(enum __ex_log_level level, const char *file, int line, cons
     uint64_t n = 0;
     char text[__log_text_size];
 
-    uint64_t millisecond = ___sys_time() / MICRO_SECONDS;
+    uint64_t millisecond = __ex_time() / MICRO_SECONDS;
     // memory leak
     // n = ___sys_strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
-                    ___thread_id(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
+                    __ex_thread_id(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;

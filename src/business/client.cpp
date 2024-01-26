@@ -117,7 +117,7 @@ static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 
 int main(int argc, char *argv[])
 {
-    env_backtrace_setup();
+    __ex_backtrace_setup();
     __ex_log_file_open("./tmp/client/log", NULL);
     __ex_logi("start client");
 

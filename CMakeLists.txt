@@ -54,7 +54,7 @@ set(kzx_sources
     src/ex/pipe.c 
     src/ex/storage.c
     src/ex/logger.c
-    # src/env/socket.c
+    src/ex/task.c
     # src/env/linetask.c
     # test/env/storage_test.c
     # test/env/logger_test.c
@@ -102,7 +102,7 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-build_executable(kang src/main.c)
+build_executable(kapp src/main.cpp)
 # build_executable(server src/business/server.c)
 # build_executable(client src/business/client.cpp)
 # build_executable(tree test/sys/struct/tree_test.c)

@@ -20,7 +20,7 @@ typedef struct ex_pipe {
     ___atom_bool writer;
     ___atom_bool reader;
     ___atom_bool breaking;
-    ___mutex_ptr mutex;
+    __ex_lock_ptr mutex;
 
 }__ex_pipe;
 
@@ -44,7 +44,7 @@ __ex_pipe* __ex_pipe_create(uint64_t len)
     pipe->buf = (char *)malloc(pipe->len);
     __ex_check(pipe->buf);
 
-    pipe->mutex = ___mutex_create();
+    pipe->mutex = __ex_lock_create();
     __ex_check(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
@@ -68,7 +68,7 @@ void __ex_pipe_destroy(__ex_pipe **pptr)
             __ex_pipe_clear(pipe);
             if (pipe->mutex){
                 __ex_pipe_break(pipe);
-                ___mutex_release(pipe->mutex);
+                __ex_lock_destroy(pipe->mutex);
             }
         }
         if (pipe->buf){
@@ -97,7 +97,7 @@ static inline uint64_t pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
             memcpy(pipe->buf, ((char*)data) + pipe->leftover, writable - pipe->leftover);
         }
         ___atom_add(&pipe->writer, writable);
-        ___mutex_notify(pipe->mutex);
+        __ex_notify(pipe->mutex);
     }
 
     return writable;
@@ -116,14 +116,14 @@ uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
 
         pos += pipe_write(pipe, data + pos, len - pos);
         if (pos != len){
-            ___lock lk = ___mutex_lock(pipe->mutex);
+            ___lock lk = __ex_lock(pipe->mutex);
             // pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
-            ___mutex_notify(pipe->mutex);
+            __ex_notify(pipe->mutex);
             // printf("__ex_pipe_write waiting --------------- enter     len: %lu pos: %lu\n", len, pos);
-            ___mutex_wait(pipe->mutex, lk);
+            __ex_wait(pipe->mutex, lk);
             // printf("__ex_pipe_write waiting --------------- exit\n");
-            ___mutex_unlock(pipe->mutex, lk);
+            __ex_unlock(pipe->mutex, lk);
         }
     }
 
@@ -150,7 +150,7 @@ static inline uint64_t pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
             memcpy(((char*)buf) + pipe->leftover, pipe->buf, readable - pipe->leftover);
         }
         ___atom_add(&pipe->reader, readable);
-        ___mutex_notify(pipe->mutex);
+        __ex_notify(pipe->mutex);
     }
 
     return readable;
@@ -172,16 +172,16 @@ uint64_t __ex_pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
         pos += pipe_read(pipe, buf + pos, len - pos);
 
         if (pos != len){
-            ___lock lk = ___mutex_lock(pipe->mutex);
+            ___lock lk = __ex_lock(pipe->mutex);
             // pipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
-            ___mutex_notify(pipe->mutex);
+            __ex_notify(pipe->mutex);
             if (___is_false(&pipe->breaking)){
                 // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ enter     len: %lu pos: %lu\n", len, pos);
-                ___mutex_wait(pipe->mutex, lk);
+                __ex_wait(pipe->mutex, lk);
                 // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ exit\n");
             }
-            ___mutex_unlock(pipe->mutex, lk);
+            __ex_unlock(pipe->mutex, lk);
             if (___is_true(&pipe->breaking)){
                 break;
             }            
@@ -207,8 +207,8 @@ void __ex_pipe_clear(__ex_pipe *pipe){
 }
 
 void __ex_pipe_break(__ex_pipe *pipe){
-    ___lock lk = ___mutex_lock(pipe->mutex);
+    ___lock lk = __ex_lock(pipe->mutex);
     ___set_true(&pipe->breaking);
-    ___mutex_broadcast(pipe->mutex);
-    ___mutex_unlock(pipe->mutex, lk);
+    __ex_broadcast(pipe->mutex);
+    __ex_unlock(pipe->mutex, lk);
 }

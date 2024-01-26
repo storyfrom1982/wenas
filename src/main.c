@@ -1,12 +1,12 @@
 #include <stdio.h>
 
 #include "ex/ex.h"
-#include "ex/task.h"
 #include "ex/malloc.h"
+#include "sys/struct/xline.h"
 
 
 struct targs {
-    ___mutex_ptr mtx;
+    __ex_lock_ptr mtx;
     ___atom_bool *testTrue;
 };
 
@@ -27,15 +27,15 @@ static void mutex_task(xline_object_ptr kv)
     __ex_logi("lock %u\n", *targ->testTrue);
 
     __ex_logi("thread enter\n");
-    ___lock lk = ___mutex_lock(targ->mtx);
+    ___lock lk = __ex_lock(targ->mtx);
     __ex_logi("sleep_until\n");
     
-    ___mutex_timer(targ->mtx, lk, 3000000);
+    __ex_timed_wait(targ->mtx, lk, 3000000000);
 
-    ___mutex_notify(targ->mtx);
+    __ex_notify(targ->mtx);
     __ex_logi("notify\n");
-    ___mutex_wait(targ->mtx, lk);
-    ___mutex_unlock(targ->mtx, lk);
+    __ex_wait(targ->mtx, lk);
+    __ex_unlock(targ->mtx, lk);
     __ex_logi("===============exit\n");
 }
 
@@ -43,15 +43,13 @@ extern void test();
 
 int main(int argc, char *argv[])
 {
-    char buf[BUFSIZ];
-    setvbuf(stdout, buf, _IONBF, BUFSIZ);
     __ex_log_file_open("./tmp/log", NULL);
-    env_backtrace_setup();
+    __ex_backtrace_setup();
 
 #if 1
     char text[1024] = {0};
 
-    uint64_t millisecond = ___sys_time();
+    uint64_t millisecond = __ex_time();
     // ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
     // __logi("c time %s", text);
 
@@ -87,9 +85,9 @@ int main(int argc, char *argv[])
     ___atom_lock(&testTrue);
     __ex_logi("is lock\n");
 
-    ___mutex_ptr mtx = ___mutex_create();
+    __ex_lock_ptr mtx = __ex_lock_create();
 
-    ___lock lk = ___mutex_lock(mtx);
+    ___lock lk = __ex_lock(mtx);
 
     // ___atom_bool *tt = &testTrue;
     // std::cout << "testTrue: " << *tt << std::endl;
@@ -98,30 +96,30 @@ int main(int argc, char *argv[])
     targ.mtx = mtx;
     targ.testTrue = &testTrue;
 
-    taskqueue_ptr task = taskqueue_create();
+    __ex_task_ptr task = __ex_task_create();
     struct xline_object kv;
     xline_make_object(&kv, 1024);
     xline_object_add_ptr(&kv, "func", (void*)mutex_task);
     xline_object_add_ptr(&kv, "ctx", (void*)&targ);
-    taskqueue_post(task, kv.addr);
+    __ex_task_post(task, &kv);
 
-    // ___mutex_timer(mtx, lk, 3000000000);
+    __ex_timed_wait(mtx, lk, 3000000);
     ___atom_unlock(&testTrue);
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
     
     __ex_logi("waitting\n");
-    ___mutex_wait(mtx, lk);
+    __ex_wait(mtx, lk);
     __ex_logi("wake\n");
     
-    ___mutex_broadcast(mtx);
-    ___mutex_unlock(mtx, lk);
+    __ex_broadcast(mtx);
+    __ex_unlock(mtx, lk);
 
-    __ex_logi("join thread %lu\n", ___thread_id());
+    __ex_logi("join thread %lu\n", __ex_thread_id());
     // ___thread_join(tid);
-    taskqueue_release(&task);
+    __ex_task_destroy(&task);
 
-    ___mutex_release(mtx);
+    __ex_lock_destroy(mtx);
 
     
 #endif

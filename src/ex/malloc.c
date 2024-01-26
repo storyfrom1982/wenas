@@ -845,7 +845,7 @@ void env_malloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void env_malloc_debug(void (*cb)(const char *debug))
+void __ex_memory_leak_trace(void (*cb)(const char *leak_location))
 {
 	__ptr *ptr = NULL;
 	env_memory_pool_t *pool = NULL;

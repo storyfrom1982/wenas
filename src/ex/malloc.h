@@ -27,6 +27,4 @@ extern void free(void* address);
 // extern int memcmp(const void *s1, const void *s2, size_t n);
 // extern void* memcpy(void *dest, const void *src, size_t n);
 
-extern void env_malloc_debug(void (*cb)(const char *debug));
-
 #endif //#ifndef ____UNIX_MALLOC_H__

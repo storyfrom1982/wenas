@@ -30,7 +30,12 @@ typedef void*                   __ptr;
 
 #define MILLI_SECONDS    1000ULL
 #define MICRO_SECONDS    1000000ULL
-#define NANO_SECONDS     1000000000ULL
+
+///////////////////////////////////////////////////////
+///// 线程间通信
+///////////////////////////////////////////////////////
+
+#include "task.h"
 
 
 #ifdef __cplusplus
@@ -76,6 +81,9 @@ __ex_export void __ex_pipe_clear(__ex_pipe *pipe);
 __ex_export void __ex_pipe_break(__ex_pipe *pipe);
 
 
+__ex_export void __ex_backtrace_setup();
+__ex_export void __ex_memory_leak_trace(void (*cb)(const char *leak_location));
+
 ///////////////////////////////////////////////////////
 ///// 日志存储
 ///////////////////////////////////////////////////////
@@ -109,6 +117,19 @@ __ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, in
     } while (false)
 
 #define __ex_break(condition)   assert((condition))
+
+///////////////////////////////////////////////////////
+///// 线程间通信
+///////////////////////////////////////////////////////
+
+typedef struct ex_task* __ex_task_ptr;
+typedef struct xline_object* __ex_task_ctx_ptr;
+typedef void (*__ex_task_func)(__ex_task_ctx_ptr ctx);
+
+__ex_export __ex_task_ptr __ex_task_create();
+__ex_export void __ex_task_destroy(__ex_task_ptr *pptr);
+__ex_export int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx);
+__ex_export __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx);
 
 
 #ifdef __cplusplus
