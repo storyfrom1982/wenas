@@ -72,8 +72,8 @@ __ex_export uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len);
 __ex_export uint64_t __ex_pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len);
 __ex_export uint64_t __ex_pipe_readable(__ex_pipe *pipe);
 __ex_export uint64_t __ex_pipe_writable(__ex_pipe *pipe);
-__ex_export void __ex_pipe_stop(__ex_pipe *pipe);
 __ex_export void __ex_pipe_clear(__ex_pipe *pipe);
+__ex_export void __ex_pipe_break(__ex_pipe *pipe);
 
 
 ///////////////////////////////////////////////////////
@@ -107,6 +107,8 @@ __ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, in
             goto Clean; \
         } \
     } while (false)
+
+#define __ex_break(condition)   assert((condition))
 
 
 #ifdef __cplusplus

@@ -613,7 +613,7 @@ void* calloc(size_t number, size_t size)
 {
 	size *= number;
 	size += 3;
-	printf("number=%lu size=%lu\n", number, size);
+	// printf("number=%lu size=%lu\n", number, size);
 	
 	void *ptr = malloc(size);
 

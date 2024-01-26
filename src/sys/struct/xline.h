@@ -355,12 +355,12 @@ static inline void xline_object_append_number(xline_object_ptr xobj, const char 
     }    
     xobj->key = (xkey_ptr)(xobj->head + xobj->pos);
     xobj->pos += xkey_fill(xobj->key, key);
-    printf("add key=%s xkey=%s\n", key, &xobj->key[1]);
+    // printf("add key=%s xkey=%s\n", key, &xobj->key[1]);
     xobj->val = (xline_ptr)(xobj->head + xobj->pos);
     *xobj->val = val;
     xobj->pos += __xline_sizeof(xobj->val);
     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
-    printf("xline size=%lu xobj->pos=%lu\n", __xline_sizeof(((xline_ptr)xobj->addr)), xobj->pos);
+    // printf("xline size=%lu xobj->pos=%lu\n", __xline_sizeof(((xline_ptr)xobj->addr)), xobj->pos);
 }
 
 static inline void xline_object_add_int8(xline_object_ptr xobj, const char *key, int8_t n8)
@@ -430,7 +430,7 @@ static inline xline_ptr xline_object_parse(xline_object_ptr xobj, xline_ptr xmap
     xobj->len = __xline_sizeof_data(xmap);
     xobj->head = (uint8_t*)__xline_to_data(xmap);
     xobj->key = (xkey_ptr)(xobj->head);
-    printf("parse key=%s xkey=%s\n", &xobj->head[1], &xobj->key[1]);
+    // printf("parse key=%s xkey=%s\n", &xobj->head[1], &xobj->key[1]);
     xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));    
     return xobj->val;
 }
@@ -455,7 +455,7 @@ static inline xline_ptr xline_object_find(xline_object_ptr xobj, const char *key
         xobj->key = (xkey_ptr)(xobj->head + xobj->pos);
         xobj->pos += __sizeof_xkey(xobj->key);
         xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));
-        printf("get key=%s xkey=%s\n", key, &xobj->key[1]);
+        // printf("get key=%s xkey=%s\n", key, &xobj->key[1]);
         if (strlen(key) == xobj->key->byte[0]
             && memcmp(key, &xobj->key->byte[1], xobj->key->byte[0]) == 0){
             return xobj->val;

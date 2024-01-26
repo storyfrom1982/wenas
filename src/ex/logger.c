@@ -8,7 +8,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <pthread.h>
 
 #include "task.h"
@@ -16,8 +15,8 @@
 #define __log_text_size			4096
 #define __log_text_end			( __log_text_size - 2 )
 #define __log_file_size         1024 * 1024 * 8
-#define __log_pipe_size			1 << 14
-// #define __log_pipe_size			1 << 8
+// #define __log_pipe_size			1 << 14
+#define __log_pipe_size			1 << 1
 
 #define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
@@ -58,19 +57,28 @@ static void ex_log_file_write_loop(xline_object_ptr ctx)
     
     while (1)
     {
+        // printf("__ex_pipe_read enter\n");
         if ((res = __ex_pipe_read(g_log_file.pipe, buf, 1)) == 1){
+            // printf("__ex_pipe_read 1\n");
             n = __ex_pipe_readable(g_log_file.pipe);
+            // printf("__ex_pipe_readable %lu\n", n);
             res += __ex_pipe_read(g_log_file.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
+            // printf("__ex_pipe_read exit\n");
         }
 
         if (res > 0){
             n = __ex_fwrite(g_log_file.fp, buf, res);
-           __ex_check(n == res);
+            // 日志线程本身不能同时读写日志管道
+            // __ex_check(n == res);
+            __ex_break(n == res);
+
             if (__ex_ftell(g_log_file.fp) > __log_file_size){
                 __ex_fclose(g_log_file.fp);
                 __ex_move_path(g_log_file.log0, g_log_file.log1);
                 g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
-               __ex_check(g_log_file.fp != NULL);
+                // 日志线程本身不能同时读写日志管道
+                // __ex_check(g_log_file.fp != NULL);
+                __ex_break(g_log_file.fp != NULL);
             }
         }else {
             if (___is_false(&g_log_file.running)){
@@ -112,7 +120,7 @@ void test1()
     test2();
 }
 
-void test(){
+static void test(){
     void *p = malloc(256);
     test1();
 }
@@ -128,7 +136,7 @@ void __ex_log_file_close()
     if (___set_false(&g_log_file.running)){
         ___set_false(&g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
-        __ex_pipe_stop(g_log_file.pipe);
+        __ex_pipe_break(g_log_file.pipe);
         taskqueue_release(&g_log_file.task);
         __ex_pipe_destroy(&g_log_file.pipe);     
         free(g_log_file.log0);
@@ -152,8 +160,8 @@ void __ex_log_file_close()
 
 int __ex_log_file_open(const char *path, __ex_log_cb cb)
 {
-
     // test();
+
     __ex_log_file_close();
 
     g_log_file.print_cb = cb;

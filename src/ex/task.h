@@ -450,7 +450,6 @@ static void* taskqueue_mainloop(void *p)
             ___mutex_unlock(tq->lock, lk);
 
         }else {
-            printf("ctx size=%lu\n", __xline_sizeof(task_ctx));
             xline_object_parse(&task_parser, task_ctx);
             post_func = (ex_task_func)xline_object_find_ptr(&task_parser, "func");
             if (post_func){
@@ -468,14 +467,11 @@ static void* taskqueue_mainloop(void *p)
 
 static inline taskqueue_ptr taskqueue_create()
 {
-    printf("taskqueue_create() enter\n");
     int ret;
     taskqueue_ptr tq = (taskqueue_ptr)malloc(sizeof(struct taskqueue));
     assert(tq);
-    printf("taskqueue_create() 1\n");
     tq->lock = ___mutex_create();
     assert(tq->lock);
-    printf("taskqueue_create() 2\n");
 
     tq->rpos = 0;
     tq->wpos = 0;
@@ -483,13 +479,10 @@ static inline taskqueue_ptr taskqueue_create()
     tq->push_waiting = 0;
     tq->pop_waiting = 0;
 
-    printf("taskqueue_create() 3\n");
     tq->buf = calloc(tq->range, sizeof(xline_ptr));
 
-    printf("taskqueue_create() 4\n");
     tq->running = true;
     tq->tid = ___thread_create(taskqueue_mainloop, tq);
-    printf("tid=============%0x\n", tq->tid);
     assert(tq->tid);
 
     return tq;
@@ -498,7 +491,7 @@ static inline taskqueue_ptr taskqueue_create()
 static inline void taskqueue_release(taskqueue_ptr *pptr)
 {
     if (pptr && *pptr) {
-        printf("taskqueue_release enter\n");
+        __ex_logi("taskqueue_release enter\n");
         taskqueue_ptr tq = *pptr;
         *pptr = NULL;
         ___set_false(&tq->running);
@@ -510,7 +503,6 @@ static inline void taskqueue_release(taskqueue_ptr *pptr)
             ___mutex_unlock(tq->lock, lk);
         }
 
-        printf("join tid=============%0x\n", tq->tid);
         ___thread_join(tq->tid);
         // pthread_join(tq->tid, NULL);
         ___mutex_release(tq->lock);
@@ -522,7 +514,7 @@ static inline void taskqueue_release(taskqueue_ptr *pptr)
 
         free(tq->buf);
         free(tq);
-        printf("taskqueue_release exit\n");
+        __ex_logi("taskqueue_release exit\n");
     }
 }
 

@@ -18,7 +18,7 @@ static void mutex_task(xline_object_ptr kv)
     while (1)
     {
         bool ret = ___atom_try_lock(targ->testTrue);
-        // __logi("__atom_try_lock %u", *targ->testTrue);
+        __ex_logi("__atom_try_lock %u\n", *targ->testTrue);
         if (ret){
             __ex_logi("__atom_try_lock %u\n", *targ->testTrue);
             break;

@@ -76,7 +76,7 @@ bool __ex_find_path(const char* path)
 	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
 }
 
-static bool env_mkdir(const char* path)
+static bool __ex_mkdir(const char* path)
 {
 	int r = mkdir(path, 0777);
 	return 0 == r ? true : false;
@@ -129,7 +129,7 @@ bool __ex_make_path(const char* path)
             if(*p == '/') {
                 *p = '\0';
                 if (!__ex_find_path(buf)){
-                    ret = env_mkdir(buf);
+                    ret = __ex_mkdir(buf);
                     if (!ret){
                         break;
                     }
@@ -138,7 +138,7 @@ bool __ex_make_path(const char* path)
             }
         }
         if (ret){
-            ret = env_mkdir(buf);
+            ret = __ex_mkdir(buf);
         }
     }
 
