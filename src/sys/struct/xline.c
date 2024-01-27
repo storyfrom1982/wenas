@@ -264,14 +264,14 @@ typedef struct xkey {
 #define __sizeof_xkey(xk)   (XKEY_HEAD_SIZE + (xk)->byte[0])
 
 
-typedef struct xline_object {
+typedef struct xline_maker {
     uint64_t stride;
     uint64_t pos, len;
     xkey_ptr key;
     xline_ptr val;
-    struct xline_object *prev, *next;
+    struct xline_maker *prev, *next;
     uint8_t *addr, *head;
-}*xline_object_ptr;
+}*xline_maker_ptr;
 
 
 inline uint64_t xkey_fill(xkey_ptr xkey, const char *str)
@@ -285,15 +285,15 @@ inline uint64_t xkey_fill(xkey_ptr xkey, const char *str)
     return __sizeof_xkey(xkey);
 }
 
-inline void xline_clear_object(xline_object_ptr xobj)
+inline void xline_maker_clear(xline_maker_ptr xobj)
 {
     if (xobj && xobj->addr){
         free(xobj->addr);
     }
-    *xobj = (struct xline_object){0};
+    *xobj = (struct xline_maker){0};
 }
 
-inline void xline_make_object(xline_object_ptr xobj, uint64_t stride)
+inline void xline_maker_create(xline_maker_ptr xobj, uint64_t stride)
 {
     xobj->pos = 0;
     xobj->len = xobj->stride = stride;
@@ -302,7 +302,7 @@ inline void xline_make_object(xline_object_ptr xobj, uint64_t stride)
     xobj->key = xobj->val = NULL;
 }
 
-inline void xline_object_append(xline_object_ptr xobj, const char *key, const void *val, uint64_t size, uint8_t flag)
+inline void xline_append_object(xline_maker_ptr xobj, const char *key, const void *val, uint64_t size, uint8_t flag)
 {
     while ((xobj->len - xobj->pos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE + size)){
         xobj->len += xobj->stride;
@@ -318,27 +318,27 @@ inline void xline_object_append(xline_object_ptr xobj, const char *key, const vo
     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_MAP);
 }
 
-inline void xline_object_add_text(xline_object_ptr xobj, const char *key, const char *text)
+inline void xline_add_text(xline_maker_ptr xobj, const char *key, const char *text)
 {
-    xline_object_append(xobj, key, text, strlen(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
+    xline_append_object(xobj, key, text, strlen(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
 }
 
-inline void xline_object_add_map(xline_object_ptr xobj, const char *key, xline_object_ptr xmap)
+inline void xline_add_map(xline_maker_ptr xobj, const char *key, xline_maker_ptr xmap)
 {
-    xline_object_append(xobj, key, xmap->head, xmap->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
+    xline_append_object(xobj, key, xmap->head, xmap->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
 }
 
-inline void xline_object_add_list(xline_object_ptr xobj, const char *key, xline_object_ptr xlist)
+inline void xline_add_list(xline_maker_ptr xobj, const char *key, xline_maker_ptr xlist)
 {
-    xline_object_append(xobj, key, xlist->head, xlist->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
+    xline_append_object(xobj, key, xlist->head, xlist->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
 }
 
-inline void xline_object_add_binary(xline_object_ptr xobj, const char *key, const void *val, uint64_t size)
+inline void xline_add_binary(xline_maker_ptr xobj, const char *key, const void *val, uint64_t size)
 {
-    xline_object_append(xobj, key, val, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
+    xline_append_object(xobj, key, val, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
 }
 
-inline void xline_object_append_number(xline_object_ptr xobj, const char *key, struct xline val)
+inline void xline_append_number(xline_maker_ptr xobj, const char *key, struct xline val)
 {
     while ((xobj->len - xobj->pos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE)){
         xobj->len += xobj->stride;
@@ -355,68 +355,68 @@ inline void xline_object_append_number(xline_object_ptr xobj, const char *key, s
     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_MAP);
 }
 
-inline void xline_object_add_int8(xline_object_ptr xobj, const char *key, int8_t n8)
+inline void xline_add_int8(xline_maker_ptr xobj, const char *key, int8_t n8)
 {
-    xline_object_append_number(xobj, key, __n2b8(n8));
+    xline_append_number(xobj, key, __n2b8(n8));
 }
 
-inline void xline_object_add_int16(xline_object_ptr xobj, const char *key, int16_t n16)
+inline void xline_add_int16(xline_maker_ptr xobj, const char *key, int16_t n16)
 {
-    xline_object_append_number(xobj, key, __n2b16(n16));
+    xline_append_number(xobj, key, __n2b16(n16));
 }
 
-inline void xline_object_add_int32(xline_object_ptr xobj, const char *key, int32_t n32)
+inline void xline_add_int32(xline_maker_ptr xobj, const char *key, int32_t n32)
 {
-    xline_object_append_number(xobj, key, __n2b32(n32));
+    xline_append_number(xobj, key, __n2b32(n32));
 }
 
-inline void xline_object_add_int64(xline_object_ptr xobj, const char *key, int64_t n64)
+inline void xline_add_int64(xline_maker_ptr xobj, const char *key, int64_t n64)
 {
-    xline_object_append_number(xobj, key, __n2b64(n64));
+    xline_append_number(xobj, key, __n2b64(n64));
 }
 
-inline void xline_object_add_uint8(xline_object_ptr xobj, const char *key, uint8_t u8)
+inline void xline_add_uint8(xline_maker_ptr xobj, const char *key, uint8_t u8)
 {
-    xline_object_append_number(xobj, key, __u2b8(u8));
+    xline_append_number(xobj, key, __u2b8(u8));
 }
 
-inline void xline_object_add_uint16(xline_object_ptr xobj, const char *key, uint16_t u16)
+inline void xline_add_uint16(xline_maker_ptr xobj, const char *key, uint16_t u16)
 {
-    xline_object_append_number(xobj, key, __u2b16(u16));
+    xline_append_number(xobj, key, __u2b16(u16));
 }
 
-inline void xline_object_add_uint32(xline_object_ptr xobj, const char *key, uint32_t u32)
+inline void xline_add_uint32(xline_maker_ptr xobj, const char *key, uint32_t u32)
 {
-    xline_object_append_number(xobj, key, __u2b32(u32));
+    xline_append_number(xobj, key, __u2b32(u32));
 }
 
-inline void xline_object_add_uint64(xline_object_ptr xobj, const char *key, uint64_t u64)
+inline void xline_add_uint64(xline_maker_ptr xobj, const char *key, uint64_t u64)
 {
-    xline_object_append_number(xobj, key, __u2b64(u64));
+    xline_append_number(xobj, key, __u2b64(u64));
 }
 
-inline void xline_object_add_real32(xline_object_ptr xobj, const char *key, float f32)
+inline void xline_add_real32(xline_maker_ptr xobj, const char *key, float f32)
 {
-    xline_object_append_number(xobj, key, __f2b32(f32));
+    xline_append_number(xobj, key, __f2b32(f32));
 }
 
-inline void xline_object_add_real64(xline_object_ptr xobj, const char *key, double f64)
+inline void xline_add_real64(xline_maker_ptr xobj, const char *key, double f64)
 {
-    xline_object_append_number(xobj, key, __f2b64(f64));
+    xline_append_number(xobj, key, __f2b64(f64));
 }
 
-inline void xline_object_add_ptr(xline_object_ptr xobj, const char *key, void *p)
+inline void xline_add_ptr(xline_maker_ptr xobj, const char *key, void *p)
 {
     int64_t n = (int64_t)(p);
-    xline_object_append_number(xobj, key, __n2b64(n));
+    xline_append_number(xobj, key, __n2b64(n));
 }
 
-inline void xline_object_add_bool(xline_object_ptr xobj, const char *key, uint8_t b)
+inline void xline_add_bool(xline_maker_ptr xobj, const char *key, uint8_t b)
 {
-    xline_object_append_number(xobj, key, __bool_to_byte(b));
+    xline_append_number(xobj, key, __bool_to_byte(b));
 }
 
-inline xline_ptr xline_object_parse(xline_object_ptr xobj, xline_ptr xmap)
+inline xline_ptr xline_parse(xline_maker_ptr xobj, xline_ptr xmap)
 {
     xobj->addr = NULL;
     xobj->len = __xline_sizeof_data(xmap);
@@ -426,7 +426,7 @@ inline xline_ptr xline_object_parse(xline_object_ptr xobj, xline_ptr xmap)
     return xobj->val;
 }
 
-inline xline_ptr xline_object_next(xline_object_ptr xobj)
+inline xline_ptr xline_next(xline_maker_ptr xobj)
 {
     if (xobj->val){
         xobj->pos = ((xobj->val->byte) - (xobj->head) + __xline_sizeof(xobj->val));
@@ -439,7 +439,7 @@ inline xline_ptr xline_object_next(xline_object_ptr xobj)
     return NULL;
 }
 
-inline xline_ptr xline_object_find(xline_object_ptr xobj, const char *key)
+inline xline_ptr xline_find(xline_maker_ptr xobj, const char *key)
 {
     xobj->pos = 0;
     while (xobj->pos < xobj->len) {
@@ -455,7 +455,7 @@ inline xline_ptr xline_object_find(xline_object_ptr xobj, const char *key)
     return NULL;
 }
 
-inline xline_ptr xline_object_after(xline_object_ptr xobj, const char *key)
+inline xline_ptr xline_after(xline_maker_ptr xobj, const char *key)
 {
     if (xobj->val){
 
@@ -487,118 +487,118 @@ inline xline_ptr xline_object_after(xline_object_ptr xobj, const char *key)
         } while (xobj->val != start_val);
     }
 
-    return xline_object_find(xobj, key);
+    return xline_find(xobj, key);
 }
 
-inline uint8_t xline_object_find_bool(xline_object_ptr xobj, const char *key)
+inline uint8_t xline_find_bool(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __byte_to_bool(val);
     }
     return 0;
 }
 
-inline int8_t xline_object_find_int8(xline_object_ptr xobj, const char *key)
+inline int8_t xline_find_int8(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2n8(val);
     }
     return 0;
 }
 
-inline int16_t xline_object_find_int16(xline_object_ptr xobj, const char *key)
+inline int16_t xline_find_int16(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2n16(val);
     }
     return 0;
 }
 
-inline int32_t xline_object_find_int32(xline_object_ptr xobj, const char *key)
+inline int32_t xline_find_int32(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2n32(val);
     }
     return 0;
 }
 
-inline int64_t xline_object_find_int64(xline_object_ptr xobj, const char *key)
+inline int64_t xline_find_int64(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2n64(val);
     }
     return 0;
 }
 
-inline uint8_t xline_object_find_uint8(xline_object_ptr xobj, const char *key)
+inline uint8_t xline_find_uint8(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2u8(val);
     }
     return 0;
 }
 
-inline uint16_t xline_object_find_uint16(xline_object_ptr xobj, const char *key)
+inline uint16_t xline_find_uint16(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2u16(val);
     }
     return 0;
 }
 
-inline uint32_t xline_object_find_uint32(xline_object_ptr xobj, const char *key)
+inline uint32_t xline_find_uint32(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2u32(val);
     }
     return 0;
 }
 
-inline uint64_t xline_object_find_uint64(xline_object_ptr xobj, const char *key)
+inline uint64_t xline_find_uint64(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2u64(val);
     }
     return 0;
 }
 
-inline float xline_object_find_real32(xline_object_ptr xobj, const char *key)
+inline float xline_find_real32(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2f32(val);
     }
     return 0.0f;
 }
 
-inline double xline_object_find_real64(xline_object_ptr xobj, const char *key)
+inline double xline_find_real64(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return __b2f64(val);
     }
     return 0.0f;
 }
 
-inline void* xline_object_find_ptr(xline_object_ptr xobj, const char *key)
+inline void* xline_find_ptr(xline_maker_ptr xobj, const char *key)
 {
-    xline_ptr val = xline_object_after(xobj, key);
+    xline_ptr val = xline_after(xobj, key);
     if (val){
         return (void *)(__b2n64(val));
     }
     return NULL;
 }
 
-inline void xline_object_list_append(xline_object_ptr xobj, xline_ptr x)
+inline void xline_list_append(xline_maker_ptr xobj, xline_ptr x)
 {
     uint64_t len = __xline_sizeof(x);
     while ((xobj->len - xobj->pos) < len){
@@ -613,7 +613,7 @@ inline void xline_object_list_append(xline_object_ptr xobj, xline_ptr x)
     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_LIST);
 }
 
-inline xline_ptr xline_object_list_parse(xline_object_ptr xobj, xline_ptr xlist)
+inline xline_ptr xline_list_parse(xline_maker_ptr xobj, xline_ptr xlist)
 {
     xobj->addr = NULL;
     xobj->key = NULL;
@@ -625,7 +625,7 @@ inline xline_ptr xline_object_list_parse(xline_object_ptr xobj, xline_ptr xlist)
     return x;
 }
 
-inline xline_ptr xline_object_list_next(xline_object_ptr xobj)
+inline xline_ptr xline_list_next(xline_maker_ptr xobj)
 {
     if (xobj->len - xobj->pos > 0){
         xline_ptr x = (xline_ptr)(xobj->head + xobj->pos);

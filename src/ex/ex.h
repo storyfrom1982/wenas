@@ -123,8 +123,9 @@ __ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, in
 ///////////////////////////////////////////////////////
 
 typedef struct ex_task* __ex_task_ptr;
-typedef struct xline_object* __ex_task_ctx_ptr;
-typedef void (*__ex_task_func)(__ex_task_ctx_ptr ctx);
+typedef struct xline* __ex_task_ctx_ptr;
+typedef struct xline_maker* __ex_task_ctx_maker_ptr;
+typedef void (*__ex_task_func)(__ex_task_ctx_maker_ptr ctx);
 
 __ex_export __ex_task_ptr __ex_task_create();
 __ex_export void __ex_task_destroy(__ex_task_ptr *pptr);

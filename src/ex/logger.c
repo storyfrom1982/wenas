@@ -37,7 +37,7 @@ typedef struct ex_log_file {
 
 static __ex_log_file g_log_file = {0};
 
-static void ex_log_file_write_loop(__ex_task_ctx_ptr ctx)
+static void ex_log_file_write_loop(__ex_task_ctx_maker_ptr ctx)
 {
     __ex_logd("ex_log_file_write_loop enter\n");
 

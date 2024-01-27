@@ -8,6 +8,7 @@
 #ifndef __cplusplus
 
 #include <time.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <assert.h>
@@ -24,7 +25,7 @@ static inline uint64_t __ex_time(void)
 	// POSIX.1-2008 marks gettimeofday() as obsolete, recommending the use of clock_gettime(2) instead.
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	return (__uint64)tv.tv_sec * __EX_NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
+	return (uint64_t)tv.tv_sec * __EX_NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
 #endif
 }
 

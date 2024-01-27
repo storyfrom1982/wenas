@@ -10,9 +10,9 @@ struct targs {
     ___atom_bool *testTrue;
 };
 
-static void mutex_task(xline_object_ptr kv)
+static void mutex_task(__ex_task_ctx_maker_ptr ctx)
 {
-    struct targs *targ = (struct targs *)xline_object_find_ptr(kv, "ctx");
+    struct targs *targ = (struct targs *)xline_find_ptr(ctx, "ctx");
     __ex_logi("lock %u\n", *targ->testTrue);
 
     while (1)
@@ -97,11 +97,11 @@ int main(int argc, char *argv[])
     targ.testTrue = &testTrue;
 
     __ex_task_ptr task = __ex_task_create();
-    struct xline_object kv;
-    xline_make_object(&kv, 1024);
-    xline_object_add_ptr(&kv, "func", (void*)mutex_task);
-    xline_object_add_ptr(&kv, "ctx", (void*)&targ);
-    __ex_task_post(task, &kv);
+    struct xline_maker ctx;
+    xline_maker_setup(&ctx, NULL, 1024);
+    xline_add_ptr(&ctx, "func", (void*)mutex_task);
+    xline_add_ptr(&ctx, "ctx", (void*)&targ);
+    __ex_task_post(task, ctx.xline);
 
     __ex_timed_wait(mtx, lk, 3000000);
     ___atom_unlock(&testTrue);

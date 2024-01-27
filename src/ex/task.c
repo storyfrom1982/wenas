@@ -54,7 +54,7 @@ void* __ex_taskqueue_loop(void *p)
 {
     int64_t timeout = 0;
     xline_ptr task_ctx;
-    struct xline_object task_parser;
+    struct xline_maker task_parser;
     __ex_task_func post_func;
     __ex_task_ptr task = (__ex_task_ptr)p;
 
@@ -73,8 +73,8 @@ void* __ex_taskqueue_loop(void *p)
 
         }else {
 
-            xline_object_parse(&task_parser, task_ctx);
-            post_func = (__ex_task_func)xline_object_find_ptr(&task_parser, "func");
+            xline_parse(&task_parser, task_ctx);
+            post_func = (__ex_task_func)xline_find_ptr(&task_parser, "func");
             if (post_func){
                 (post_func)(&task_parser);
             }
@@ -146,7 +146,7 @@ void __ex_task_destroy(__ex_task_ptr *pptr)
 
 int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx)
 {
-    while (__ex_taskqueue_push(task, (xline_ptr)ctx->addr) == -1){
+    while (__ex_taskqueue_push(task, ctx) == -1){
 		if (___is_true(&task->running)){
 			___lock lk = __ex_lock(task->lock);
 			__ex_notify(task->lock);
@@ -165,11 +165,11 @@ int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx)
 __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx)
 {
     __ex_task_ptr task = __ex_task_create();
-    struct xline_object task_obj;
-    xline_make_object(&task_obj, 64);
-    xline_object_add_ptr(&task_obj, "func", (void*)func);
-    xline_object_add_ptr(&task_obj, "ctx", ctx);
-    __ex_task_post(task, &task_obj);
+    struct xline_maker ctx_maker;
+    xline_maker_setup(&ctx_maker, NULL, 64);
+    xline_add_ptr(&ctx_maker, "func", (void*)func);
+    xline_add_ptr(&ctx_maker, "ctx", ctx);
+    __ex_task_post(task, ctx_maker.xline);
     return task;
 }
 
