@@ -1,7 +1,7 @@
 #ifndef __SYS_TREE_H__
 #define __SYS_TREE_H__
 
-#include <env/env.h>
+#include <ex/ex.h>
 
 #define NODE_DIMENSION          4
 #define TREE_DIMENSION          16
@@ -392,7 +392,7 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
             }else {
                 break;
             }
-            
+
             parent = tree;
             if (tree != NULL){
                 i = ((*p) & 0x0F);
@@ -406,11 +406,24 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
         }
 
         tree = parent;
-        i--; // 所有子节点都大于父节点，所以从比当前结点小的兄弟节点开始遍历。
+        // 所有子节点都大于父节点，所以从比当前节点小的兄弟节点开始遍历
+        if (i == 0){
+            // 当前节点已经是兄弟节点当中最小的节点，所以要向上移动到叔叔节点
+            i = TREE_DIMENSION -1;
+            tree = __tree2node(tree)->parent;
+        }else {
+            // 移动到小于当前节点的兄弟节点
+            i--;
+        }
 
         while (tree[i] == NULL)
         {
-            i--;
+            if (i == 0){
+                i = __tree2node(tree)->index - 1;
+                tree = __tree2node(tree)->parent;
+            }else {
+                i--;
+            }
             continue;
         }
     }
@@ -420,38 +433,67 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
         while (i >= 0)
         {
             if (tree[i] == NULL){
+                if (i == 0){
+                    // __ex_logd("find all >>>>>---------------------->>>\n");
+                    // 已经遍历了所有子节点
+                    break;
+                }
                 --i;
+                // __ex_logd("find next >>>>>---------------------->>>\n");
+                // 跳过空节点
                 continue;
             }
-            
+
+            // 移动到非空子节点
             tree = (__tree)tree[i];
+            // 从最右边开始遍历当前节点的子节点
             i = TREE_DIMENSION -1;
 
-            if (__tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
-                // 必须先加入叶子结点。
+            // 子节点的分支数为 0
+            // 叶子节点的映射一定不为空
+            if (__tree2node(tree)->branch == 0/* && __tree2node(tree)->mapping != NULL*/){
+                // 在一个分支上找到了叶子结点
+                // 这里只加入叶子节点，不处理分支节点
+                // 因为是从右向左遍历，所以最先找到的第一个叶子节点，一定是最大的那个叶子节点
                 next->next = (__node_list*)malloc(sizeof(__node_list));
                 next = next->next;
                 next->node = __tree2node(tree);
                 next->next = NULL;
-                count --;
-                if (__tree2node(tree)->route == 1){
-                    break;
-                }
+                count--;
+                __ex_logd("leaf mapping ----------- %s\n", (char*)next->node->mapping);
+                break;
             }
         }
 
+        // 将下标指向比当前节点小的兄弟节点
         i = __tree2node(tree)->index - 1;
+        // 移动回当前节点的父节点，继续向下遍历
         tree = __tree2node(tree)->parent;
 
         if (tree){
-            // 已经加入了所有子结点，再加入父节点。
-            if (__tree2node(tree)->mapping != NULL){
-                next->next = (__node_list*)malloc(sizeof(__node_list));
-                next = next->next;
-                next->node = __tree2node(tree);
-                next->next = NULL;
-                count --;
+            // 标记一个分支已经被遍历过了
+            __tree2node(tree)->x++;
+            if (__tree2node(tree)->x == __tree2node(tree)->branch){
+                // 当前节点的所有子节点都已经被遍历
+                // 多以可以把当前节点加入列表中了
+                __ex_logd("branch++ ------------x = %u branch = %u\n", __tree2node(tree)->x, __tree2node(tree)->branch);
+                // 将标记清零
+                __tree2node(tree)->x = 0;
+                if (__tree2node(tree)->mapping != NULL){
+                    next->next = (__node_list*)malloc(sizeof(__node_list));
+                    next = next->next;
+                    next->node = __tree2node(tree);
+                    next->next = NULL;
+                    count --;
+                    __ex_logd("branch mapping ------------ %s\n", (char*)next->node->mapping);
+                }                
+            }else {
+                __ex_logd("branch++ ------------x = %u branch = %u\n", __tree2node(tree)->x, __tree2node(tree)->branch);
             }
+            
+            // @note 之前在这里直接当前节点加入列表是有问题的
+            // 因为当时并不能确定当前的节点的子节点都已经被遍历了
+            // 父节点没有被重复加入，是因为所有叶子节点的父节点都没有映射值
         }
     }
 
