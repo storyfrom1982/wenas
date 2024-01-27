@@ -124,5 +124,10 @@ int main(int argc, char *argv[])
 
     std::cout << "exit\n";
 
+    char membuf[12343];
+    mclear(membuf, 12343);
+    memcpy(membuf, "123456789", strlen("123456789"));
+    memcmp("123", "456", 3);
+
 	return 0;
 }

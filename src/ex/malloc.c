@@ -612,7 +612,7 @@ void* malloc(size_t size)
 void* calloc(size_t number, size_t size)
 {
 	size *= number;
-	size += 3;
+	// size += 3;
 	// printf("number=%lu size=%lu\n", number, size);
 	
 	void *ptr = malloc(size);
@@ -625,17 +625,14 @@ void* calloc(size_t number, size_t size)
 		for (size_t r = size % 8; r > 0; r--){
 			*(((char*)ptr) + (size - r)) = 0;
 		}
-
-		char *c = (char*)ptr;
-		for (size_t t = 0; t < size; ++t){
-			if (c[t] != 0){
-				printf("memset failed\n");
-				exit(0);
-			}
-		}
-
-    	// memset(pointer, 0, len);
-    	// return pointer;
+		//检测是否清零
+		// char *c = (char*)ptr;
+		// for (size_t t = 0; t < size; ++t){
+		// 	if (c[t] != 0){
+		// 		printf("memset failed\n");
+		// 		exit(0);
+		// 	}
+		// }
 	}
 
 	return ptr;
@@ -782,45 +779,67 @@ char* strndup(const char *s, size_t n)
 	return result;
 }
 
-// size_t strlen(const char *s)
-// {
-//     assert(s);
-//     size_t l = 0;
-//     while (s[l] != '\0'){
-//         l++;
-//     }
-//     return l;
-// }
+size_t strlen(const char *s)
+{
+    if (!s){
+		return 0;
+	}
+    size_t l = 0;
+    while (s[l] != '\0'){
+        l++;
+    }
+    return l;
+}
 
-// int memcmp(const void *s1, const void *s2, size_t n){
-//     assert(s1);
-//     assert(s2);
-//     if (!n){
-//         return 0;
-//     }
-//     while (--n && *(char*)s1 == *(char*)s2){
-//         s1 = (char*)s1 + 1;
-//         s2 = (char*)s2 + 1;
-//     }
-//     return (*(char*)s1 - *(char*)s2);
-// }
+int memcmp(const void *s1, const void *s2, size_t n){
+    assert(s1);
+    assert(s2);
+    if (!n){
+        return 0;
+    }
+    while (--n && *(char*)s1 == *(char*)s2){
+        s1 = (char*)s1 + 1;
+        s2 = (char*)s2 + 1;
+    }
+    return (*(char*)s1 - *(char*)s2);
+}
 
-// void* memcpy(void *dest, const void *src, size_t n)
-// {
-//     assert(dest);
-//     assert(src);
-//     if (!n){
-//         return dest;
-//     }
-//     size_t l = n / 8;
-//     for (size_t i = 0; i < l; ++i){
-//         *(((size_t*)dest) + i) = *(((size_t*)src) + i);
-//     }
-//     for (size_t r = n % 8; r > 0; r--){
-//         *(((char*)dest) + (n - r)) = *(((char*)src) + (n - r));
-//     }
-//     return dest;
-// }
+void* memcpy(void *dst, const void *src, size_t n)
+{
+    assert(dst);
+    assert(src);
+    if (!n){
+        return dst;
+    }
+    size_t l = n / 8;
+    for (size_t i = 0; i < l; ++i){
+        *(((size_t*)dst) + i) = *(((size_t*)src) + i);
+    }
+    for (size_t r = n % 8; r > 0; r--){
+        *(((char*)dst) + (n - r)) = *(((char*)src) + (n - r));
+    }
+    return dst;
+}
+
+void mclear(void *ptr, size_t len)
+{
+	if (ptr != NULL){
+		size_t l = len >> 3;
+		for (size_t i = 0; i < l; ++i){
+			*(((size_t*)ptr) + i) = 0;
+		}
+		for (size_t r = len % 8; r > 0; r--){
+			*(((char*)ptr) + (len - r)) = 0;
+		}
+		char *c = (char*)ptr;
+		for (size_t t = 0; t < len; ++t){
+			if (c[t] != 0){
+				printf("memset failed\n");
+				exit(0);
+			}
+		}
+	}
+}
 
 /////////////////////////////////////////////////////////////////////////////
 ////

@@ -121,6 +121,10 @@ int main(int argc, char *argv[])
 
     __ex_lock_destroy(mtx);
 
+    char membuf[12343];
+    mclear(membuf, 12343);
+    memcpy(membuf, "123456789", strlen("123456789"));
+    memcmp("123", "456", 3);
     
 #endif
     __ex_log_file_close();
