@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     }
 
     {
-        int key = 0;
+        int key = 2;
         __node_list *tmp, *sort = tree_up(tree, &key, sizeof(key), 64);
         while (sort)
         {
@@ -67,19 +67,19 @@ int main(int argc, char *argv[])
 
     // tree_clear(tree, free_mapping);
 
-    {
-        int key = 31;
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
-        __node_list *tmp, *sort = tree_down(tree, &key, sizeof(int), 64);
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
-        while (sort)
-        {
-            tmp = sort;
-            __ex_logd("sort down >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
-            sort = sort->next;
-            free(tmp);
-        }
-    }
+    // {
+    //     int key = 31;
+    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
+    //     __node_list *tmp, *sort = tree_down(tree, &key, sizeof(int), 64);
+    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
+    //     while (sort)
+    //     {
+    //         tmp = sort;
+    //         __ex_logd("sort down >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
+    //         sort = sort->next;
+    //         free(tmp);
+    //     }
+    // }
 
     return 0;
 #endif
@@ -89,19 +89,19 @@ int main(int argc, char *argv[])
         tree_inseart(tree, keys[i], strlen(keys[i]), strdup(keys[i]));
     }
 
-    {
-        const char *key = "zzzxyza";
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
-        __node_list *tmp, *sort = tree_down(tree, key, strlen(key), 32);
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
-        while (sort)
-        {
-            tmp = sort;
-            __ex_logd("sort down >>>>----------------------------> %s\n", sort->node->mapping);
-            sort = sort->next;
-            free(tmp);
-        }
-    }    
+    // {
+    //     const char *key = "zzzxyza";
+    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
+    //     __node_list *tmp, *sort = tree_down(tree, key, strlen(key), 32);
+    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
+    //     while (sort)
+    //     {
+    //         tmp = sort;
+    //         __ex_logd("sort down >>>>----------------------------> %s\n", sort->node->mapping);
+    //         sort = sort->next;
+    //         free(tmp);
+    //     }
+    // }    
 
     {
         const char *key = "bbb";
