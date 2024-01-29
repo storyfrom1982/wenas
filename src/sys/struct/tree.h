@@ -248,18 +248,21 @@ static inline __ptr tree_min(__tree root)
     if (__tree2node(root)->route > 0){
 
         __tree tree = root;
+        // 从主干最左边的分支开始找，找到第一个有映射值的节点
         uint8_t i = 0;
 
         while (tree)
         {
-            // i 不会大于 TREE_DIMENSION，因为 root 的 route 大于 0，所以 tree 必然有一个分支
+            // 下标不会大于 TREE_DIMENSION，因为 root 的 route 大于 0，所以 tree 必然有一个分支
             while (tree[i] == NULL){
+                // 跳过空节点
                 i++;
             }
 
             tree = (__tree)tree[i];
 
-            if (tree && __tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
+            if (tree && __tree2node(tree)->mapping != NULL){
+                // 最左边第一个有值的节点
                 return __tree2node(tree)->mapping;
             }
 
@@ -276,20 +279,23 @@ static inline __ptr tree_max(__tree root)
     if (__tree2node(root)->route > 0){
 
         __tree tree = root;
+        // 从最右边开始找，找到第一个叶子节点
         uint8_t i = TREE_DIMENSION - 1;
 
         while (tree)
         {
             while (tree[i] == NULL){
+                // 跳过空节点
                 i--;
             }
 
             tree = (__tree)tree[i];
 
-            if (tree && __tree2node(tree)->route == 1 && __tree2node(tree)->mapping != NULL){
+            if (tree && __tree2node(tree)->branch == 0){
+                // 找到叶子节点
                 return __tree2node(tree)->mapping;
             }
-            
+            // 指向当前枝干最右边的节点
             i = TREE_DIMENSION - 1;
         }
     }
