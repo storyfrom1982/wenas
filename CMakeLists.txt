@@ -52,7 +52,7 @@ set(kzx_sources
     # src/sys/struct/xline.c
     src/ex/malloc.c
     src/ex/pipe.c 
-    src/ex/storage.c
+    src/ex/file.c
     src/ex/logger.c
     src/ex/task.c
     # src/env/linetask.c
@@ -102,7 +102,7 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-# build_executable(kapp src/main.cpp)
+# build_executable(kapp src/main.c)
 # build_executable(server src/business/server.c)
 # build_executable(client src/business/client.cpp)
 build_executable(kapp test/sys/struct/tree_test.c)

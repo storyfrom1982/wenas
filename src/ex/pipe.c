@@ -79,7 +79,7 @@ void __ex_pipe_destroy(__ex_pipe **pptr)
 }
 
 
-static inline uint64_t pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
+static inline uint64_t pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
 {
     uint64_t  writable = pipe->len - pipe->writer + pipe->reader;
 
@@ -103,7 +103,7 @@ static inline uint64_t pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
     return writable;
 }
 
-uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
+uint64_t __ex_pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
 {
     uint64_t pos = 0;
 
@@ -132,7 +132,7 @@ uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len)
     return pos;
 }
 
-static inline uint64_t pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
+static inline uint64_t pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
 {
     uint64_t readable = pipe->writer - pipe->reader;
 
@@ -156,7 +156,7 @@ static inline uint64_t pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
     return readable;
 }
 
-uint64_t __ex_pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len)
+uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
 {
     uint64_t pos = 0;
 

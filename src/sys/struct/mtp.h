@@ -153,9 +153,9 @@ typedef struct physics_socket {
 #define TRANSUNIT_TIMEOUT_INTERVAL      1000000000ULL
 
 struct msgtransport {
-    __tree peers;
+    xtree peers;
     //所有待重传的 pack 的定时器，不区分链接
-    __tree timers;
+    xtree timers;
     ___mutex_ptr mtx;
     ___atom_bool running;
     //socket可读或者有数据待发送时为true
@@ -223,7 +223,7 @@ static inline void msgchannel_clear(msgchannel_ptr channel)
     ___mutex_notify(channel->mtx);
     ___mutex_unlock(channel->mtx, lk);
     ___atom_sub(&channel->mtp->send_queue_length, __transbuf_usable(channel->sendbuf));
-    tree_delete(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
+    xtree_take(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
 }
 
 static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
@@ -587,7 +587,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             //TODO 先检测是否为 BEY。
             if (recvunit->head.type == TRANSUNIT_BYE){
                 //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (msgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
                 if (channel != NULL){
                     if (___set_true(&channel->disconnected)){
                         //被动断开的一端，收到第一个 BEY，回复第一个 BEY，并且启动超时重传。
@@ -607,14 +607,14 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             }else if (recvunit->head.type == TRANSUNIT_FINAL){
                 //被动方收到 FINAL，释放连接，结束超时重传。
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (msgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
                 if (channel){
                     mtp->listener->disconnection(mtp->listener, channel);
                 }
 
             }else if (recvunit->head.type == TRANSUNIT_HELLO){
 
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (msgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
                 __ex_logi("msgtransport_main_loop TRANSUNIT_HELLO find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                 if (channel != NULL){
                     //回复建立连接成功消息
@@ -634,14 +634,14 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 channel = msgchannel_create(mtp, &addr);
                 __ex_logi("msgtransport_main_loop new connections channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
                 msgchannel_enqueue(channel, mtp->sendqueue);
-                tree_inseart(mtp->peers, addr.key, addr.keylen, channel);
+                xtree_save(mtp->peers, addr.key, addr.keylen, channel);
                 ___set_true(&channel->connected);
                 //TODO 这里是被动建立连接 onConnectionFromPeer
                 channel->mtp->listener->connection(channel->mtp->listener, channel);
 
             }else {
 
-                channel = (msgchannel_ptr)tree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (msgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
             }
 
 
@@ -693,7 +693,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
         //to peer channel 在外部线程中创建，在主循环中回收。
         channel = msgchannel_dequeue(mtp->connectionqueue);
         if (channel != NULL){
-            tree_inseart(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
+            xtree_save(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
             msgchannel_enqueue(channel, mtp->sendqueue);
         }
 
@@ -830,7 +830,7 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
     mtp->listener = listener;
     mtp->send_queue_length = 0;
     mtp->mtx = ___mutex_create();
-    mtp->peers = tree_create();
+    mtp->peers = xtree_create();
     
     for (size_t i = 0; i < MSGCHANNELQUEUE_ARRAY_RANGE; i++)
     {
@@ -876,8 +876,8 @@ static inline void msgtransport_release(msgtransport_ptr *pptr)
         ___mutex_broadcast(mtp->mtx);
         taskqueue_release(&mtp->mainloop_task);
         linekv_release(&mtp->mainloop_func);
-        tree_clear(mtp->peers, free_channel);
-        tree_release(&mtp->peers);
+        xtree_clear(mtp->peers, free_channel);
+        xtree_free(&mtp->peers);
         ___mutex_release(mtp->mtx);
         free(mtp);
     }

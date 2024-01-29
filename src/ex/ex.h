@@ -22,7 +22,7 @@
 /////////////////////////////////////////////////////////
 /////// 可变类型指针
 /////////////////////////////////////////////////////////
-typedef void*                   __ptr;
+// typedef void*                   __ptr;
 
 /////////////////////////////////////////////////////////
 /////// 时间相关
@@ -55,8 +55,8 @@ __ex_export __ex_fp __ex_fopen(const char* path, const char* mode);
 __ex_export bool __ex_fclose(__ex_fp fp);
 __ex_export int64_t __ex_ftell(__ex_fp fp);
 __ex_export int64_t __ex_fflush(__ex_fp fp);
-__ex_export int64_t __ex_fwrite(__ex_fp fp, __ptr data, uint64_t size);
-__ex_export int64_t __ex_fread(__ex_fp fp, __ptr buf, uint64_t size);
+__ex_export int64_t __ex_fwrite(__ex_fp fp, void* data, uint64_t size);
+__ex_export int64_t __ex_fread(__ex_fp fp, void* buf, uint64_t size);
 __ex_export int64_t __ex_fseek(__ex_fp fp, int64_t offset, int32_t whence);
 
 __ex_export bool __ex_make_path(const char* path);
@@ -73,8 +73,8 @@ __ex_export bool __ex_move_path(const char* from, const char* to);
 typedef struct ex_pipe __ex_pipe;
 __ex_export __ex_pipe* __ex_pipe_create(uint64_t len);
 __ex_export void __ex_pipe_destroy(__ex_pipe **pp_pipe);
-__ex_export uint64_t __ex_pipe_write(__ex_pipe *pipe, __ptr data, uint64_t len);
-__ex_export uint64_t __ex_pipe_read(__ex_pipe *pipe, __ptr buf, uint64_t len);
+__ex_export uint64_t __ex_pipe_write(__ex_pipe *pipe, void* data, uint64_t len);
+__ex_export uint64_t __ex_pipe_read(__ex_pipe *pipe, void* buf, uint64_t len);
 __ex_export uint64_t __ex_pipe_readable(__ex_pipe *pipe);
 __ex_export uint64_t __ex_pipe_writable(__ex_pipe *pipe);
 __ex_export void __ex_pipe_clear(__ex_pipe *pipe);

@@ -36,12 +36,12 @@ int64_t __ex_fflush(__ex_fp fp)
 	return fflush((FILE*)fp);
 }
 
-int64_t __ex_fwrite(__ex_fp fp, __ptr data, uint64_t size)
+int64_t __ex_fwrite(__ex_fp fp, void *data, uint64_t size)
 {
 	return fwrite(data, 1, size, (FILE*)fp);
 }
 
-int64_t __ex_fread(__ex_fp fp, __ptr buf, uint64_t size)
+int64_t __ex_fread(__ex_fp fp, void *buf, uint64_t size)
 {
 	return fread(buf, 1, size, (FILE*)fp);
 }
