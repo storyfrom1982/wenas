@@ -56,6 +56,8 @@ static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr ma
     uint8_t len = 0;
     uint8_t *p = (uint8_t *)key;
 
+    __ex_logd("---------------------------------- mapping = %d index = %u\n", *(int*)mapping, i);
+
     while (len < keylen)
     {
         parent = tree;
@@ -69,6 +71,7 @@ static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr ma
         node->route ++;
         node->index = i;
         node->parent = parent;
+        __ex_logd("mapping = %d index = %u\n", *(int*)mapping, i);
 
         parent = tree;
         i = (*p & 0x0F);
@@ -81,6 +84,7 @@ static inline void tree_inseart(__tree root, void *key, uint8_t keylen, __ptr ma
         node->route ++;
         node->index = i;
         node->parent = parent;
+        __ex_logd("mapping = %d index = %u\n", *(int*)mapping, i);
 
         p++;
         len++;
@@ -383,6 +387,8 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
     {
         uint8_t len = 0;
         uint8_t *p = (uint8_t *)key;
+
+        // 找到开始的节点
         while (len < keylen)
         {
             parent = tree;
@@ -405,44 +411,74 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
             len++;
         }
 
-        tree = parent;
-        // 所有子节点都大于父节点，所以从比当前节点小的兄弟节点开始遍历
-        if (i == 0){
-            // 当前节点已经是兄弟节点当中最小的节点，所以要向上移动到叔叔节点
-            i = TREE_DIMENSION -1;
+        __ex_logd("leaf mapping ----------- %d\n", *(int*)__tree2node(tree)->mapping);
+        // 将当前节点加入列表
+        next->next = (__node_list*)malloc(sizeof(__node_list));
+        next = next->next;
+        next->node = __tree2node(tree);
+        next->next = NULL;
+        count--;
+
+        __ex_logd("tree_down >>>>>----------------------> index %u\n", i);
+
+        // 下标移动到弟节点
+        i = __tree2node(tree)->index -1;
+        // 指针指向父节点
+        tree = __tree2node(tree)->parent;
+        __ex_logd("parent branch ----------- %u\n", __tree2node(tree)->route);
+        // 下标移动到小于当前节点的兄弟节点
+        // 因为所有子节点都大于父节点，所以从比当前节点小的兄弟节点开始遍历
+
+        while (tree && i > 15){
+            // 当前节点已经是兄弟节点当中最小的节点，所以指针要上移，指向比父亲节点小的叔叔节点，从叔叔节点开始遍历
+            // __ex_logd("tree_down >>>>>----------------------> up to parent %u\n", i);
+            i = __tree2node(tree)->index -1;
             tree = __tree2node(tree)->parent;
-        }else {
-            // 移动到小于当前节点的兄弟节点
-            i--;
         }
 
-        while (tree[i] == NULL)
-        {
-            if (i == 0){
-                i = __tree2node(tree)->index - 1;
-                tree = __tree2node(tree)->parent;
-            }else {
-                i--;
-            }
-            continue;
-        }
+        // if (i == 0){
+        //     // 当前节点已经是兄弟节点当中最小的节点，所以指针要上移，指向比父亲节点小的叔叔节点，从叔叔节点开始遍历
+        //     i = TREE_DIMENSION -1;
+        //     tree = __tree2node(tree)->parent;
+        //     __ex_logd("parent branch ----------- %u\n", __tree2node(tree)->route);
+        // }else {
+        //     i--;
+        // }
+
+        __ex_logd("tree_down >>>>>----------------------> index %u\n", i);
+
+        // while (tree[i] == NULL)
+        // {
+        //     if (i == 0){
+        //         i = __tree2node(tree)->index - 1;
+        //         tree = __tree2node(tree)->parent;
+        //     }else {
+        //         i--;
+        //     }
+        //     continue;
+        // }
     }
 
     while (tree && count)
     {
         while (i >= 0)
         {
+            // __ex_logd("tree_down >>>>>----------------------> 6\n");
+            // 检查当前节点是否为空节点
             if (tree[i] == NULL){
                 if (i == 0){
-                    // __ex_logd("find all >>>>>---------------------->>>\n");
+                    __ex_logd("find all >>>>>---------------------->>>\n");
                     // 已经遍历了所有子节点
                     break;
                 }
+                // __ex_logd("tree_down >>>>>----------------------> index %u\n", i);
                 --i;
                 // __ex_logd("find next >>>>>---------------------->>>\n");
                 // 跳过空节点
                 continue;
             }
+
+            // __ex_logd("tree_down >>>>>---------------------------------------------- index %u\n", i);
 
             // 移动到非空子节点
             tree = (__tree)tree[i];
@@ -452,6 +488,7 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
             // 子节点的分支数为 0
             // 叶子节点的映射一定不为空
             if (__tree2node(tree)->branch == 0/* && __tree2node(tree)->mapping != NULL*/){
+                // __ex_logd("tree_down >>>>>----------------------> 7.6\n");
                 // 在一个分支上找到了叶子结点
                 // 这里只加入叶子节点，不处理分支节点
                 // 因为是从右向左遍历，所以最先找到的第一个叶子节点，一定是最大的那个叶子节点
@@ -460,13 +497,16 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
                 next->node = __tree2node(tree);
                 next->next = NULL;
                 count--;
-                __ex_logd("leaf mapping ----------- %s\n", (char*)next->node->mapping);
+                // __ex_logd("leaf mapping ----------- %d\n", *(int*)next->node->mapping);
                 break;
             }
         }
 
+        // __ex_logd("tree_down >>>>>----------------------> __tree2node(tree)->index %u\n", __tree2node(tree)->index);
         // 将下标指向比当前节点小的兄弟节点
         i = __tree2node(tree)->index - 1;
+
+        // __ex_logd("tree_down >>>>>----------------------> --index %u\n", i);
         // 移动回当前节点的父节点，继续向下遍历
         tree = __tree2node(tree)->parent;
 
@@ -476,7 +516,7 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
             if (__tree2node(tree)->x == __tree2node(tree)->branch){
                 // 当前节点的所有子节点都已经被遍历
                 // 多以可以把当前节点加入列表中了
-                __ex_logd("branch++ ------------x = %u branch = %u\n", __tree2node(tree)->x, __tree2node(tree)->branch);
+                // __ex_logd("branch++ ------------x = %u branch = %u\n", __tree2node(tree)->x, __tree2node(tree)->branch);
                 // 将标记清零
                 __tree2node(tree)->x = 0;
                 if (__tree2node(tree)->mapping != NULL){
@@ -485,8 +525,14 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
                     next->node = __tree2node(tree);
                     next->next = NULL;
                     count --;
-                    __ex_logd("branch mapping ------------ %s\n", (char*)next->node->mapping);
-                }                
+                    // __ex_logd("branch mapping ------------ %d\n", *(int*)next->node->mapping);
+                }
+
+                // // 将下标指向比当前节点小的兄弟节点
+                // i = __tree2node(tree)->index - 1;
+                // // 移动回当前节点的父节点，继续向下遍历
+                // tree = __tree2node(tree)->parent;
+
             }else {
                 __ex_logd("branch++ ------------x = %u branch = %u\n", __tree2node(tree)->x, __tree2node(tree)->branch);
             }
@@ -495,10 +541,47 @@ static inline __node_list* tree_down(__tree root, void *key, uint8_t keylen, uin
             // 因为当时并不能确定当前的节点的子节点都已经被遍历了
             // 父节点没有被重复加入，是因为所有叶子节点的父节点都没有映射值
         }
+
+        while (tree && i > 15){
+            // 当前节点已经是兄弟节点当中最小的节点，所以指针要上移，指向比父亲节点小的叔叔节点，从叔叔节点开始遍历
+            // __ex_logd("tree_down >>>>>----------------------> up to parent %u\n", i);
+            i = __tree2node(tree)->index -1;
+            tree = __tree2node(tree)->parent;
+        }
+        // __ex_logd("tree_down out >>>>>----------------------> up to parent %u\n", i);
     }
 
     return head.next;
 }
+
+// 无法排序 受字节序，大小端的影响
+// [0x7B724B80] [731.174]   59 tree.h                [D] ---------------------------------- mapping = 1 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 1 index = 1
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 1 index = 0
+// [0x7B724B80] [731.174]   59 tree.h                [D] ---------------------------------- mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 32768 index = 8
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 32768 index = 0
+// [0x7B724B80] [731.174]   59 tree.h                [D] ---------------------------------- mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 65536 index = 1
+// [0x7B724B80] [731.174]   74 tree.h                [D] mapping = 65536 index = 0
+// [0x7B724B80] [731.174]   87 tree.h                [D] mapping = 65536 index = 0
 
 
 #endif
