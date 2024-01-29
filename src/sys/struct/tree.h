@@ -134,6 +134,7 @@ static inline __ptr tree_delete(__tree root, void *key, uint8_t keylen)
     uint8_t len = 0;
     uint8_t *p = (uint8_t *)key;
 
+    // 不能直接删除路径，要先找到节点，才能执行删除操作
     while (len < keylen)
     {
         if (tree != NULL){
@@ -155,21 +156,26 @@ static inline __ptr tree_delete(__tree root, void *key, uint8_t keylen)
         return mapping;
     }
 
+    // 总数减一
     __tree2node(root)->route--;
 
     mapping = __tree2node(tree)->mapping;
     __tree2node(tree)->mapping = NULL;
+    // 父节点的叶子数减一
     __tree2node(__tree2node(tree)->parent)->leaves--;
 
     p--;
 
+    // 删除路径
     while (len > 0)
     {
         parent = __tree2node(tree)->parent;
         if (tree != NULL){
             if ((--(__tree2node(tree)->route)) == 0){
+                // 这个分支只有这一个属于删除节点的路径，所以节点被删除后，这个分支也要同时删除
                 free(tree);
                 parent[((*p) & 0x0F)] = NULL;
+                // 更新分支数
                 __tree2node(parent)->branch --;
             }
             tree = parent;
