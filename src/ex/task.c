@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#include "sys/struct/heap.h"
+
 #include "sys/struct/xline.h"
 
 

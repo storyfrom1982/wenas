@@ -304,7 +304,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                     // 移除定时器，设置确认状态
                     assert(channel->timerheap->array[unit->ts.pos] != NULL);
                     unit->comfirmed = true;
-                    timenode = heap_delete(channel->timerheap, &unit->ts);
+                    timenode = xheap_remove(channel->timerheap, &unit->ts);
                     assert(timenode->value == unit);
                 }
 
@@ -366,7 +366,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 assert(channel->timerheap->array[unit->ts.pos] != NULL);
                 // 移除定时器，设置确认状态
                 unit->comfirmed = true;
-                timenode = heap_delete(channel->timerheap, &unit->ts);
+                timenode = xheap_remove(channel->timerheap, &unit->ts);
                 assert(timenode->value == unit);
             }
 
@@ -492,7 +492,7 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
     channel->msgbuf->range = UNIT_BUF_RANGE;
     channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
     channel->sendbuf->range = UNIT_BUF_RANGE;
-    channel->timerheap = heap_create(UNIT_BUF_RANGE);
+    channel->timerheap = xheap_create(UNIT_BUF_RANGE);
     channel->queue = NULL;
     return channel;
 }
@@ -501,7 +501,7 @@ static inline void msgchannel_release(msgchannel_ptr channel)
 {
     __ex_logi("msgchannel_release enter");
     ___mutex_release(channel->mtx);
-    heap_destroy(&channel->timerheap);
+    xheap_free(&channel->timerheap);
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
@@ -721,7 +721,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                     //定时器的堆越小，操作效率越高。
                     sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
-                    heap_push(channel->timerheap, &sendunit->ts);
+                    xheap_push(channel->timerheap, &sendunit->ts);
                     ___atom_sub(&mtp->send_queue_length, 1);
                     sendunit->resending = 0;
                 }else {
@@ -767,10 +767,10 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
                         mtp->device->sendto(mtp->device, &sendunit->channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                         if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
-                            heap_pop(channel->timerheap);
+                            xheap_pop(channel->timerheap);
                             sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                             sendunit->ts.value = sendunit;
-                            heap_push(channel->timerheap, &sendunit->ts);
+                            xheap_push(channel->timerheap, &sendunit->ts);
                             sendunit->resending = 0;
                         }else {
                             timer = TRANSUNIT_TIMEOUT_INTERVAL;

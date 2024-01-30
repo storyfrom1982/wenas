@@ -95,13 +95,13 @@ static void* task_loop(void *p)
     while (__is_true(ltq->running)) {
 
         while (ltq->timer_list->pos > 0 && ltq->timer_list->array[1].key <= env_time()){
-            element = heap_pop(ltq->timer_list);
+            element = xheap_pop(ltq->timer_list);
             timer = (linekv_ptr) element.value;
             timer_func = (linetask_timer_func)linekv_find_ptr(timer, "func");
             element.key = timer_func(timer); 
             if (element.key != 0){
                 element.key += env_time();
-                heap_push(ltq->timer_list, element);
+                xheap_push(ltq->timer_list, element);
             }
         }
 
@@ -137,7 +137,7 @@ static void* task_loop(void *p)
 
                 element.key = linekv_find_uint64(task, "delay") + env_time();
                 element.value = task;
-                heap_push(ltq->timer_list, element);
+                xheap_push(ltq->timer_list, element);
 
             }else {
 
@@ -172,7 +172,7 @@ linetask_ptr linetask_create()
     ltq->end.next = NULL;
     ltq->end.prev = &(ltq->head);
 
-    ltq->timer_list = heap_create(UINT8_MAX);
+    ltq->timer_list = xheap_create(UINT8_MAX);
     assert(ltq->timer_list);
 
     ltq->running = true;
@@ -207,13 +207,13 @@ void linetask_release(linetask_ptr *pptr)
         }
 
         while (ptr->timer_list->pos > 0){
-            heapment_t element = heap_pop(ptr->timer_list);
+            heapment_t element = xheap_pop(ptr->timer_list);
             if (element.value){
                 linekv_release((linekv_ptr*)&(element.value));
             }
         }
 
-        heap_destroy(&ptr->timer_list);
+        xheap_free(&ptr->timer_list);
 
         free(ptr);
     }

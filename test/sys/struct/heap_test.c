@@ -1,9 +1,9 @@
-#include "sys/struct/heap.h"
+#include "sys/struct/xheap.h"
 
 
 void heap_test()
 {
-    heapment_t hm;
+    xheapnode_ptr node;
     uint64_t array[] = {
         2,  3,  4,  5,  22, 11, 6, 6,  6, 6,  6, 4, 4,
         99, 50, 22, 97, 56, 44, 7, 10, 3, 21, 1, 0, 33,
@@ -23,18 +23,26 @@ void heap_test()
         99, 50, 22, 97, 56, 44, 7, 10, 3, 21, 1, 0, 33,        
         99, 50, 22, 97, 56, 44, 7, 10, 3, 21, 1, 0, 33
         };
-    heap_t *h = heap_create(256);
+    xheap_ptr h = xheap_create(256);
     for (int32_t i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
-        hm.key = array[i];
-        heap_push(h, hm);
+        node = malloc(sizeof(struct xheapnode));
+        node->key = array[i];
+        xheap_push(h, node);
     }
 
     __ex_logd("len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
 
     for (int32_t i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
-        hm = heap_pop(h);
-        __ex_logd("heap.pos %u count %d key = %lu\n", h->pos, i, hm.key);
+        node = xheap_pop(h);
+        __ex_logd("heap.pos %u count %d key = %lu\n", h->pos, i, node->key);
+        free(node);
     }
 
-    heap_destroy(&h);
+    xheap_free(&h);
+}
+
+int main(int argc, char *argv[])
+{
+    heap_test();
+    return 0;
 }
