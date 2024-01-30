@@ -79,6 +79,7 @@ static inline xheapnode_ptr xheap_pop(xheap_ptr h)
     uint32_t left, right, index, smallest = HEAP_TOP;
 
     if (h->pos < HEAP_TOP){
+        __ex_logd("heap is emplty\n");
         return NULL;
     }
 
