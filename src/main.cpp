@@ -50,10 +50,10 @@ static void mutex_task(xline_maker_ptr kv)
 
 int main(int argc, char *argv[])
 {
+    __ex_backtrace_setup();
     __ex_log_file_open("./tmp/log", NULL);
 #if 1
-    __ex_backtrace_setup();
-
+    
     ___atom_size size = 10;
     ___atom_set(&size, 10);
 

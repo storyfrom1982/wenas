@@ -43,9 +43,9 @@ extern void test();
 
 int main(int argc, char *argv[])
 {
-    __ex_log_file_open("./tmp/log", NULL);
     __ex_backtrace_setup();
-
+    __ex_log_file_open("./tmp/log", NULL);
+    
 #if 1
     char text[1024] = {0};
 
