@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 
     std::cout << "join thread " << __ex_thread_id() << std::endl;
     // ___thread_join(tid);
-    __ex_task_destroy(&task);
+    __ex_task_free(&task);
 
     __ex_lock_destroy(mtx);
 #endif

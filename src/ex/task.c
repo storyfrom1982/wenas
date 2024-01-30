@@ -113,9 +113,9 @@ __ex_task_ptr __ex_task_create()
     return task;
 }
 
-void __ex_task_destroy(__ex_task_ptr *pptr)
+void __ex_task_free(__ex_task_ptr *pptr)
 {
-    __ex_logi("__ex_task_destroy enter\n");
+    __ex_logi("__ex_task_free enter\n");
 
     if (pptr && *pptr) {
         __ex_task_ptr task = *pptr;
@@ -140,7 +140,7 @@ void __ex_task_destroy(__ex_task_ptr *pptr)
         free(task);
     }
 
-    __ex_logi("__ex_task_destroy exit\n");
+    __ex_logi("__ex_task_free exit\n");
 }
 
 

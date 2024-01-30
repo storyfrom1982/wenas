@@ -137,8 +137,8 @@ void __ex_log_file_close()
         ___set_false(&g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         __ex_pipe_break(g_log_file.pipe);
-        __ex_task_destroy(&g_log_file.task);
-        __ex_pipe_destroy(&g_log_file.pipe);     
+        __ex_task_free(&g_log_file.task);
+        __ex_pipe_free(&g_log_file.pipe);
         free(g_log_file.log0);
         free(g_log_file.log1);
 
@@ -213,11 +213,11 @@ Clean:
         g_log_file.log1 = NULL;
     }
     if (g_log_file.pipe){
-        __ex_pipe_destroy(&g_log_file.pipe);
+        __ex_pipe_free(&g_log_file.pipe);
         g_log_file.pipe = NULL;
     }
     if (g_log_file.task){
-        __ex_task_destroy(&g_log_file.task);
+        __ex_task_free(&g_log_file.task);
         g_log_file.task = NULL;
     }
     if (g_log_file.fp){

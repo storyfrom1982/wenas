@@ -72,7 +72,7 @@ __ex_export bool __ex_move_path(const char* from, const char* to);
 
 typedef struct ex_pipe __ex_pipe;
 __ex_export __ex_pipe* __ex_pipe_create(uint64_t len);
-__ex_export void __ex_pipe_destroy(__ex_pipe **pp_pipe);
+__ex_export void __ex_pipe_free(__ex_pipe **pp_pipe);
 __ex_export uint64_t __ex_pipe_write(__ex_pipe *pipe, void* data, uint64_t len);
 __ex_export uint64_t __ex_pipe_read(__ex_pipe *pipe, void* buf, uint64_t len);
 __ex_export uint64_t __ex_pipe_readable(__ex_pipe *pipe);
@@ -128,7 +128,7 @@ typedef struct xline_maker* __ex_task_ctx_maker_ptr;
 typedef void (*__ex_task_func)(__ex_task_ctx_maker_ptr ctx);
 
 __ex_export __ex_task_ptr __ex_task_create();
-__ex_export void __ex_task_destroy(__ex_task_ptr *pptr);
+__ex_export void __ex_task_free(__ex_task_ptr *pptr);
 __ex_export int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx);
 __ex_export __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx);
 

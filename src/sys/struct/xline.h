@@ -631,11 +631,15 @@ static inline void xline_list_append(xline_maker_ptr xobj, xline_ptr x)
 {
     uint64_t len = __xline_sizeof(x);
     while ((xobj->len - xobj->pos) < len){
+        if (xobj->addr == NULL){
+            exit(0);
+        }
         xobj->len += xobj->stride;
         xobj->addr = (uint8_t *)malloc(xobj->len);
         memcpy(xobj->addr + XLINE_STATIC_SIZE, xobj->head, xobj->pos);
         free((xobj->head - XLINE_STATIC_SIZE));
         xobj->head = xobj->addr + XLINE_STATIC_SIZE;
+        xobj->xline = (xline_ptr)xobj->addr;
     }
     memcpy(xobj->head + xobj->pos, x->byte, len);
     xobj->pos += len;

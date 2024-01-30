@@ -54,12 +54,12 @@ __ex_pipe* __ex_pipe_create(uint64_t len)
 
 Clean:
 
-    __ex_pipe_destroy(&pipe);
+    __ex_pipe_free(&pipe);
 
     return NULL;
 }
 
-void __ex_pipe_destroy(__ex_pipe **pptr)
+void __ex_pipe_free(__ex_pipe **pptr)
 {
     if (pptr && *pptr){
         __ex_pipe *pipe = *pptr;

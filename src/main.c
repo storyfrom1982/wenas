@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 
     __ex_logi("join thread %lu\n", __ex_thread_id());
     // ___thread_join(tid);
-    __ex_task_destroy(&task);
+    __ex_task_free(&task);
 
     __ex_lock_destroy(mtx);
 
