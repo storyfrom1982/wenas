@@ -804,7 +804,7 @@ int memcmp(const void *s1, const void *s2, size_t n){
     return (*(char*)s1 - *(char*)s2);
 }
 
-void* memcpy(void *dst, const void *src, size_t n)
+void* mcopy(void *dst, const void *src, size_t n)
 {
     assert(dst);
     assert(src);

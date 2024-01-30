@@ -896,7 +896,7 @@ static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_
     unit->head.msg_range = 1;
 
     struct xline_maker kv;
-    xline_bind(&kv, unit->body, UNIT_BODY_SIZE);
+    xline_maker_setup(&kv, unit->body, UNIT_BODY_SIZE);
     //TODO 加密数据，需要对端验证
     xline_add_text(&kv, "msg", "HELLO");
     unit->head.body_size = kv.pos;
@@ -938,7 +938,7 @@ static inline void msgtransport_ping(msgchannel_ptr channel)
         unit->head.type = TRANSUNIT_PING;
         unit->head.msg_range = 1;
         struct xline_maker kv;
-        xline_bind(&kv, unit->body, UNIT_BODY_SIZE);
+        xline_maker_setup(&kv, unit->body, UNIT_BODY_SIZE);
         xline_add_text(&kv, "msg", "PING");
         unit->head.body_size = kv.pos;
         msgchannel_push(channel, unit);

@@ -22,7 +22,7 @@ extern void free(void* address);
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
 extern size_t strlen(const char *s);
 extern int memcmp(const void *s1, const void *s2, size_t n);
-extern void* memcpy(void *dst, const void *src, size_t n);
+extern void* mcopy(void *dst, const void *src, size_t n);
 void mclear(void *ptr, size_t len);
 
 #ifdef __cplusplus
