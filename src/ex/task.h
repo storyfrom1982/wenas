@@ -135,7 +135,7 @@ static inline __ex_lock_ptr __ex_lock_create()
     return mptr;
 }
 
-static inline void __ex_lock_destroy(__ex_lock_ptr mptr)
+static inline void __ex_lock_free(__ex_lock_ptr mptr)
 {
     int ret;
     assert(mptr);
@@ -350,7 +350,7 @@ static inline __ex_lock_ptr __ex_lock_create()
     return ptr;
 }
 
-static inline void __ex_lock_destroy(__ex_lock_ptr mtx)
+static inline void __ex_lock_free(__ex_lock_ptr mtx)
 {
     if (mtx){
         delete mtx;

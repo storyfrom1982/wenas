@@ -2,11 +2,10 @@
 #define __MESSAGE_TRANSPORT_H__
 
 
-#include <env/env.h>
-#include <env/task.h>
-#include <env/malloc.h>
-#include <sys/struct/heap.h>
-#include <sys/struct/tree.h>
+#include <ex/ex.h>
+#include <sys/struct/xheap.h>
+#include <sys/struct/xtree.h>
+#include <sys/struct/xline.h>
 
 
 enum {
@@ -66,7 +65,7 @@ typedef struct unithead {
 typedef struct transunit {
     bool comfirmed;
     uint8_t resending;
-    struct heapnode ts;
+    struct xheapnode ts;
     // uint32_t timestamp; //计算往返耗时
     msgchannel_ptr channel;
     struct unithead head;
@@ -98,7 +97,7 @@ typedef struct transmsgbuf {
 struct msgchannel {
     msgchannel_ptr prev, next;
     int status;
-    ___mutex_ptr mtx;
+    __ex_lock_ptr mtx;
     ___atom_bool is_connected;
     ___atom_bool is_channel_breaker;
     ___atom_bool connected;
@@ -106,7 +105,7 @@ struct msgchannel {
     ___atom_bool termination;
     uint8_t interval;
     uint64_t update;
-    heap_ptr timerheap;
+    xheap_ptr timerheap;
     struct unithead ack;
     transmsgbuf_ptr msgbuf;
     channelqueue_ptr queue;
@@ -156,14 +155,14 @@ struct msgtransport {
     xtree peers;
     //所有待重传的 pack 的定时器，不区分链接
     xtree timers;
-    ___mutex_ptr mtx;
+    __ex_lock_ptr mtx;
     ___atom_bool running;
     //socket可读或者有数据待发送时为true
     ___atom_bool working;
     msglistener_ptr listener;
     physics_socket_ptr device;
-    linekv_ptr mainloop_func;
-    taskqueue_ptr mainloop_task;
+    xline_maker_ptr mainloop_func;
+    __ex_task_ptr mainloop_task;
     ___atom_size send_queue_length;
     channelqueue_ptr connectionqueue, sendqueue, disconnctionqueue;
     struct channelqueue channels[MSGCHANNELQUEUE_ARRAY_RANGE];
@@ -212,7 +211,7 @@ static inline msgchannel_ptr msgchannel_dequeue(channelqueue_ptr queue)
 
 static inline void msgchannel_clear(msgchannel_ptr channel)
 {
-    ___lock lk = ___mutex_lock(channel->mtx);
+    ___lock lk = __ex_lock(channel->mtx);
     if (channel->queue != NULL){
         channel->prev->next = channel->next;
         channel->next->prev = channel->prev;
@@ -220,8 +219,8 @@ static inline void msgchannel_clear(msgchannel_ptr channel)
         channel->queue = NULL;
     }
     ___set_true(&channel->disconnected);
-    ___mutex_notify(channel->mtx);
-    ___mutex_unlock(channel->mtx, lk);
+    __ex_notify(channel->mtx);
+    __ex_unlock(channel->mtx, lk);
     ___atom_sub(&channel->mtp->send_queue_length, __transbuf_usable(channel->sendbuf));
     xtree_take(channel->mtp->peers, channel->addr.key, channel->addr.keylen);
 }
@@ -239,17 +238,17 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     while (__transbuf_writable(channel->sendbuf) == 0){
         // 不进行阻塞，添加续传逻辑
         // TODO 设置当前 channel 的等待写入标志
-        ___lock lk = ___mutex_lock(channel->mtx);
+        ___lock lk = __ex_lock(channel->mtx);
         if (___is_true(&channel->disconnected)){
-            ___mutex_unlock(channel->mtx, lk);
+            __ex_unlock(channel->mtx, lk);
             return;
         }
-        ___mutex_wait(channel->mtx, lk);
+        __ex_wait(channel->mtx, lk);
         if (___is_true(&channel->disconnected)){
-            ___mutex_unlock(channel->mtx, lk);
+            __ex_unlock(channel->mtx, lk);
             return;
         }
-        ___mutex_unlock(channel->mtx, lk);
+        __ex_unlock(channel->mtx, lk);
     }
 
     // 再将 unit 放入缓冲区 
@@ -260,17 +259,17 @@ static inline void msgchannel_push(msgchannel_ptr channel, transunit_ptr unit)
     // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
     // 是否统计所有 channel 的待发送包数量？
     if (___atom_add(&channel->mtp->send_queue_length, 1) == 1){
-        ___lock lk = ___mutex_lock(channel->mtp->mtx);
-        ___mutex_notify(channel->mtp->mtx);
-        ___mutex_unlock(channel->mtp->mtx, lk);
+        ___lock lk = __ex_lock(channel->mtp->mtx);
+        __ex_notify(channel->mtp->mtx);
+        __ex_unlock(channel->mtp->mtx, lk);
     }
 }
 
 static const char* get_transunit_msg(transunit_ptr unit)
 {
-    struct linekv kv;
-    linekv_parser(&kv, unit->body, unit->head.body_size);
-    return linekv_find_string(&kv, "msg");
+    struct xline_maker kv;
+    xline_parse(&kv, unit->body);
+    return xline_find(&kv, "msg");
 }
 
 static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
@@ -283,7 +282,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
 
         uint8_t index;
         transunit_ptr unit;
-        heapnode_ptr timenode;
+        xheapnode_ptr timenode;
 
         if (ack->head.ack_sn == ack->head.ack_range){
             // 收到连续的 ACK，连续的最大序列号是 maximal
@@ -327,7 +326,7 @@ static inline void msgchannel_pull(msgchannel_ptr channel, transunit_ptr ack)
                 channel->sendbuf->buf[index] = NULL;
 
                 ___atom_add(&channel->sendbuf->rpos, 1);
-                ___mutex_notify(channel->mtx);
+                __ex_notify(channel->mtx);
 
             } while ((uint8_t)(ack->head.ack_range - channel->sendbuf->rpos) <= 0);
 
@@ -483,11 +482,11 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
     msgchannel_ptr channel = (msgchannel_ptr) malloc(sizeof(struct msgchannel));
     channel->connected = false;
     channel->disconnected = false;
-    channel->update = ___sys_clock();
+    channel->update = __ex_clock();
     channel->interval = 0;
     channel->mtp = mtp;
     channel->addr = *addr;
-    channel->mtx = ___mutex_create();
+    channel->mtx = __ex_lock_create();
     channel->msgbuf = (transmsgbuf_ptr) calloc(1, sizeof(struct transmsgbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
     channel->msgbuf->range = UNIT_BUF_RANGE;
     channel->sendbuf = (transunitbuf_ptr) calloc(1, sizeof(struct transunitbuf) + sizeof(transunit_ptr) * UNIT_BUF_RANGE);
@@ -500,7 +499,7 @@ static inline msgchannel_ptr msgchannel_create(msgtransport_ptr mtp, msgaddr_ptr
 static inline void msgchannel_release(msgchannel_ptr channel)
 {
     __ex_logi("msgchannel_release enter");
-    ___mutex_release(channel->mtx);
+    __ex_lock_free(channel->mtx);
     xheap_free(&channel->timerheap);
     free(channel->msgbuf);
     free(channel->sendbuf);
@@ -536,17 +535,17 @@ static inline void msgtransport_recv_loop(msgtransport_ptr mtp)
         mtp->device->listening(mtp->device);
 //        __logi("msgtransport_recv_loop readable");
         if (___is_true(&mtp->running)){
-            ___lock lk = ___mutex_lock(mtp->mtx);
-            ___mutex_notify(mtp->mtx);
-            ___mutex_wait(mtp->mtx, lk);
-            ___mutex_unlock(mtp->mtx, lk);
+            ___lock lk = __ex_lock(mtp->mtx);
+            __ex_notify(mtp->mtx);
+            __ex_wait(mtp->mtx, lk);
+            __ex_unlock(mtp->mtx, lk);
         }
     }
 
     __ex_logi("msgtransport_recv_loop exit");
 }
 
-static inline void msgtransport_main_loop(linekv_ptr ctx)
+static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 {
     __ex_logi("msgtransport_main_loop enter");
 
@@ -556,12 +555,12 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
     // transack_ptr ack;
     struct msgaddr addr;
     transunit_ptr recvunit = NULL;
-    heapnode_ptr timenode;
+    xheapnode_ptr timenode;
     transunit_ptr sendunit = NULL;
     msgchannel_ptr channel = NULL;
     msgchannel_ptr next = NULL;
 
-    msgtransport_ptr mtp = (msgtransport_ptr)linekv_find_ptr(ctx, "ctx");
+    msgtransport_ptr mtp = (msgtransport_ptr)xline_find_ptr(ctx, "ctx");
 
     addr.addr = NULL;
 
@@ -647,7 +646,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             if (channel != NULL){
 
-                channel->update = ___sys_clock();
+                channel->update = __ex_clock();
 
                 if (recvunit->head.type == TRANSUNIT_ACK){
                     msgchannel_pull(channel, recvunit);
@@ -681,10 +680,10 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
             if (mtp->send_queue_length == 0 && (mtp->connectionqueue->len + mtp->disconnctionqueue->len) == 0){
-                ___lock lk = ___mutex_lock(mtp->mtx);
-                ___mutex_notify(mtp->mtx);
-                ___mutex_timer(mtp->mtx, lk, timer);
-                ___mutex_unlock(mtp->mtx, lk);
+                ___lock lk = __ex_lock(mtp->mtx);
+                __ex_notify(mtp->mtx);
+                __ex_timed_wait(mtp->mtx, lk, timer);
+                __ex_unlock(mtp->mtx, lk);
                 timer = 1000000000ULL * 10;
             }
         }
@@ -715,11 +714,11 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                     channel->sendbuf->upos++;
                     //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
-                    ___mutex_notify(channel->mtx);//TODO
+                    __ex_notify(channel->mtx);//TODO
                     //检测队列为空，才开启定时器
                     //所有channel统一使用一个定时器（还是每个channel各自维护定时器逻辑比较简单）。
                     //定时器的堆越小，操作效率越高。
-                    sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                    sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
                     xheap_push(channel->timerheap, &sendunit->ts);
                     ___atom_sub(&mtp->send_queue_length, 1);
@@ -741,7 +740,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                 //TODO 检测 channel 空闲时间，如果连接超时，就断开连接。清理僵尸连接。
                 //onDisconnect 回调要区分发送超时和连接超时
                 if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
-                    if (___sys_clock() - channel->update > (1000000000ULL * 30)){
+                    if (__ex_clock() - channel->update > (1000000000ULL * 30)){
                         __ex_logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
                         msgchannel_clear(channel);
                         mtp->listener->timeout(mtp->listener, channel);
@@ -751,8 +750,8 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
 
             if (channel->timerheap->pos > 0){
 
-                timeout = __heap_min(channel->timerheap)->key - ___sys_clock();
-//                __logi("msgtransport_main_loop timeout resend timestamp: %llu current: %llu timeout: %lld", sendunit->ts.key, ___sys_clock(), timeout);
+                timeout = __heap_min(channel->timerheap)->key - __ex_clock();
+//                __logi("msgtransport_main_loop timeout resend timestamp: %llu current: %llu timeout: %lld", sendunit->ts.key, __ex_clock(), timeout);
                 if (timeout > 0){
 
                     if (timer > timeout){
@@ -768,7 +767,7 @@ static inline void msgtransport_main_loop(linekv_ptr ctx)
                         mtp->device->sendto(mtp->device, &sendunit->channel->addr, (void*)&(sendunit->head), UNIT_HEAD_SIZE + sendunit->head.body_size);
                         if (result == UNIT_HEAD_SIZE + sendunit->head.body_size){
                             xheap_pop(channel->timerheap);
-                            sendunit->ts.key = ___sys_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+                            sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                             sendunit->ts.value = sendunit;
                             xheap_push(channel->timerheap, &sendunit->ts);
                             sendunit->resending = 0;
@@ -829,7 +828,7 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
     mtp->device = device;
     mtp->listener = listener;
     mtp->send_queue_length = 0;
-    mtp->mtx = ___mutex_create();
+    mtp->mtx = __ex_lock_create();
     mtp->peers = xtree_create();
     
     for (size_t i = 0; i < MSGCHANNELQUEUE_ARRAY_RANGE; i++)
@@ -853,14 +852,14 @@ static inline msgtransport_ptr msgtransport_create(physics_socket_ptr device, ms
 //    mtp->mainloop_task = taskqueue_create();
 //    taskqueue_post(mtp->mainloop_task, mtp->mainloop_func);
 
-    mtp->mainloop_task = taskqueue_run_loop(msgtransport_main_loop, mtp);
+    mtp->mainloop_task = __ex_task_run(msgtransport_main_loop, mtp);
 
     __ex_logi("msgtransport_create exit");
 
     return mtp;
 }
 
-static void free_channel(__ptr val)
+static void free_channel(void *val)
 {
     __ex_logi(">>>>------------> free channel 0x%x", val);
     msgchannel_release((msgchannel_ptr)val);
@@ -873,12 +872,12 @@ static inline void msgtransport_release(msgtransport_ptr *pptr)
         msgtransport_ptr mtp = *pptr;
         *pptr = NULL;
         ___set_false(&mtp->running);
-        ___mutex_broadcast(mtp->mtx);
-        taskqueue_release(&mtp->mainloop_task);
-        linekv_release(&mtp->mainloop_func);
+        __ex_broadcast(mtp->mtx);
+        __ex_task_free(&mtp->mainloop_task);
+        xline_maker_clear(&mtp->mainloop_func);
         xtree_clear(mtp->peers, free_channel);
         xtree_free(&mtp->peers);
-        ___mutex_release(mtp->mtx);
+        __ex_lock_free(mtp->mtx);
         free(mtp);
     }
     __ex_logi("msgtransport_release exit");
@@ -896,10 +895,10 @@ static inline msgchannel_ptr msgtransport_connect(msgtransport_ptr mtp, msgaddr_
     unit->head.type = TRANSUNIT_HELLO;
     unit->head.msg_range = 1;
 
-    struct linekv kv;
-    linekv_bind(&kv, unit->body, UNIT_BODY_SIZE);
+    struct xline_maker kv;
+    xline_bind(&kv, unit->body, UNIT_BODY_SIZE);
     //TODO 加密数据，需要对端验证
-    linekv_add_string(&kv, "msg", "HELLO");
+    xline_add_text(&kv, "msg", "HELLO");
     unit->head.body_size = kv.pos;
 
     //TODO 先 push pack，再入队。
@@ -934,13 +933,13 @@ static inline void msgtransport_disconnect(msgtransport_ptr mtp, msgchannel_ptr 
 static inline void msgtransport_ping(msgchannel_ptr channel)
 {
     __ex_logi("msgtransport_ping enter");
-    if (___sys_clock() - channel->update >= 1000000000ULL * 10){
+    if (__ex_clock() - channel->update >= 1000000000ULL * 10){
         transunit_ptr unit = (transunit_ptr)malloc(sizeof(struct transunit));
         unit->head.type = TRANSUNIT_PING;
         unit->head.msg_range = 1;
-        struct linekv kv;
-        linekv_bind(&kv, unit->body, UNIT_BODY_SIZE);
-        linekv_add_string(&kv, "msg", "PING");
+        struct xline_maker kv;
+        xline_bind(&kv, unit->body, UNIT_BODY_SIZE);
+        xline_add_text(&kv, "msg", "PING");
         unit->head.body_size = kv.pos;
         msgchannel_push(channel, unit);
     }
@@ -1011,3 +1010,43 @@ static inline void msgtransport_send(msgtransport_ptr mtp, msgchannel_ptr channe
 
 
 #endif //__MESSAGE_TRANSPORT_H__
+
+
+
+// #include <stdio.h>
+// #include <string.h>
+
+// // 函数：对字符串进行异或加密/解密
+// void xorEncryptDecrypt(char *input, char *output, char key) {
+//     size_t len = strlen(input);
+
+//     for (size_t i = 0; i < len; ++i) {
+//         output[i] = input[i] ^ key;
+//     }
+
+//     output[len] = '\0';  // 添加字符串结束符
+// }
+
+// int main() {
+//     // 原始字符串
+//     char original[] = "Hello, XOR Encryption!";
+
+//     // 密钥
+//     char key = 'K';
+
+//     // 加密
+//     char encrypted[256];
+//     xorEncryptDecrypt(original, encrypted, key);
+
+//     // 输出加密后的字符串
+//     printf("Encrypted: %s\n", encrypted);
+
+//     // 解密
+//     char decrypted[256];
+//     xorEncryptDecrypt(encrypted, decrypted, key);
+
+//     // 输出解密后的字符串
+//     printf("Decrypted: %s\n", decrypted);
+
+//     return 0;
+// }

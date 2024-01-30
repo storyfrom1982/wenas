@@ -1,5 +1,4 @@
-#include <env/env.h>
-#include <env/task.h>
+#include <ex/ex.h>
 #include <sys/struct/mtp.h>
 
 #include <sys/time.h>
@@ -20,15 +19,15 @@ typedef struct server {
     struct sockaddr_in addr;
     struct msgaddr msgaddr;
     struct msglistener listener;
-    linekey_ptr func;
-    taskqueue_ptr task;
+    xkey_ptr func;
+    __ex_task_ptr task;
     msgtransport_ptr mtp;
 }server_t;
 
 
 static void malloc_debug_cb(const char *debug)
 {
-    __ex_logw("%s\n", debug);
+    __ex_logd("%s\n", debug);
 }
 
 static void listening(struct physics_socket *socket)
@@ -49,7 +48,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
 {
     // __logi("send_msg enter");
     send_number++;
-    uint64_t randtime = ___sys_clock() / 1000000ULL;
+    uint64_t randtime = __ex_clock() / 1000000ULL;
     if ((send_number & 0x0f) == (randtime & 0x0f)){
         __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu", ++lost_number);
         return size;
@@ -87,46 +86,48 @@ static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
 
 }
 
-static void disconnect_task(linekv_ptr task)
+static void disconnect_task(xline_maker_ptr task)
 {
-    msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
+    msgchannel_ptr channel = (msgchannel_ptr)xline_find_ptr(task, "ctx");
     // __logi(">>>>---------------> disconnect_task channel: 0x%x", channel);
     msgchannel_termination(&channel);
-    linekv_release(&task);
+    xline_maker_clear(&task);
 }
 
 static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
 {
     // __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
-    linekv_ptr task = linekv_create(1024);
-    linekv_add_ptr(task, "func", (void*)disconnect_task);
-    linekv_add_ptr(task, "ctx", channel);
-    taskqueue_post(server->task, task);
+    struct xline_maker task;
+    xline_maker_setup(&task, NULL, 1024);
+    xline_add_ptr(&task, "func", (void*)disconnect_task);
+    xline_add_ptr(&task, "ctx", channel);
+    __ex_task_post(&server->task, task.xline);
 }
 
-static void recv_task(linekv_ptr task)
+static void recv_task(xline_maker_ptr task)
 {
-    msgchannel_ptr channel = (msgchannel_ptr)linekv_find_ptr(task, "ctx");
-    transmsg_ptr msg = (transmsg_ptr)linekv_find_ptr(task, "msg");
-    struct linekv parser;
-    linekv_parser(&parser, msg->data, msg->size);
-    __ex_logi(">>>>---------------------------------------------------> recv msg enter: %s", linekv_find_string(&parser, "msg"));
+    msgchannel_ptr channel = (msgchannel_ptr)xline_find_ptr(task, "ctx");
+    transmsg_ptr msg = (transmsg_ptr)xline_find_ptr(task, "msg");
+    struct xline_maker parse;
+    xline_parse(&parse, msg->data);
+    __ex_logi(">>>>---------------------------------------------------> recv msg enter: %s", (char*)xline_find(&parse, "msg"));
     msgtransport_send(channel->mtp, channel, msg->data, msg->size);
     __ex_logi(">>>>---------------------------------------------------> recv msg exit");
     free(msg);
-    linekv_release(&task);
+    xline_maker_clear(&task);
 }
 
 static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
 {
     __ex_logi(">>>>---------------------------------------------------> recv msg --- enter");
     server_t *server = (server_t*)listener->ctx;
-    linekv_ptr task = linekv_create(1024);
-    linekv_add_ptr(task, "func", (void*)recv_task);
-    linekv_add_ptr(task, "ctx", channel);
-    linekv_add_ptr(task, "msg", msg);
-    taskqueue_post(server->task, task);
+    struct xline_maker parse;
+    xline_maker_setup(&parse, NULL, 1024);
+    xline_add_ptr(&parse, "func", (void*)recv_task);
+    xline_add_ptr(&parse, "ctx", channel);
+    xline_add_ptr(&parse, "msg", msg);
+    __ex_task_post(server->task, parse.xline);
     __ex_logi(">>>>---------------------------------------------------> recv msg --- exit");
 }
 
@@ -134,10 +135,11 @@ static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
 {
     // __logi(">>>>---------------> channel_timeout channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
-    linekv_ptr task = linekv_create(1024);
-    linekv_add_ptr(task, "func", (void*)disconnect_task);
-    linekv_add_ptr(task, "ctx", channel);
-    taskqueue_post(server->task, task);
+    struct xline_maker parse;
+    xline_maker_setup(&parse, NULL, 1024);
+    xline_add_ptr(&parse, "func", (void*)disconnect_task);
+    xline_add_ptr(&parse, "ctx", channel);
+    __ex_task_post(server->task, parse.xline);
 }
 
 int main(int argc, char *argv[])
@@ -206,7 +208,7 @@ int main(int argc, char *argv[])
     listener->ctx = &server;
     server.mtp = msgtransport_create(device, &server.listener);
 
-    server.task = taskqueue_create();
+    server.task = __ex_task_create();
 
     msgtransport_recv_loop(server.mtp);
 
@@ -227,7 +229,7 @@ int main(int argc, char *argv[])
 
     __ex_logi("env_malloc_debug");
 #if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(malloc_debug_cb);
+    __ex_memory_leak_trace(malloc_debug_cb);
 #endif
 
     __ex_logi("exit");

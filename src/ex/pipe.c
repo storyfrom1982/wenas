@@ -68,7 +68,7 @@ void __ex_pipe_free(__ex_pipe **pptr)
             __ex_pipe_clear(pipe);
             if (pipe->mutex){
                 __ex_pipe_break(pipe);
-                __ex_lock_destroy(pipe->mutex);
+                __ex_lock_free(pipe->mutex);
             }
         }
         if (pipe->buf){

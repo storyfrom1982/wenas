@@ -129,7 +129,7 @@ void __ex_task_free(__ex_task_ptr *pptr)
         }
 
         __ex_thread_join(task->tid);
-        __ex_lock_destroy(task->lock);
+        __ex_lock_free(task->lock);
 
         xline_ptr x;
         while ((x = __ex_taskqueue_pop(task)) != NULL){

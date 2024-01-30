@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     // ___thread_join(tid);
     __ex_task_free(&task);
 
-    __ex_lock_destroy(mtx);
+    __ex_lock_free(mtx);
 #endif
     __ex_log_file_close();
 
