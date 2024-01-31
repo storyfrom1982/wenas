@@ -28,9 +28,9 @@ typedef struct client{
     socklen_t addlen;
     struct sockaddr_in local_addr;
     struct sockaddr_in remote_addr;
-    struct msgaddr msgaddr;
-    struct msglistener listener;
-    msgtransport_ptr mtp;
+    struct xmsgaddr xmsgaddr;
+    struct xmsglistener listener;
+    xmessenger_ptr mtp;
 }*client_ptr;
 
 
@@ -40,7 +40,7 @@ static void malloc_debug_cb(const char *debug)
     __ex_logw("%s\n", debug);
 }
 
-static void listening(struct physics_socket *socket)
+static void listening(struct xmsgsocket *socket)
 {
     client_ptr client = (client_ptr)socket->ctx;
 	fd_set fds;
@@ -55,7 +55,7 @@ static void listening(struct physics_socket *socket)
 }
 
 static uint64_t send_number = 0, lost_number = 0;
-static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, void *data, size_t size)
+static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr remote_addr, void *data, size_t size)
 {
     send_number++;
     uint64_t randtime = ___sys_clock() / 1000ULL;
@@ -69,7 +69,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr remote_addr, v
     return result;
 }
 
-static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, size_t size)
 {
     client_ptr client = (client_ptr)socket->ctx;
     if (addr->addr == NULL){
@@ -89,18 +89,18 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     return result;
 }
 
-static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_connection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel connection: 0x%x", channel);
 }
 
-static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel disconnection: 0x%x", channel);
     msgchannel_termination(&channel);
 }
 
-static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
+static void channel_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
@@ -108,7 +108,7 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
     free(msg);
 }
 
-static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_timeout(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel timeout: 0x%x", channel);
     msgchannel_termination(&channel);
@@ -127,9 +127,9 @@ int main(int argc, char *argv[])
     const char *host = "47.98.176.55";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
-    physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
-    msgaddr_ptr remote_addr = &client->msgaddr;
-    msglistener_ptr listener = &client->listener;
+    xmsgsocket_ptr device = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
+    xmsgaddr_ptr remote_addr = &client->xmsgaddr;
+    xmsglistener_ptr listener = &client->listener;
 
     client->local_addr.sin_family = AF_INET;
     client->local_addr.sin_port = htons(3721);
@@ -184,13 +184,13 @@ int main(int argc, char *argv[])
     device->recvfrom = recv_msg;
     
     listener->ctx = client;
-    client->mtp = msgtransport_create(device, &client->listener);
+    client->mtp = xmessenger_create(device, &client->listener);
 
     std::thread thread([&](){
         msgtransport_recv_loop(client->mtp);
     });
 
-    msgchannel_ptr channel = msgtransport_connect(client->mtp, remote_addr);
+    xmsgchannel_ptr channel = xmessenger_connect(client->mtp, remote_addr);
 
     char str[1024];
 
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
     //         }
     //         memset(str, i % 256, len);
     //         str[len] = '\0';
-    //         msgtransport_send(client->mtp, channel, str, len);
+    //         xmessenger_send(client->mtp, channel, str, len);
     //     }
     // }
     
@@ -219,22 +219,22 @@ int main(int argc, char *argv[])
         str[len-1] = '\0';
         linekv_ptr msg = linekv_create(1024);
         linekv_add_string(msg, "msg", str);
-        msgtransport_send(client->mtp, channel, msg->head, msg->pos);
+        xmessenger_send(client->mtp, channel, msg->head, msg->pos);
         linekv_release(&msg);
     }
 
 
-    __ex_loge("msgtransport_send finish");
+    __ex_loge("xmessenger_send finish");
 
-    __ex_logi("msgtransport_disconnect");
-    msgtransport_disconnect(client->mtp, channel);
+    __ex_logi("xmessenger_disconnect");
+    xmessenger_disconnect(client->mtp, channel);
 
     ___set_false(&client->mtp->running);
     int data = 0;
     ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
-    __ex_logi("msgtransport_release");
-    msgtransport_release(&client->mtp);
+    __ex_logi("xmessenger_free");
+    xmessenger_free(&client->mtp);
 
     __ex_logi("free device");
     free(device);

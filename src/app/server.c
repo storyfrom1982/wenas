@@ -1,5 +1,5 @@
 #include <ex/ex.h>
-#include <sys/struct/mtp.h>
+#include <sys/struct/xmessenger.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -17,11 +17,11 @@ typedef struct server {
     int socket;
     socklen_t addlen;
     struct sockaddr_in addr;
-    struct msgaddr msgaddr;
-    struct msglistener listener;
+    struct xmsgaddr xmsgaddr;
+    struct xmsglistener listener;
     xkey_ptr func;
     __ex_task_ptr task;
-    msgtransport_ptr mtp;
+    xmessenger_ptr mtp;
 }server_t;
 
 
@@ -30,7 +30,7 @@ static void malloc_debug_cb(const char *debug)
     __ex_logd("%s\n", debug);
 }
 
-static void listening(struct physics_socket *socket)
+static void listening(struct xmsgsocket *socket)
 {
     server_t *server = (server_t*)socket->ctx;
 	fd_set fds;
@@ -44,7 +44,7 @@ static void listening(struct physics_socket *socket)
 }
 
 static uint64_t send_number = 0, lost_number = 0;
-static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size)
 {
     // __logi("send_msg enter");
     send_number++;
@@ -63,7 +63,7 @@ static size_t send_msg(struct physics_socket *socket, msgaddr_ptr addr, void *da
     return result;
 }
 
-static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, size_t size)
 {
     server_t *server = (server_t*)socket->ctx;
     if (addr->addr == NULL){
@@ -81,20 +81,20 @@ static size_t recv_msg(struct physics_socket *socket, msgaddr_ptr addr, void *bu
     return result;
 }
 
-static void channel_connection(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_connection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
 
 }
 
 static void disconnect_task(xline_maker_ptr task)
 {
-    msgchannel_ptr channel = (msgchannel_ptr)xline_find_ptr(task, "ctx");
+    xmsgchannel_ptr channel = (xmsgchannel_ptr)xline_find_ptr(task, "ctx");
     // __logi(">>>>---------------> disconnect_task channel: 0x%x", channel);
     msgchannel_termination(&channel);
     xline_maker_clear(&task);
 }
 
-static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     // __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
@@ -107,18 +107,18 @@ static void channel_disconnection(msglistener_ptr listener, msgchannel_ptr chann
 
 static void recv_task(xline_maker_ptr task)
 {
-    msgchannel_ptr channel = (msgchannel_ptr)xline_find_ptr(task, "ctx");
-    transmsg_ptr msg = (transmsg_ptr)xline_find_ptr(task, "msg");
+    xmsgchannel_ptr channel = (xmsgchannel_ptr)xline_find_ptr(task, "ctx");
+    xmsg_ptr msg = (xmsg_ptr)xline_find_ptr(task, "msg");
     struct xline_maker parse;
     xline_parse(&parse, msg->data);
     __ex_logi(">>>>---------------------------------------------------> recv msg enter: %s", (char*)xline_find(&parse, "msg"));
-    msgtransport_send(channel->mtp, channel, msg->data, msg->size);
+    xmessenger_send(channel->mtp, channel, msg->data, msg->size);
     __ex_logi(">>>>---------------------------------------------------> recv msg exit");
     free(msg);
     xline_maker_clear(&task);
 }
 
-static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, transmsg_ptr msg)
+static void channel_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
     __ex_logi(">>>>---------------------------------------------------> recv msg --- enter");
     server_t *server = (server_t*)listener->ctx;
@@ -131,7 +131,7 @@ static void channel_message(msglistener_ptr listener, msgchannel_ptr channel, tr
     __ex_logi(">>>>---------------------------------------------------> recv msg --- exit");
 }
 
-static void channel_timeout(msglistener_ptr listener, msgchannel_ptr channel)
+static void channel_timeout(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     // __logi(">>>>---------------> channel_timeout channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
@@ -152,9 +152,9 @@ int main(int argc, char *argv[])
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
     server_t server;
-    physics_socket_ptr device = (physics_socket_ptr)malloc(sizeof(struct physics_socket));
-    msgaddr_ptr addr = &server.msgaddr;
-    msglistener_ptr listener = &server.listener;
+    xmsgsocket_ptr device = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
+    xmsgaddr_ptr addr = &server.xmsgaddr;
+    xmsglistener_ptr listener = &server.listener;
 
     // server.udpbuf = (udpqueue_ptr)malloc(sizeof(struct udpqueue));
     // server.udpbuf->mtx = ___mutex_create();
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
     device->recvfrom = recv_msg;
     
     listener->ctx = &server;
-    server.mtp = msgtransport_create(device, &server.listener);
+    server.mtp = xmessenger_create(device, &server.listener);
 
     server.task = __ex_task_create();
 
@@ -215,9 +215,9 @@ int main(int argc, char *argv[])
     ___set_false(&server.mtp->running);
     int data = 0;
     ssize_t result = sendto(server.socket, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
-    __ex_logi("msgtransport_disconnect");
-    msgtransport_release(&server.mtp);
-    __ex_logi("msgtransport_release");
+    __ex_logi("xmessenger_disconnect");
+    xmessenger_free(&server.mtp);
+    __ex_logi("xmessenger_free");
 
     __ex_logi("free device");
     free(device);
