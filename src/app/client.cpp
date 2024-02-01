@@ -89,18 +89,18 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
     return result;
 }
 
-static void channel_connection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel connection: 0x%x", channel);
 }
 
-static void channel_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel disconnection: 0x%x", channel);
     msgchannel_termination(&channel);
 }
 
-static void channel_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
+static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
     struct linekv parser;
     linekv_parser(&parser, msg->data, msg->size);
@@ -108,7 +108,7 @@ static void channel_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, 
     free(msg);
 }
 
-static void channel_timeout(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel timeout: 0x%x", channel);
     msgchannel_termination(&channel);
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     const char *host = "47.98.176.55";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
-    xmsgsocket_ptr device = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
+    xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
     xmsgaddr_ptr remote_addr = &client->xmsgaddr;
     xmsglistener_ptr listener = &client->listener;
 
@@ -156,10 +156,10 @@ int main(int argc, char *argv[])
     remote_addr->addr = &client->remote_addr;
     remote_addr->addrlen = sizeof(client->remote_addr);
 
-    listener->connection = channel_connection;
-    listener->disconnection = channel_disconnection;
-    listener->message = channel_message;
-    listener->timeout = channel_timeout;
+    listener->connection = on_connection_from_peer;
+    listener->disconnection = on_disconnection;
+    listener->message = on_receive_message;
+    listener->timeout = on_idle;
 
     int fd;
     int enable = 1;
@@ -178,16 +178,16 @@ int main(int argc, char *argv[])
     }
 
     client->socket = fd;
-    device->ctx = client;
-    device->listening = listening;
-    device->sendto = send_msg;
-    device->recvfrom = recv_msg;
+    msgsock->ctx = client;
+    msgsock->listening = listening;
+    msgsock->sendto = send_msg;
+    msgsock->recvfrom = recv_msg;
     
     listener->ctx = client;
-    client->mtp = xmessenger_create(device, &client->listener);
+    client->mtp = xmessenger_create(msgsock, &client->listener);
 
     std::thread thread([&](){
-        msgtransport_recv_loop(client->mtp);
+        xmessenger_wake(client->mtp);
     });
 
     xmsgchannel_ptr channel = xmessenger_connect(client->mtp, remote_addr);
@@ -236,8 +236,8 @@ int main(int argc, char *argv[])
     __ex_logi("xmessenger_free");
     xmessenger_free(&client->mtp);
 
-    __ex_logi("free device");
-    free(device);
+    __ex_logi("free msgsock");
+    free(msgsock);
     
     __ex_logi("free client");
     free(client);

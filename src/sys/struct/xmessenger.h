@@ -17,7 +17,7 @@ enum {
 };
 
 
-#define PACK_HEAD_SIZE              8
+#define PACK_HEAD_SIZE              16
 #define PACK_BODY_SIZE              1280 // 1024 + 256
 // #define PACK_BODY_SIZE              8
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
@@ -51,7 +51,8 @@ typedef struct xmsghead {
     uint8_t sn; //serial number 包序列号
     uint8_t ack; //ack 单个包的 ACK
     uint8_t acks; //acks 这个包和它之前的所有包的 ACK
-    //uint8_t resend; //这个包的重传计数
+    uint8_t resend, x, y, z; //这个包的重传计数
+    uint32_t crc;
     uint16_t pack_range; // message fragment count 消息分包数量
     uint16_t pack_size; // message fragment length 这个分包的长度
 }*xmsghead_ptr;
@@ -125,17 +126,13 @@ struct xmsglistener {
     //没有数据接收或发送，通知用户监听网络接口，有数据可读时，通知messenger
     void (*onIdle)(struct xmsglistener*, xmsgchannel_ptr channel);
     void (*onSendable)(struct xmsglistener*, xmsgchannel_ptr channel);
-    void (*connection)(struct xmsglistener*, xmsgchannel_ptr channel);
-    void (*disconnection)(struct xmsglistener*, xmsgchannel_ptr channel);
-    void (*message)(struct xmsglistener*, xmsgchannel_ptr channel, xmsg_ptr msg);
-    void (*timeout)(struct xmsglistener*, xmsgchannel_ptr channel);
 };
 
 
 typedef struct xmsgsocket {
     void *ctx;
     //不需要内部监听，监听网络接口由用户层的线程处理
-    void (*listening)(struct xmsgsocket *socket);
+    // void (*listening)(struct xmsgsocket *socket);
     size_t (*sendto)(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size);
     size_t (*recvfrom)(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size);
 }*xmsgsocket_ptr;
@@ -154,7 +151,7 @@ struct xmessenger {
     //socket可读或者有数据待发送时为true
     ___atom_bool working;
     xmsglistener_ptr listener;
-    xmsgsocket_ptr device;
+    xmsgsocket_ptr msgsock;
     xline_maker_ptr mainloop_func;
     __ex_task_ptr mainloop_task;
     ___atom_size send_queue_length;
@@ -304,13 +301,13 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
                 if (unit->head.type == XMSG_PACK_PING){
                     if (___set_true(&channel->connected)){
                         //TODO 这里是主动发起连接 onConnectionToPeer
-                        channel->mtp->listener->connection(channel->mtp->listener, channel);
+                        channel->mtp->listener->onConnectionToPeer(channel->mtp->listener, channel);
                     }
                 }else if (unit->head.type == XMSG_PACK_BYE){
                     //TODO 不会处理 BEY 的 ACK，BEY 在释放连接之前，会一直重传。
                     if (___set_true(&channel->disconnected)){
                         msgchannel_clear(channel);
-                        channel->mtp->listener->disconnection(channel->mtp->listener, channel);
+                        channel->mtp->listener->onDisconnection(channel->mtp->listener, channel);
                     }
                 }
 
@@ -370,7 +367,7 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
                     unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                     if (!unit->comfirmed && unit->resending == 0){
                         __ex_logi("msgchannel_pull ############################### resend sn: %u", index);
-                        if (channel->mtp->device->sendto(channel->mtp->device, &channel->addr, 
+                        if (channel->mtp->msgsock->sendto(channel->mtp->msgsock, &channel->addr, 
                             (void*)&(unit->head), PACK_HEAD_SIZE + unit->head.pack_size) == PACK_HEAD_SIZE + unit->head.pack_size){
                             unit->resending++;
                         }
@@ -432,7 +429,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
     }
 
 //    __logi("msgchannel_recv sendto enter");
-    if ((channel->mtp->device->sendto(channel->mtp->device, &channel->addr, (void*)&(channel->ack), PACK_HEAD_SIZE)) == PACK_HEAD_SIZE) {
+    if ((channel->mtp->msgsock->sendto(channel->mtp->msgsock, &channel->addr, (void*)&(channel->ack), PACK_HEAD_SIZE)) == PACK_HEAD_SIZE) {
 //        __logi("msgchannel_recv sendto return ----------->");
         __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u",
                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
@@ -460,7 +457,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
 //            __logi("msgchannel_recv process msg %s", channel->msgbuf->msg->data);
 //            __logi("msgchannel_recv message enter");
-            channel->mtp->listener->message(channel->mtp->listener, channel, channel->msgbuf->msg);
+            channel->mtp->listener->onReceiveMessage(channel->mtp->listener, channel, channel->msgbuf->msg);
 //            __logi("msgchannel_recv message exit");
             channel->msgbuf->msg = NULL;
         }
@@ -520,28 +517,18 @@ static inline void msgchannel_termination(xmsgchannel_ptr *pptr)
 
 
 //提供给用户一个从Idle状态唤醒主循环的接口
-static inline void msgtransport_recv_loop(xmessenger_ptr mtp)
+static inline void xmessenger_wake(xmessenger_ptr messenger)
 {
-    __ex_logi("msgtransport_recv_loop enter");
-
-    while (___is_true(&mtp->running))
-    {
-        mtp->device->listening(mtp->device);
-//        __logi("msgtransport_recv_loop readable");
-        if (___is_true(&mtp->running)){
-            ___lock lk = __ex_lock(mtp->mtx);
-            __ex_notify(mtp->mtx);
-            __ex_wait(mtp->mtx, lk);
-            __ex_unlock(mtp->mtx, lk);
-        }
-    }
-
-    __ex_logi("msgtransport_recv_loop exit");
+    __ex_logi("xmessenger_wake enter %p\n", messenger);
+    ___lock lk = __ex_lock(messenger->mtx);
+    __ex_notify(messenger->mtx);
+    __ex_unlock(messenger->mtx, lk);
+    __ex_logi("xmessenger_wake exit\n");
 }
 
-static inline void msgtransport_main_loop(xline_maker_ptr ctx)
+static inline void messenger_loop(xline_maker_ptr ctx)
 {
-    __ex_logi("msgtransport_main_loop enter");
+    __ex_logi("messenger_loop enter\n");
 
     int result;
     int64_t timeout;
@@ -554,33 +541,33 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
     xmsgchannel_ptr channel = NULL;
     xmsgchannel_ptr next = NULL;
 
-    xmessenger_ptr mtp = (xmessenger_ptr)xline_find_ptr(ctx, "ctx");
+    xmessenger_ptr messenger = (xmessenger_ptr)xline_find_ptr(ctx, "ctx");
 
     addr.addr = NULL;
 
-    while (___is_true(&mtp->running))
+    while (___is_true(&messenger->running))
     {
 
         if (recvunit == NULL){
             recvunit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
             if (recvunit == NULL){
-                __ex_logi("msgtransport_recv_loop malloc failed");
+                __ex_logi("xmessenger_wake malloc failed\n");
                 exit(0);
             }
         }
 
         recvunit->head.type = 0;
         recvunit->head.pack_size = 0;
-        result = mtp->device->recvfrom(mtp->device, &addr, &recvunit->head, PACK_ONLINE_SIZE);
+        result = messenger->msgsock->recvfrom(messenger->msgsock, &addr, &recvunit->head, PACK_ONLINE_SIZE);
 
         if (result == (recvunit->head.pack_size + PACK_HEAD_SIZE)){
 
-//            __logi("msgtransport_main_loop recv ip: %u port: %u msg: %s", addr.ip, addr.port, get_transunit_msg(recvunit));
+//            __logi("messenger_loop recv ip: %u port: %u msg: %s", addr.ip, addr.port, get_transunit_msg(recvunit));
 
             //TODO 先检测是否为 BEY。
             if (recvunit->head.type == XMSG_PACK_BYE){
                 //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
-                channel = (xmsgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (xmsgchannel_ptr)xtree_find(messenger->peers, addr.key, addr.keylen);
                 if (channel != NULL){
                     if (___set_true(&channel->disconnected)){
                         //被动断开的一端，收到第一个 BEY，回复第一个 BEY，并且启动超时重传。
@@ -591,7 +578,7 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                         }
                         //被动方收到第二个 BEY。
                         //释放连接，结束超时重传。
-                        mtp->listener->disconnection(mtp->listener, channel);
+                        messenger->listener->onDisconnection(messenger->listener, channel);
                     }
                 }else {
                     //回复的第二个 BEY 可能丢包了
@@ -600,23 +587,23 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 
             }else if (recvunit->head.type == XMSG_PACK_FINAL){
                 //被动方收到 FINAL，释放连接，结束超时重传。
-                channel = (xmsgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (xmsgchannel_ptr)xtree_find(messenger->peers, addr.key, addr.keylen);
                 if (channel){
-                    mtp->listener->disconnection(mtp->listener, channel);
+                    messenger->listener->onDisconnection(messenger->listener, channel);
                 }
 
             }else if (recvunit->head.type == XMSG_PACK_PING){
 
-                channel = (xmsgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
-                __ex_logi("msgtransport_main_loop XMSG_PACK_PING find channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                channel = (xmsgchannel_ptr)xtree_find(messenger->peers, addr.key, addr.keylen);
+                __ex_logi("messenger_loop XMSG_PACK_PING find channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
                 if (channel != NULL){
                     //回复建立连接成功消息
                     //continue
                     //TODO 删除进行重连的逻辑
                     if (___set_true(&channel->disconnected)){
-                        __ex_logi("msgtransport_main_loop reconnection channel clear: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                        __ex_logi("messenger_loop reconnection channel clear: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
                         msgchannel_clear(channel);
-                        mtp->listener->disconnection(mtp->listener, channel);
+                        messenger->listener->onDisconnection(messenger->listener, channel);
                     }
                 }
                 //定期向中心服务器更新密文，并记录中心服务器的更新时间戳。
@@ -624,17 +611,17 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                 //解密失败，把所有非法连接挡在这里。
                 //解密成功，创建连接。
                 //回复建立连接成功消息。
-                channel = msgchannel_create(mtp, &addr);
-                __ex_logi("msgtransport_main_loop new connections channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
-                msgchannel_enqueue(channel, mtp->sendqueue);
-                xtree_save(mtp->peers, addr.key, addr.keylen, channel);
+                channel = msgchannel_create(messenger, &addr);
+                __ex_logi("messenger_loop new connections channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
+                msgchannel_enqueue(channel, messenger->sendqueue);
+                xtree_save(messenger->peers, addr.key, addr.keylen, channel);
                 ___set_true(&channel->connected);
                 //TODO 这里是被动建立连接 onConnectionFromPeer
-                channel->mtp->listener->connection(channel->mtp->listener, channel);
+                channel->mtp->listener->onConnectionFromPeer(channel->mtp->listener, channel);
 
             }else {
 
-                channel = (xmsgchannel_ptr)xtree_find(mtp->peers, addr.key, addr.keylen);
+                channel = (xmsgchannel_ptr)xtree_find(messenger->peers, addr.key, addr.keylen);
             }
 
 
@@ -649,9 +636,9 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                     if (recvunit->head.type == XMSG_PACK_BYE){
                         //如果当前状态已经是断开连接中，说明之前主动发送过 BEY。所以直接释放连接和相关资源。
                         if (___set_true(&channel->disconnected)){
-                            __ex_logi("msgtransport_main_loop disconnection channel: 0x%x ip: %u port: %u", channel, addr.ip, addr.port);
+                            __ex_logi("messenger_loop disconnection channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
                             msgchannel_clear(channel);
-                            mtp->listener->disconnection(mtp->listener, channel);
+                            messenger->listener->onDisconnection(messenger->listener, channel);
                         }else {
                             //如果当前不是断开连接中状态，说明是对方主动起 BEY，需要回复 ACK。
                             //等收到 BEY 的 ACK 再释放连接。
@@ -662,37 +649,38 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 
             }else {
                 //忽略非法连接
-                __ex_logi("msgtransport_main_loop recv a invalid xmsgpack: %u ip: %u port: %u", recvunit->head.type, addr.ip, addr.port);
+                __ex_logi("messenger_loop recv a invalid xmsgpack: %u ip: %u port: %u\n", recvunit->head.type, addr.ip, addr.port);
             }
 
 
 
         }else {
 
-             __ex_logi("msgtransport_main_loop send_queue_length %llu channel queue length %llu",
-                   mtp->send_queue_length + 0, mtp->channels[0].len + mtp->channels[1].len + mtp->channels[2].len);
+             __ex_logi("messenger_loop send_queue_length %llu channel queue length %llu\n",
+                   messenger->send_queue_length + 0, messenger->channels[0].len + messenger->channels[1].len + messenger->channels[2].len);
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
-            if (mtp->send_queue_length == 0 && (mtp->connectionqueue->len + mtp->disconnctionqueue->len) == 0){
-                ___lock lk = __ex_lock(mtp->mtx);
-                __ex_notify(mtp->mtx);
-                __ex_timed_wait(mtp->mtx, lk, timer);
-                __ex_unlock(mtp->mtx, lk);
+            if (messenger->send_queue_length == 0 && (messenger->connectionqueue->len + messenger->disconnctionqueue->len) == 0){
+                messenger->listener->onIdle(messenger->listener, channel);
+                ___lock lk = __ex_lock(messenger->mtx);
+                __ex_notify(messenger->mtx);
+                __ex_timed_wait(messenger->mtx, lk, timer);
+                __ex_unlock(messenger->mtx, lk);
                 timer = 1000000000ULL * 10;
             }
         }
 
 
         //to peer channel 在外部线程中创建，在主循环中回收。
-        channel = msgchannel_dequeue(mtp->connectionqueue);
+        channel = msgchannel_dequeue(messenger->connectionqueue);
         if (channel != NULL){
-            xtree_save(mtp->peers, channel->addr.key, channel->addr.keylen, channel);
-            msgchannel_enqueue(channel, mtp->sendqueue);
+            xtree_save(messenger->peers, channel->addr.key, channel->addr.keylen, channel);
+            msgchannel_enqueue(channel, messenger->sendqueue);
         }
 
 
-        channel = mtp->sendqueue->head.next;
-        while (channel != &mtp->sendqueue->end)
+        channel = messenger->sendqueue->head.next;
+        while (channel != &messenger->sendqueue->end)
         {
             next = channel->next;
 
@@ -701,10 +689,10 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                 sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
                 //不要插手 pack 类型，这里只管发送。
 
-                __ex_logi("msgtransport_main_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                __ex_logi("messenger_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
                        channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
 
-                result = mtp->device->sendto(mtp->device, &channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
+                result = messenger->msgsock->sendto(messenger->msgsock, &channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
                 if (result == PACK_HEAD_SIZE + sendunit->head.pack_size){
                     channel->sendbuf->upos++;
                     //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
@@ -715,18 +703,18 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                     sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
                     sendunit->ts.value = sendunit;
                     xheap_push(channel->timerheap, &sendunit->ts);
-                    ___atom_sub(&mtp->send_queue_length, 1);
+                    ___atom_sub(&messenger->send_queue_length, 1);
                     sendunit->resending = 0;
                 }else {
                     sendunit->resending++;
                     //重新加入定时器，间隔递增。
                     if (sendunit->resending > 5){
                         //抛出断开连接事件，区分正常断开和超时断开。
-                        __ex_logi("msgtransport_main_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("messenger_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
 
                         msgchannel_clear(channel);
-                        mtp->listener->timeout(mtp->listener, channel);
+                        messenger->listener->onDisconnection(messenger->listener, channel);
                     }
                 }
 
@@ -735,9 +723,9 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
                 //onDisconnect 回调要区分发送超时和连接超时
                 if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
                     if (__ex_clock() - channel->update > (1000000000ULL * 30)){
-                        __ex_logi("msgtransport_main_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x", channel->addr.ip, channel->addr.port, channel);
+                        __ex_logi("messenger_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x\n", channel->addr.ip, channel->addr.port, channel);
                         msgchannel_clear(channel);
-                        mtp->listener->timeout(mtp->listener, channel);
+                        messenger->listener->onDisconnection(messenger->listener, channel);
                     }
                 }
             }
@@ -745,7 +733,7 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
             if (channel->timerheap->pos > 0){
 
                 timeout = __heap_min(channel->timerheap)->key - __ex_clock();
-//                __logi("msgtransport_main_loop timeout resend timestamp: %llu current: %llu timeout: %lld", sendunit->ts.key, __ex_clock(), timeout);
+//                __logi("messenger_loop timeout resend timestamp: %llu current: %llu timeout: %lld", sendunit->ts.key, __ex_clock(), timeout);
                 if (timeout > 0){
 
                     if (timer > timeout){
@@ -756,9 +744,9 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 
                     sendunit = (xmsgpack_ptr)__heap_min(channel->timerheap)->value;
                     if (sendunit->resending < 5){
-                        __ex_logi("msgtransport_main_loop resend ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("messenger_loop resend ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
-                        mtp->device->sendto(mtp->device, &sendunit->channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
+                        messenger->msgsock->sendto(messenger->msgsock, &sendunit->channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
                         if (result == PACK_HEAD_SIZE + sendunit->head.pack_size){
                             xheap_pop(channel->timerheap);
                             sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
@@ -772,10 +760,10 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 
                     }else {
 
-                        __ex_logi("msgtransport_main_loop ***resend timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s",
+                        __ex_logi("messenger_loop ***resend timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
                                channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
                         msgchannel_clear(channel);
-                        mtp->listener->timeout(mtp->listener, channel);
+                        messenger->listener->onDisconnection(messenger->listener, channel);
                     }
                 }
             }
@@ -786,18 +774,18 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
         }
 
         //TODO 不再需要断开连接队列，让用户收到 onDisconntion 事件后，调用 disconnect 方法，发送一个 BEY pack，主循环会释放 channel 的相关资源。
-        if (mtp->disconnctionqueue->len > 0){
-            if (___atom_try_lock(&mtp->disconnctionqueue->lock)){
-                channel = mtp->disconnctionqueue->head.next;
+        if (messenger->disconnctionqueue->len > 0){
+            if (___atom_try_lock(&messenger->disconnctionqueue->lock)){
+                channel = messenger->disconnctionqueue->head.next;
                 do {
-                    __ex_logi("msgtransport_main_loop ----------------------------------------- delete channel 0x%x", channel);
+                    __ex_logi("messenger_loop ----------------------------------------- delete channel 0x%x\n", channel);
                     channel->next->prev = channel->prev;
                     channel->prev->next = channel->next;
-                    ___atom_sub(&mtp->disconnctionqueue->len, 1);
+                    ___atom_sub(&messenger->disconnctionqueue->len, 1);
                     msgchannel_release(channel);
-                    channel = mtp->disconnctionqueue->head.next;
-                }while (channel != &mtp->disconnctionqueue->end);
-                ___atom_unlock(&mtp->disconnctionqueue->lock);
+                    channel = messenger->disconnctionqueue->head.next;
+                }while (channel != &messenger->disconnctionqueue->end);
+                ___atom_unlock(&messenger->disconnctionqueue->lock);
             }
         }
     }
@@ -809,25 +797,25 @@ static inline void msgtransport_main_loop(xline_maker_ptr ctx)
 
     free(addr.addr);
 
-    __ex_logi("msgtransport_main_loop exit");
+    __ex_logi("messenger_loop exit\n");
 }
 
-static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr device, xmsglistener_ptr listener)
+static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr listener)
 {
-    __ex_logi("xmessenger_create enter");
+    __ex_logi("xmessenger_create enter\n");
 
-    xmessenger_ptr mtp = (xmessenger_ptr)calloc(1, sizeof(struct xmessenger));
+    xmessenger_ptr messenger = (xmessenger_ptr)calloc(1, sizeof(struct xmessenger));
 
-    mtp->running = true;
-    mtp->device = device;
-    mtp->listener = listener;
-    mtp->send_queue_length = 0;
-    mtp->mtx = __ex_lock_create();
-    mtp->peers = xtree_create();
+    messenger->running = true;
+    messenger->msgsock = msgsock;
+    messenger->listener = listener;
+    messenger->send_queue_length = 0;
+    messenger->mtx = __ex_lock_create();
+    messenger->peers = xtree_create();
     
     for (size_t i = 0; i < MSGCHANNELQUEUE_ARRAY_RANGE; i++)
     {
-        xmsgchannellist_ptr queueptr = &mtp->channels[i];
+        xmsgchannellist_ptr queueptr = &messenger->channels[i];
         queueptr->len = 0;
         queueptr->lock = false;
         queueptr->head.prev = NULL;
@@ -836,32 +824,35 @@ static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr device, xmsglisten
         queueptr->end.prev = &queueptr->head;
     }
 
-    mtp->connectionqueue = &mtp->channels[0];
-    mtp->sendqueue = &mtp->channels[1];
-    mtp->disconnctionqueue = &mtp->channels[2];
+    messenger->connectionqueue = &messenger->channels[0];
+    messenger->sendqueue = &messenger->channels[1];
+    messenger->disconnctionqueue = &messenger->channels[2];
 
 //    mtp->mainloop_func = linekv_create(1024);
-//    linekv_add_ptr(mtp->mainloop_func, "func", (void*)msgtransport_main_loop);
+//    linekv_add_ptr(mtp->mainloop_func, "func", (void*)messenger_loop);
 //    linekv_add_ptr(mtp->mainloop_func, "ctx", mtp);
 //    mtp->mainloop_task = taskqueue_create();
 //    taskqueue_post(mtp->mainloop_task, mtp->mainloop_func);
 
-    mtp->mainloop_task = __ex_task_run(msgtransport_main_loop, mtp);
+    __ex_logi("xmessenger_create exit\n");
 
-    __ex_logi("xmessenger_create exit");
+    return messenger;
+}
 
-    return mtp;
+static inline void xmessenger_run(xmessenger_ptr messenger)
+{
+    messenger->mainloop_task = __ex_task_run(messenger_loop, messenger);
 }
 
 static void free_channel(void *val)
 {
-    __ex_logi(">>>>------------> free channel 0x%x", val);
+    __ex_logi(">>>>------------> free channel 0x%x\n", val);
     msgchannel_release((xmsgchannel_ptr)val);
 }
 
 static inline void xmessenger_free(xmessenger_ptr *pptr)
 {
-    __ex_logi("xmessenger_free enter");
+    __ex_logi("xmessenger_free enter\n");
     if (pptr && *pptr){        
         xmessenger_ptr mtp = *pptr;
         *pptr = NULL;
@@ -874,7 +865,14 @@ static inline void xmessenger_free(xmessenger_ptr *pptr)
         __ex_lock_free(mtp->mtx);
         free(mtp);
     }
-    __ex_logi("msgtransport_release exit");
+    __ex_logi("xmessenger_free exit\n");
+}
+
+static inline void xmessenger_wait(xmessenger_ptr messenger)
+{
+    ___lock lk = __ex_lock(messenger->mtx);
+    __ex_wait(messenger->mtx, lk);
+    __ex_unlock(messenger->mtx, lk);
 }
 
 //TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
