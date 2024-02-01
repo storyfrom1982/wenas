@@ -155,8 +155,10 @@ struct xmessenger {
     xline_maker_ptr mainloop_func;
     __ex_task_ptr mainloop_task;
     ___atom_size send_queue_length;
-    xmsgchannellist_ptr connectionqueue, sendqueue, disconnctionqueue;
-    struct xmsgchannellist channels[MSGCHANNELQUEUE_ARRAY_RANGE];
+    ___atom_bool connection_buf_lock;
+    xmsgpackbuf_ptr connection_buf;
+    __ex_msg_pipe *pipe;
+    xmsgchannellist_ptr sendqueue;
 };
 
 
@@ -174,14 +176,12 @@ struct xmessenger {
 
 static inline void msgchannel_enqueue(xmsgchannel_ptr channel, xmsgchannellist_ptr queue)
 {
-    ___atom_lock(&queue->lock);
     channel->next = &queue->end;
     channel->prev = queue->end.prev;
     channel->next->prev = channel;
     channel->prev->next = channel;
     channel->queue = queue;
     ___atom_add(&queue->len, 1);
-    ___atom_unlock(&queue->lock);
 }
 
 static inline xmsgchannel_ptr msgchannel_dequeue(xmsgchannellist_ptr queue)
@@ -498,24 +498,6 @@ static inline void msgchannel_release(xmsgchannel_ptr channel)
     __ex_logi("msgchannel_release exit");
 }
 
-static inline void msgchannel_termination(xmsgchannel_ptr *pptr)
-{
-    __ex_logi("msgchannel_termination enter");
-    if (pptr && *pptr){
-        xmsgchannel_ptr channel = *pptr;
-        *pptr = NULL;
-        ___atom_lock(&channel->mtp->disconnctionqueue->lock);
-        channel->next = &channel->mtp->disconnctionqueue->end;
-        channel->prev = channel->mtp->disconnctionqueue->end.prev;
-        channel->next->prev = channel;
-        channel->prev->next = channel;
-        ___atom_add(&channel->mtp->disconnctionqueue->len, 1);
-        ___atom_unlock(&channel->mtp->disconnctionqueue->lock);
-    }
-    __ex_logi("msgchannel_termination exit");
-}
-
-
 //提供给用户一个从Idle状态唤醒主循环的接口
 static inline void xmessenger_wake(xmessenger_ptr messenger)
 {
@@ -656,11 +638,9 @@ static inline void messenger_loop(xline_maker_ptr ctx)
 
         }else {
 
-             __ex_logi("messenger_loop send_queue_length %llu channel queue length %llu\n",
-                   messenger->send_queue_length + 0, messenger->channels[0].len + messenger->channels[1].len + messenger->channels[2].len);
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
-            if (messenger->send_queue_length == 0 && (messenger->connectionqueue->len + messenger->disconnctionqueue->len) == 0){
+            if (messenger->send_queue_length == 0 && __ex_msg_pipe_readable(messenger->pipe) == 0){
                 messenger->listener->onIdle(messenger->listener, channel);
                 ___lock lk = __ex_lock(messenger->mtx);
                 __ex_notify(messenger->mtx);
@@ -671,11 +651,29 @@ static inline void messenger_loop(xline_maker_ptr ctx)
         }
 
 
-        //to peer channel 在外部线程中创建，在主循环中回收。
-        channel = msgchannel_dequeue(messenger->connectionqueue);
-        if (channel != NULL){
-            xtree_save(messenger->peers, channel->addr.key, channel->addr.keylen, channel);
-            msgchannel_enqueue(channel, messenger->sendqueue);
+        if (__ex_msg_pipe_readable(messenger->pipe) > 0){
+            __ex_logi("create channel enter\n");
+            xline_maker_ptr ctx = __ex_msg_pipe_hole_reader(messenger->pipe);
+            xmsgaddr_ptr *addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
+            xmsgchannel_ptr channel = msgchannel_create(messenger, addr);
+            __ex_msg_pipe_update_reader(messenger->pipe);
+            if (channel){
+                xtree_save(messenger->peers, channel->addr.key, channel->addr.keylen, channel);
+                msgchannel_enqueue(channel, messenger->sendqueue);
+                xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+                //TODO 以PING消息建立连接。
+                // unit->head.type = XMSG_PACK_PING;
+                unit->head.type = XMSG_PACK_PING;
+                unit->head.pack_range = 1;
+                struct xline_maker kv;
+                xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
+                //TODO 加密数据，需要对端验证
+                xline_ptr msg = xline_find(ctx, "msg");
+                xline_add_text(&kv, "msg", __xline_to_data(msg), __xline_sizeof_data(msg));
+                unit->head.pack_size = kv.pos;
+                msgchannel_push(channel, unit);
+            }
+            __ex_logi("create channel exit\n");
         }
 
 
@@ -773,21 +771,21 @@ static inline void messenger_loop(xline_maker_ptr ctx)
             channel = next;
         }
 
-        //TODO 不再需要断开连接队列，让用户收到 onDisconntion 事件后，调用 disconnect 方法，发送一个 BEY pack，主循环会释放 channel 的相关资源。
-        if (messenger->disconnctionqueue->len > 0){
-            if (___atom_try_lock(&messenger->disconnctionqueue->lock)){
-                channel = messenger->disconnctionqueue->head.next;
-                do {
-                    __ex_logi("messenger_loop ----------------------------------------- delete channel 0x%x\n", channel);
-                    channel->next->prev = channel->prev;
-                    channel->prev->next = channel->next;
-                    ___atom_sub(&messenger->disconnctionqueue->len, 1);
-                    msgchannel_release(channel);
-                    channel = messenger->disconnctionqueue->head.next;
-                }while (channel != &messenger->disconnctionqueue->end);
-                ___atom_unlock(&messenger->disconnctionqueue->lock);
-            }
-        }
+        // //TODO 不再需要断开连接队列，让用户收到 onDisconntion 事件后，调用 disconnect 方法，发送一个 BEY pack，主循环会释放 channel 的相关资源。
+        // if (messenger->disconnctionqueue->len > 0){
+        //     if (___atom_try_lock(&messenger->disconnctionqueue->lock)){
+        //         channel = messenger->disconnctionqueue->head.next;
+        //         do {
+        //             __ex_logi("messenger_loop ----------------------------------------- delete channel 0x%x\n", channel);
+        //             channel->next->prev = channel->prev;
+        //             channel->prev->next = channel->next;
+        //             ___atom_sub(&messenger->disconnctionqueue->len, 1);
+        //             msgchannel_release(channel);
+        //             channel = messenger->disconnctionqueue->head.next;
+        //         }while (channel != &messenger->disconnctionqueue->end);
+        //         ___atom_unlock(&messenger->disconnctionqueue->lock);
+        //     }
+        // }
     }
 
 
@@ -813,20 +811,16 @@ static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr msgsock, xmsgliste
     messenger->mtx = __ex_lock_create();
     messenger->peers = xtree_create();
     
-    for (size_t i = 0; i < MSGCHANNELQUEUE_ARRAY_RANGE; i++)
-    {
-        xmsgchannellist_ptr queueptr = &messenger->channels[i];
-        queueptr->len = 0;
-        queueptr->lock = false;
-        queueptr->head.prev = NULL;
-        queueptr->end.next = NULL;
-        queueptr->head.next = &queueptr->end;
-        queueptr->end.prev = &queueptr->head;
-    }
+    messenger->sendqueue = malloc(sizeof(struct xmsgchannellist));
+    messenger->sendqueue->len = 0;
+    messenger->sendqueue->lock = false;
+    messenger->sendqueue->head.prev = NULL;
+    messenger->sendqueue->end.next = NULL;
+    messenger->sendqueue->head.next = &messenger->sendqueue->end;
+    messenger->sendqueue->end.prev = &messenger->sendqueue->head;
 
-    messenger->connectionqueue = &messenger->channels[0];
-    messenger->sendqueue = &messenger->channels[1];
-    messenger->disconnctionqueue = &messenger->channels[2];
+    messenger->pipe = __ex_msg_pipe_create(256);
+    __ex_check(messenger->pipe != NULL);
 
 //    mtp->mainloop_func = linekv_create(1024);
 //    linekv_add_ptr(mtp->mainloop_func, "func", (void*)messenger_loop);
@@ -837,6 +831,10 @@ static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr msgsock, xmsgliste
     __ex_logi("xmessenger_create exit\n");
 
     return messenger;
+
+Clean:
+
+    return NULL;
 }
 
 static inline void xmessenger_run(xmessenger_ptr messenger)
@@ -854,16 +852,19 @@ static inline void xmessenger_free(xmessenger_ptr *pptr)
 {
     __ex_logi("xmessenger_free enter\n");
     if (pptr && *pptr){        
-        xmessenger_ptr mtp = *pptr;
+        xmessenger_ptr msger = *pptr;
         *pptr = NULL;
-        ___set_false(&mtp->running);
-        __ex_broadcast(mtp->mtx);
-        __ex_task_free(&mtp->mainloop_task);
-        xline_maker_clear(&mtp->mainloop_func);
-        xtree_clear(mtp->peers, free_channel);
-        xtree_free(&mtp->peers);
-        __ex_lock_free(mtp->mtx);
-        free(mtp);
+        ___set_false(&msger->running);
+        __ex_broadcast(msger->mtx);
+        __ex_task_free(&msger->mainloop_task);
+        xline_maker_clear(&msger->mainloop_func);
+        xtree_clear(msger->peers, free_channel);
+        xtree_free(&msger->peers);
+        __ex_lock_free(msger->mtx);
+        if (msger->sendqueue){
+            free(msger->sendqueue);
+        }
+        free(msger);
     }
     __ex_logi("xmessenger_free exit\n");
 }
@@ -877,32 +878,18 @@ static inline void xmessenger_wait(xmessenger_ptr messenger)
 
 //TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
 //TODO 增加一个加密验证数据，messenger 只负责将消息发送到对端，连接能否建立，取决于对端验证结果。
-static inline xmsgchannel_ptr xmessenger_connect(xmessenger_ptr mtp, xmsgaddr_ptr addr)
+static inline int xmessenger_connect(xmessenger_ptr messenger, xmsgaddr_ptr addr)
 {
-    __ex_logi("xmessenger_connect enter");
-    xmsgchannel_ptr channel = msgchannel_create(mtp, addr);
-    xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-    //TODO 以PING消息建立连接。
-    // unit->head.type = XMSG_PACK_PING;
-    unit->head.type = XMSG_PACK_PING;
-    unit->head.pack_range = 1;
-
-    struct xline_maker kv;
-    xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
-    //TODO 加密数据，需要对端验证
-    xline_add_text(&kv, "msg", "HELLO");
-    unit->head.pack_size = kv.pos;
-
-    //TODO 先 push pack，再入队。
-    msgchannel_enqueue(channel, mtp->connectionqueue);
-    msgchannel_push(channel, unit);
-
-    // ___lock lk = ___mutex_lock(channel->mtx);
-    // ___mutex_wait(channel->mtx, lk);
-    // ___mutex_unlock(channel->mtx, lk);
-    // __logi("xmessenger_connect exit");
-    __ex_logi("xmessenger_connect exit");
-    return channel;
+    __ex_logi("xmessenger_connect enter\n");
+    xline_maker_ptr *ctx = __ex_msg_pipe_hold_writer(messenger->pipe);
+    if (ctx == NULL){
+        return -1;
+    }
+    xline_add_ptr(ctx, "addr", addr);
+    xline_add_text(ctx, "msg", "PING", strlen("PING"));
+    __ex_msg_pipe_update_writer(messenger->pipe);
+    __ex_logi("xmessenger_connect exit\n");
+    return 0;
 }
 
 static inline void xmessenger_disconnect(xmessenger_ptr mtp, xmsgchannel_ptr channel)
@@ -931,7 +918,7 @@ static inline void xmessenger_ping(xmsgchannel_ptr channel)
         unit->head.pack_range = 1;
         struct xline_maker kv;
         xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
-        xline_add_text(&kv, "msg", "PING");
+        xline_add_text(&kv, "msg", "PING", strlen("PING"));
         unit->head.pack_size = kv.pos;
         msgchannel_push(channel, unit);
     }

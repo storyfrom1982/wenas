@@ -26,19 +26,19 @@ struct ex_task {
 #define __task_queue_writable(q)      ((uint8_t)((q)->range - 1 - (q)->wpos + (q)->rpos))
 
 
-static inline int __ex_taskqueue_push(__ex_task_ptr queue, xline_ptr task)
+static inline int __ex_task_push(__ex_task_ptr queue, xline_ptr task)
 {
     assert(queue != NULL && task != NULL);
     if (__task_queue_writable(queue)){
         queue->buf[queue->wpos] = task;
         ___atom_add(&queue->wpos, 1);
-        __ex_notify(queue->lock);     
+        __ex_notify(queue->lock);
         return 0;
     }
     return -1;
 }
 
-static inline xline_ptr __ex_taskqueue_pop(__ex_task_ptr queue)
+static inline xline_ptr __ex_task_pop(__ex_task_ptr queue)
 {
     assert(queue != NULL);
     if (__task_queue_readable(queue)){
@@ -50,7 +50,7 @@ static inline xline_ptr __ex_taskqueue_pop(__ex_task_ptr queue)
     return NULL;
 }
 
-void* __ex_taskqueue_loop(void *p)
+static void* __ex_task_loop(void *p)
 {
     int64_t timeout = 0;
     xline_ptr task_ctx;
@@ -58,11 +58,11 @@ void* __ex_taskqueue_loop(void *p)
     __ex_task_func post_func;
     __ex_task_ptr task = (__ex_task_ptr)p;
 
-    __ex_logi("__ex_taskqueue_loop(0x%X) enter\n", __ex_thread_id());
+    __ex_logi("__ex_task_loop(0x%X) enter\n", __ex_thread_id());
     
     while (___is_true(&task->running)) {
 
-        if ((task_ctx = __ex_taskqueue_pop(task)) == NULL){
+        if ((task_ctx = __ex_task_pop(task)) == NULL){
 
             ___lock lk = __ex_lock(task->lock);
             __ex_notify(task->lock);
@@ -82,7 +82,7 @@ void* __ex_taskqueue_loop(void *p)
         }
     }
 
-    __ex_logi("__ex_taskqueue_loop(0x%X) exit\n", __ex_thread_id());
+    __ex_logi("__ex_task_loop(0x%X) exit\n", __ex_thread_id());
 
     return NULL;
 }
@@ -105,7 +105,7 @@ __ex_task_ptr __ex_task_create()
     task->buf = (xline_ptr*)calloc(task->range, sizeof(xline_ptr));
 
     task->running = true;
-    task->tid = __ex_thread_create(__ex_taskqueue_loop, task);
+    task->tid = __ex_thread_create(__ex_task_loop, task);
     assert(task->tid);
 
     __ex_logi("__ex_task_create exit\n");
@@ -132,7 +132,7 @@ void __ex_task_free(__ex_task_ptr *pptr)
         __ex_lock_free(task->lock);
 
         xline_ptr x;
-        while ((x = __ex_taskqueue_pop(task)) != NULL){
+        while ((x = __ex_task_pop(task)) != NULL){
             free(x);
         }
 
@@ -146,7 +146,7 @@ void __ex_task_free(__ex_task_ptr *pptr)
 
 int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx)
 {
-    while (__ex_taskqueue_push(task, ctx) == -1){
+    while (__ex_task_push(task, ctx) == -1){
 		if (___is_true(&task->running)){
 			___lock lk = __ex_lock(task->lock);
 			__ex_notify(task->lock);

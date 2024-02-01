@@ -126,12 +126,24 @@ typedef struct ex_task* __ex_task_ptr;
 typedef struct xline* __ex_task_ctx_ptr;
 typedef struct xline_maker* __ex_task_ctx_maker_ptr;
 typedef void (*__ex_task_func)(__ex_task_ctx_maker_ptr ctx);
-
 __ex_export __ex_task_ptr __ex_task_create();
 __ex_export void __ex_task_free(__ex_task_ptr *pptr);
 __ex_export int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx);
 __ex_export __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx);
 
+
+typedef struct msg_pipe __ex_msg_pipe;
+typedef struct xline_maker* xline_maker_ptr;
+__ex_export __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len);
+__ex_export void __ex_msg_pipe_free(__ex_msg_pipe **pptr);
+__ex_export uint64_t __ex_msg_pipe_readable(__ex_msg_pipe *pipe);
+__ex_export uint64_t __ex_msg_pipe_writable(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_clear(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_break(__ex_msg_pipe *pipe);
+__ex_export xline_maker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe);
+__ex_export xline_maker_ptr __ex_msg_pipe_hole_reader(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
 
 #ifdef __cplusplus
 }

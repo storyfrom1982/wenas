@@ -110,7 +110,6 @@ static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 static void disconnect_task(xline_maker_ptr task)
 {
     xmsgchannel_ptr channel = (xmsgchannel_ptr)xline_find_ptr(task, "ctx");
-    msgchannel_termination(&channel);
 }
 
 static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
@@ -210,6 +209,8 @@ int main(int argc, char *argv[])
     listener->ctx = &server;
     server.messenger = xmessenger_create(msgsock, &server.listener);
     xmessenger_run(server.messenger);
+
+    xmessenger_connect(server.messenger, addr);
     
     // struct xline_maker task_ctx;
     // xline_maker_setup(&task_ctx, NULL, 256);

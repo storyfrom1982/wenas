@@ -339,7 +339,7 @@ static inline void xline_append_object(xline_maker_ptr xobj, const char *key, co
     *(xobj->xline) = __number_to_byte_64bit(xobj->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
 }
 
-static inline void xline_add_text(xline_maker_ptr xobj, const char *key, const char *text)
+static inline void xline_add_text(xline_maker_ptr xobj, const char *key, const char *text, uint64_t size)
 {
     xline_append_object(xobj, key, text, strlen(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
 }
