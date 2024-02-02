@@ -2,6 +2,7 @@
 #define __XLINE_H__
 
 #include <stdint.h>
+#include <ex/malloc.h>
 
 // #define XLINE_NUMBER_SIZE_MASK     0x1f //00011111 开启 XLINE_TYPE_4BIT 字节（ 保留低位 5bit，64bit 是 16 个字节，16 需要占用 5bit ）
 #define XLINE_NUMBER_SIZE_MASK     0x0f //00011111 保留低位 4bit，获取 xline 为 number 类型时，数据的长度
@@ -226,23 +227,23 @@ static inline uint64_t xline_fill(xline_ptr x, const void *data, uint64_t size, 
 {
     if (size < 0x100){
         *x = __number_to_byte_8bit(size, flag);
-        memcpy(&x->byte[2], data, size);
+        mcopy(&x->byte[2], data, size);
     }else if (size < 0x10000){
         *x = __number_to_byte_16bit(size, flag);
-        memcpy(&x->byte[3], data, size);
+        mcopy(&x->byte[3], data, size);
     }else if (size < 0x100000000){
         *x = __number_to_byte_32bit(size, flag);
-        memcpy(&x->byte[5], data, size);
+        mcopy(&x->byte[5], data, size);
     }else {
         *x = __number_to_byte_64bit(size, flag);
-        memcpy(&x->byte[9], data, size);
+        mcopy(&x->byte[9], data, size);
     }
     return size + __xline_sizeof_head(x);
 }
 
 static inline xline_ptr xline_from_text(const char *text)
 {
-    uint64_t len = strlen(text) + 1;
+    uint64_t len = slength(text) + 1;
     xline_ptr ptr = (xline_ptr)malloc(__xline_sizeif_object((len)));
     xline_fill(ptr, text, len, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
     *(ptr->byte + (__xline_sizeof_head(ptr) + len - 1)) = '\0';
@@ -265,42 +266,39 @@ typedef struct xkey {
     char byte[1];
 }*xkey_ptr;
 
-#define __sizeof_xkey(xk)   (XKEY_HEAD_SIZE + (xk)->byte[0])
+#define __xkey_sizeof(xk)       (XKEY_HEAD_SIZE + (xk)->byte[0])
 
 
-typedef struct xline_maker {
-    // uint64_t stride;
+typedef struct xmaker {
     uint64_t wpos, rpos, len;
     xkey_ptr key;
     xline_ptr val;
     xline_ptr xline;
     uint8_t *addr, *head;
-}*xline_maker_ptr;
+}*xmaker_ptr;
 
 
-static inline uint64_t xkey_fill(xkey_ptr xkey, const char *str)
+static inline uint64_t xkey_fill(xkey_ptr xkey, const char *str, size_t len)
 {
-    __ex_logd("xkey_fill enter\n");
-    uint8_t len = strlen(str);
-    __ex_logd("xkey_fill %u\n", len);
-    if (len > UINT8_MAX - XKEY_HEAD_SIZE){
-        len = UINT8_MAX - XKEY_HEAD_SIZE;
+    // key 的字符串的最大长度不能超过 255
+    // 因为 xkey 用一个字节存储字符串长度，长度一旦大于 255 就会溢出 uint8 类型
+    if (len > UINT8_MAX){
+        len = UINT8_MAX;
     }
-    memcpy(xkey->byte + XKEY_HEAD_SIZE, str, len);
+    mcopy(xkey->byte + XKEY_HEAD_SIZE, str, len);
     xkey->byte[0] = len;
-    __ex_logd("xkey_fill exit\n");
-    return __sizeof_xkey(xkey);
+    return __xkey_sizeof(xkey);
 }
 
-static inline void xline_maker_clear(xline_maker_ptr maker)
+static inline void xline_maker_clear(xmaker_ptr maker)
 {
     if (maker && maker->addr){
         free(maker->addr);
     }
-    *maker = (struct xline_maker){0};
+    *maker = (struct xmaker){0};
 }
 
-static inline void xline_maker_setup(xline_maker_ptr maker, uint8_t *ptr, uint64_t len)
+static inline void xline_maker_setup(xmaker_ptr maker, uint8_t *ptr, uint64_t len)
 {
     maker->len = len;
     maker->wpos = maker->rpos = 0;
@@ -316,189 +314,195 @@ static inline void xline_maker_setup(xline_maker_ptr maker, uint8_t *ptr, uint64
     maker->val = NULL;
 }
 
-static inline void xline_maker_reset(xline_maker_ptr maker)
+static inline void xline_maker_reset(xmaker_ptr maker)
 {
     maker->wpos = maker->rpos = 0;
     maker->key = NULL;
     maker->val = NULL;
 }
 
-static inline void xline_maker_update(xline_maker_ptr parent, xline_maker_ptr child)
+static inline void xline_maker_update(xmaker_ptr parent, xmaker_ptr child)
 {
     parent->wpos += __xline_sizeof(child->xline);
     *(parent->xline) = __number_to_byte_64bit(parent->wpos, __xline_typeof(child->xline) | __xline_subclass_typeof(child->xline));
 }
 
-static inline void xline_append_object(xline_maker_ptr maker, const char *key, const void *val, uint64_t size, uint8_t flag)
+static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
 {
-    while ((maker->len - maker->wpos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE + size)){
+    while ((maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < (XKEY_HEAD_SIZE + keylen + XLINE_STATIC_SIZE + size)){
         if (maker->addr == NULL){
+            __ex_loge("maker->addr == NULL\n");
             exit(0);
         }
-        maker->len *= 2;
+        maker->len += maker->len;
         maker->addr = (uint8_t *)malloc(maker->len);
-        memcpy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
+        mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
         free((maker->head - XLINE_STATIC_SIZE));
         maker->head = maker->addr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)maker->addr;
     }
     maker->key = (xkey_ptr)(maker->head + maker->wpos);
-    maker->wpos += xkey_fill(maker->key, key);
+    maker->wpos += xkey_fill(maker->key, key, slength(key));
     maker->val = (xline_ptr)(maker->head + maker->wpos);
     maker->wpos += xline_fill(maker->val, val, size, flag);
     *(maker->xline) = __number_to_byte_64bit(maker->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
 }
 
-static inline void xline_add_text(xline_maker_ptr maker, const char *key, const char *text, uint64_t size)
+static inline void xline_add_text(xmaker_ptr maker, const char *key, const char *text, uint64_t size)
 {
-    xline_append_object(maker, key, text, strlen(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
+    xline_append_object(maker, key, slength(key), text, slength(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
 }
 
-static inline void xline_add_map(xline_maker_ptr maker, const char *key, xline_maker_ptr xmap)
+static inline void xline_add_map(xmaker_ptr maker, const char *key, xmaker_ptr xmap)
 {
-    xline_append_object(maker, key, xmap->head, xmap->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
+    xline_append_object(maker, key, slength(key), xmap->head, xmap->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
 }
 
-static inline void xline_add_list(xline_maker_ptr maker, const char *key, xline_maker_ptr xlist)
+static inline void xline_add_list(xmaker_ptr maker, const char *key, xmaker_ptr xlist)
 {
-    xline_append_object(maker, key, xlist->head, xlist->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
+    xline_append_object(maker, key, slength(key), xlist->head, xlist->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
 }
 
-static inline void xline_add_binary(xline_maker_ptr maker, const char *key, const void *val, uint64_t size)
+static inline void xline_add_binary(xmaker_ptr maker, const char *key, const void *val, uint64_t size)
 {
-    xline_append_object(maker, key, val, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
+    xline_append_object(maker, key, slength(key), val, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
 }
 
-static inline void xline_append_number(xline_maker_ptr maker, const char *key, struct xline val)
+static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
 {
-    __ex_logd("xline_append_number enter\n");
-    while ((maker->len - maker->wpos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE)){
-        __ex_logd("xline_append_number malloc\n");
+    __ex_loge("xline_append_number ------------------------ enter %p\n", maker->head);
+    __ex_loge("xline_append_number keylen = %lu %s\n", keylen, key);
+    // 最小长度 = 根 xline 的头 (XLINE_STATIC_SIZE) + key 长度 (keylen + XKEY_HEAD_SIZE) + value 长度 (XLINE_STATIC_SIZE)
+    while ((int64_t)(maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < ((keylen + XKEY_HEAD_SIZE) + XLINE_STATIC_SIZE)){
         if (maker->addr == NULL){
-            __ex_logd("maker->addr == NULL\n");
+            __ex_loge("maker->addr == NULL\n");
             exit(0);
         }
-        maker->len *= 2;
+        maker->len += maker->len;
+        __ex_loge("xline_append_number len = %lu wpos = %lu\n", maker->len, maker->wpos);
         maker->addr = (uint8_t *)malloc(maker->len);
-        memcpy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
+        if (maker->wpos > 0){
+            mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
+        }
         free((maker->head - XLINE_STATIC_SIZE));
-        __ex_logd("free addr %p\n", maker->xline);
-        // free(xobj->xline);
         maker->head = maker->addr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)maker->addr;
     }
-    __ex_logd("xline_append_number wpos = %lu\n", maker->wpos);
+    __ex_loge("xline_append_number wpos %lu\n", maker->wpos);
     maker->key = (xkey_ptr)(maker->head + maker->wpos);
-    __ex_logd("xline_append_number key = %p key len %d key = %s\n", maker->key, strlen(key), key);
-    maker->wpos += xkey_fill(maker->key, key);
-    __ex_logd("xline_append_number 3\n");
-    // printf("add key=%s xkey=%s\n", key, &xobj->key[1]);
+    free_test(maker->head - XLINE_STATIC_SIZE);
+    maker->wpos += xkey_fill(maker->key, key, keylen);
+    __ex_loge("xline_append_number wpos %lu\n", maker->wpos);
+    free_test(maker->head - XLINE_STATIC_SIZE);
     maker->val = (xline_ptr)(maker->head + maker->wpos);
-    __ex_logd("xline_append_number 4\n");
-    *maker->val = val;
-    __ex_logd("xline_append_number 5\n");
+    free_test(maker->head - XLINE_STATIC_SIZE);
+    *(maker->val) = val;
+    // memcpy(maker->val, &val, __xline_sizeof(&val));
+    __ex_loge("xline_append_number val addr %p size = %lu\n", maker->val, __xline_sizeof(&val));
+    free_test(maker->head - XLINE_STATIC_SIZE);
     maker->wpos += __xline_sizeof(maker->val);
-    __ex_logd("xline_append_number 6\n");
+    free_test(maker->head - XLINE_STATIC_SIZE);
+    __ex_loge("xline_append_number head  %p\n", maker->head);
     *(maker->xline) = __number_to_byte_64bit(maker->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
-    // printf("xline size=%lu xobj->pos=%lu\n", __xline_sizeof(((xline_ptr)xobj->addr)), xobj->pos);
-    __ex_logd("xline_append_number exit\n");
+    __ex_loge("xline_append_number xline %p\n", maker->xline);
+    __ex_loge("xline_append_number addr  %p\n", maker->addr);
+    free_test(maker->head - XLINE_STATIC_SIZE);
+    __ex_loge("xline_append_number ------------------------- exit %p\n", maker->head);
+
 }
 
-static inline void xline_add_int8(xline_maker_ptr maker, const char *key, int8_t n8)
+static inline void xline_add_int8(xmaker_ptr maker, const char *key, int8_t n8)
 {
-    xline_append_number(maker, key, __n2b8(n8));
+    xline_append_number(maker, key, slength(key), __n2b8(n8));
 }
 
-static inline void xline_add_int16(xline_maker_ptr maker, const char *key, int16_t n16)
+static inline void xline_add_int16(xmaker_ptr maker, const char *key, int16_t n16)
 {
-    xline_append_number(maker, key, __n2b16(n16));
+    xline_append_number(maker, key, slength(key), __n2b16(n16));
 }
 
-static inline void xline_add_int32(xline_maker_ptr maker, const char *key, int32_t n32)
+static inline void xline_add_int32(xmaker_ptr maker, const char *key, int32_t n32)
 {
-    xline_append_number(maker, key, __n2b32(n32));
+    xline_append_number(maker, key, slength(key), __n2b32(n32));
 }
 
-static inline void xline_add_int64(xline_maker_ptr maker, const char *key, int64_t n64)
+static inline void xline_add_int64(xmaker_ptr maker, const char *key, int64_t n64)
 {
-    xline_append_number(maker, key, __n2b64(n64));
+    xline_append_number(maker, key, slength(key), __n2b64(n64));
 }
 
-static inline void xline_add_uint8(xline_maker_ptr maker, const char *key, uint8_t u8)
+static inline void xline_add_uint8(xmaker_ptr maker, const char *key, uint8_t u8)
 {
-    xline_append_number(maker, key, __u2b8(u8));
+    xline_append_number(maker, key, slength(key), __u2b8(u8));
 }
 
-static inline void xline_add_uint16(xline_maker_ptr maker, const char *key, uint16_t u16)
+static inline void xline_add_uint16(xmaker_ptr maker, const char *key, uint16_t u16)
 {
-    xline_append_number(maker, key, __u2b16(u16));
+    xline_append_number(maker, key, slength(key), __u2b16(u16));
 }
 
-static inline void xline_add_uint32(xline_maker_ptr maker, const char *key, uint32_t u32)
+static inline void xline_add_uint32(xmaker_ptr maker, const char *key, uint32_t u32)
 {
-    xline_append_number(maker, key, __u2b32(u32));
+    xline_append_number(maker, key, slength(key), __u2b32(u32));
 }
 
-static inline void xline_add_uint64(xline_maker_ptr maker, const char *key, uint64_t u64)
+static inline void xline_add_uint64(xmaker_ptr maker, const char *key, uint64_t u64)
 {
-    xline_append_number(maker, key, __u2b64(u64));
+    xline_append_number(maker, key, slength(key), __u2b64(u64));
 }
 
-static inline void xline_add_real32(xline_maker_ptr maker, const char *key, float f32)
+static inline void xline_add_real32(xmaker_ptr maker, const char *key, float f32)
 {
-    xline_append_number(maker, key, __f2b32(f32));
+    xline_append_number(maker, key, slength(key), __f2b32(f32));
 }
 
-static inline void xline_add_real64(xline_maker_ptr maker, const char *key, double f64)
+static inline void xline_add_real64(xmaker_ptr maker, const char *key, double f64)
 {
-    xline_append_number(maker, key, __f2b64(f64));
+    xline_append_number(maker, key, slength(key), __f2b64(f64));
 }
 
-static inline void xline_add_ptr(xline_maker_ptr maker, const char *key, void *p)
+static inline void xline_add_ptr(xmaker_ptr maker, const char *key, void *p)
 {
     int64_t n = (int64_t)(p);
-    xline_append_number(maker, key, __n2b64(n));
+    xline_append_number(maker, key, slength(key), __n2b64(n));
 }
 
-static inline void xline_add_bool(xline_maker_ptr maker, const char *key, uint8_t b)
+static inline void xline_add_bool(xmaker_ptr maker, const char *key, uint8_t b)
 {
-    xline_append_number(maker, key, __bool_to_byte(b));
+    xline_append_number(maker, key, slength(key), __bool_to_byte(b));
 }
 
-static inline xline_ptr xline_parse(xline_maker_ptr maker, xline_ptr xmap)
+static inline struct xmaker xline_parse(xline_ptr xmap)
 {
-    maker->addr = NULL;
-    maker->wpos = __xline_sizeof_data(xmap);
-    maker->head = (uint8_t*)__xline_to_data(xmap);
-    maker->key = (xkey_ptr)(maker->head);
-    // printf("parse key=%s xkey=%s\n", &xobj->head[1], &xobj->key[1]);
-    maker->val = (xline_ptr)(maker->key->byte + __sizeof_xkey(maker->key));    
-    return maker->val;
+    // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
+    struct xmaker maker = {0};    
+    maker.wpos = __xline_sizeof_data(xmap);
+    maker.head = (uint8_t*)__xline_to_data(xmap);
+    return maker;
 }
 
-static inline xline_ptr xline_next(xline_maker_ptr maker)
+static inline xline_ptr xline_next(xmaker_ptr maker)
 {
-    if (maker->val){
-        maker->rpos = ((maker->val->byte) - (maker->head) + __xline_sizeof(maker->val));
-        if (maker->rpos < maker->wpos){
-            maker->key = (xkey_ptr)(maker->head + maker->wpos);
-            maker->val = (xline_ptr)(maker->key->byte + __sizeof_xkey(maker->key));
-            return maker->val;
-        }
+    if (maker->rpos < maker->wpos){
+        maker->key = (xkey_ptr)(maker->head + maker->rpos);
+        maker->rpos += __xkey_sizeof(maker->key);
+        maker->val = (xline_ptr)(maker->head + maker->rpos);
+        maker->rpos += __xline_sizeof(maker->val);
+        return maker->val;
     }
     return NULL;
 }
 
-static inline xline_ptr xline_find(xline_maker_ptr maker, const char *key)
+static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 {
     maker->rpos = 0;
     while (maker->rpos < maker->wpos) {
         maker->key = (xkey_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_xkey(maker->key);
-        maker->val = (xline_ptr)(maker->key->byte + __sizeof_xkey(maker->key));
+        maker->rpos += __xkey_sizeof(maker->key);
+        maker->val = (xline_ptr)(maker->head + maker->rpos);
         // printf("get key=%s xkey=%s\n", key, &xobj->key[1]);
-        if (strlen(key) == maker->key->byte[0]
-            && memcmp(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
+        if (slength(key) == maker->key->byte[0]
+            && mcompare(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
             return maker->val;
         }
         maker->rpos += __xline_sizeof(maker->val);
@@ -506,7 +510,7 @@ static inline xline_ptr xline_find(xline_maker_ptr maker, const char *key)
     return NULL;
 }
 
-static inline xline_ptr xline_after(xline_maker_ptr maker, const char *key)
+static inline xline_ptr xline_after(xmaker_ptr maker, const char *key)
 {
     if (maker->val){
 
@@ -515,10 +519,10 @@ static inline xline_ptr xline_after(xline_maker_ptr maker, const char *key)
 
         while (maker->rpos < maker->wpos) {
             maker->key = (xkey_ptr)(maker->head + maker->rpos);
-            maker->rpos += __sizeof_xkey(maker->key);
-            maker->val = (xline_ptr)(maker->key->byte + __xline_sizeof(maker->key));
-            if (strlen(key) == maker->key->byte[0]
-                && memcmp(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
+            maker->rpos += __xkey_sizeof(maker->key);
+            maker->val = (xline_ptr)(maker->head + maker->rpos);
+            if (slength(key) == maker->key->byte[0]
+                && mcompare(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
                 return maker->val;
             }
             maker->rpos += __xline_sizeof(maker->val);
@@ -528,11 +532,11 @@ static inline xline_ptr xline_after(xline_maker_ptr maker, const char *key)
 
         do {
             maker->key = (xkey_ptr)(maker->head + maker->rpos);
-            maker->rpos += __sizeof_xkey(maker->key);
-            maker->val = (xline_ptr)(maker->key->byte + __sizeof_xkey(maker->key));
+            maker->rpos += __xkey_sizeof(maker->key);
+            maker->val = (xline_ptr)(maker->head + maker->rpos);
             maker->rpos += __xline_sizeof(maker->val);
-            if (strlen(key) == maker->key->byte[0]
-                && memcmp(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
+            if (slength(key) == maker->key->byte[0]
+                && mcompare(key, &maker->key->byte[1], maker->key->byte[0]) == 0){
                 return maker->val;
             }
         } while (maker->val != start_val);
@@ -541,7 +545,7 @@ static inline xline_ptr xline_after(xline_maker_ptr maker, const char *key)
     return xline_find(maker, key);
 }
 
-static inline uint8_t xline_find_bool(xline_maker_ptr maker, const char *key)
+static inline uint8_t xline_find_bool(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -550,7 +554,7 @@ static inline uint8_t xline_find_bool(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline int8_t xline_find_int8(xline_maker_ptr maker, const char *key)
+static inline int8_t xline_find_int8(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -559,7 +563,7 @@ static inline int8_t xline_find_int8(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline int16_t xline_find_int16(xline_maker_ptr maker, const char *key)
+static inline int16_t xline_find_int16(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -568,7 +572,7 @@ static inline int16_t xline_find_int16(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline int32_t xline_find_int32(xline_maker_ptr maker, const char *key)
+static inline int32_t xline_find_int32(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -577,7 +581,7 @@ static inline int32_t xline_find_int32(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline int64_t xline_find_int64(xline_maker_ptr maker, const char *key)
+static inline int64_t xline_find_int64(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -586,7 +590,7 @@ static inline int64_t xline_find_int64(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline uint8_t xline_find_uint8(xline_maker_ptr maker, const char *key)
+static inline uint8_t xline_find_uint8(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -595,7 +599,7 @@ static inline uint8_t xline_find_uint8(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline uint16_t xline_find_uint16(xline_maker_ptr maker, const char *key)
+static inline uint16_t xline_find_uint16(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -604,7 +608,7 @@ static inline uint16_t xline_find_uint16(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline uint32_t xline_find_uint32(xline_maker_ptr maker, const char *key)
+static inline uint32_t xline_find_uint32(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -613,7 +617,7 @@ static inline uint32_t xline_find_uint32(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline uint64_t xline_find_uint64(xline_maker_ptr maker, const char *key)
+static inline uint64_t xline_find_uint64(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -622,7 +626,7 @@ static inline uint64_t xline_find_uint64(xline_maker_ptr maker, const char *key)
     return 0;
 }
 
-static inline float xline_find_real32(xline_maker_ptr maker, const char *key)
+static inline float xline_find_real32(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -631,7 +635,7 @@ static inline float xline_find_real32(xline_maker_ptr maker, const char *key)
     return 0.0f;
 }
 
-static inline double xline_find_real64(xline_maker_ptr maker, const char *key)
+static inline double xline_find_real64(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -640,7 +644,7 @@ static inline double xline_find_real64(xline_maker_ptr maker, const char *key)
     return 0.0f;
 }
 
-static inline void* xline_find_ptr(xline_maker_ptr maker, const char *key)
+static inline void* xline_find_ptr(xmaker_ptr maker, const char *key)
 {
     xline_ptr val = xline_after(maker, key);
     if (val){
@@ -649,7 +653,7 @@ static inline void* xline_find_ptr(xline_maker_ptr maker, const char *key)
     return NULL;
 }
 
-static inline void xline_list_append(xline_maker_ptr maker, xline_ptr x)
+static inline void xline_list_append(xmaker_ptr maker, xline_ptr x)
 {
     uint64_t len = __xline_sizeof(x);
     while ((maker->len - maker->wpos) < len){
@@ -658,33 +662,32 @@ static inline void xline_list_append(xline_maker_ptr maker, xline_ptr x)
         }
         maker->len *= 2;
         maker->addr = (uint8_t *)malloc(maker->len);
-        memcpy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
+        mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
         free((maker->head - XLINE_STATIC_SIZE));
         maker->head = maker->addr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)maker->addr;
     }
-    memcpy(maker->head + maker->wpos, x->byte, len);
+    mcopy(maker->head + maker->wpos, x->byte, len);
     maker->wpos += len;
     *(maker->xline) = __number_to_byte_64bit(maker->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
 }
 
-static inline xline_ptr xline_list_parse(xline_maker_ptr maker, xline_ptr xlist)
+static inline struct xmaker xline_list_parse(xline_ptr xlist)
 {
-    maker->addr = NULL;
-    maker->key = NULL;
-    maker->len = 0;
-    maker->head = (uint8_t*)__xline_to_data(xlist);
-    maker->val = (xline_ptr)maker->head;
-    xline_ptr x = (xline_ptr)(maker->head);
+    // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
+    struct xmaker maker = {0};
+    // maker.addr = NULL;
+    // maker.key = NULL;
+    // maker.len = 0;
+    // maker.rpos = 0;
+    maker.head = (uint8_t*)__xline_to_data(xlist);
+    maker.val = (xline_ptr)maker.head;
     // 读取 xlist 的长度，然后设置 wpos
-    maker->wpos = __xline_sizeif_object(xlist);
-    // 设置 rpos 指向下一个 xline 的地址
-    maker->rpos = __xline_sizeof(x);
-    // 返回第一个 xline
-    return x;
+    maker.wpos = __xline_sizeif_object(xlist);
+    return maker;
 }
 
-static inline xline_ptr xline_list_next(xline_maker_ptr maker)
+static inline xline_ptr xline_list_next(xmaker_ptr maker)
 {
     if (maker->wpos - maker->rpos > 0){
         xline_ptr x = (xline_ptr)(maker->head + maker->rpos);

@@ -69,6 +69,7 @@ __ex_export bool __ex_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 ///// 线程相关
 ///////////////////////////////////////////////////////
+typedef struct xmaker* xmaker_ptr;
 
 typedef struct ex_pipe __ex_pipe;
 __ex_export __ex_pipe* __ex_pipe_create(uint64_t len);
@@ -80,6 +81,17 @@ __ex_export uint64_t __ex_pipe_writable(__ex_pipe *pipe);
 __ex_export void __ex_pipe_clear(__ex_pipe *pipe);
 __ex_export void __ex_pipe_break(__ex_pipe *pipe);
 
+typedef struct msg_pipe __ex_msg_pipe;
+__ex_export __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len);
+__ex_export void __ex_msg_pipe_free(__ex_msg_pipe **pptr);
+__ex_export uint64_t __ex_msg_pipe_readable(__ex_msg_pipe *pipe);
+__ex_export uint64_t __ex_msg_pipe_writable(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_clear(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_break(__ex_msg_pipe *pipe);
+__ex_export xmaker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe);
+__ex_export xmaker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe);
+__ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
 
 __ex_export void __ex_backtrace_setup();
 __ex_export void __ex_memory_leak_trace(void (*cb)(const char *leak_location));
@@ -123,28 +135,13 @@ __ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, in
 ///////////////////////////////////////////////////////
 
 typedef struct ex_task* __ex_task_ptr;
-typedef struct xline* __ex_task_ctx_ptr;
-typedef struct xline_maker* __ex_task_ctx_maker_ptr;
-typedef void (*__ex_task_func)(__ex_task_ctx_maker_ptr ctx);
+typedef void (*__ex_task_func)(xmaker_ptr ctx);
 __ex_export __ex_task_ptr __ex_task_create();
 __ex_export void __ex_task_free(__ex_task_ptr *pptr);
-__ex_export __ex_task_ctx_maker_ptr __ex_task_hold_pusher(__ex_task_ptr task);
+__ex_export xmaker_ptr __ex_task_hold_pusher(__ex_task_ptr task);
 __ex_export void __ex_task_update_pusher(__ex_task_ptr task);
 __ex_export __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx);
 
-
-typedef struct msg_pipe __ex_msg_pipe;
-typedef struct xline_maker* xline_maker_ptr;
-__ex_export __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len);
-__ex_export void __ex_msg_pipe_free(__ex_msg_pipe **pptr);
-__ex_export uint64_t __ex_msg_pipe_readable(__ex_msg_pipe *pipe);
-__ex_export uint64_t __ex_msg_pipe_writable(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_clear(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_break(__ex_msg_pipe *pipe);
-__ex_export xline_maker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe);
-__ex_export xline_maker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
 
 #ifdef __cplusplus
 }

@@ -116,17 +116,17 @@ typedef uint16_t ___atom_size16bit;
 //////////////////////////////////////
 
 
-typedef struct __lock {
+typedef struct ex_mutex {
     pthread_cond_t cond[1];
     pthread_mutex_t mutex[1];
-}*__ex_lock_ptr;
+}*__ex_mutex_ptr;
 
 typedef pthread_mutex_t*      ___lock;
 
-static inline __ex_lock_ptr __ex_lock_create()
+static inline __ex_mutex_ptr __ex_mutex_create()
 {
     int ret;
-    __ex_lock_ptr mptr = (__ex_lock_ptr)malloc(sizeof(struct __lock));
+    __ex_mutex_ptr mptr = (__ex_mutex_ptr)malloc(sizeof(struct ex_mutex));
     assert(mptr);
     ret = pthread_mutex_init(mptr->mutex, NULL);
     assert(ret == 0);
@@ -135,7 +135,7 @@ static inline __ex_lock_ptr __ex_lock_create()
     return mptr;
 }
 
-static inline void __ex_lock_free(__ex_lock_ptr mptr)
+static inline void __ex_mutex_free(__ex_mutex_ptr mptr)
 {
     int ret;
     assert(mptr);
@@ -146,32 +146,32 @@ static inline void __ex_lock_free(__ex_lock_ptr mptr)
     free(mptr);
 }
 
-static inline pthread_mutex_t* __ex_lock(__ex_lock_ptr mptr)
+static inline pthread_mutex_t* __ex_mutex_lock(__ex_mutex_ptr mptr)
 {
     assert(mptr);
     pthread_mutex_lock(mptr->mutex);
     return mptr->mutex;
 }
 
-static inline void __ex_notify(__ex_lock_ptr mptr)
+static inline void __ex_mutex_notify(__ex_mutex_ptr mptr)
 {
     assert(mptr);
     pthread_cond_signal(mptr->cond);
 }
 
-static inline void __ex_broadcast(__ex_lock_ptr mptr)
+static inline void __ex_mutex_broadcast(__ex_mutex_ptr mptr)
 {
     assert(mptr);
     pthread_cond_broadcast(mptr->cond);
 }
 
-static inline void __ex_wait(__ex_lock_ptr mptr, pthread_mutex_t *lock)
+static inline void __ex_mutex_wait(__ex_mutex_ptr mptr, pthread_mutex_t *lock)
 {
     assert(mptr);
     pthread_cond_wait(mptr->cond, lock);
 }
 
-static inline int __ex_timed_wait(__ex_lock_ptr mptr, pthread_mutex_t *lock, uint64_t delay)
+static inline int __ex_mutex_timed_wait(__ex_mutex_ptr mptr, pthread_mutex_t *lock, uint64_t delay)
 {
     assert(mptr);
     struct timespec ts;
@@ -184,7 +184,7 @@ static inline int __ex_timed_wait(__ex_lock_ptr mptr, pthread_mutex_t *lock, uin
     return 0;
 }
 
-static inline void __ex_unlock(__ex_lock_ptr mptr, pthread_mutex_t *lock)
+static inline void __ex_mutex_unlock(__ex_mutex_ptr mptr, pthread_mutex_t *lock)
 {
     assert(mptr && lock);
     pthread_mutex_unlock(lock);
@@ -341,28 +341,28 @@ private:
 };
 
 using ___lock = CxxMutex::CxxLock;
-typedef struct CxxMutex*    __ex_lock_ptr;
+typedef struct CxxMutex*    __ex_mutex_ptr;
 
-static inline __ex_lock_ptr __ex_lock_create()
+static inline __ex_mutex_ptr __ex_mutex_create()
 {
-    __ex_lock_ptr ptr = new CxxMutex();
+    __ex_mutex_ptr ptr = new CxxMutex();
     assert(ptr);
     return ptr;
 }
 
-static inline void __ex_lock_free(__ex_lock_ptr mtx)
+static inline void __ex_mutex_free(__ex_mutex_ptr mtx)
 {
     if (mtx){
         delete mtx;
     }
 }
 
-#define __ex_lock(mtx)                      (mtx)->lock()
-#define __ex_notify(mtx)                    (mtx)->notify()
-#define __ex_broadcast(mtx)                 (mtx)->broadcast()
-#define __ex_wait(mtx, lock)                (mtx)->wait((lock))
-#define __ex_timed_wait(mtx, lock, delay)   (mtx)->timer((lock), (delay))
-#define __ex_unlock(mtx, lock)              (mtx)->unlock((lock))
+#define __ex_mutex_lock(mtx)                      (mtx)->lock()
+#define __ex_mutex_notify(mtx)                    (mtx)->notify()
+#define __ex_mutex_broadcast(mtx)                 (mtx)->broadcast()
+#define __ex_mutex_wait(mtx, lock)                (mtx)->wait((lock))
+#define __ex_mutex_timed_wait(mtx, lock, delay)   (mtx)->timer((lock), (delay))
+#define __ex_mutex_unlock(mtx, lock)              (mtx)->unlock((lock))
 
 
 #endif //__cplusplus

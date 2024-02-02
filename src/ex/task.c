@@ -26,7 +26,7 @@ struct ex_task {
 
 static void* __ex_task_loop(void *p)
 {
-    xline_maker_ptr ctx;
+    xmaker_ptr ctx;
     __ex_task_func post_func;
     __ex_task_ptr task = (__ex_task_ptr)p;
 
@@ -61,12 +61,12 @@ __ex_task_ptr __ex_task_create()
     __ex_task_ptr task = (__ex_task_ptr)malloc(sizeof(struct ex_task));
     assert(task);
 
-    task->pipe = __ex_msg_pipe_create(2);
+    task->pipe = __ex_msg_pipe_create(256);
     assert(task->pipe);
 
-    task->running = true;
-    task->tid = __ex_thread_create(__ex_task_loop, task);
-    assert(task->tid);
+    // task->running = true;
+    // task->tid = __ex_thread_create(__ex_task_loop, task);
+    // assert(task->tid);
 
     __ex_logi("__ex_task_create exit\n");
 
@@ -92,7 +92,7 @@ void __ex_task_free(__ex_task_ptr *pptr)
 }
 
 
-xline_maker_ptr __ex_task_hold_pusher(__ex_task_ptr task)
+xmaker_ptr __ex_task_hold_pusher(__ex_task_ptr task)
 {
     return __ex_msg_pipe_hold_writer(task->pipe);
 }
@@ -105,7 +105,7 @@ void __ex_task_update_pusher(__ex_task_ptr task)
 __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx)
 {
     __ex_task_ptr task = __ex_task_create();
-    xline_maker_ptr maker = __ex_task_hold_pusher(task);
+    xmaker_ptr maker = __ex_task_hold_pusher(task);
     xline_add_ptr(maker, "func", (void*)func);
     xline_add_ptr(maker, "ctx", ctx);
     __ex_task_update_pusher(task);

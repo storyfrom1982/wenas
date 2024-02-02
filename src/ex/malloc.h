@@ -18,12 +18,13 @@ extern char* strdup(const char *s);
 extern char* strndup(const char *s, size_t n);
 extern int posix_memalign(void* *ptr, size_t align, size_t size);
 extern void free(void* address);
+extern void free_test(void* address);
 
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
-extern size_t strlen(const char *s);
-extern int memcmp(const void *s1, const void *s2, size_t n);
+extern size_t slength(const char *s);
+extern int mcompare(const void *s1, const void *s2, size_t n);
 extern void* mcopy(void *dst, const void *src, size_t n);
-void mclear(void *ptr, size_t len);
+extern void mclear(void *ptr, size_t len);
 
 #ifdef __cplusplus
 }

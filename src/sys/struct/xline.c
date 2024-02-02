@@ -261,17 +261,17 @@
 //     char byte[1];
 // }*xkey_ptr;
 
-// #define __sizeof_xkey(xk)   (XKEY_HEAD_SIZE + (xk)->byte[0])
+// #define __xkey_sizeof(xk)   (XKEY_HEAD_SIZE + (xk)->byte[0])
 
 
-// typedef struct xline_maker {
+// typedef struct xmaker {
 //     uint64_t stride;
 //     uint64_t pos, len;
 //     xkey_ptr key;
 //     xline_ptr val;
-//     struct xline_maker *prev, *next;
+//     struct xmaker *prev, *next;
 //     uint8_t *addr, *head;
-// }*xline_maker_ptr;
+// }*xmaker_ptr;
 
 
 // inline uint64_t xkey_fill(xkey_ptr xkey, const char *str)
@@ -282,18 +282,18 @@
 //     }
 //     memcpy(xkey->byte + XKEY_HEAD_SIZE, str, len);
 //     xkey->byte[0] = len;
-//     return __sizeof_xkey(xkey);
+//     return __xkey_sizeof(xkey);
 // }
 
-// inline void xline_maker_clear(xline_maker_ptr xobj)
+// inline void xline_maker_clear(xmaker_ptr xobj)
 // {
 //     if (xobj && xobj->addr){
 //         free(xobj->addr);
 //     }
-//     *xobj = (struct xline_maker){0};
+//     *xobj = (struct xmaker){0};
 // }
 
-// inline void xline_maker_create(xline_maker_ptr xobj, uint64_t stride)
+// inline void xline_maker_create(xmaker_ptr xobj, uint64_t stride)
 // {
 //     xobj->pos = 0;
 //     xobj->len = xobj->stride = stride;
@@ -302,7 +302,7 @@
 //     xobj->key = xobj->val = NULL;
 // }
 
-// inline void xline_append_object(xline_maker_ptr xobj, const char *key, const void *val, uint64_t size, uint8_t flag)
+// inline void xline_append_object(xmaker_ptr xobj, const char *key, const void *val, uint64_t size, uint8_t flag)
 // {
 //     while ((xobj->len - xobj->pos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE + size)){
 //         xobj->len += xobj->stride;
@@ -318,27 +318,27 @@
 //     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_MAP);
 // }
 
-// inline void xline_add_text(xline_maker_ptr xobj, const char *key, const char *text)
+// inline void xline_add_text(xmaker_ptr xobj, const char *key, const char *text)
 // {
 //     xline_append_object(xobj, key, text, strlen(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
 // }
 
-// inline void xline_add_map(xline_maker_ptr xobj, const char *key, xline_maker_ptr xmap)
+// inline void xline_add_map(xmaker_ptr xobj, const char *key, xmaker_ptr xmap)
 // {
 //     xline_append_object(xobj, key, xmap->head, xmap->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
 // }
 
-// inline void xline_add_list(xline_maker_ptr xobj, const char *key, xline_maker_ptr xlist)
+// inline void xline_add_list(xmaker_ptr xobj, const char *key, xmaker_ptr xlist)
 // {
 //     xline_append_object(xobj, key, xlist->head, xlist->pos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_LIST);
 // }
 
-// inline void xline_add_binary(xline_maker_ptr xobj, const char *key, const void *val, uint64_t size)
+// inline void xline_add_binary(xmaker_ptr xobj, const char *key, const void *val, uint64_t size)
 // {
 //     xline_append_object(xobj, key, val, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_BIN);
 // }
 
-// inline void xline_append_number(xline_maker_ptr xobj, const char *key, struct xline val)
+// inline void xline_append_number(xmaker_ptr xobj, const char *key, struct xline val)
 // {
 //     while ((xobj->len - xobj->pos) < (XKEY_MAX_SIZE + XLINE_STATIC_SIZE)){
 //         xobj->len += xobj->stride;
@@ -355,97 +355,97 @@
 //     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_MAP);
 // }
 
-// inline void xline_add_int8(xline_maker_ptr xobj, const char *key, int8_t n8)
+// inline void xline_add_int8(xmaker_ptr xobj, const char *key, int8_t n8)
 // {
 //     xline_append_number(xobj, key, __n2b8(n8));
 // }
 
-// inline void xline_add_int16(xline_maker_ptr xobj, const char *key, int16_t n16)
+// inline void xline_add_int16(xmaker_ptr xobj, const char *key, int16_t n16)
 // {
 //     xline_append_number(xobj, key, __n2b16(n16));
 // }
 
-// inline void xline_add_int32(xline_maker_ptr xobj, const char *key, int32_t n32)
+// inline void xline_add_int32(xmaker_ptr xobj, const char *key, int32_t n32)
 // {
 //     xline_append_number(xobj, key, __n2b32(n32));
 // }
 
-// inline void xline_add_int64(xline_maker_ptr xobj, const char *key, int64_t n64)
+// inline void xline_add_int64(xmaker_ptr xobj, const char *key, int64_t n64)
 // {
 //     xline_append_number(xobj, key, __n2b64(n64));
 // }
 
-// inline void xline_add_uint8(xline_maker_ptr xobj, const char *key, uint8_t u8)
+// inline void xline_add_uint8(xmaker_ptr xobj, const char *key, uint8_t u8)
 // {
 //     xline_append_number(xobj, key, __u2b8(u8));
 // }
 
-// inline void xline_add_uint16(xline_maker_ptr xobj, const char *key, uint16_t u16)
+// inline void xline_add_uint16(xmaker_ptr xobj, const char *key, uint16_t u16)
 // {
 //     xline_append_number(xobj, key, __u2b16(u16));
 // }
 
-// inline void xline_add_uint32(xline_maker_ptr xobj, const char *key, uint32_t u32)
+// inline void xline_add_uint32(xmaker_ptr xobj, const char *key, uint32_t u32)
 // {
 //     xline_append_number(xobj, key, __u2b32(u32));
 // }
 
-// inline void xline_add_uint64(xline_maker_ptr xobj, const char *key, uint64_t u64)
+// inline void xline_add_uint64(xmaker_ptr xobj, const char *key, uint64_t u64)
 // {
 //     xline_append_number(xobj, key, __u2b64(u64));
 // }
 
-// inline void xline_add_real32(xline_maker_ptr xobj, const char *key, float f32)
+// inline void xline_add_real32(xmaker_ptr xobj, const char *key, float f32)
 // {
 //     xline_append_number(xobj, key, __f2b32(f32));
 // }
 
-// inline void xline_add_real64(xline_maker_ptr xobj, const char *key, double f64)
+// inline void xline_add_real64(xmaker_ptr xobj, const char *key, double f64)
 // {
 //     xline_append_number(xobj, key, __f2b64(f64));
 // }
 
-// inline void xline_add_ptr(xline_maker_ptr xobj, const char *key, void *p)
+// inline void xline_add_ptr(xmaker_ptr xobj, const char *key, void *p)
 // {
 //     int64_t n = (int64_t)(p);
 //     xline_append_number(xobj, key, __n2b64(n));
 // }
 
-// inline void xline_add_bool(xline_maker_ptr xobj, const char *key, uint8_t b)
+// inline void xline_add_bool(xmaker_ptr xobj, const char *key, uint8_t b)
 // {
 //     xline_append_number(xobj, key, __bool_to_byte(b));
 // }
 
-// inline xline_ptr xline_parse(xline_maker_ptr xobj, xline_ptr xmap)
+// inline xline_ptr xline_parse(xmaker_ptr xobj, xline_ptr xmap)
 // {
 //     xobj->addr = NULL;
 //     xobj->len = __xline_sizeof_data(xmap);
 //     xobj->head = (uint8_t*)__xline_to_data(xmap);
 //     xobj->key = (xkey_ptr)(xobj->head);
-//     xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));    
+//     xobj->val = (xline_ptr)(xobj->key->byte + __xkey_sizeof(xobj->key));    
 //     return xobj->val;
 // }
 
-// inline xline_ptr xline_next(xline_maker_ptr xobj)
+// inline xline_ptr xline_next(xmaker_ptr xobj)
 // {
 //     if (xobj->val){
 //         xobj->pos = ((xobj->val->byte) - (xobj->head) + __xline_sizeof(xobj->val));
 //         if (xobj->pos < xobj->len){
 //             xobj->key = (xkey_ptr)(xobj->head + xobj->pos);
-//             xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));
+//             xobj->val = (xline_ptr)(xobj->key->byte + __xkey_sizeof(xobj->key));
 //             return xobj->val;
 //         }
 //     }
 //     return NULL;
 // }
 
-// inline xline_ptr xline_find(xline_maker_ptr xobj, const char *key)
+// inline xline_ptr xline_find(xmaker_ptr xobj, const char *key)
 // {
 //     xobj->pos = 0;
 //     while (xobj->pos < xobj->len) {
 //         xobj->key = (xkey_ptr)(xobj->head + xobj->pos);
-//         xobj->pos += __sizeof_xkey(xobj->key);
-//         xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));
+//         xobj->pos += __xkey_sizeof(xobj->key);
+//         xobj->val = (xline_ptr)(xobj->key->byte + __xkey_sizeof(xobj->key));
 //         if (strlen(key) == xobj->key->byte[0]
 //             && memcmp(key, &xobj->key->byte[1], xobj->key->byte[0]) == 0){
 //             return xobj->val;
@@ -455,7 +455,7 @@
 //     return NULL;
 // }
 
-// inline xline_ptr xline_after(xline_maker_ptr xobj, const char *key)
+// inline xline_ptr xline_after(xmaker_ptr xobj, const char *key)
 // {
 //     if (xobj->val){
 
@@ -464,7 +464,7 @@
 
 //         while (xobj->pos < xobj->len) {
 //             xobj->key = (xline_ptr)(xobj->head + xobj->pos);
-//             xobj->pos += __sizeof_xkey(xobj->key);
+//             xobj->pos += __xkey_sizeof(xobj->key);
 //             xobj->val = (xline_ptr)(xobj->key->byte + __xline_sizeof(xobj->key));
 //             if (strlen(key) == xobj->key->byte[0]
 //                 && memcmp(key, &xobj->key->byte[1], xobj->key->byte[0]) == 0){
@@ -477,8 +477,8 @@
 
 //         do {
 //             xobj->key = (xkey_ptr)(xobj->head + xobj->pos);
-//             xobj->pos += __sizeof_xkey(xobj->key);
-//             xobj->val = (xline_ptr)(xobj->key->byte + __sizeof_xkey(xobj->key));
+//             xobj->pos += __xkey_sizeof(xobj->key);
+//             xobj->val = (xline_ptr)(xobj->key->byte + __xkey_sizeof(xobj->key));
 //             xobj->pos += __xline_sizeof(xobj->val);
 //             if (strlen(key) == xobj->key->byte[0]
 //                 && memcmp(key, &xobj->key->byte[1], xobj->key->byte[0]) == 0){
@@ -490,7 +490,7 @@
 //     return xline_find(xobj, key);
 // }
 
-// inline uint8_t xline_find_bool(xline_maker_ptr xobj, const char *key)
+// inline uint8_t xline_find_bool(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -499,7 +499,7 @@
 //     return 0;
 // }
 
-// inline int8_t xline_find_int8(xline_maker_ptr xobj, const char *key)
+// inline int8_t xline_find_int8(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -508,7 +508,7 @@
 //     return 0;
 // }
 
-// inline int16_t xline_find_int16(xline_maker_ptr xobj, const char *key)
+// inline int16_t xline_find_int16(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -517,7 +517,7 @@
 //     return 0;
 // }
 
-// inline int32_t xline_find_int32(xline_maker_ptr xobj, const char *key)
+// inline int32_t xline_find_int32(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -526,7 +526,7 @@
 //     return 0;
 // }
 
-// inline int64_t xline_find_int64(xline_maker_ptr xobj, const char *key)
+// inline int64_t xline_find_int64(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -535,7 +535,7 @@
 //     return 0;
 // }
 
-// inline uint8_t xline_find_uint8(xline_maker_ptr xobj, const char *key)
+// inline uint8_t xline_find_uint8(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -544,7 +544,7 @@
 //     return 0;
 // }
 
-// inline uint16_t xline_find_uint16(xline_maker_ptr xobj, const char *key)
+// inline uint16_t xline_find_uint16(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -553,7 +553,7 @@
 //     return 0;
 // }
 
-// inline uint32_t xline_find_uint32(xline_maker_ptr xobj, const char *key)
+// inline uint32_t xline_find_uint32(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -562,7 +562,7 @@
 //     return 0;
 // }
 
-// inline uint64_t xline_find_uint64(xline_maker_ptr xobj, const char *key)
+// inline uint64_t xline_find_uint64(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -571,7 +571,7 @@
 //     return 0;
 // }
 
-// inline float xline_find_real32(xline_maker_ptr xobj, const char *key)
+// inline float xline_find_real32(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -580,7 +580,7 @@
 //     return 0.0f;
 // }
 
-// inline double xline_find_real64(xline_maker_ptr xobj, const char *key)
+// inline double xline_find_real64(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -589,7 +589,7 @@
 //     return 0.0f;
 // }
 
-// inline void* xline_find_ptr(xline_maker_ptr xobj, const char *key)
+// inline void* xline_find_ptr(xmaker_ptr xobj, const char *key)
 // {
 //     xline_ptr val = xline_after(xobj, key);
 //     if (val){
@@ -598,7 +598,7 @@
 //     return NULL;
 // }
 
-// inline void xline_list_append(xline_maker_ptr xobj, xline_ptr x)
+// inline void xline_list_append(xmaker_ptr xobj, xline_ptr x)
 // {
 //     uint64_t len = __xline_sizeof(x);
 //     while ((xobj->len - xobj->pos) < len){
@@ -613,7 +613,7 @@
 //     *((xline_ptr)xobj->addr) = __number_to_byte_64bit(xobj->pos, XLINE_OBJECT_TYPE_LIST);
 // }
 
-// inline xline_ptr xline_list_parse(xline_maker_ptr xobj, xline_ptr xlist)
+// inline xline_ptr xline_list_parse(xmaker_ptr xobj, xline_ptr xlist)
 // {
 //     xobj->addr = NULL;
 //     xobj->key = NULL;
@@ -625,7 +625,7 @@
 //     return x;
 // }
 
-// inline xline_ptr xline_list_next(xline_maker_ptr xobj)
+// inline xline_ptr xline_list_next(xmaker_ptr xobj)
 // {
 //     if (xobj->len - xobj->pos > 0){
 //         xline_ptr x = (xline_ptr)(xobj->head + xobj->pos);

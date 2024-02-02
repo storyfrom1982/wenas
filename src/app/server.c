@@ -31,7 +31,7 @@ static void malloc_debug_cb(const char *debug)
     __ex_logd("%s\n", debug);
 }
 
-static void listening(xline_maker_ptr task_ctx)
+static void listening(xmaker_ptr task_ctx)
 {
     __ex_logd("listening enter\n");
     __ex_logd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
@@ -94,7 +94,7 @@ static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
     __ex_logd("on_idle server = %p\n", server);
-    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
     __ex_logd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     __ex_logd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
     xline_add_ptr(ctx, "func", listening);
@@ -119,7 +119,7 @@ static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 
 }
 
-static void disconnect_task(xline_maker_ptr task)
+static void disconnect_task(xmaker_ptr task)
 {
     xmsgchannel_ptr channel = (xmsgchannel_ptr)xline_find_ptr(task, "ctx");
 }
@@ -127,13 +127,13 @@ static void disconnect_task(xline_maker_ptr task)
 static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
-    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", disconnect_task);
     xline_add_ptr(ctx, "ctx", channel);
     __ex_task_update_pusher(server->task);
 }
 
-static void process_message(xline_maker_ptr task_ctx)
+static void process_message(xmaker_ptr task_ctx)
 {
 
 }
@@ -141,7 +141,7 @@ static void process_message(xline_maker_ptr task_ctx)
 static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
-    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", process_message);
     xline_add_ptr(ctx, "ctx", channel);
     xline_add_ptr(ctx, "msg", msg);
@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
 
     xmessenger_connect(server.messenger, addr);
     
-    // struct xline_maker task_ctx;
+    // struct xmaker task_ctx;
     // xline_maker_setup(&task_ctx, NULL, 256);
     // xline_add_ptr(&task_ctx, "func", listening);
     // xline_add_ptr(&task_ctx, "ctx", &server);

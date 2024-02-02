@@ -14,11 +14,11 @@ extern "C" {
 #endif
 
 struct targs {
-    __ex_lock_ptr mtx;
+    __ex_mutex_ptr mtx;
     ___atom_bool *testTrue;
 };
 
-static void mutex_task(xline_maker_ptr kv)
+static void mutex_task(xmaker_ptr kv)
 {
     struct targs *targ = (struct targs *)xline_find_ptr(kv, "ctx");
 
@@ -35,14 +35,14 @@ static void mutex_task(xline_maker_ptr kv)
     std::cout << "tt: " << *targ->testTrue << std::endl;
 
     std::cout << "thread enter\n";
-    auto lk = __ex_lock(targ->mtx);
+    auto lk = __ex_mutex_lock(targ->mtx);
     std::cout << "sleep_until\n";
-    __ex_timed_wait(targ->mtx, *(___lock*)(&lk), 3000000000);
+    __ex_mutex_timed_wait(targ->mtx, *(___lock*)(&lk), 3000000000);
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
-    __ex_notify(targ->mtx);
+    __ex_mutex_notify(targ->mtx);
     std::cout << "notify\n";
-    __ex_wait(targ->mtx, lk);
-    __ex_unlock(targ->mtx, lk);
+    __ex_mutex_wait(targ->mtx, lk);
+    __ex_mutex_unlock(targ->mtx, lk);
     std::cout << "exit\n";
     // return nullptr;
 }
@@ -84,9 +84,9 @@ int main(int argc, char *argv[])
     ___atom_lock(&testTrue);
     std::cout << "is lock: " << testTrue.load() << std::endl;
 
-    __ex_lock_ptr mtx = __ex_lock_create();
+    __ex_mutex_ptr mtx = __ex_mutex_create();
 
-    auto lk = __ex_lock(mtx);
+    auto lk = __ex_mutex_lock(mtx);
 
     // ___atom_bool *tt = &testTrue;
     // std::cout << "testTrue: " << *tt << std::endl;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
     targ.testTrue = &testTrue;
 
     __ex_task_ptr task = __ex_task_create();
-    struct xline_maker ctx;
+    struct xmaker ctx;
     xline_maker_setup(&ctx, NULL, 1024);
     xline_add_ptr(&ctx, "func", (void*)mutex_task);
     xline_add_ptr(&ctx, "ctx", (void*)&targ);
@@ -104,21 +104,21 @@ int main(int argc, char *argv[])
 
     // ___thread_ptr tid = ___thread_create(mutex_task, &targ);
 
-    __ex_timed_wait(mtx, *(CxxMutex::CxxLock*)(&lk), 3000000);
+    __ex_mutex_timed_wait(mtx, *(CxxMutex::CxxLock*)(&lk), 3000000);
     ___atom_unlock(&testTrue);
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
     std::cout << "waitting\n";
-    __ex_wait(mtx, lk);
+    __ex_mutex_wait(mtx, lk);
     std::cout << "wake\n";
-    __ex_broadcast(mtx);
-    __ex_unlock(mtx, lk);
+    __ex_mutex_broadcast(mtx);
+    __ex_mutex_unlock(mtx, lk);
 
     std::cout << "join thread " << __ex_thread_id() << std::endl;
     // ___thread_join(tid);
     __ex_task_free(&task);
 
-    __ex_lock_free(mtx);
+    __ex_mutex_free(mtx);
 #endif
     __ex_log_file_close();
 
