@@ -370,8 +370,6 @@ static inline void xline_add_binary(xmaker_ptr maker, const char *key, const voi
 
 static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
 {
-    __ex_loge("xline_append_number ------------------------ enter %p\n", maker->head);
-    __ex_loge("xline_append_number keylen = %lu %s\n", keylen, key);
     // 最小长度 = 根 xline 的头 (XLINE_STATIC_SIZE) + key 长度 (keylen + XKEY_HEAD_SIZE) + value 长度 (XLINE_STATIC_SIZE)
     while ((int64_t)(maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < ((keylen + XKEY_HEAD_SIZE) + XLINE_STATIC_SIZE)){
         if (maker->addr == NULL){
@@ -379,7 +377,6 @@ static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t
             exit(0);
         }
         maker->len += maker->len;
-        __ex_loge("xline_append_number len = %lu wpos = %lu\n", maker->len, maker->wpos);
         maker->addr = (uint8_t *)malloc(maker->len);
         if (maker->wpos > 0){
             mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
@@ -388,27 +385,12 @@ static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t
         maker->head = maker->addr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)maker->addr;
     }
-    __ex_loge("xline_append_number wpos %lu\n", maker->wpos);
     maker->key = (xkey_ptr)(maker->head + maker->wpos);
-    free_test(maker->head - XLINE_STATIC_SIZE);
     maker->wpos += xkey_fill(maker->key, key, keylen);
-    __ex_loge("xline_append_number wpos %lu\n", maker->wpos);
-    free_test(maker->head - XLINE_STATIC_SIZE);
     maker->val = (xline_ptr)(maker->head + maker->wpos);
-    free_test(maker->head - XLINE_STATIC_SIZE);
     *(maker->val) = val;
-    // memcpy(maker->val, &val, __xline_sizeof(&val));
-    __ex_loge("xline_append_number val addr %p size = %lu\n", maker->val, __xline_sizeof(&val));
-    free_test(maker->head - XLINE_STATIC_SIZE);
     maker->wpos += __xline_sizeof(maker->val);
-    free_test(maker->head - XLINE_STATIC_SIZE);
-    __ex_loge("xline_append_number head  %p\n", maker->head);
     *(maker->xline) = __number_to_byte_64bit(maker->wpos, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_MAP);
-    __ex_loge("xline_append_number xline %p\n", maker->xline);
-    __ex_loge("xline_append_number addr  %p\n", maker->addr);
-    free_test(maker->head - XLINE_STATIC_SIZE);
-    __ex_loge("xline_append_number ------------------------- exit %p\n", maker->head);
-
 }
 
 static inline void xline_add_int8(xmaker_ptr maker, const char *key, int8_t n8)

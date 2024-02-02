@@ -18,7 +18,7 @@ extern char* strdup(const char *s);
 extern char* strndup(const char *s, size_t n);
 extern int posix_memalign(void* *ptr, size_t align, size_t size);
 extern void free(void* address);
-extern void free_test(void* address);
+// extern void free_test(void* address);
 
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
 extern size_t slength(const char *s);

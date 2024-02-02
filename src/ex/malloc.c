@@ -423,27 +423,27 @@ static void flush_cache()
 	}
 }
 
-#include <stdio.h>
-void free_test(void* address)
-{
-	size_t page_id = 0;
-	size_t pool_id = 0;
-	__ptr *ptr = NULL;
-	env_memory_page_t *page = NULL;
-	env_memory_pool_t *pool = NULL;
+// #include <stdio.h>
+// void free_test(void* address)
+// {
+// 	size_t page_id = 0;
+// 	size_t pool_id = 0;
+// 	__ptr *ptr = NULL;
+// 	env_memory_page_t *page = NULL;
+// 	env_memory_pool_t *pool = NULL;
 
-	if (address){
-		ptr = __address2pointer(address);
-		printf("ptr->size == %lu || ptr->flag == %lu\n", ptr->size, ptr->flag);
+// 	if (address){
+// 		ptr = __address2pointer(address);
+// 		printf("ptr->size == %lu || ptr->flag == %lu\n", ptr->size, ptr->flag);
 
-		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
-		printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
+// 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
+// 		printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 
-		pool = &(mm->pool[pool_id]);
-		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
-		printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
-	}
-}
+// 		pool = &(mm->pool[pool_id]);
+// 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
+// 		printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
+// 	}
+// }
 
 void free(void* address)
 {
@@ -457,20 +457,20 @@ void free(void* address)
 		ptr = __address2pointer(address);
 
 		if (ptr->size == 0 || ptr->flag == 0){
-			printf("ptr->size == 0 || ptr->flag == 0");
+			// printf("ptr->size == 0 || ptr->flag == 0");
 			abort();
 		}
 
 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
 		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
+			// printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 			abort();
 		}
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
 		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
+			// printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
 			abort();
 		}
 
@@ -507,7 +507,7 @@ void free(void* address)
 
 void* malloc(size_t size)
 {
-	printf("malloc >>>>>>>--------------------------------------------------->>>> enter\n");
+	// printf("malloc >>>>>>>--------------------------------------------------->>>> enter\n");
 	__ptr *ptr = NULL;
 	size_t reserved_size = 0;
 
@@ -571,7 +571,7 @@ void* malloc(size_t size)
 		*((int64_t*)ptr->debug_msg) = __backtrace(((void**)ptr->debug_msg) + 1, ENV_MALLOC_BACKTRACE_DEPTH - 1);
 #endif
 
-		printf("malloc >>>>>>>--------------------------------------------------->>>> exit\n");
+		// printf("malloc >>>>>>>--------------------------------------------------->>>> exit\n");
 		return __pointer2address(ptr);
 	}
 

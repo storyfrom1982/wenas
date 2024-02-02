@@ -64,9 +64,9 @@ __ex_task_ptr __ex_task_create()
     task->pipe = __ex_msg_pipe_create(256);
     assert(task->pipe);
 
-    // task->running = true;
-    // task->tid = __ex_thread_create(__ex_task_loop, task);
-    // assert(task->tid);
+    task->running = true;
+    task->tid = __ex_thread_create(__ex_task_loop, task);
+    assert(task->tid);
 
     __ex_logi("__ex_task_create exit\n");
 
