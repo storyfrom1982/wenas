@@ -15,6 +15,7 @@
 
 typedef struct server {
     int socket;
+    ___atom_bool listening;
     socklen_t addlen;
     struct sockaddr_in addr;
     struct xmsgaddr xmsgaddr;
@@ -32,16 +33,23 @@ static void malloc_debug_cb(const char *debug)
 
 static void listening(xline_maker_ptr task_ctx)
 {
+    __ex_logd("listening enter\n");
+    __ex_logd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
     server_t *server = (server_t *)xline_find_ptr(task_ctx, "ctx");
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(server->socket, &fds);
-    struct timeval timeout;
-    // timeout.tv_sec  = 10;
-    // timeout.tv_usec = 0;
-    // select(server->socket + 1, &fds, NULL, NULL, &timeout);
-    select(server->socket + 1, &fds, NULL, NULL, NULL);
-    xmessenger_wake(server->messenger);
+    if (___set_true(&server->listening)){
+        __ex_logd("listening server = %p\n", server);
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(server->socket, &fds);
+        struct timeval timeout;
+        // timeout.tv_sec  = 10;
+        // timeout.tv_usec = 0;
+        // select(server->socket + 1, &fds, NULL, NULL, &timeout);
+        select(server->socket + 1, &fds, NULL, NULL, NULL);
+        xmessenger_wake(server->messenger);
+        ___set_false(&server->listening);
+    }
+    __ex_logd("listening exit\n");
 }
 
 static uint64_t send_number = 0, lost_number = 0;
@@ -51,7 +59,7 @@ static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data,
     send_number++;
     uint64_t randtime = __ex_clock() / 1000000ULL;
     if ((send_number & 0x0f) == (randtime & 0x0f)){
-        __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu", ++lost_number);
+        __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
         return size;
     }
     server_t *server = (server_t*)socket->ctx;
@@ -85,11 +93,15 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
 static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
-    struct xline_maker task_ctx;
-    xline_maker_setup(&task_ctx, NULL, 256);
-    xline_add_ptr(&task_ctx, "func", listening);
-    xline_add_ptr(&task_ctx, "ctx", server);
-    __ex_task_post(server->task, task_ctx.xline);
+    __ex_logd("on_idle server = %p\n", server);
+    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    __ex_logd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
+    __ex_logd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
+    xline_add_ptr(ctx, "func", listening);
+    __ex_logd("2 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
+    xline_add_ptr(ctx, "ctx", server);
+    __ex_logd("2 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
+    __ex_task_update_pusher(server->task);
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
@@ -114,13 +126,11 @@ static void disconnect_task(xline_maker_ptr task)
 
 static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
-    // __logi(">>>>---------------> channel_disconnection channel: 0x%x", channel);
     server_t *server = (server_t*)listener->ctx;
-    struct xline_maker task;
-    xline_maker_setup(&task, NULL, 1024);
-    xline_add_ptr(&task, "func", (void*)disconnect_task);
-    xline_add_ptr(&task, "ctx", channel);
-    __ex_task_post(&server->task, task.xline);
+    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xline_add_ptr(ctx, "func", disconnect_task);
+    xline_add_ptr(ctx, "ctx", channel);
+    __ex_task_update_pusher(server->task);
 }
 
 static void process_message(xline_maker_ptr task_ctx)
@@ -131,19 +141,18 @@ static void process_message(xline_maker_ptr task_ctx)
 static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
-    struct xline_maker task_ctx;
-    xline_maker_setup(&task_ctx, NULL, 1024);
-    xline_add_ptr(&task_ctx, "func", process_message);
-    xline_add_ptr(&task_ctx, "ctx", channel);
-    xline_add_ptr(&task_ctx, "msg", msg);
-    __ex_task_post(server->task, task_ctx.xline);
+    xline_maker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xline_add_ptr(ctx, "func", process_message);
+    xline_add_ptr(ctx, "ctx", channel);
+    xline_add_ptr(ctx, "msg", msg);
+    __ex_task_update_pusher(server->task);
 }
 
 int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
     __ex_log_file_open("./tmp/server/log", NULL);
-    __ex_logi("start server");
+    __ex_logi("start server\n");
 
     const char *host = "127.0.0.1";
     // uint16_t port = atoi(argv[1]);

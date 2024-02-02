@@ -265,7 +265,7 @@ static const char* get_transunit_msg(xmsgpack_ptr unit)
 
 static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
 {
-    __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u",
+    __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u\n",
            ack->head.acks, ack->head.ack, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0);
 
     // 只处理 sn 在 rpos 与 upos 之间的 xmsgpack
@@ -287,7 +287,7 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
                 index = __transbuf_rpos(channel->sendbuf);
                 unit = channel->sendbuf->buf[index];
 
-                __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
+                __ex_logi("msgchannel_pull >>>>>-------------------> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]\n",
                        ack->head.acks, ack->head.ack, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0, get_transunit_msg(unit));
 
                 if (!unit->comfirmed){
@@ -348,7 +348,7 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
             index = ack->head.ack & (PACK_WINDOW_RANGE - 1);
             unit = channel->sendbuf->buf[index];
 
-            __ex_logi("msgchannel_pull >>>>>>---------->>> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]",
+            __ex_logi("msgchannel_pull >>>>>>---------->>> range: %u sn: %u rpos: %u upos: %u wpos %u msg: [%s]\n",
                    ack->head.acks, ack->head.ack, channel->sendbuf->rpos + 0, channel->sendbuf->upos + 0, channel->sendbuf->wpos + 0, get_transunit_msg(unit));
 
             // 检测此 SN 是否未确认
@@ -366,7 +366,7 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
                 while (index != ack->head.sn) {
                     unit = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                     if (!unit->comfirmed && unit->resending == 0){
-                        __ex_logi("msgchannel_pull ############################### resend sn: %u", index);
+                        __ex_logi("msgchannel_pull ############################### resend sn: %u\n", index);
                         if (channel->mtp->msgsock->sendto(channel->mtp->msgsock, &channel->addr, 
                             (void*)&(unit->head), PACK_HEAD_SIZE + unit->head.pack_size) == PACK_HEAD_SIZE + unit->head.pack_size){
                             unit->resending++;
@@ -386,7 +386,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
     channel->ack.pack_size = 0;
     uint16_t index = unit->head.sn & (PACK_WINDOW_RANGE - 1);
     
-    __ex_logi("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]",
+    __ex_logi("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]\n",
            unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
     
     if (unit->head.sn == channel->msgbuf->wpos){
@@ -431,7 +431,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 //    __logi("msgchannel_recv sendto enter");
     if ((channel->mtp->msgsock->sendto(channel->mtp->msgsock, &channel->addr, (void*)&(channel->ack), PACK_HEAD_SIZE)) == PACK_HEAD_SIZE) {
 //        __logi("msgchannel_recv sendto return ----------->");
-        __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u",
+        __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u\n",
                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
         // channel->ack.type = TRANSUNIT_NONE;
     }
@@ -653,25 +653,37 @@ static inline void messenger_loop(xline_maker_ptr ctx)
 
         if (__ex_msg_pipe_readable(messenger->pipe) > 0){
             __ex_logi("create channel enter\n");
-            xline_maker_ptr ctx = __ex_msg_pipe_hole_reader(messenger->pipe);
-            xmsgaddr_ptr *addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
-            xmsgchannel_ptr channel = msgchannel_create(messenger, addr);
-            __ex_msg_pipe_update_reader(messenger->pipe);
-            if (channel){
-                xtree_save(messenger->peers, channel->addr.key, channel->addr.keylen, channel);
-                msgchannel_enqueue(channel, messenger->sendqueue);
-                xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-                //TODO 以PING消息建立连接。
-                // unit->head.type = XMSG_PACK_PING;
-                unit->head.type = XMSG_PACK_PING;
-                unit->head.pack_range = 1;
-                struct xline_maker kv;
-                xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
-                //TODO 加密数据，需要对端验证
-                xline_ptr msg = xline_find(ctx, "msg");
-                xline_add_text(&kv, "msg", __xline_to_data(msg), __xline_sizeof_data(msg));
-                unit->head.pack_size = kv.pos;
-                msgchannel_push(channel, unit);
+            xline_maker_ptr ctx = __ex_msg_pipe_hold_reader(messenger->pipe);
+            __ex_logi("xmessenger_loop ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
+            if (ctx){
+                __ex_logi("create channel 1\n");
+                xmsgaddr_ptr *addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
+                __ex_logi("create channel 2\n");
+                xmsgchannel_ptr channel = msgchannel_create(messenger, addr);
+                __ex_logi("create channel 3\n");                
+                __ex_logi("create channel 4\n");
+                if (channel){
+                    xtree_save(messenger->peers, channel->addr.key, channel->addr.keylen, channel);
+                    msgchannel_enqueue(channel, messenger->sendqueue);
+                    xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+                    //TODO 以PING消息建立连接。
+                    // unit->head.type = XMSG_PACK_PING;
+                    unit->head.type = XMSG_PACK_PING;
+                    unit->head.pack_range = 1;
+                    struct xline_maker kv;
+                    __ex_logi("create channel 5\n");
+                    xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
+                    __ex_logi("create channel 6\n");
+                    //TODO 加密数据，需要对端验证
+                    xline_ptr msg = xline_find(ctx, "msg");
+                    __ex_logi("create channel %p\n", msg);
+                    __ex_logi("create channel msg len %lu msg = %s\n", __xline_sizeof_data(msg), __xline_to_data(msg));
+                    xline_add_text(&kv, "msg", __xline_to_data(msg), __xline_sizeof_data(msg));
+                    __ex_logi("create channel 8\n");
+                    unit->head.pack_size = kv.wpos;
+                    msgchannel_push(channel, unit);
+                }
+                __ex_msg_pipe_update_reader(messenger->pipe);
             }
             __ex_logi("create channel exit\n");
         }
@@ -819,14 +831,8 @@ static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr msgsock, xmsgliste
     messenger->sendqueue->head.next = &messenger->sendqueue->end;
     messenger->sendqueue->end.prev = &messenger->sendqueue->head;
 
-    messenger->pipe = __ex_msg_pipe_create(256);
+    messenger->pipe = __ex_msg_pipe_create(2);
     __ex_check(messenger->pipe != NULL);
-
-//    mtp->mainloop_func = linekv_create(1024);
-//    linekv_add_ptr(mtp->mainloop_func, "func", (void*)messenger_loop);
-//    linekv_add_ptr(mtp->mainloop_func, "ctx", mtp);
-//    mtp->mainloop_task = taskqueue_create();
-//    taskqueue_post(mtp->mainloop_task, mtp->mainloop_func);
 
     __ex_logi("xmessenger_create exit\n");
 
@@ -881,12 +887,14 @@ static inline void xmessenger_wait(xmessenger_ptr messenger)
 static inline int xmessenger_connect(xmessenger_ptr messenger, xmsgaddr_ptr addr)
 {
     __ex_logi("xmessenger_connect enter\n");
-    xline_maker_ptr *ctx = __ex_msg_pipe_hold_writer(messenger->pipe);
+    xline_maker_ptr ctx = __ex_msg_pipe_hold_writer(messenger->pipe);
+    __ex_logi("xmessenger_connect ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     if (ctx == NULL){
         return -1;
     }
     xline_add_ptr(ctx, "addr", addr);
     xline_add_text(ctx, "msg", "PING", strlen("PING"));
+    __ex_logi("xmessenger_connect ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     __ex_msg_pipe_update_writer(messenger->pipe);
     __ex_logi("xmessenger_connect exit\n");
     return 0;
@@ -919,7 +927,7 @@ static inline void xmessenger_ping(xmsgchannel_ptr channel)
         struct xline_maker kv;
         xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
         xline_add_text(&kv, "msg", "PING", strlen("PING"));
-        unit->head.pack_size = kv.pos;
+        unit->head.pack_size = kv.wpos;
         msgchannel_push(channel, unit);
     }
     __ex_logi("xmessenger_ping exit");

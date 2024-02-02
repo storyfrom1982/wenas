@@ -128,7 +128,8 @@ typedef struct xline_maker* __ex_task_ctx_maker_ptr;
 typedef void (*__ex_task_func)(__ex_task_ctx_maker_ptr ctx);
 __ex_export __ex_task_ptr __ex_task_create();
 __ex_export void __ex_task_free(__ex_task_ptr *pptr);
-__ex_export int __ex_task_post(__ex_task_ptr task, __ex_task_ctx_ptr ctx);
+__ex_export __ex_task_ctx_maker_ptr __ex_task_hold_pusher(__ex_task_ptr task);
+__ex_export void __ex_task_update_pusher(__ex_task_ptr task);
 __ex_export __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx);
 
 
@@ -142,7 +143,7 @@ __ex_export void __ex_msg_pipe_clear(__ex_msg_pipe *pipe);
 __ex_export void __ex_msg_pipe_break(__ex_msg_pipe *pipe);
 __ex_export xline_maker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe);
 __ex_export void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe);
-__ex_export xline_maker_ptr __ex_msg_pipe_hole_reader(__ex_msg_pipe *pipe);
+__ex_export xline_maker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe);
 __ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
 
 #ifdef __cplusplus

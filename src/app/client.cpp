@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
         str[len-1] = '\0';
         linekv_ptr msg = linekv_create(1024);
         linekv_add_string(msg, "msg", str);
-        xmessenger_send(client->mtp, channel, msg->head, msg->pos);
+        xmessenger_send(client->mtp, channel, msg->head, msg->wpos);
         linekv_release(&msg);
     }
 

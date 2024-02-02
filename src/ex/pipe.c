@@ -221,6 +221,7 @@ struct msg_pipe {
     uint64_t len;
     ___atom_size writer;
     ___atom_size reader;
+    ___atom_size holder;
     ___atom_bool breaking;
     __ex_lock_ptr mutex;
     xline_maker_ptr buf;
@@ -243,12 +244,16 @@ __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
 
     __ex_logi("pipe len %lu\n", pipe->len);
 
-    pipe->buf = (xline_maker_ptr)calloc(pipe->len, sizeof(xline_maker_ptr*));
+    // 一维指针 (struct xmaker*) 可以像使用 xmaker 类型的数组那样，进行下标操作，每个下标指向的是一个 xmaker 类型的结构体
+    // 二维指针 (struct xmaker**) 也可以像使用数组那样，进行下标操作，但是每个下标指向的是 xmaker 类型的结构体指针 (xmaker*)
+    pipe->buf = (xline_maker_ptr)calloc(pipe->len, sizeof(struct xline_maker));
+    // pipe->buf = (xline_maker_ptr*)calloc(pipe->len, sizeof(xline_maker_ptr*));
     __ex_check(pipe->buf);
 
     for (int i = 0; i < pipe->len; ++i){
-        // pipe->buf[i] = malloc(sizeof(struct xline_maker));
-        xline_maker_setup(&pipe->buf[i], NULL, 256);
+        // 如果使用二级指针，需要给每个指针分配实际的内存地址
+        // pipe->buf[i] = calloc(1, sizeof(struct xline_maker));
+        xline_maker_setup(&pipe->buf[i], NULL, 2);
     }
 
     pipe->mutex = __ex_lock_create();
@@ -280,7 +285,9 @@ void __ex_msg_pipe_free(__ex_msg_pipe **pptr)
         }
         if (pipe->buf){
             for (int i = 0; i < pipe->len; ++i){
-                xline_maker_clear(pipe->buf[i]);
+                // 如果使用二级指针，这里需要释放内存
+                // xline_maker_clear(pipe->buf[i]);
+                free(pipe->buf[i]);
             }
             free(pipe->buf);
         }
@@ -314,45 +321,62 @@ void __ex_msg_pipe_break(__ex_msg_pipe *pipe)
 
 xline_maker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe)
 {
-    while (!__ex_msg_pipe_writable){
+    while ((pipe->len - pipe->writer + pipe->reader) == 0){
+        // 只有需要阻塞时才检查 breaking 状态
         if (___is_true(&pipe->breaking)){
             return NULL;
         }
         ___lock lk = __ex_lock(pipe->mutex);
+        // 写入线程不能确保被 __ex_msg_pipe_update_writer 唤醒
+        // 因为 __ex_msg_pipe_update_writer 的唤醒没有加锁
+        __ex_notify(pipe->mutex);
         __ex_wait(pipe->mutex, lk);
         __ex_unlock(pipe->mutex, lk);
         if (___is_true(&pipe->breaking)){
             return NULL;
         }        
     }
-    return &pipe->buf[pipe->writer];
+    // 重置 xline maker，用户才能重新写入数据
+    // update reader 时重置一次就可以了，所以这里不需要重置了
+    // xline_maker_reset(pipe->buf[(pipe->writer & (pipe->len - 1))]);
+    // 返回给用户一个可写缓冲区，用户持有这个缓冲区，直接写入数据
+    return &pipe->buf[(pipe->writer & (pipe->len - 1))];
 }
 
 void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe)
 {
+    // 用户完成一次写入，增加一个可读区域
     ___atom_add(&pipe->writer, 1);
     __ex_notify(pipe->mutex);
 }
 
-xline_maker_ptr __ex_msg_pipe_hole_reader(__ex_msg_pipe *pipe)
+xline_maker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe)
 {
-    while (!__ex_msg_pipe_readable){
+    while ((pipe->writer - pipe->reader) == 0){
+        // 只有需要阻塞时才检查 breaking 状态
         if (___is_true(&pipe->breaking)){
             return NULL;
         }
         ___lock lk = __ex_lock(pipe->mutex);
+        // 写入线程不能确保被 __ex_msg_pipe_update_reader 唤醒
+        // 因为 __ex_msg_pipe_update_reader 的唤醒没有加锁
+        __ex_notify(pipe->mutex);
         __ex_wait(pipe->mutex, lk);
         __ex_unlock(pipe->mutex, lk);
         if (___is_true(&pipe->breaking)){
             return NULL;
         }        
     }
-    return &pipe->buf[pipe->reader];
+    // 用户持有一个可读缓冲区，直接读取数据
+    return &pipe->buf[(pipe->reader & (pipe->len - 1))];
 }
 
 void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe)
 {
-    // TODO reset xline maker
+    // 重置 xline maker，用户才能重新写入数据
+    xline_maker_reset(&pipe->buf[(pipe->reader & (pipe->len - 1))]);
+    // 完成一次读取，增加一个可写区域
     ___atom_add(&pipe->reader, 1);
+    // 执行一次唤醒
     __ex_notify(pipe->mutex);
 }
