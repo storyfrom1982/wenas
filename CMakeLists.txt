@@ -110,6 +110,6 @@ endfunction(build_executable)
 
 # build_executable(kapp src/main.cpp)
 build_executable(server src/app/server.c)
-# build_executable(client src/app/client.cpp)
+build_executable(client src/app/client.cpp)
 # build_executable(kapp test/sys/struct/tree_test.c)
 # build_executable(kapp test/sys/struct/heap_test.c)

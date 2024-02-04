@@ -13,7 +13,8 @@ enum {
     XMSG_PACK_MSG = 0x01,
     XMSG_PACK_ACK = 0x02,
     XMSG_PACK_PING = 0x04,
-    XMSG_PACK_FINAL = 0x08
+    XMSG_PACK_PONG = 0x08,
+    XMSG_PACK_FINAL = 0x10
 };
 
 
@@ -258,8 +259,8 @@ static inline void msgchannel_push(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 
 static const char* get_transunit_msg(xmsgpack_ptr unit)
 {
-    struct xmaker kv = xline_parse(unit->body);
-    return xline_find(&kv, "msg");
+    struct xmaker kv = xline_parse((xline_ptr)unit->body);
+    return (const char*)xline_find(&kv, "msg");
 }
 
 static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
@@ -543,7 +544,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
 
         if (result == (recvunit->head.pack_size + PACK_HEAD_SIZE)){
 
-//            __logi("messenger_loop recv ip: %u port: %u msg: %s", addr.ip, addr.port, get_transunit_msg(recvunit));
+           __ex_logi("messenger_loop recv ip: %u port: %u msg: %s\n", addr.ip, addr.port, get_transunit_msg(recvunit));
 
             //TODO 先检测是否为 BEY。
             if (recvunit->head.type == XMSG_PACK_BYE){
@@ -574,7 +575,18 @@ static inline void messenger_loop(xmaker_ptr ctx)
                 }
 
             }else if (recvunit->head.type == XMSG_PACK_PING){
-
+                struct xmaker parser = xline_parse((xline_ptr)recvunit->body);
+                xline_ptr hello = xline_find(&parser, "key");
+                if (hello){
+                    size_t len = __xline_sizeof_data(hello);
+                    char *key = (char*)__xline_to_data(hello);
+                    char output[len + 1];
+                    for (size_t i = 0; i < len; ++i) {
+                        output[i] = key[i] ^ 'k';
+                    }
+                    output[len] = '\0';
+                    __ex_logd("channel key = %s\n", output);
+                }
                 channel = (xmsgchannel_ptr)xtree_find(messenger->peers, addr.key, addr.keylen);
                 __ex_logi("messenger_loop XMSG_PACK_PING find channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
                 if (channel != NULL){
@@ -656,7 +668,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
             __ex_logi("xmessenger_loop ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
             if (ctx){
                 __ex_logi("create channel 1\n");
-                xmsgaddr_ptr *addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
+                xmsgaddr_ptr addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
                 __ex_logi("create channel 2\n");
                 xmsgchannel_ptr channel = msgchannel_create(messenger, addr);
                 __ex_logi("create channel 3\n");                
@@ -677,7 +689,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                     xline_ptr msg = xline_find(ctx, "msg");
                     __ex_logi("create channel %p\n", msg);
                     __ex_logi("create channel msg len %lu msg = %s\n", __xline_sizeof_data(msg), __xline_to_data(msg));
-                    xline_add_text(&kv, "msg", __xline_to_data(msg), __xline_sizeof_data(msg));
+                    xline_add_text(&kv, "msg", (char*)__xline_to_data(msg), __xline_sizeof_data(msg));
                     __ex_logi("create channel 8\n");
                     unit->head.pack_size = kv.wpos;
                     msgchannel_push(channel, unit);
@@ -822,7 +834,7 @@ static inline xmessenger_ptr xmessenger_create(xmsgsocket_ptr msgsock, xmsgliste
     messenger->mtx = __ex_mutex_create();
     messenger->peers = xtree_create();
     
-    messenger->sendqueue = malloc(sizeof(struct xmsgchannellist));
+    messenger->sendqueue = (xmsgchannellist_ptr)malloc(sizeof(struct xmsgchannellist));
     messenger->sendqueue->len = 0;
     messenger->sendqueue->lock = false;
     messenger->sendqueue->head.prev = NULL;
@@ -862,7 +874,7 @@ static inline void xmessenger_free(xmessenger_ptr *pptr)
         ___set_false(&msger->running);
         __ex_mutex_broadcast(msger->mtx);
         __ex_task_free(&msger->mainloop_task);
-        xline_maker_clear(&msger->mainloop_func);
+        xline_maker_clear(msger->mainloop_func);
         xtree_clear(msger->peers, free_channel);
         xtree_free(&msger->peers);
         __ex_mutex_free(msger->mtx);
@@ -892,7 +904,13 @@ static inline int xmessenger_connect(xmessenger_ptr messenger, xmsgaddr_ptr addr
         return -1;
     }
     xline_add_ptr(ctx, "addr", addr);
-    xline_add_text(ctx, "msg", "PING", strlen("PING"));
+    const char *key = "PING";
+    size_t len = strlen(key);
+    char output[len];
+    for (size_t i = 0; i < len; ++i) {
+        output[i] = key[i] ^ 'k';
+    }
+    xline_add_text(ctx, "msg", output, len);
     __ex_logi("xmessenger_connect ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     __ex_msg_pipe_update_writer(messenger->pipe);
     __ex_logi("xmessenger_connect exit\n");

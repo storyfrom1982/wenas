@@ -638,7 +638,7 @@ static inline void* xline_find_ptr(xmaker_ptr maker, const char *key)
 static inline void xline_list_append(xmaker_ptr maker, xline_ptr x)
 {
     uint64_t len = __xline_sizeof(x);
-    while ((maker->len - maker->wpos) < len){
+    while ((maker->len - (maker->wpos + XLINE_STATIC_SIZE)) < len){
         if (maker->addr == NULL){
             exit(0);
         }
@@ -665,7 +665,7 @@ static inline struct xmaker xline_list_parse(xline_ptr xlist)
     maker.head = (uint8_t*)__xline_to_data(xlist);
     maker.val = (xline_ptr)maker.head;
     // 读取 xlist 的长度，然后设置 wpos
-    maker.wpos = __xline_sizeif_object(xlist);
+    maker.wpos = __xline_sizeof_data(xlist);
     return maker;
 }
 

@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
     server.messenger = xmessenger_create(msgsock, &server.listener);
     xmessenger_run(server.messenger);
 
-    xmessenger_connect(server.messenger, addr);
+    // xmessenger_connect(server.messenger, addr);
     
     // struct xmaker task_ctx;
     // xline_maker_setup(&task_ctx, NULL, 256);

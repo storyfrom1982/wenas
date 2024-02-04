@@ -1,9 +1,9 @@
-extern "C" {
-    #include "env/env.h"
-    #include "env/malloc.h"
-}
+#include "ex/ex.h"
 
-#include <sys/struct/mtp.h>
+extern "C" {
+    #include "ex/malloc.h"
+    #include <sys/struct/xmessenger.h>
+}
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -30,14 +30,14 @@ typedef struct client{
     struct sockaddr_in remote_addr;
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
-    xmessenger_ptr mtp;
+    xmessenger_ptr msger;
 }*client_ptr;
 
 
 
 static void malloc_debug_cb(const char *debug)
 {
-    __ex_logw("%s\n", debug);
+    __ex_loge("%s\n", debug);
 }
 
 static void listening(struct xmsgsocket *socket)
@@ -58,7 +58,7 @@ static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr remote_addr, void *data, size_t size)
 {
     send_number++;
-    uint64_t randtime = ___sys_clock() / 1000ULL;
+    uint64_t randtime = __ex_clock() / 1000ULL;
     if ((send_number & 0xdf) == (randtime & 0xdf)){
         // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
         return size;
@@ -89,29 +89,34 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
     return result;
 }
 
+static void on_connection_to_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+{
+    __ex_logi(">>>>---------------> on_connection_to_peer: 0x%x", channel);
+}
+
 static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> channel connection: 0x%x", channel);
+    __ex_logi(">>>>---------------> on_connection_from_peer: 0x%x", channel);
 }
 
 static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> channel disconnection: 0x%x", channel);
-    msgchannel_termination(&channel);
+    __ex_logi(">>>>---------------> on_disconnection: 0x%x", channel);
 }
 
 static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
 {
-    struct linekv parser;
-    linekv_parser(&parser, msg->data, msg->size);
-    __ex_logi(">>>>---------------> channel msg: %llu  content %s", msg->size, linekv_find_string(&parser, "msg"));
-    free(msg);
+
+}
+
+static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+{
+
 }
 
 static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> channel timeout: 0x%x", channel);
-    msgchannel_termination(&channel);
 }
 
 
@@ -124,7 +129,7 @@ int main(int argc, char *argv[])
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
     // const char *host = "127.0.0.1";
-    const char *host = "47.98.176.55";
+    const char *host = "47.99.146.226";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 3824;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
@@ -156,10 +161,12 @@ int main(int argc, char *argv[])
     remote_addr->addr = &client->remote_addr;
     remote_addr->addrlen = sizeof(client->remote_addr);
 
-    listener->connection = on_connection_from_peer;
-    listener->disconnection = on_disconnection;
-    listener->message = on_receive_message;
-    listener->timeout = on_idle;
+    listener->onConnectionToPeer = on_connection_to_peer;
+    listener->onConnectionFromPeer = on_connection_from_peer;
+    listener->onDisconnection = on_disconnection;
+    listener->onReceiveMessage = on_receive_message;
+    listener->onSendable = on_sendable;
+    listener->onIdle = on_idle;
 
     int fd;
     int enable = 1;
@@ -179,18 +186,18 @@ int main(int argc, char *argv[])
 
     client->socket = fd;
     msgsock->ctx = client;
-    msgsock->listening = listening;
     msgsock->sendto = send_msg;
     msgsock->recvfrom = recv_msg;
     
     listener->ctx = client;
-    client->mtp = xmessenger_create(msgsock, &client->listener);
+    client->msger = xmessenger_create(msgsock, &client->listener);
+    xmessenger_run(client->msger);
 
-    std::thread thread([&](){
-        xmessenger_wake(client->mtp);
-    });
+    // std::thread thread([&](){
+    //     xmessenger_wake(client->mtp);
+    // });
 
-    xmsgchannel_ptr channel = xmessenger_connect(client->mtp, remote_addr);
+    xmessenger_connect(client->msger, remote_addr);
 
     char str[1024];
 
@@ -217,24 +224,25 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        linekv_ptr msg = linekv_create(1024);
-        linekv_add_string(msg, "msg", str);
-        xmessenger_send(client->mtp, channel, msg->head, msg->wpos);
-        linekv_release(&msg);
+        xmaker maker;
+        xline_maker_setup(&maker, NULL, 1024);
+        xline_add_text(&maker, "msg", str, slength(str));
+        // xmessenger_send(client->mtp, channel, maker.head, maker.wpos);
+        xline_maker_clear(&maker);
     }
 
 
     __ex_loge("xmessenger_send finish");
 
     __ex_logi("xmessenger_disconnect");
-    xmessenger_disconnect(client->mtp, channel);
+    // xmessenger_disconnect(client->mtp, channel);
 
-    ___set_false(&client->mtp->running);
+    ___set_false(&client->msger->running);
     int data = 0;
     ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
     __ex_logi("xmessenger_free");
-    xmessenger_free(&client->mtp);
+    xmessenger_free(&client->msger);
 
     __ex_logi("free msgsock");
     free(msgsock);
@@ -244,15 +252,10 @@ int main(int argc, char *argv[])
 
     close(fd);
 
-    thread.join();
+    // thread.join();
 
     __ex_logi("env_logger_stop");
     __ex_log_file_close();
-
-    __ex_logi("env_malloc_debug");
-#if defined(ENV_MALLOC_BACKTRACE)
-    env_malloc_debug(malloc_debug_cb);
-#endif
 
     __ex_logi("exit");
     return 0;
