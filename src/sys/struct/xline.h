@@ -350,7 +350,7 @@ static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t
 
 static inline void xline_add_text(xmaker_ptr maker, const char *key, const char *text, uint64_t size)
 {
-    xline_append_object(maker, key, slength(key), text, slength(text), XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
+    xline_append_object(maker, key, slength(key), text, size, XLINE_TYPE_OBJECT | XLINE_OBJECT_TYPE_TEXT);
 }
 
 static inline void xline_add_map(xmaker_ptr maker, const char *key, xmaker_ptr xmap)
