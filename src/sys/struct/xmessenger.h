@@ -330,6 +330,8 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
                 channel->sendbuf->buf[index] = NULL;
 
                 ___atom_add(&channel->sendbuf->rpos, 1);
+                // TODO 通知 channel 可写
+                // channel->msger->listener->onSendable();
                 __ex_mutex_notify(channel->mtx);
 
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
@@ -391,6 +393,59 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
             }
         }
     }
+}
+
+static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsgpack_ptr ack)
+{
+    ssize_t result;
+    xmsgpack_ptr pack;
+
+    if (__transbuf_usable(channel->sendbuf) > 0){
+        pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
+        if (ack != NULL){
+            pack->head.ack = ack->head.ack;
+            pack->head.acks = ack->head.acks;
+        }
+        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
+        if (result == PACK_HEAD_SIZE + pack->head.pack_size){
+            channel->sendbuf->upos++;
+            pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+            pack->ts.value = pack;
+            xheap_push(channel->timerheap, &pack->ts);
+            ___atom_sub(&channel->msger->send_queue_length, 1);
+            pack->resending = 0;
+            channel->update = __ex_clock();
+        }
+
+    }else if (ack != NULL){
+
+        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(ack->head), PACK_HEAD_SIZE);
+        if (result == PACK_HEAD_SIZE){
+            channel->update = __ex_clock();
+        }
+    }
+
+    while (channel->timerheap->pos > 0 && __heap_min(channel->timerheap)->key - __ex_clock() < 0){
+        pack = (xmsgpack_ptr)__heap_min(channel->timerheap)->value;
+        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &pack->channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
+        if (result == PACK_HEAD_SIZE + pack->head.pack_size){
+            xheap_pop(channel->timerheap);
+            pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
+            pack->ts.value = pack;
+            xheap_push(channel->timerheap, &pack->ts);
+            pack->resending ++;
+            channel->update = __ex_clock();
+        }else {
+            break;
+        }
+    }
+
+    if (channel->timerheap->pos > 0){
+        return __heap_min(channel->timerheap)->key - __ex_clock();
+    }
+
+    return 0;
+
 }
 
 static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
@@ -508,8 +563,6 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 static inline xmsgchannel_ptr msgchannel_create(xmessenger_ptr msger, xmsgaddr_ptr addr)
 {
     xmsgchannel_ptr channel = (xmsgchannel_ptr) malloc(sizeof(struct xmsgchannel));
-    channel->cid = msger->cid;
-    channel->key = msger->cid % 255;
     channel->connected = false;
     channel->disconnected = false;
     channel->update = __ex_clock();
@@ -523,9 +576,13 @@ static inline xmsgchannel_ptr msgchannel_create(xmessenger_ptr msger, xmsgaddr_p
     channel->sendbuf->range = PACK_WINDOW_RANGE;
     channel->timerheap = xheap_create(PACK_WINDOW_RANGE);
     channel->queue = NULL;
-    if (++msger->cid == 0){
-        msger->cid = 1;
+    while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
+        if (++msger->cid == 0){
+            msger->cid = 1;
+        }
     }
+    channel->cid = msger->cid;
+    channel->key = msger->cid % 255;
     return channel;
 }
 
@@ -717,7 +774,9 @@ static inline void messenger_loop(xmaker_ptr ctx)
                 }
                 ___lock lk = __ex_mutex_lock(msger->mtx);
                 __ex_mutex_notify(msger->mtx);
-                __ex_mutex_timed_wait(msger->mtx, lk, timer);
+                if (msger->send_queue_length == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
+                    __ex_mutex_timed_wait(msger->mtx, lk, timer);
+                }
                 __ex_mutex_unlock(msger->mtx, lk);
                 timer = 1000000000ULL * 10;
             }
@@ -758,117 +817,25 @@ static inline void messenger_loop(xmaker_ptr ctx)
             __ex_logi("create channel exit\n");
         }
 
-
         channel = msger->sendqueue->head.next;
+
         while (channel != &msger->sendqueue->end)
         {
             next = channel->next;
 
-            // 把发送流程抽出来，封装成一个函数，在回复 ACK 的时候，如果有待发送 PACK，就把 ACK 和 PACK 一起发送
-            //TODO 一次发送一个包，还是全部发送，还是指定每次发送数量？
-            if (__transbuf_usable(channel->sendbuf) > 0){
-                sendunit = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
-                //不要插手 pack 类型，这里只管发送。
-
-                __ex_logi("messenger_loop sendto ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
-                       channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
-
-                result = msger->msgsock->sendto(msger->msgsock, &channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
-                if (result == PACK_HEAD_SIZE + sendunit->head.pack_size){
-                    channel->sendbuf->upos++;
-                    //检测是否写阻塞，再执行唤醒。（因为只有缓冲区已满，才会写阻塞，所以无需原子锁定再进行检测，写阻塞会在下一次检测时被唤醒）
-                    __ex_mutex_notify(channel->mtx);//TODO
-                    //检测队列为空，才开启定时器
-                    //所有channel统一使用一个定时器（还是每个channel各自维护定时器逻辑比较简单）。
-                    //定时器的堆越小，操作效率越高。
-                    sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                    sendunit->ts.value = sendunit;
-                    xheap_push(channel->timerheap, &sendunit->ts);
-                    ___atom_sub(&msger->send_queue_length, 1);
-                    sendunit->resending = 0;
-                }else {
-                    sendunit->resending++;
-                    //重新加入定时器，间隔递增。
-                    if (sendunit->resending > 5){
-                        //抛出断开连接事件，区分正常断开和超时断开。
-                        __ex_logi("messenger_loop ***try again timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
-                               channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
-
-                        msgchannel_clear(channel);
-                        msger->listener->onDisconnection(msger->listener, channel);
-                    }
-                }
-
-            }else {
-                //TODO 检测 channel 空闲时间，如果连接超时，就断开连接。清理僵尸连接。
-                //onDisconnect 回调要区分发送超时和连接超时
-                if (channel->timerheap->pos == 0 && __transbuf_readable(channel->sendbuf) == 0){
-                    if (__ex_clock() - channel->update > (1000000000ULL * 30)){
-                        __ex_logi("messenger_loop ***timeout recycle*** ip: %u port: %u channel: 0x%x\n", channel->addr.ip, channel->addr.port, channel);
-                        msgchannel_clear(channel);
-                        msger->listener->onDisconnection(msger->listener, channel);
-                    }
-                }
+            timeout = msgchannel_send(channel, NULL);
+            if (timeout > 0 && timer > timeout){
+                timer = timeout;
             }
 
-            if (channel->timerheap->pos > 0){
-
-                timeout = __heap_min(channel->timerheap)->key - __ex_clock();
-//                __logi("messenger_loop timeout resend timestamp: %llu current: %llu timeout: %lld", sendunit->ts.key, __ex_clock(), timeout);
-                if (timeout > 0){
-
-                    if (timer > timeout){
-                        timer = timeout;
-                    }
-
-                }else {
-
-                    sendunit = (xmsgpack_ptr)__heap_min(channel->timerheap)->value;
-                    if (sendunit->resending < 5){
-                        __ex_logi("messenger_loop resend ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
-                               channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
-                        msger->msgsock->sendto(msger->msgsock, &sendunit->channel->addr, (void*)&(sendunit->head), PACK_HEAD_SIZE + sendunit->head.pack_size);
-                        if (result == PACK_HEAD_SIZE + sendunit->head.pack_size){
-                            xheap_pop(channel->timerheap);
-                            sendunit->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-                            sendunit->ts.value = sendunit;
-                            xheap_push(channel->timerheap, &sendunit->ts);
-                            sendunit->resending = 0;
-                        }else {
-                            timer = TRANSUNIT_TIMEOUT_INTERVAL;
-                            sendunit->resending++;
-                        }
-
-                    }else {
-
-                        __ex_logi("messenger_loop ***resend timeout*** ip: %u port: %u channel: 0x%x SN: %u msg: %s\n",
-                               channel->addr.ip, channel->addr.port, channel, sendunit->head.sn, get_transunit_msg(sendunit));
-                        msgchannel_clear(channel);
-                        msger->listener->onDisconnection(msger->listener, channel);
-                    }
-                }
+            if (__ex_clock() - channel->update > (1000000000ULL * 30)){
+                // 十秒内没有收发过数据，释放连建
+                msgchannel_clear(channel);
+                channel->msger->listener->onDisconnection(channel->msger->listener, channel);
             }
-
-            //TODO 如果当前 channel 设置了待写入标志 与 缓冲区可写，则通知用户可写入（因为设置待写入标志时没有加锁，所以需要重复检测状态）。
 
             channel = next;
         }
-
-        // //TODO 不再需要断开连接队列，让用户收到 onDisconntion 事件后，调用 disconnect 方法，发送一个 BEY pack，主循环会释放 channel 的相关资源。
-        // if (messenger->disconnctionqueue->len > 0){
-        //     if (___atom_try_lock(&messenger->disconnctionqueue->lock)){
-        //         channel = messenger->disconnctionqueue->head.next;
-        //         do {
-        //             __ex_logi("messenger_loop ----------------------------------------- delete channel 0x%x\n", channel);
-        //             channel->next->prev = channel->prev;
-        //             channel->prev->next = channel->next;
-        //             ___atom_sub(&messenger->disconnctionqueue->len, 1);
-        //             msgchannel_release(channel);
-        //             channel = messenger->disconnctionqueue->head.next;
-        //         }while (channel != &messenger->disconnctionqueue->end);
-        //         ___atom_unlock(&messenger->disconnctionqueue->lock);
-        //     }
-        // }
     }
 
 
