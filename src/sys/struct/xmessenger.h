@@ -395,7 +395,7 @@ static inline void msgchannel_pull(xmsgchannel_ptr channel, xmsgpack_ptr ack)
     }
 }
 
-static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsgpack_ptr ack)
+static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsghead_ptr ack)
 {
     ssize_t result;
     xmsgpack_ptr pack;
@@ -403,8 +403,8 @@ static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsgpack_ptr ack)
     if (__transbuf_usable(channel->sendbuf) > 0){
         pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
         if (ack != NULL){
-            pack->head.ack = ack->head.ack;
-            pack->head.acks = ack->head.acks;
+            pack->head.ack = ack->ack;
+            pack->head.acks = ack->acks;
         }
         result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
         if (result == PACK_HEAD_SIZE + pack->head.pack_size){
@@ -419,7 +419,7 @@ static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsgpack_ptr ack)
 
     }else if (ack != NULL){
 
-        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(ack->head), PACK_HEAD_SIZE);
+        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(ack), PACK_HEAD_SIZE);
         if (result == PACK_HEAD_SIZE){
             channel->update = __ex_clock();
         }
@@ -520,14 +520,17 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
         }
     }
 
-//    __logi("msgchannel_recv sendto enter");
-    if ((channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(channel->ack), PACK_HEAD_SIZE)) == PACK_HEAD_SIZE) {
-//        __logi("msgchannel_recv sendto return ----------->");
-        __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u\n",
-               unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
-        // channel->ack.type = TRANSUNIT_NONE;
-    }
-//    __logi("msgchannel_recv sendto exit");
+
+    msgchannel_send(channel, &channel->ack);
+
+// //    __logi("msgchannel_recv sendto enter");
+//     if ((channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(channel->ack), PACK_HEAD_SIZE)) == PACK_HEAD_SIZE) {
+// //        __logi("msgchannel_recv sendto return ----------->");
+//         __ex_logi("msgchannel_recv ACK ---> SN: %u rpos: %u wpos: %u\n",
+//                unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
+//         // channel->ack.type = TRANSUNIT_NONE;
+//     }
+// //    __logi("msgchannel_recv sendto exit");
 
     index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
@@ -644,7 +647,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
 
         if (result == (recvunit->head.pack_size + PACK_HEAD_SIZE)){
 
-           __ex_logi("messenger_loop recv ip: %u port: %u msg: %s\n", addr.ip, addr.port, get_transunit_msg(recvunit));
+           __ex_logi("messenger_loop recv ip: %u port: %u msg: %d\n", addr.ip, addr.port, recvunit->head.type);
 
             //TODO 先检测是否为 BEY。
             if (recvunit->head.type == XMSG_PACK_BYE){
@@ -718,33 +721,46 @@ static inline void messenger_loop(xmaker_ptr ctx)
             }else if (recvunit->head.type == XMSG_PACK_PONG){
 
                 if (recvunit->head.cid == 0){
-
+                    __ex_logd("XMSG_PACK_PONG 1\n");
                     channel = (xmsgchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
+                    __ex_logd("XMSG_PACK_PONG 2\n");
                     if (channel && recvunit->head.x ^ channel->key == XMSG_KEY){
+                        __ex_logd("XMSG_PACK_PONG 3\n");
                         // 删除以 IP 地址为 KEY 建立的索引
                         struct xmaker parser = xline_parse((xline_ptr)recvunit->body);
+                        __ex_logd("XMSG_PACK_PONG 4\n");
                         uint32_t cid = xline_find_uint32(&parser, "id");
+                        __ex_logd("XMSG_PACK_PONG 5\n");
                         __ex_logd("msger channel to peer connected: cid = %u ip: %u port: %u\n", cid, addr.ip, addr.port);
                         // 设置对端 cid 与 key
                         channel->peer_cid = cid;
                         channel->peer_key = cid % 255;
+                        __ex_logd("XMSG_PACK_PONG 6\n");
                         msgchannel_enqueue(channel, msger->sendqueue);
                         // 以 cip 为 KEY 建立索引
+                        __ex_logd("XMSG_PACK_PONG 7\n");
                         xtree_save(msger->peers, &channel->peer_cid, 4, channel);
+                        __ex_logd("XMSG_PACK_PONG 8\n");
                         ___set_true(&channel->connected);
+                        __ex_logd("XMSG_PACK_PONG 9\n");
                         // 主动发起 PING 的一方会收到 PONG，是主动建立连接
                         channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
-                        
+                        __ex_logd("XMSG_PACK_PONG 10\n");
                         msgchannel_recv(channel, recvunit);
                     }
 
                 }else {
+                    __ex_logd("XMSG_PACK_PONG --- 1\n");
                     // 通过索引获取 channel
                     channel = (xmsgchannel_ptr)xtree_find(msger->peers, &recvunit->head.cid, 4);
+                    __ex_logd("XMSG_PACK_PONG 2\n");
                     // 协议层验证                  
                     if (recvunit->head.x ^ channel->key == XMSG_KEY){
+                        __ex_logd("XMSG_PACK_PONG 3\n");
                         msgchannel_recv(channel, recvunit);
+                        __ex_logd("XMSG_PACK_PONG 4\n");
                     }
+
                 }
 
             }else if (recvunit->head.type == XMSG_PACK_MSG) {
