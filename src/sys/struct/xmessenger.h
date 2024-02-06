@@ -108,7 +108,7 @@ struct xmsgchannel {
     xheap_ptr timerheap;
     struct xmsghead ack;
     xmsgbuf_ptr msgbuf;
-    xmsgchannellist_ptr queue;
+    // xmsgchannellist_ptr queue;
     struct xmsgaddr addr;
     xmsgpackbuf_ptr sendbuf;
     xmessenger_ptr msger;
@@ -179,48 +179,30 @@ struct xmessenger {
 #define __transbuf_readable(b)      ((uint8_t)((b)->wpos - (b)->rpos))
 #define __transbuf_writable(b)      ((uint8_t)((b)->range - 1 - (b)->wpos + (b)->rpos))
 
-#define XMSG_KEY    'X'
+#define XMSG_KEY    'x'
+#define XMSG_VAL    'X'
 
-static inline void msgchannel_enqueue(xmsgchannel_ptr channel, xmsgchannellist_ptr queue)
+static inline void xmsger_enqueue_channel(xmessenger_ptr msger, xmsgchannel_ptr channel)
 {
-    channel->next = &queue->end;
-    channel->prev = queue->end.prev;
+    channel->next = &msger->sendqueue->end;
+    channel->prev = msger->sendqueue->end.prev;
     channel->next->prev = channel;
     channel->prev->next = channel;
-    channel->queue = queue;
-    ___atom_add(&queue->len, 1);
+    ___atom_add(&msger->sendqueue->len, 1);
 }
 
-static inline xmsgchannel_ptr msgchannel_dequeue(xmsgchannellist_ptr queue)
+static inline void xmsger_clear_channel(xmessenger_ptr msger, xmsgchannel_ptr channel)
 {
-    if (queue->len > 0){
-        if (___atom_try_lock(&queue->lock)){
-            xmsgchannel_ptr channel = queue->head.next;
-            channel->prev->next = channel->next;
-            channel->next->prev = channel->prev;
-            channel->queue = NULL;
-            ___atom_sub(&queue->len, 1);
-            ___atom_unlock(&queue->lock);
-            return channel;
-        }
+    channel->prev->next = channel->next;
+    channel->next->prev = channel->prev;
+    ___atom_sub(&msger->sendqueue->len, 1);
+    if (channel->peer_cid != 0){
+        xtree_take(msger->peers, &channel->cid, 4);
+    }else {
+        // 此时，还没有使用 cid 作为索引
+        xtree_take(msger->peers, channel->addr.key, channel->addr.keylen);
     }
-    return NULL;
-}
-
-static inline void msgchannel_clear(xmsgchannel_ptr channel)
-{
-    ___lock lk = __ex_mutex_lock(channel->mtx);
-    if (channel->queue != NULL){
-        channel->prev->next = channel->next;
-        channel->next->prev = channel->prev;
-        ___atom_sub(&channel->queue->len, 1);
-        channel->queue = NULL;
-    }
-    ___set_true(&channel->bye);
-    __ex_mutex_notify(channel->mtx);
-    __ex_mutex_unlock(channel->mtx, lk);
-    ___atom_sub(&channel->msger->send_queue_length, __transbuf_usable(channel->sendbuf));
-    xtree_take(channel->msger->peers, channel->addr.key, channel->addr.keylen);
+    
 }
 
 static inline void msgchannel_push(xmsgchannel_ptr channel, xmsgpack_ptr unit)
@@ -252,7 +234,7 @@ static inline void msgchannel_push(xmsgchannel_ptr channel, xmsgpack_ptr unit)
     // 再将 unit 放入缓冲区 
     unit->head.sn = channel->sendbuf->wpos;
     // 设置校验码
-    unit->head.x = XMSG_KEY ^ channel->peer_key;
+    unit->head.x = XMSG_VAL ^ channel->peer_key;
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
 
@@ -578,7 +560,7 @@ static inline xmsgchannel_ptr msgchannel_create(xmessenger_ptr msger, xmsgaddr_p
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
     channel->timerheap = xheap_create(PACK_WINDOW_RANGE);
-    channel->queue = NULL;
+    channel->peer_cid = 0;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
             msger->cid = 1;
@@ -621,7 +603,7 @@ static inline xmsgpack_ptr make_pack(xmsgchannel_ptr channel, uint8_t type)
     // 设置对方 cid
     pack->head.cid = channel->peer_cid;
     // 设置校验码
-    pack->head.x = XMSG_KEY ^ channel->peer_key;
+    pack->head.x = XMSG_VAL ^ channel->peer_key;
     // 设置是否附带 ACK 标志
     pack->head.y = 0;
     return pack;
@@ -670,7 +652,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
             if (channel){
 
                 // 协议层验证
-                if (rpack->head.x ^ channel->key == XMSG_KEY){
+                if (rpack->head.x ^ channel->key == XMSG_VAL){
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         
@@ -726,7 +708,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
 
                 if (rpack->head.type == XMSG_PACK_PING){
 
-                    if (rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_KEY){
+                    if (rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
 
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
                         uint32_t cid = xline_find_uint32(&parser, "cid");
@@ -736,7 +718,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                         channel->peer_cid = cid;
                         channel->peer_key = cid % 255;
                         __ex_logi("messenger_loop new connections channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
-                        msgchannel_enqueue(channel, msger->sendqueue);
+                        xmsger_enqueue_channel(msger, channel);
                         xtree_save(msger->peers, &channel->cid, 4, channel);
                         ___set_true(&channel->connected);
 
@@ -748,9 +730,8 @@ static inline void messenger_loop(xmaker_ptr ctx)
                         spack->head.cid = 0;
                         struct xmaker kv;
                         xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
-                        spack->head.x = (XMSG_KEY ^ XMSG_KEY);
                         xline_add_uint32(&kv, "cid", channel->cid);
-                        spack->head.pack_size = kv.wpos + 9;
+                        spack->head.pack_size = kv.wpos + 9; //TODO
                         msgchannel_push(channel, spack);
 
                         msgchannel_recv(channel, rpack);
@@ -762,7 +743,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                     // 主要是为了，避免在第一次收到 PONG 时，用 cid 索引到 channel
                     channel = (xmsgchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
                     __ex_logd("XMSG_PACK_PONG 1\n");
-                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_KEY){
+                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
                         __ex_logd("XMSG_PACK_PONG 2\n");
                         // 删除以 IP 地址为 KEY 建立的索引
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
@@ -774,7 +755,6 @@ static inline void messenger_loop(xmaker_ptr ctx)
                         channel->peer_cid = cid;
                         channel->peer_key = cid % 255;
                         __ex_logd("XMSG_PACK_PONG 5\n");
-                        msgchannel_enqueue(channel, msger->sendqueue);
                         // 以 cip 为 KEY 建立索引
                         __ex_logd("XMSG_PACK_PONG 6\n");
                         xtree_save(msger->peers, &channel->cid, 4, channel);
@@ -826,7 +806,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                 if (channel){
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
                     xtree_save(msger->peers, channel->addr.key, channel->addr.keylen, channel);
-                    msgchannel_enqueue(channel, msger->sendqueue);
+                    xmsger_enqueue_channel(msger, channel);
                     xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
                     // 建立连接时，cid 必须是 0
                     spack->head.cid = 0;
@@ -834,7 +814,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                     xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                     // 这里是协议层验证
                     // TODO 需要更换一个密钥
-                    spack->head.x = (XMSG_KEY ^ XMSG_KEY);
+                    spack->head.x = (XMSG_VAL ^ XMSG_KEY);
                     xline_add_uint32(&kv, "cid", channel->cid);
                     spack->head.pack_size = kv.wpos + 9;
                     msgchannel_push(channel, spack);
@@ -857,7 +837,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
 
             if (__ex_clock() - channel->update > (1000000000ULL * 30)){
                 // 十秒内没有收发过数据，释放连建
-                msgchannel_clear(channel);
+                xmsger_clear_channel(msger, channel);
                 channel->msger->listener->onDisconnection(channel->msger->listener, channel);
             }
 
