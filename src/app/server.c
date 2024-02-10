@@ -55,13 +55,13 @@ static void listening(xmaker_ptr task_ctx)
 static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size)
 {
-    // __logi("send_msg enter");
-    send_number++;
-    uint64_t randtime = __ex_clock() / 1000000ULL;
-    if ((send_number & 0x0f) == (randtime & 0x0f)){
-        __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
-        return size;
-    }
+    // // __logi("send_msg enter");
+    // send_number++;
+    // uint64_t randtime = __ex_clock() / 1000000ULL;
+    // if ((send_number & 0x0f) == (randtime & 0x0f)){
+    //     __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
+    //     return size;
+    // }
     server_t *server = (server_t*)socket->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
@@ -139,7 +139,16 @@ static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 
 static void process_message(xmaker_ptr task_ctx)
 {
-
+    __ex_logd("process_message enter\n");
+    xmsg_ptr msg = (xmsg_ptr)xline_find_ptr(task_ctx, "msg");
+    struct xmaker parser = xline_parse((xline_ptr)msg->data);
+    xline_ptr line = xline_find(&parser, "msg");
+    if (line){
+        char *cmsg = strndup((char*)__xline_to_data(line), (size_t)__xline_sizeof_data(line));
+        __ex_logd("process_message >>>>--------------> %s\n", cmsg);
+        free(cmsg);
+    }
+    __ex_logd("process_message exit\n");
 }
 
 static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)

@@ -408,6 +408,7 @@ static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsghead_ptr ack)
     }
 
     while (channel->timerheap->pos > 0 && __heap_min(channel->timerheap)->key - __ex_clock() < 0){
+        __ex_logd("time out resend -----------------------\n");
         pack = (xmsgpack_ptr)__heap_min(channel->timerheap)->value;
         result = channel->msger->msgsock->sendto(channel->msger->msgsock, &pack->channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
         if (result == PACK_HEAD_SIZE + pack->head.pack_size){
@@ -432,6 +433,9 @@ static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsghead_ptr ack)
 
 static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 {
+    __ex_logd("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]\n",
+           unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
+
     if (unit->head.y == 1){
         // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
         msgchannel_pull(channel, unit);
@@ -442,8 +446,6 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
     channel->ack.pack_size = 0;
     uint16_t index = unit->head.sn & (PACK_WINDOW_RANGE - 1);
     
-    __ex_logi("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]\n",
-           unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
     
     // 如果收到连续的 PACK
     if (unit->head.sn == channel->msgbuf->wpos){
@@ -532,7 +534,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 //        __logi("msgchannel_recv pack_range %u", channel->msgbuf->pack_range);
         if (channel->msgbuf->pack_range == 0){
             channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
-//            __logi("msgchannel_recv process msg %s", channel->msgbuf->msg->data);
+            __ex_logi("msgchannel_recv process msg ---------------- %s\n", channel->msgbuf->msg->data);
 //            __logi("msgchannel_recv message enter");
             channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msgbuf->msg);
 //            __logi("msgchannel_recv message exit");
@@ -649,21 +651,22 @@ static inline void messenger_loop(xmaker_ptr ctx)
 
         if (result == (rpack->head.pack_size + PACK_HEAD_SIZE)){
 
-            __ex_logi("messenger_loop recv ip: %u port: %u msg: %d\n", addr.ip, addr.port, rpack->head.type);
+            __ex_logi("messenger_loop recv ip: %u port: %u cid: %u msg: %d\n", addr.ip, addr.port, rpack->head.cid, rpack->head.type);
 
             channel = (xmsgchannel_ptr)xtree_find(msger->peers, &rpack->head.cid, 4);
 
             if (channel){
+                __ex_logd("receive pack check key\n");
 
                 // 协议层验证
                 if (rpack->head.x ^ channel->key == XMSG_VAL){
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
-                        
+                        __ex_logd("receive msg pack\n");
                         msgchannel_recv(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_ACK) {
-
+                        __ex_logd("receive ack pack\n");
                         msgchannel_pull(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_BYE){
@@ -752,7 +755,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
                         // 删除以 IP 地址为 KEY 建立的索引
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
                         __ex_logd("XMSG_PACK_PONG 3\n");
-                        uint32_t cid = xline_find_uint32(&parser, "id");
+                        uint32_t cid = xline_find_uint32(&parser, "cid");
                         __ex_logd("XMSG_PACK_PONG 4\n");
                         __ex_logd("msger channel to peer connected: cid = %u ip: %u port: %u\n", cid, addr.ip, addr.port);
                         // 设置对端 cid 与 key
@@ -781,7 +784,7 @@ static inline void messenger_loop(xmaker_ptr ctx)
             }
 
             rpack = NULL;
-            
+
         }else {
 
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
@@ -1008,9 +1011,10 @@ static inline void xmessenger_send(xmessenger_ptr mtp, xmsgchannel_ptr channel, 
         msg_data = ((char*)data) + x * XMSG_MAXIMUM_LENGTH;
         for (size_t y = 0; y < XMSG_PACK_RANGE; y++)
         {
-            xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
             memcpy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
-            unit->head.type = XMSG_PACK_MSG;
+            // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = PACK_BODY_SIZE;
             unit->head.pack_range = XMSG_PACK_RANGE - y;
             msgchannel_push(channel, unit);
@@ -1030,18 +1034,20 @@ static inline void xmessenger_send(xmessenger_ptr mtp, xmsgchannel_ptr channel, 
         }
 
         for (size_t y = 0; y < unit_count; y++){
-            xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
             memcpy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
-            unit->head.type = XMSG_PACK_MSG;
+            // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = PACK_BODY_SIZE;
             unit->head.pack_range = (unit_count + last_unit_id) - y;
             msgchannel_push(channel, unit);
         }
 
         if (last_unit_id){
-            xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
+            xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
             memcpy(unit->body, msg_data + (unit_count * PACK_BODY_SIZE), last_unit_size);
-            unit->head.type = XMSG_PACK_MSG;        
+            // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = last_unit_size;
             unit->head.pack_range = last_unit_id;
             msgchannel_push(channel, unit);
