@@ -538,11 +538,15 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 //            __logi("msgchannel_recv message exit");
             channel->msgbuf->msg = NULL;
         }
+        __ex_logd("msgchannel_recv free 1\n");
         free(channel->msgbuf->buf[index]);
+        __ex_logd("msgchannel_recv free 2\n");
         channel->msgbuf->buf[index] = NULL;
         channel->msgbuf->rpos++;
         index = __transbuf_rpos(channel->msgbuf);
     }
+
+    __ex_logd("msgchannel_recv exit\n");
 }
 
 static inline xmsgchannel_ptr msgchannel_create(xmessenger_ptr msger, xmsgaddr_ptr addr)
@@ -776,6 +780,8 @@ static inline void messenger_loop(xmaker_ptr ctx)
                 }
             }
 
+            rpack = NULL;
+            
         }else {
 
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。

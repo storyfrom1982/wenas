@@ -106,12 +106,14 @@ static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
-
+    __ex_logd("on_connection_from_peer enter\n");
+    __ex_logd("on_connection_from_peer exit\n");
 }
 
 static void on_connection_to_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
-
+    __ex_logd("on_connection_to_peer enter\n");
+    __ex_logd("on_connection_to_peer exit\n");
 }
 
 static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
@@ -126,11 +128,13 @@ static void disconnect_task(xmaker_ptr task)
 
 static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
+    __ex_logd("on_disconnection enter\n");
     server_t *server = (server_t*)listener->ctx;
     xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", disconnect_task);
     xline_add_ptr(ctx, "ctx", channel);
     __ex_task_update_pusher(server->task);
+    __ex_logd("on_disconnection exit\n");
 }
 
 static void process_message(xmaker_ptr task_ctx)
