@@ -31,6 +31,7 @@ typedef struct client{
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
     xmessenger_ptr msger;
+    xmsgchannel_ptr channel;
 }*client_ptr;
 
 
@@ -57,12 +58,12 @@ static void listening(struct xmsgsocket *socket)
 static uint64_t send_number = 0, lost_number = 0;
 static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr remote_addr, void *data, size_t size)
 {
-    send_number++;
-    uint64_t randtime = __ex_clock() / 1000ULL;
-    if ((send_number & 0xdf) == (randtime & 0xdf)){
-        // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
-        return size;
-    }
+    // send_number++;
+    // uint64_t randtime = __ex_clock() / 1000ULL;
+    // if ((send_number & 0xdf) == (randtime & 0xdf)){
+    //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
+    //     return size;
+    // }
     client_ptr client = (client_ptr)socket->ctx;
     ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t)remote_addr->addrlen);
     // __logi("send_msg result %d", result);
@@ -92,6 +93,9 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
 static void on_connection_to_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
 {
     __ex_logi(">>>>---------------> on_connection_to_peer: 0x%x\n", channel);
+    client_ptr client = (client_ptr)listener->ctx;
+    client->channel = channel;
+
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
@@ -227,7 +231,7 @@ int main(int argc, char *argv[])
         xmaker maker;
         xline_maker_setup(&maker, NULL, 1024);
         xline_add_text(&maker, "msg", str, slength(str));
-        // xmessenger_send(client->mtp, channel, maker.head, maker.wpos);
+        xmessenger_send(client->msger, client->channel, maker.addr, maker.wpos + 9);
         xline_maker_clear(&maker);
     }
 

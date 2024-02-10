@@ -433,6 +433,7 @@ static inline int64_t msgchannel_send(xmsgchannel_ptr channel, xmsghead_ptr ack)
 
 static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
 {
+
     __ex_logd("msgchannel_recv >>>>---------> SN: %u rpos: %u wpos: %u msg: [%s]\n",
            unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos, get_transunit_msg(unit));
 
@@ -445,8 +446,7 @@ static inline void msgchannel_recv(xmsgchannel_ptr channel, xmsgpack_ptr unit)
     channel->ack.type = XMSG_PACK_ACK;
     channel->ack.pack_size = 0;
     uint16_t index = unit->head.sn & (PACK_WINDOW_RANGE - 1);
-    
-    
+
     // 如果收到连续的 PACK
     if (unit->head.sn == channel->msgbuf->wpos){
 
@@ -656,6 +656,8 @@ static inline void messenger_loop(xmaker_ptr ctx)
             channel = (xmsgchannel_ptr)xtree_find(msger->peers, &rpack->head.cid, 4);
 
             if (channel){
+                __ex_logd("receive pack check key\n");
+
                 __ex_logd("receive pack check key\n");
 
                 // 协议层验证
@@ -1054,7 +1056,6 @@ static inline void xmessenger_send(xmessenger_ptr mtp, xmsgchannel_ptr channel, 
         }
     }
 }
-
 
 //make_channel(addr, 验证数据) //channel 在外部线程创建
 //clear_channel(ChannelPtr) //在外部线程销毁
