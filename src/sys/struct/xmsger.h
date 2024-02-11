@@ -345,7 +345,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
 
 static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
 {
-    __xlogd("xchannel_send >>>>------------> enter\n");
+    // __xlogd("xchannel_send >>>>------------> enter\n");
 
     ssize_t result;
     xmsgpack_ptr pack;
@@ -403,7 +403,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
         result = 0;
     }
 
-    __xlogd("xchannel_send >>>>------------> exit\n");
+    // __xlogd("xchannel_send >>>>------------> exit\n");
 
     return result;
 
@@ -771,7 +771,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                 xchannel_ptr channel = xchannel_create(msger, addr);
                 if (channel){
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
-                    xtree_save(msger->peers, channel->addr.key, channel->addr.keylen, channel);
+                    xtree_save(msger->peers, &channel->cid, 4, channel);
                     xmsger_enqueue_channel(msger, channel);
                     xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
                     // 建立连接时，cid 必须是 0
