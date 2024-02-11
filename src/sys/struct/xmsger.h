@@ -681,8 +681,18 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                     }else if (rpack->head.type == XMSG_PACK_PONG){
                         __xlogd("xmsger_loop receive PONG\n");
+                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
+                        uint32_t cid = xline_find_uint32(&parser, "cid");
+                        // 设置对端 cid 与 key
+                        channel->peer_cid = cid;
+                        channel->peer_key = cid % 255;
+                        rpack->head.cid = channel->peer_cid;
+                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
+                        if (___set_true(&channel->connected)){
+                            // 主动发起 PING 的一方会收到 PONG，是主动建立连接
+                            channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
+                        }
                         xchannel_recv(channel, rpack);
-
                     }
 
                 }
@@ -712,8 +722,8 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         channel->msger->listener->onConnectionFromPeer(channel->msger->listener, channel);
 
                         xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
-                        // 第一次回复 PONG，cid 必须设置为 0
-                        spack->head.cid = 0;
+                        // // 第一次回复 PONG，cid 必须设置为 0
+                        // spack->head.cid = channel->peer_cid;
                         struct xmaker kv;
                         xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                         xline_add_uint32(&kv, "cid", channel->cid);
@@ -722,27 +732,6 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                         xchannel_recv(channel, rpack);
                     }
-
-                }else if (rpack->head.type == XMSG_PACK_PONG){
-                    __xlogd("xmsger_loop receive PONG\n");
-                    // 第一次发送 PING，并没有使用 cid 作为本地索引，虽然这时已经有本地 cid 了
-                    // 主要是为了，避免在第一次收到 PONG 时，用 cid 索引到 channel
-                    channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
-                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
-                        // 删除以 IP 地址为 KEY 建立的索引
-                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                        uint32_t cid = xline_find_uint32(&parser, "cid");
-                        // 设置对端 cid 与 key
-                        channel->peer_cid = cid;
-                        channel->peer_key = cid % 255;
-                        // 以 cip 为 KEY 建立索引
-                        xtree_save(msger->peers, &channel->cid, 4, channel);
-                        ___set_true(&channel->connected);
-                        // 主动发起 PING 的一方会收到 PONG，是主动建立连接
-                        channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
-                        xchannel_recv(channel, rpack);
-                    }
-
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
                     __xlogd("xmsger_loop receive BYE\n");
