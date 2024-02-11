@@ -32,12 +32,12 @@ void heap_test()
 
     xheap_remove(h, node);
 
-    __ex_logd("len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
+    __xlogd("len ==== %d %lu\n", sizeof(array) / sizeof(uint64_t), h->pos);
 
     for (int32_t i = 0; i < sizeof(array) / sizeof(uint64_t); ++i){
         node = xheap_pop(h);
         if (node){
-            __ex_logd("heap.pos %u count %d key = %lu\n", h->pos, i, node->key);
+            __xlogd("heap.pos %u count %d key = %lu\n", h->pos, i, node->key);
             free(node);   
         }
     }

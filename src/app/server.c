@@ -1,5 +1,5 @@
 #include <ex/ex.h>
-#include <sys/struct/xmessenger.h>
+#include <sys/struct/xmsger.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -22,22 +22,22 @@ typedef struct server {
     struct xmsglistener listener;
     xkey_ptr func;
     __ex_task_ptr task;
-    xmessenger_ptr messenger;
+    xmsger_ptr messenger;
 }server_t;
 
 
 static void malloc_debug_cb(const char *debug)
 {
-    __ex_logd("%s\n", debug);
+    __xlogd("%s\n", debug);
 }
 
 static void listening(xmaker_ptr task_ctx)
 {
-    __ex_logd("listening enter\n");
-    __ex_logd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
+    __xlogd("listening enter\n");
+    __xlogd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
     server_t *server = (server_t *)xline_find_ptr(task_ctx, "ctx");
     if (___set_true(&server->listening)){
-        __ex_logd("listening server = %p\n", server);
+        __xlogd("listening server = %p\n", server);
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(server->socket, &fds);
@@ -46,10 +46,10 @@ static void listening(xmaker_ptr task_ctx)
         // timeout.tv_usec = 0;
         // select(server->socket + 1, &fds, NULL, NULL, &timeout);
         select(server->socket + 1, &fds, NULL, NULL, NULL);
-        xmessenger_wake(server->messenger);
+        xmsger_wake(server->messenger);
         ___set_false(&server->listening);
     }
-    __ex_logd("listening exit\n");
+    __xlogd("listening exit\n");
 }
 
 static uint64_t send_number = 0, lost_number = 0;
@@ -59,7 +59,7 @@ static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data,
     // send_number++;
     // uint64_t randtime = __ex_clock() / 1000000ULL;
     // if ((send_number & 0x0f) == (randtime & 0x0f)){
-    //     __ex_logi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
+    //     __xlogi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
     //     return size;
     // }
     server_t *server = (server_t*)socket->ctx;
@@ -90,68 +90,68 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
     return result;
 }
 
-static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
-    __ex_logd("on_idle server = %p\n", server);
+    __xlogd("on_idle server = %p\n", server);
     xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
-    __ex_logd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
-    __ex_logd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
+    __xlogd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
+    __xlogd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
     xline_add_ptr(ctx, "func", listening);
-    __ex_logd("2 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
+    __xlogd("2 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
     xline_add_ptr(ctx, "ctx", server);
-    __ex_logd("2 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
+    __xlogd("2 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     __ex_task_update_pusher(server->task);
 }
 
-static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logd("on_connection_from_peer enter\n");
-    __ex_logd("on_connection_from_peer exit\n");
+    __xlogd("on_connection_from_peer enter\n");
+    __xlogd("on_connection_from_peer exit\n");
 }
 
-static void on_connection_to_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logd("on_connection_to_peer enter\n");
-    __ex_logd("on_connection_to_peer exit\n");
+    __xlogd("on_connection_to_peer enter\n");
+    __xlogd("on_connection_to_peer exit\n");
 }
 
-static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
 {
 
 }
 
 static void disconnect_task(xmaker_ptr task)
 {
-    xmsgchannel_ptr channel = (xmsgchannel_ptr)xline_find_ptr(task, "ctx");
+    xchannel_ptr channel = (xchannel_ptr)xline_find_ptr(task, "ctx");
 }
 
-static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logd("on_disconnection enter\n");
+    __xlogd("on_disconnection enter\n");
     server_t *server = (server_t*)listener->ctx;
     xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", disconnect_task);
     xline_add_ptr(ctx, "ctx", channel);
     __ex_task_update_pusher(server->task);
-    __ex_logd("on_disconnection exit\n");
+    __xlogd("on_disconnection exit\n");
 }
 
 static void process_message(xmaker_ptr task_ctx)
 {
-    __ex_logd("process_message enter\n");
+    __xlogd("process_message enter\n");
     xmsg_ptr msg = (xmsg_ptr)xline_find_ptr(task_ctx, "msg");
     struct xmaker parser = xline_parse((xline_ptr)msg->data);
     xline_ptr line = xline_find(&parser, "msg");
     if (line){
         char *cmsg = strndup((char*)__xline_to_data(line), (size_t)__xline_sizeof_data(line));
-        __ex_logd("process_message >>>>--------------> %s\n", cmsg);
+        __xlogd("process_message >>>>--------------> %s\n", cmsg);
         free(cmsg);
     }
-    __ex_logd("process_message exit\n");
+    __xlogd("process_message exit\n");
 }
 
-static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
+static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
     xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
@@ -164,8 +164,8 @@ static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channe
 int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
-    __ex_log_file_open("./tmp/server/log", NULL);
-    __ex_logi("start server\n");
+    __xlog_open("./tmp/server/log", NULL);
+    __xlogi("start server\n");
 
     const char *host = "127.0.0.1";
     // uint16_t port = atoi(argv[1]);
@@ -204,20 +204,20 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __ex_loge("socket error");
+        __xloge("socket error");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
-        __ex_loge("setsockopt error");
+        __xloge("setsockopt error");
     }
 	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
-        __ex_loge("setsockopt error");
+        __xloge("setsockopt error");
     }
     if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
-        __ex_loge("bind error");
+        __xloge("bind error");
     }
 	int flags = fcntl(fd, F_GETFL, 0);
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
-        __ex_loge("set no block failed");
+        __xloge("set no block failed");
     }
 
     server.socket = fd;
@@ -229,10 +229,10 @@ int main(int argc, char *argv[])
     server.task = __ex_task_create();
 
     listener->ctx = &server;
-    server.messenger = xmessenger_create(msgsock, &server.listener);
-    xmessenger_run(server.messenger);
+    server.messenger = xmsger_create(msgsock, &server.listener);
+    xmsger_run(server.messenger);
 
-    // xmessenger_connect(server.messenger, addr);
+    // xmsger_connect(server.messenger, addr);
     
     // struct xmaker task_ctx;
     // xline_maker_setup(&task_ctx, NULL, 256);
@@ -242,26 +242,26 @@ int main(int argc, char *argv[])
 
     while (true)
     {
-        xmessenger_wait(server.messenger);
+        xmsger_wait(server.messenger);
     }
 
     ___set_false(&server.messenger->running);
     int data = 0;
     ssize_t result = sendto(server.socket, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
-    __ex_logi("xmessenger_disconnect");
-    xmessenger_free(&server.messenger);
-    __ex_logi("xmessenger_free\n");
+    __xlogi("xmsger_disconnect");
+    xmsger_free(&server.messenger);
+    __xlogi("xmsger_free\n");
 
     __ex_task_free(&server.task);
 
-    __ex_logi("close socket\n");
+    __xlogi("close socket\n");
     free(msgsock);
 
     close(fd);
 
-    __ex_log_file_close();
+    __xlog_close();
 
-    __ex_logi("exit\n");
+    __xlogi("exit\n");
 
     return 0;
 }

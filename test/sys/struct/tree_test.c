@@ -3,12 +3,12 @@
 
 static void malloc_debug_cb(const char *debug)
 {
-    __ex_loge("%s\n", debug);
+    __xloge("%s\n", debug);
 }
 
 static void free_mapping(void *mapping)
 {
-    // __ex_logd("free tree node mapping: %d\n", *(int*)mapping);
+    // __xlogd("free tree node mapping: %d\n", *(int*)mapping);
     free(mapping);
 }
 
@@ -44,13 +44,13 @@ int main(int argc, char *argv[])
     // xtree_save(tree, &key, sizeof(int), &key);
 
     for (int i = 0; i < sizeof(ikeys) / sizeof(int); ++i){
-        __ex_logd("keys[i] = %d\n", ikeys[i]);
+        __xlogd("keys[i] = %d\n", ikeys[i]);
         xtree_save(tree, &ikeys[i], sizeof(int), &ikeys[i]);
     }
 
     for (int i = 0; i < sizeof(ikeys) / sizeof(int); ++i){
         int *mapping = xtree_find(tree, &ikeys[i], sizeof(int));
-        __ex_logd("find key =%d mapping = %d\n", ikeys[i], *mapping);
+        __xlogd("find key =%d mapping = %d\n", ikeys[i], *mapping);
     }
 
     {
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
         while (sort)
         {
             tmp = sort;
-            __ex_logd("sort up >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
+            __xlogd("sort up >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
             sort = sort->next;
             free(tmp);
         }
@@ -69,13 +69,13 @@ int main(int argc, char *argv[])
 
     // {
     //     int key = 31;
-    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
+    //     __xlogd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
     //     xnode_list *tmp, *sort = tree_drop(tree, &key, sizeof(int), 64);
-    //     __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
+    //     __xlogd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
     //     while (sort)
     //     {
     //         tmp = sort;
-    //         __ex_logd("sort down >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
+    //         __xlogd("sort down >>>>----------------------------> %d\n", *(int*)sort->node->mapping);
     //         sort = sort->next;
     //         free(tmp);
     //     }
@@ -85,19 +85,19 @@ int main(int argc, char *argv[])
 #endif
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
-        // __ex_logd("keys[i] = %s\n", keys[i]);
+        // __xlogd("keys[i] = %s\n", keys[i]);
         xtree_save(tree, keys[i], strlen(keys[i]), strdup(keys[i]));
     }
 
     {
         const char *key = "zzzxyza";
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
+        __xlogd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 1\n");
         xnode_list_ptr tmp, sort = tree_drop(tree, key, strlen(key), 32);
-        __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
+        __xlogd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 2\n");
         while (sort)
         {
             tmp = sort;
-            __ex_logd("sort down >>>>----------------------------> %s\n", sort->node->mapping);
+            __xlogd("sort down >>>>----------------------------> %s\n", sort->node->mapping);
             sort = sort->next;
             free(tmp);
         }
@@ -109,44 +109,44 @@ int main(int argc, char *argv[])
         while (sort)
         {
             tmp = sort;
-            __ex_logd("sort up >>>>----------------------------> %s\n", sort->node->mapping);
+            __xlogd("sort up >>>>----------------------------> %s\n", sort->node->mapping);
             sort = sort->next;
             free(tmp);
         }
     }
 
-    __ex_logd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
+    __xlogd("sort ----------- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
     
 
     void* min = tree_min(tree);
-    __ex_logd("min >>>>------------> %s\n", min);
+    __xlogd("min >>>>------------> %s\n", min);
 
     void* max = tree_max(tree);
-    __ex_logd("max >>>>------------> %s\n", max);
+    __xlogd("max >>>>------------> %s\n", max);
     
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
         char *mapping = xtree_find(tree, keys[i], strlen(keys[i]));
-        __ex_logd("find key =%s mapping = %s\n", keys[i], mapping);
+        __xlogd("find key =%s mapping = %s\n", keys[i], mapping);
     }
 
-    __ex_logd("tree node count -- %lu\n", __tree2node(tree)->route);
+    __xlogd("tree node count -- %lu\n", __tree2node(tree)->route);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*) / 2; ++i){
-        __ex_logd("delete key ================================= %s\n", keys[i]);
+        __xlogd("delete key ================================= %s\n", keys[i]);
         void* val = xtree_take(tree, keys[i], strlen(keys[i]));
-        __ex_logd("delete val ================================= %s\n", (char*)val);
+        __xlogd("delete val ================================= %s\n", (char*)val);
         free(val);
     }
 
-    __ex_logd("tree node count ---- %lu\n", __tree2node(tree)->route);
+    __xlogd("tree node count ---- %lu\n", __tree2node(tree)->route);
 
     for (int i = 0; i < sizeof(keys) / sizeof(const char*); ++i){
-        // __ex_logd("keys[i] ================================= %s\n", keys[i]);
+        // __xlogd("keys[i] ================================= %s\n", keys[i]);
         char *mapping = xtree_find(tree, keys[i], strlen(keys[i]));
-        __ex_logd("----->>> key =%s mapping = %s\n", keys[i], mapping);
+        __xlogd("----->>> key =%s mapping = %s\n", keys[i], mapping);
     }
 
-    __ex_logd("tree node count %lu\n", __tree2node(tree)->route);
+    __xlogd("tree node count %lu\n", __tree2node(tree)->route);
     xtree_clear(tree, free_mapping);
     xtree_free(&tree);
 

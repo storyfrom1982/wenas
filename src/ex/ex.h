@@ -99,36 +99,41 @@ __ex_export void __ex_memory_leak_trace(void (*cb)(const char *leak_location));
 ///////////////////////////////////////////////////////
 ///// 日志存储
 ///////////////////////////////////////////////////////
-enum __ex_log_level 
+enum __xlog_level 
 {
-        EX_LOG_LEVEL_DEBUG,
-        EX_LOG_LEVEL_INFO,
-        EX_LOG_LEVEL_ERROR
+        __XLOG_LEVEL_DEBUG,
+        __XLOG_LEVEL_INFO,
+        __XLOG_LEVEL_ERROR
 };
 
-typedef void (*__ex_log_cb) (int32_t level, const char *log);
-__ex_export int __ex_log_file_open(const char *path, __ex_log_cb cb);
-__ex_export void __ex_log_file_close();
-__ex_export void __ex_log_printf(enum __ex_log_level level, const char *file, int line, const char *fmt, ...);
+typedef void (*__xlog_cb) (int32_t level, const char *log);
+__ex_export int __xlog_open(const char *path, __xlog_cb cb);
+__ex_export void __xlog_close();
+__ex_export void __xlog_printf(enum __xlog_level level, const char *file, int line, const char *fmt, ...);
 
-#define __ex_logd(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+#define __xlogi(__FORMAT__, ...) \
+    __xlog_printf(__XLOG_LEVEL_INFO, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
 
-#define __ex_logi(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_INFO, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+#define __xloge(__FORMAT__, ...) \
+    __xlog_printf(__XLOG_LEVEL_ERROR, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
 
-#define __ex_loge(__FORMAT__, ...) \
-        __ex_log_printf(EX_LOG_LEVEL_ERROR, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+#ifdef __XDEBUG__
+    #define __xlogd(__FORMAT__, ...) \
+        __xlog_printf(__XLOG_LEVEL_DEBUG, __FILE__, __LINE__, __FORMAT__, ##__VA_ARGS__)
+#else
+    #define __xlogd(__FORMAT__, ...) \
+        do {} while(0)
+#endif
 
-#define __ex_check(condition) \
+#define __xcheck(condition) \
     do { \
         if (!(condition)) { \
-            __ex_loge("CHECK FAILED: %s, %s\n", #condition, strerror(errno)); \
+            __xloge("CHECK FAILED: %s, %s\n", #condition, strerror(errno)); \
             goto Clean; \
         } \
-    } while (false)
+    } while (0)
 
-#define __ex_break(condition)   assert((condition))
+#define __xbreak(condition)   assert((condition))
 
 ///////////////////////////////////////////////////////
 ///// 线程间通信

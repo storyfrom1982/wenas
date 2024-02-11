@@ -13,30 +13,30 @@ struct targs {
 static void mutex_task(xmaker_ptr ctx)
 {
     struct targs *targ = (struct targs *)xline_find_ptr(ctx, "ctx");
-    __ex_logi("lock %u\n", *targ->testTrue);
+    __xlogi("lock %u\n", *targ->testTrue);
 
     while (1)
     {
         bool ret = ___atom_try_lock(targ->testTrue);
-        __ex_logi("__atom_try_lock %u\n", *targ->testTrue);
+        __xlogi("__atom_try_lock %u\n", *targ->testTrue);
         if (ret){
-            __ex_logi("__atom_try_lock %u\n", *targ->testTrue);
+            __xlogi("__atom_try_lock %u\n", *targ->testTrue);
             break;
         }
     }
-    __ex_logi("lock %u\n", *targ->testTrue);
+    __xlogi("lock %u\n", *targ->testTrue);
 
-    __ex_logi("thread enter\n");
+    __xlogi("thread enter\n");
     ___lock lk = __ex_mutex_lock(targ->mtx);
-    __ex_logi("sleep_until\n");
+    __xlogi("sleep_until\n");
     
     __ex_mutex_timed_wait(targ->mtx, lk, 3000000000);
 
     __ex_mutex_notify(targ->mtx);
-    __ex_logi("notify\n");
+    __xlogi("notify\n");
     __ex_mutex_wait(targ->mtx, lk);
     __ex_mutex_unlock(targ->mtx, lk);
-    __ex_logi("===============exit\n");
+    __xlogi("===============exit\n");
 }
 
 extern void test();
@@ -44,7 +44,7 @@ extern void test();
 int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
-    __ex_log_file_open("./tmp/log", NULL);
+    __xlog_open("./tmp/log", NULL);
     
 #if 1
     char text[1024] = {0};
@@ -59,31 +59,31 @@ int main(int argc, char *argv[])
 
     ___atom_size size = 10;
     ___atom_sub(&size, 5);
-    __ex_logi("___atom_sub %lu\n", size);
+    __xlogi("___atom_sub %lu\n", size);
 
     ___atom_add(&size, 15);
-    __ex_logi("___atom_add %lu\n", size);
+    __xlogi("___atom_add %lu\n", size);
 
     ___atom_bool testTrue = false;
 
     if (___set_true(&testTrue)){
-        __ex_logi("set false to true\n");
+        __xlogi("set false to true\n");
     }
 
     if (___is_true(&testTrue)){
-        __ex_logi("is true\n");
+        __xlogi("is true\n");
     }
 
     if (___set_false(&testTrue)){
-        __ex_logi("set true to false\n");
+        __xlogi("set true to false\n");
     }
 
     if (___is_false(&testTrue)){
-        __ex_logi("is false\n");
+        __xlogi("is false\n");
     }
 
     ___atom_lock(&testTrue);
-    __ex_logi("is lock\n");
+    __xlogi("is lock\n");
 
     __ex_mutex_ptr mtx = __ex_mutex_create();
 
@@ -108,14 +108,14 @@ int main(int argc, char *argv[])
 
     // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
     
-    __ex_logi("waitting\n");
+    __xlogi("waitting\n");
     __ex_mutex_wait(mtx, lk);
-    __ex_logi("wake\n");
+    __xlogi("wake\n");
     
     __ex_mutex_broadcast(mtx);
     __ex_mutex_unlock(mtx, lk);
 
-    __ex_logi("join thread %lu\n", __ex_thread_id());
+    __xlogi("join thread %lu\n", __ex_thread_id());
     // ___thread_join(tid);
     __ex_task_free(&task);
 
@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
     memcmp("123", "456", 3);
     
 #endif
-    __ex_log_file_close();
-    __ex_logi("exit\n");
+    __xlog_close();
+    __xlogi("exit\n");
 
 	return 0;
 }

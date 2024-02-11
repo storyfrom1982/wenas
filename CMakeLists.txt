@@ -53,7 +53,7 @@ set(kzx_sources
     src/ex/malloc.c
     src/ex/pipe.c 
     src/ex/file.c
-    src/ex/logger.c
+    src/ex/xlog.c
     src/ex/task.c
     # src/env/linetask.c
     # test/env/storage_test.c
@@ -87,6 +87,10 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND kzx_ldflags pthread dl)
+endif()
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    list(APPEND kzx_defines -D__XDEBUG__)
 endif()
 
 if(ENV_CHECK_BACKTRACE)

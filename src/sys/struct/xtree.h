@@ -56,7 +56,7 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
     uint8_t len = 0;
     uint8_t *p = (uint8_t *)key;
 
-    // __ex_logd("---------------------------------- mapping = %d index = %u\n", *(int*)mapping, i);
+    // __xlogd("---------------------------------- mapping = %d index = %u\n", *(int*)mapping, i);
 
     while (len < keylen)
     {
@@ -71,7 +71,7 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
         node->route ++;
         node->index = i;
         node->parent = parent;
-        // __ex_logd("mapping = %d index = %u\n", *(int*)mapping, i);
+        // __xlogd("mapping = %d index = %u\n", *(int*)mapping, i);
 
         parent = tree;
         i = (*p & 0x0F);
@@ -84,7 +84,7 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
         node->route ++;
         node->index = i;
         node->parent = parent;
-        // __ex_logd("mapping = %d index = %u\n", *(int*)mapping, i);
+        // __xlogd("mapping = %d index = %u\n", *(int*)mapping, i);
 
         p++;
         len++;

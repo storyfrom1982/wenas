@@ -331,7 +331,7 @@ static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t
 {
     while ((maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < (XKEY_HEAD_SIZE + keylen + XLINE_STATIC_SIZE + size)){
         if (maker->addr == NULL){
-            __ex_loge("maker->addr == NULL\n");
+            __xloge("maker->addr == NULL\n");
             exit(0);
         }
         maker->len += maker->len;
@@ -373,7 +373,7 @@ static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t
     // 最小长度 = 根 xline 的头 (XLINE_STATIC_SIZE) + key 长度 (keylen + XKEY_HEAD_SIZE) + value 长度 (XLINE_STATIC_SIZE)
     while ((int64_t)(maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < ((keylen + XKEY_HEAD_SIZE) + XLINE_STATIC_SIZE)){
         if (maker->addr == NULL){
-            __ex_loge("maker->addr == NULL\n");
+            __xloge("maker->addr == NULL\n");
             exit(0);
         }
         maker->len += maker->len;

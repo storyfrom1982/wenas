@@ -51,7 +51,7 @@ static void mutex_task(xmaker_ptr kv)
 int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
-    __ex_log_file_open("./tmp/log", NULL);
+    __xlog_open("./tmp/log", NULL);
 #if 1
     
     ___atom_size size = 10;
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
 
     __ex_mutex_free(mtx);
 #endif
-    __ex_log_file_close();
+    __xlog_close();
 
     std::cout << "exit\n";
 

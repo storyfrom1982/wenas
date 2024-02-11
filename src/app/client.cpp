@@ -2,7 +2,7 @@
 
 extern "C" {
     #include "ex/malloc.h"
-    #include <sys/struct/xmessenger.h>
+    #include <sys/struct/xmsger.h>
 }
 
 #include <sys/time.h>
@@ -30,15 +30,15 @@ typedef struct client{
     struct sockaddr_in remote_addr;
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
-    xmessenger_ptr msger;
-    xmsgchannel_ptr channel;
+    xmsger_ptr msger;
+    xchannel_ptr channel;
 }*client_ptr;
 
 
 
 static void malloc_debug_cb(const char *debug)
 {
-    __ex_loge("%s\n", debug);
+    __xloge("%s\n", debug);
 }
 
 static void listening(struct xmsgsocket *socket)
@@ -90,45 +90,45 @@ static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, 
     return result;
 }
 
-static void on_connection_to_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> on_connection_to_peer: 0x%x\n", channel);
+    __xlogi(">>>>---------------> on_connection_to_peer: 0x%x\n", channel);
     client_ptr client = (client_ptr)listener->ctx;
     client->channel = channel;
 
 }
 
-static void on_connection_from_peer(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
+    __xlogi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
 }
 
-static void on_disconnection(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> on_disconnection: 0x%x\n", channel);
+    __xlogi(">>>>---------------> on_disconnection: 0x%x\n", channel);
 }
 
-static void on_receive_message(xmsglistener_ptr listener, xmsgchannel_ptr channel, xmsg_ptr msg)
-{
-
-}
-
-static void on_sendable(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
 
 }
 
-static void on_idle(xmsglistener_ptr listener, xmsgchannel_ptr channel)
+static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __ex_logi(">>>>---------------> channel timeout: 0x%x\n", channel);
+
+}
+
+static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
+{
+    __xlogi(">>>>---------------> channel timeout: 0x%x\n", channel);
 }
 
 
 int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
-    __ex_log_file_open("./tmp/client/log", NULL);
-    __ex_logi("start client");
+    __xlog_open("./tmp/client/log", NULL);
+    __xlogi("start client");
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
 
@@ -144,14 +144,14 @@ int main(int argc, char *argv[])
     client->local_addr.sin_port = htons(3721);
     client->local_addr.sin_addr.s_addr = INADDR_ANY;
     if((client->local_socket = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __ex_loge("socket error\n");
+        __xloge("socket error\n");
     }
     if (bind(client->local_socket, (const struct sockaddr *)&client->local_addr, sizeof(client->local_addr)) == -1){
-        __ex_loge("bind error\n");
+        __xloge("bind error\n");
     }    
 	int event_flags = fcntl(client->local_socket, F_GETFL, 0);
     if (fcntl(client->local_socket, F_SETFL, event_flags | O_NONBLOCK) == -1){
-        __ex_loge("set no block failed\n");
+        __xloge("set no block failed\n");
     }
 
     client->remote_addr.sin_family = AF_INET;
@@ -175,17 +175,17 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __ex_loge("socket error\n");
+        __xloge("socket error\n");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
-        __ex_loge("setsockopt error\n");
+        __xloge("setsockopt error\n");
     }
 	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
-        __ex_loge("setsockopt error\n");
+        __xloge("setsockopt error\n");
     }
 	int flags = fcntl(fd, F_GETFL, 0);
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
-        __ex_loge("set no block failed\n");
+        __xloge("set no block failed\n");
     }
 
     client->socket = fd;
@@ -194,14 +194,14 @@ int main(int argc, char *argv[])
     msgsock->recvfrom = recv_msg;
     
     listener->ctx = client;
-    client->msger = xmessenger_create(msgsock, &client->listener);
-    xmessenger_run(client->msger);
+    client->msger = xmsger_create(msgsock, &client->listener);
+    xmsger_run(client->msger);
 
     // std::thread thread([&](){
-    //     xmessenger_wake(client->mtp);
+    //     xmsger_wake(client->mtp);
     // });
 
-    xmessenger_connect(client->msger, remote_addr);
+    xmsger_connect(client->msger, remote_addr);
 
     char str[1024];
 
@@ -215,13 +215,13 @@ int main(int argc, char *argv[])
     //         }
     //         memset(str, i % 256, len);
     //         str[len] = '\0';
-    //         xmessenger_send(client->mtp, channel, str, len);
+    //         xmsger_send(client->mtp, channel, str, len);
     //     }
     // }
     
     while (1)
     {
-        __ex_logi("Enter a value :\n");
+        __xlogi("Enter a value :\n");
         fgets(str, 100, stdin);
         size_t len = strlen(str);
         if (len == 2 && str[0] == 'q'){
@@ -231,36 +231,36 @@ int main(int argc, char *argv[])
         xmaker maker;
         xline_maker_setup(&maker, NULL, 1024);
         xline_add_text(&maker, "msg", str, slength(str));
-        xmessenger_send(client->msger, client->channel, maker.addr, maker.wpos + 9);
+        xmsger_send(client->msger, client->channel, maker.addr, maker.wpos + 9);
         xline_maker_clear(&maker);
     }
 
 
-    __ex_loge("xmessenger_send finish\n");
+    __xloge("xmsger_send finish\n");
 
-    __ex_logi("xmessenger_disconnect\n");
-    // xmessenger_disconnect(client->mtp, channel);
+    __xlogi("xmsger_disconnect\n");
+    // xmsger_disconnect(client->mtp, channel);
 
     ___set_false(&client->msger->running);
     int data = 0;
     ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
     
-    __ex_logi("xmessenger_free\n");
-    xmessenger_free(&client->msger);
+    __xlogi("xmsger_free\n");
+    xmsger_free(&client->msger);
 
-    __ex_logi("free msgsock\n");
+    __xlogi("free msgsock\n");
     free(msgsock);
     
-    __ex_logi("free client\n");
+    __xlogi("free client\n");
     free(client);
 
     close(fd);
 
     // thread.join();
 
-    __ex_logi("env_logger_stop\n");
-    __ex_log_file_close();
+    __xlogi("env_logger_stop\n");
+    __xlog_close();
 
-    __ex_logi("exit\n");
+    __xlogi("exit\n");
     return 0;
 }

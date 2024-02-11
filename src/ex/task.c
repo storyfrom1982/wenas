@@ -30,7 +30,7 @@ static void* __ex_task_loop(void *p)
     __ex_task_func post_func;
     __ex_task_ptr task = (__ex_task_ptr)p;
 
-    __ex_logi("__ex_task_loop(0x%X) enter\n", __ex_thread_id());
+    __xlogi("__ex_task_loop(0x%X) enter\n", __ex_thread_id());
     
     while (___is_true(&task->running)) {
 
@@ -47,7 +47,7 @@ static void* __ex_task_loop(void *p)
         __ex_msg_pipe_update_reader(task->pipe);
     }
 
-    __ex_logi("__ex_task_loop(0x%X) exit\n", __ex_thread_id());
+    __xlogi("__ex_task_loop(0x%X) exit\n", __ex_thread_id());
 
     return NULL;
 }
@@ -55,7 +55,7 @@ static void* __ex_task_loop(void *p)
 
 __ex_task_ptr __ex_task_create()
 {
-    __ex_logi("__ex_task_create enter\n");
+    __xlogi("__ex_task_create enter\n");
 
     int ret;
     __ex_task_ptr task = (__ex_task_ptr)malloc(sizeof(struct ex_task));
@@ -68,14 +68,14 @@ __ex_task_ptr __ex_task_create()
     task->tid = __ex_thread_create(__ex_task_loop, task);
     assert(task->tid);
 
-    __ex_logi("__ex_task_create exit\n");
+    __xlogi("__ex_task_create exit\n");
 
     return task;
 }
 
 void __ex_task_free(__ex_task_ptr *pptr)
 {
-    __ex_logi("__ex_task_free enter\n");
+    __xlogi("__ex_task_free enter\n");
 
     if (pptr && *pptr) {
         __ex_task_ptr task = *pptr;
@@ -88,7 +88,7 @@ void __ex_task_free(__ex_task_ptr *pptr)
         free(task);
     }
 
-    __ex_logi("__ex_task_free exit\n");
+    __xlogi("__ex_task_free exit\n");
 }
 
 

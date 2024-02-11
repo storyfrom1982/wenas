@@ -63,7 +63,7 @@ static inline size_t xheap_push(xheap_ptr h, xheapnode_ptr node)
         h->array[i] = node;
         h->array[i]->pos = i;
         if (i <= 0){
-            __ex_logi("heap_push %llu", i);
+            __xlogi("heap_push %llu", i);
             exit(0);
         }
         return i;
@@ -79,7 +79,7 @@ static inline xheapnode_ptr xheap_pop(xheap_ptr h)
     uint32_t left, right, index, smallest = HEAP_TOP;
 
     if (h->pos < HEAP_TOP){
-        __ex_logd("heap is emplty\n");
+        __xlogd("heap is emplty\n");
         return NULL;
     }
 
@@ -158,7 +158,7 @@ static inline xheapnode_ptr xheap_remove(xheap_ptr h, xheapnode_ptr node)
 
     // 节点的 key 值必然一致
     if (h->array[smallest]->key != node->key){
-        __ex_logi("heap_delete h->array[smallest]->key != node->key");
+        __xlogi("heap_delete h->array[smallest]->key != node->key");
         exit(0);
     }
 

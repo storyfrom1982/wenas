@@ -29,7 +29,7 @@ typedef struct ex_pipe {
 __ex_pipe* __ex_pipe_create(uint64_t len)
 {
     __ex_pipe *pipe = (__ex_pipe *)malloc(sizeof(__ex_pipe));
-    __ex_check(pipe);
+    __xcheck(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -43,10 +43,10 @@ __ex_pipe* __ex_pipe_create(uint64_t len)
     pipe->leftover = pipe->len;
 
     pipe->buf = (char *)malloc(pipe->len);
-    __ex_check(pipe->buf);
+    __xcheck(pipe->buf);
 
     pipe->mutex = __ex_mutex_create();
-    __ex_check(pipe->mutex);
+    __xcheck(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -108,7 +108,7 @@ uint64_t __ex_pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
 {
     uint64_t pos = 0;
 
-    // __ex_check(pipe->buf && data);
+    // __xcheck(pipe->buf && data);
     if (pipe == NULL || data == NULL){
         return pos;
     }
@@ -162,7 +162,7 @@ uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
     uint64_t pos = 0;
 
     // 如果日志线程触发了下面的日志写入，会造成原本负责读管道的线程向管道写数据，如果这时管道的空间不够大，就会造成日志线程阻塞
-    // __ex_check(pipe->buf && buf);
+    // __xcheck(pipe->buf && buf);
     if (pipe == NULL || buf == NULL){
         return pos;
     }
@@ -231,7 +231,7 @@ struct msg_pipe {
 __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
 {
     __ex_msg_pipe *pipe = (__ex_msg_pipe *)malloc(sizeof(struct msg_pipe));
-    __ex_check(pipe);
+    __xcheck(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -242,13 +242,13 @@ __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
         } while(len >>= 1);
     }
 
-    __ex_logi("pipe len %lu\n", pipe->len);
+    __xlogi("pipe len %lu\n", pipe->len);
 
     // 一维指针 (struct xmaker*) 可以像使用 xmaker 类型的数组那样，进行下标操作，每个下标指向的是一个 xmaker 类型的结构体
     // 二维指针 (struct xmaker**) 也可以像使用数组那样，进行下标操作，但是每个下标指向的是 xmaker 类型的结构体指针 (xmaker*)
     pipe->buf = (xmaker_ptr)calloc(pipe->len, sizeof(struct xmaker));
     // pipe->buf = (xline_maker_ptr*)calloc(pipe->len, sizeof(xline_maker_ptr*));
-    __ex_check(pipe->buf);
+    __xcheck(pipe->buf);
 
     for (int i = 0; i < pipe->len; ++i){
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
@@ -257,7 +257,7 @@ __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
     }
 
     pipe->mutex = __ex_mutex_create();
-    __ex_check(pipe->mutex);
+    __xcheck(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;

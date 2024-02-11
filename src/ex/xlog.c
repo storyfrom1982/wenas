@@ -21,10 +21,10 @@
 #define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
 
-static const char *s_log_level_strings[EX_LOG_LEVEL_ERROR + 1] = {"D", "I", "E"};
+static const char *s_log_level_strings[__XLOG_LEVEL_ERROR + 1] = {"D", "I", "E"};
 
 
-typedef struct ex_log_file {
+typedef struct xlog_file {
     ___atom_bool lock;
     ___atom_bool running;
     ___atom_bool writing;
@@ -32,25 +32,25 @@ typedef struct ex_log_file {
     __ex_fp fp;
     __ex_pipe *pipe;
     __ex_task_ptr task;
-    __ex_log_cb print_cb;
-}__ex_log_file;
+    __xlog_cb print_cb;
+}__xlog_file;
 
-static __ex_log_file g_log_file = {0};
+static __xlog_file g_log_file = {0};
 
-static void ex_log_file_write_loop(xmaker_ptr ctx)
+static void __xlog_file_write_loop(xmaker_ptr ctx)
 {
-    __ex_logd("ex_log_file_write_loop enter\n");
+    __xlogd("__xlog_file_write_loop enter\n");
 
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
-    __ex_check(buf != NULL);
+    __xcheck(buf != NULL);
 
     {
         // 只有在 Release 模式下才能获取到指针的信息
         uint64_t *a = (uint64_t*)(buf - 16);
         uint64_t *b = (uint64_t*)(buf - 8);
-        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
+        __xlogd("buf addr: %llu.%llu\n", *a, *b);
     }
 
     ___set_true(&g_log_file.writing);
@@ -69,16 +69,16 @@ static void ex_log_file_write_loop(xmaker_ptr ctx)
         if (res > 0){
             n = __ex_fwrite(g_log_file.fp, buf, res);
             // 日志线程本身不能同时读写日志管道
-            // __ex_check(n == res);
-            __ex_break(n == res);
+            // __xcheck(n == res);
+            __xbreak(n == res);
 
             if (__ex_ftell(g_log_file.fp) > __log_file_size){
                 __ex_fclose(g_log_file.fp);
                 __ex_move_path(g_log_file.log0, g_log_file.log1);
                 g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
                 // 日志线程本身不能同时读写日志管道
-                // __ex_check(g_log_file.fp != NULL);
-                __ex_break(g_log_file.fp != NULL);
+                // __xcheck(g_log_file.fp != NULL);
+                __xbreak(g_log_file.fp != NULL);
             }
         }else {
             if (___is_false(&g_log_file.running)){
@@ -92,12 +92,12 @@ Clean:
     if (buf){
         uint64_t *a = (uint64_t*)(buf - 16);
         uint64_t *b = (uint64_t*)(buf - 8);
-        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
+        __xlogd("buf addr: %llu.%llu\n", *a, *b);
         free(buf);
-        __ex_logd("buf addr: %llu.%llu\n", *a, *b);
+        __xlogd("buf addr: %llu.%llu\n", *a, *b);
     }
 
-    __ex_logd("ex_log_file_write_loop exit\n");
+    __xlogd("__xlog_file_write_loop exit\n");
 }
 
 void test3()
@@ -127,10 +127,10 @@ static void test(){
 
 static void memory_leak_cb(const char *leak_location)
 {
-    __ex_loge("%s\n", leak_location);
+    __xloge("%s\n", leak_location);
 }
 
-void __ex_log_file_close()
+void __xlog_close()
 {
     //先设置关闭状态    
     if (___set_false(&g_log_file.running)){
@@ -142,9 +142,9 @@ void __ex_log_file_close()
         free(g_log_file.log0);
         free(g_log_file.log1);
 
-        __ex_logi(">>>>-------------->\n");
-        __ex_logi("Log stop >>>>-------------->\n");
-        __ex_logi(">>>>-------------->\n");
+        __xlogi(">>>>-------------->\n");
+        __xlogi("Log stop >>>>-------------->\n");
+        __xlogi(">>>>-------------->\n");
 
         ___atom_lock(&g_log_file.lock);
         __ex_fclose(g_log_file.fp);
@@ -158,26 +158,26 @@ void __ex_log_file_close()
 #endif
 }
 
-int __ex_log_file_open(const char *path, __ex_log_cb cb)
+int __xlog_open(const char *path, __xlog_cb cb)
 {
     // test();
 
     static char buf[BUFSIZ];
     setvbuf(stdout, buf, _IONBF, BUFSIZ);
 
-    __ex_log_file_close();
+    __xlog_close();
 
     g_log_file.print_cb = cb;
 
     int len = strlen(path) + strlen("/0.log") + 1;
     if (!__ex_find_path(path)){
-        __ex_check(__ex_make_path(path));
+        __xcheck(__ex_make_path(path));
     }
 
     g_log_file.log0 = calloc(1, len);
-    __ex_check(g_log_file.log0);
+    __xcheck(g_log_file.log0);
     g_log_file.log1 = calloc(1, len);
-    __ex_check(g_log_file.log1);
+    __xcheck(g_log_file.log1);
 
     snprintf(g_log_file.log0, len, "%s/0.log", path);
     snprintf(g_log_file.log1, len, "%s/1.log", path);
@@ -186,17 +186,17 @@ int __ex_log_file_open(const char *path, __ex_log_cb cb)
     g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
     ___atom_unlock(&g_log_file.lock);
 
-    __ex_check(g_log_file.fp);
+    __xcheck(g_log_file.fp);
     
-    __ex_logi(">>>>-------------->\n");
-    __ex_logi("Log start >>>>--------------> %s\n", g_log_file.log0);
-    __ex_logi(">>>>-------------->\n");  
+    __xlogi(">>>>-------------->\n");
+    __xlogi("Log start >>>>--------------> %s\n", g_log_file.log0);
+    __xlogi(">>>>-------------->\n");  
 
     g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
-    __ex_check(g_log_file.pipe);
+    __xcheck(g_log_file.pipe);
 
-    g_log_file.task = __ex_task_run(ex_log_file_write_loop, &g_log_file);
-    __ex_check(g_log_file.task);
+    g_log_file.task = __ex_task_run(__xlog_file_write_loop, &g_log_file);
+    __xcheck(g_log_file.task);
 
     ___set_true(&g_log_file.running);
 
@@ -231,7 +231,7 @@ Clean:
     return -1;
 }
 
-void __ex_log_printf(enum __ex_log_level level, const char *file, int line, const char *fmt, ...)
+void __xlog_printf(enum __xlog_level level, const char *file, int line, const char *fmt, ...)
 {
     uint64_t n = 0;
     char text[__log_text_size];
