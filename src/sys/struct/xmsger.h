@@ -354,6 +354,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
         pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
         if (ack != NULL){
             __xlogd("xchannel_send >>>>------------> ACK and MSG\n");
+            pack->head.y = 1;
             pack->head.ack = ack->ack;
             pack->head.acks = ack->acks;
         }else {
@@ -681,17 +682,17 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                     }else if (rpack->head.type == XMSG_PACK_PONG){
                         __xlogd("xmsger_loop receive PONG\n");
-                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                        uint32_t cid = xline_find_uint32(&parser, "cid");
-                        // 设置对端 cid 与 key
-                        channel->peer_cid = cid;
-                        channel->peer_key = cid % 255;
-                        rpack->head.cid = channel->peer_cid;
-                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
                         if (___set_true(&channel->connected)){
+                            struct xmaker parser = xline_parse((xline_ptr)rpack->body);
+                            uint32_t cid = xline_find_uint32(&parser, "cid");                            
+                            // 设置对端 cid 与 key
+                            channel->peer_cid = cid;
+                            channel->peer_key = cid % 255;
                             // 主动发起 PING 的一方会收到 PONG，是主动建立连接
                             channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
                         }
+                        rpack->head.cid = channel->peer_cid;
+                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
                         xchannel_recv(channel, rpack);
                     }
 
