@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
     while (1)
     {
         __xlogi("Enter a value :\n");
-        fgets(str, 100, stdin);
+        fgets(str, 1000, stdin);
         size_t len = strlen(str);
         if (len == 2 && str[0] == 'q'){
             break;

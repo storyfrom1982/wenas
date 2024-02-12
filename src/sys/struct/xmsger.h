@@ -104,6 +104,7 @@ struct xchannel {
     ___atom_bool connected;
     ___atom_bool termination;
     uint8_t delay;
+    uint64_t timestamp;
     uint64_t update;
     xheap_ptr timer;
     struct xmsghead ack;
@@ -191,11 +192,16 @@ static inline void xmsger_enqueue_channel(xmsger_ptr msger, xchannel_ptr channel
     ___atom_add(&msger->sendqueue->len, 1);
 }
 
-static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
+static inline void xmsger_dequeue_channel(xmsger_ptr msger, xchannel_ptr channel)
 {
     channel->prev->next = channel->next;
     channel->next->prev = channel->prev;
     ___atom_sub(&msger->sendqueue->len, 1);
+}
+
+static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
+{
+    xmsger_dequeue_channel(msger, channel);
     if (channel->peer_cid != 0){
         xtree_take(msger->peers, &channel->cid, 4);
     }else {
@@ -548,7 +554,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
     channel->timer = xheap_create(PACK_WINDOW_RANGE);
-    channel->peer_cid = 0;
+    channel->peer_cid = channel->update % UINT16_MAX;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
             msger->cid = 1;
@@ -556,12 +562,14 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
     }
     channel->cid = msger->cid;
     channel->key = msger->cid % 255;
+    xmsger_enqueue_channel(msger, channel);
     return channel;
 }
 
 static inline void xchannel_release(xchannel_ptr channel)
 {
     __xlogd("xchannel_release enter\n");
+    xmsger_dequeue_channel(channel->msger, channel);
     __ex_mutex_free(channel->mtx);
     xheap_free(&channel->timer);
     free(channel->msgbuf);
@@ -705,33 +713,45 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                     __xlogd("xmsger_loop receive PING\n");
 
-                    channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
-
-                    if (channel == NULL && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
-
+                    if (rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
+                        
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                        uint32_t cid = xline_find_uint32(&parser, "cid");
-                        __xlogd("channel id = %u\n", cid);
-                        // 创建连接
-                        channel = xchannel_create(msger, &addr);
-                        channel->peer_cid = cid;
-                        channel->peer_key = cid % 255;
-                        __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
-                        xmsger_enqueue_channel(msger, channel);
-                        xtree_save(msger->peers, addr.key, addr.keylen, channel);
+                        uint32_t peer_cid = xline_find_uint32(&parser, "cid");
+                        uint64_t timestamp = xline_find_uint64(&parser, "time");
 
-                        xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
-                        // // 第一次回复 PONG，cid 必须设置为 0
-                        spack->head.cid = 0;
-                        spack->head.x = XMSG_VAL ^ XMSG_KEY;
-                        spack->head.y = 1;
-                        struct xmaker kv;
-                        xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
-                        xline_add_uint32(&kv, "cid", channel->cid);
-                        spack->head.pack_size = kv.wpos + 9; //TODO
-                        xchannel_push(channel, spack);
+                        channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
 
-                        xchannel_recv(channel, rpack);
+                        // 检查是否为建立同一次连接的重复的 PING
+                        if (channel != NULL && channel->timestamp != timestamp){
+                            // 不是重复的 PING
+                            // 同一个地址，在建立第一次连接的过程中，又发起了第二次连接，所以要释放第一次连接的资源
+                            xchannel_release(channel);
+                            channel = NULL;
+                        }
+
+                        if (channel == NULL){
+                            // 创建连接
+                            channel = xchannel_create(msger, &addr);
+                            channel->peer_cid = peer_cid;
+                            channel->peer_key = peer_cid % 255;
+                            channel->timestamp = timestamp;
+                            __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u cid: %u\n", channel, addr.ip, addr.port, channel->peer_cid);
+                            // 上一次的连接已经被释放，xtree 直接覆盖原来的连接，替换当前的连接
+                            xtree_save(msger->peers, addr.key, addr.keylen, channel);
+
+                            xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
+                            // // 第一次回复 PONG，cid 必须设置为 0
+                            spack->head.cid = 0;
+                            spack->head.x = XMSG_VAL ^ XMSG_KEY;
+                            spack->head.y = 1;
+                            struct xmaker kv;
+                            xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
+                            xline_add_uint32(&kv, "cid", channel->cid);
+                            spack->head.pack_size = kv.wpos + 9; //TODO
+                            xchannel_push(channel, spack);
+
+                            xchannel_recv(channel, rpack);
+                        }                        
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_PONG){
@@ -810,7 +830,6 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                 if (channel){
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
                     xtree_save(msger->peers, channel->addr.key, channel->addr.keylen, channel);
-                    xmsger_enqueue_channel(msger, channel);
                     xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
                     // 建立连接时，cid 必须是 0
                     spack->head.cid = 0;
@@ -818,8 +837,9 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     // TODO 需要更换一个密钥
                     spack->head.x = (XMSG_VAL ^ XMSG_KEY);
                     struct xmaker kv;
-                    xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);                    
+                    xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                     xline_add_uint32(&kv, "cid", channel->cid);
+                    xline_add_uint64(&kv, "time", __ex_clock());
                     spack->head.pack_size = kv.wpos + 9;
                     xchannel_push(channel, spack);
                 }
