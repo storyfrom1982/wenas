@@ -379,7 +379,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
 
     }else if (ack != NULL){
         __xlogd("xchannel_send >>>>------------> ACK\n");
-        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)&(ack), PACK_HEAD_SIZE);
+        result = channel->msger->msgsock->sendto(channel->msger->msgsock, &channel->addr, (void*)ack, PACK_HEAD_SIZE);
         if (result == PACK_HEAD_SIZE){
         }else {
             __xlogd("xchannel_send >>>>------------------------> failed\n");
@@ -719,6 +719,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
                         // // 第一次回复 PONG，cid 必须设置为 0
                         spack->head.cid = 0;
+                        spack->head.y = 1;
                         struct xmaker kv;
                         xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                         xline_add_uint32(&kv, "cid", channel->cid);
@@ -737,9 +738,14 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         uint32_t cid = xline_find_uint32(&parser, "cid");                            
                         // 设置对端 cid 与 key
                         channel->peer_cid = cid;
-                        channel->peer_key = cid % 255;                        
+                        channel->peer_key = cid % 255;
+                        rpack->head.type = XMSG_PACK_ACK;
                         rpack->head.x = XMSG_VAL ^ channel->peer_key;
                         xchannel_recv(channel, rpack);
+                        if (___set_true(&channel->connected)){
+                            //这里是被动建立连接 onConnectionFromPeer
+                            channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
+                        }
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
@@ -751,7 +757,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         xchannel_pull(channel, rpack);
                         channel->connected = true;
                         //这里是被动建立连接 onConnectionFromPeer
-                        channel->msger->listener->onConnectionFromPeer(channel->msger->listener, channel);                        
+                        channel->msger->listener->onConnectionFromPeer(channel->msger->listener, channel);
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
