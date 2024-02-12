@@ -146,7 +146,7 @@ typedef struct xmsgsocket {
 
 #define MSGCHANNELQUEUE_ARRAY_RANGE     3
 #define TRANSACK_BUFF_RANGE             4096
-#define TRANSUNIT_TIMEOUT_INTERVAL      1000000000ULL
+#define TRANSUNIT_TIMEOUT_INTERVAL      10000000000ULL
 
 struct xmsger {
     // 每次创建新的channel时加一
@@ -554,7 +554,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
     channel->timer = xheap_create(PACK_WINDOW_RANGE);
-    channel->peer_cid = channel->update % UINT16_MAX;
+    channel->peer_cid = 0;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
             msger->cid = 1;
@@ -723,6 +723,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                         // 检查是否为建立同一次连接的重复的 PING
                         if (channel != NULL && channel->timestamp != timestamp){
+                            __xlogd("xmsger_loop receive PING reconnecting\n");
                             // 不是重复的 PING
                             // 同一个地址，在建立第一次连接的过程中，又发起了第二次连接，所以要释放第一次连接的资源
                             xchannel_release(channel);
@@ -735,7 +736,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                             channel->peer_cid = peer_cid;
                             channel->peer_key = peer_cid % 255;
                             channel->timestamp = timestamp;
-                            __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u cid: %u\n", channel, addr.ip, addr.port, channel->peer_cid);
+                            __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u cid: %u time: %lu\n", channel, addr.ip, addr.port, peer_cid, timestamp);
                             // 上一次的连接已经被释放，xtree 直接覆盖原来的连接，替换当前的连接
                             xtree_save(msger->peers, addr.key, addr.keylen, channel);
 
@@ -884,7 +885,7 @@ static inline xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr 
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->cid = 1;
+    msger->cid = __ex_clock() % UINT16_MAX;
     msger->running = true;
     msger->msgsock = msgsock;
     msger->listener = listener;

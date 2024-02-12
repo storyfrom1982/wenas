@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
     // const char *host = "127.0.0.1";
     const char *host = "47.99.146.226";
     // uint16_t port = atoi(argv[1]);
-    uint16_t port = 3824;
+    uint16_t port = 9256;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
     xmsgaddr_ptr remote_addr = &client->xmsgaddr;
     xmsglistener_ptr listener = &client->listener;

@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
 
     const char *host = "127.0.0.1";
     // uint16_t port = atoi(argv[1]);
-    uint16_t port = 3824;
+    uint16_t port = 9256;
     server_t server;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
     xmsgaddr_ptr addr = &server.xmsgaddr;
