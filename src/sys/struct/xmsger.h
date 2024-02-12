@@ -723,6 +723,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
                         // // 第一次回复 PONG，cid 必须设置为 0
                         spack->head.cid = 0;
+                        spack->head.x = XMSG_VAL ^ XMSG_KEY;
                         spack->head.y = 1;
                         struct xmaker kv;
                         xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
@@ -736,27 +737,32 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                 }else if (rpack->head.type == XMSG_PACK_PONG){
                     __xlogd("xmsger_loop receive PONG\n");
 
-                    channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
-                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
+                    channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
+                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
+                        xtree_save(msger->peers, &channel->cid, 4, channel);
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
                         uint32_t cid = xline_find_uint32(&parser, "cid");                            
                         // 设置对端 cid 与 key
                         channel->peer_cid = cid;
                         channel->peer_key = cid % 255;
                         rpack->head.type = XMSG_PACK_ACK;
-                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
+                        rpack->head.x = XMSG_VAL ^ XMSG_KEY;
                         xchannel_recv(channel, rpack);
                         if (___set_true(&channel->connected)){
                             //这里是被动建立连接 onConnectionFromPeer
                             channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
                         }
+                    }else {
+                        rpack->head.type = XMSG_PACK_ACK;
+                        rpack->head.x = XMSG_VAL ^ XMSG_KEY;
+                        msger->msgsock->sendto(msger->msgsock, &addr, (void*)&(rpack->head), PACK_HEAD_SIZE);
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
                     __xlogd("xmsger_loop receive ACK\n");
 
                     channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
-                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
+                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
                         xtree_save(msger->peers, &channel->cid, 4, channel);
                         xchannel_pull(channel, rpack);
                         channel->connected = true;
@@ -768,7 +774,8 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     __xlogd("xmsger_loop receive BYE\n");
                     // 主动方释放连接后，收到了被动方重传的 BEY
                     // 直接 sendto 回复 FINAL
-
+                    rpack->head.type = XMSG_PACK_FINAL;
+                    msger->msgsock->sendto(msger->msgsock, &addr, (void*)&(rpack->head), PACK_HEAD_SIZE);
                 }
             }
 
