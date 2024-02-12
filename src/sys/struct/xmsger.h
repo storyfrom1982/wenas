@@ -682,15 +682,6 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                     }else if (rpack->head.type == XMSG_PACK_PONG){
                         __xlogd("xmsger_loop receive PONG\n");
-                        if (___set_true(&channel->connected)){
-                            struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                            uint32_t cid = xline_find_uint32(&parser, "cid");                            
-                            // 设置对端 cid 与 key
-                            channel->peer_cid = cid;
-                            channel->peer_key = cid % 255;
-                            // 主动发起 PING 的一方会收到 PONG，是主动建立连接
-                            channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
-                        }
                         rpack->head.cid = channel->peer_cid;
                         rpack->head.x = XMSG_VAL ^ channel->peer_key;
                         xchannel_recv(channel, rpack);
@@ -705,7 +696,10 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                 if (rpack->head.type == XMSG_PACK_PING){
 
                     __xlogd("xmsger_loop receive PING\n");
-                    if (rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
+
+                    channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
+
+                    if (channel == NULL && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
 
                         struct xmaker parser = xline_parse((xline_ptr)rpack->body);
                         uint32_t cid = xline_find_uint32(&parser, "cid");
@@ -716,15 +710,11 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         channel->peer_key = cid % 255;
                         __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u\n", channel, addr.ip, addr.port);
                         xmsger_enqueue_channel(msger, channel);
-                        xtree_save(msger->peers, &channel->cid, 4, channel);
-                        ___set_true(&channel->connected);
-
-                        //这里是被动建立连接 onConnectionFromPeer
-                        channel->msger->listener->onConnectionFromPeer(channel->msger->listener, channel);
+                        xtree_save(msger->peers, addr.key, addr.keylen, channel);
 
                         xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
                         // // 第一次回复 PONG，cid 必须设置为 0
-                        // spack->head.cid = channel->peer_cid;
+                        spack->head.cid = 0;
                         struct xmaker kv;
                         xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                         xline_add_uint32(&kv, "cid", channel->cid);
@@ -732,6 +722,30 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         xchannel_push(channel, spack);
 
                         xchannel_recv(channel, rpack);
+                    }
+
+                }else if (rpack->head.type == XMSG_PACK_PONG){
+
+                    channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
+                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
+                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
+                        uint32_t cid = xline_find_uint32(&parser, "cid");                            
+                        // 设置对端 cid 与 key
+                        channel->peer_cid = cid;
+                        channel->peer_key = cid % 255;                        
+                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
+                        xchannel_recv(channel, rpack);
+                    }
+
+                }else if (rpack->head.type == XMSG_PACK_ACK){
+
+                    channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
+                    if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
+                        xtree_save(msger->peers, &channel->cid, 4, channel);
+                        xchannel_pull(channel, rpack);
+                        channel->connected = true;
+                        //这里是被动建立连接 onConnectionFromPeer
+                        channel->msger->listener->onConnectionFromPeer(channel->msger->listener, channel);                        
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
@@ -772,16 +786,16 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                 xchannel_ptr channel = xchannel_create(msger, addr);
                 if (channel){
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
-                    xtree_save(msger->peers, &channel->cid, 4, channel);
+                    xtree_save(msger->peers, channel->addr.key, channel->addr.keylen, channel);
                     xmsger_enqueue_channel(msger, channel);
                     xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
                     // 建立连接时，cid 必须是 0
                     spack->head.cid = 0;
-                    struct xmaker kv;
-                    xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                     // 这里是协议层验证
                     // TODO 需要更换一个密钥
                     spack->head.x = (XMSG_VAL ^ XMSG_KEY);
+                    struct xmaker kv;
+                    xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);                    
                     xline_add_uint32(&kv, "cid", channel->cid);
                     spack->head.pack_size = kv.wpos + 9;
                     xchannel_push(channel, spack);
