@@ -284,7 +284,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                     pack->comfirmed = true;
                     timenode = xheap_remove(channel->timer, &pack->ts);
                     assert(timenode->value == pack);
-                    __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->len);
+                    __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->pos);
                 }else {
                     // 这里可以统计收到重复 ACK 的次数
                 }
@@ -320,7 +320,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 pack->comfirmed = true;
                 timenode = xheap_remove(channel->timer, &pack->ts);
                 assert(timenode->value == pack);
-                __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->len);
+                __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->pos);
             }
 
             // 重传 rpos 到 SN 之间的所有尚未确认的 SN
@@ -371,6 +371,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
             pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
             pack->ts.value = pack;
             xheap_push(channel->timer, &pack->ts);
+            __xlogd("xchannel_send >>>>------------------------> channel timer count %lu\n", channel->timer->pos);
             ___atom_sub(&channel->msger->send_queue_length, 1);
             pack->resending = 0;
         }else {
@@ -395,6 +396,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
             pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
             pack->ts.value = pack;
             xheap_push(channel->timer, &pack->ts);
+            __xlogd("xchannel_send >>>>------------------------> channel timer count %lu\n", channel->timer->pos);
             pack->resending ++;
         }else {
             __xlogd("xchannel_send >>>>------------------------> failed\n");
@@ -644,6 +646,8 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         __xlogd("xmsger_loop receive MSG\n");
+                        rpack->head.cid = channel->peer_cid;
+                        rpack->head.x = XMSG_VAL ^ channel->peer_key;
                         xchannel_recv(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_ACK) {
