@@ -105,7 +105,7 @@ struct xchannel {
     ___atom_bool termination;
     uint8_t delay;
     uint64_t update;
-    xheap_ptr timerheap;
+    xheap_ptr timer;
     struct xmsghead ack;
     xmsgbuf_ptr msgbuf;
     // xchannellist_ptr queue;
@@ -280,10 +280,11 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 if (!pack->comfirmed){
                     // 移除定时器，设置确认状态
                     __xlogd("xchannel_pull >>>>------------> remove timer: %u\n", pack->head.sn);
-                    assert(channel->timerheap->array[pack->ts.pos] != NULL);
+                    assert(channel->timer->array[pack->ts.pos] != NULL);
                     pack->comfirmed = true;
-                    timenode = xheap_remove(channel->timerheap, &pack->ts);
+                    timenode = xheap_remove(channel->timer, &pack->ts);
                     assert(timenode->value == pack);
+                    __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->len);
                 }else {
                     // 这里可以统计收到重复 ACK 的次数
                 }
@@ -314,11 +315,12 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
 
             // 检测此 SN 是否未确认
             if (pack && !pack->comfirmed){
-                assert(channel->timerheap->array[pack->ts.pos] != NULL);
+                assert(channel->timer->array[pack->ts.pos] != NULL);
                 // 移除定时器，设置确认状态
                 pack->comfirmed = true;
-                timenode = xheap_remove(channel->timerheap, &pack->ts);
+                timenode = xheap_remove(channel->timer, &pack->ts);
                 assert(timenode->value == pack);
+                __xlogd("xchannel_pull >>>>------------------------------------> timer count: %lu\n", channel->timer->len);
             }
 
             // 重传 rpos 到 SN 之间的所有尚未确认的 SN
@@ -341,6 +343,8 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
     }else {
 
     }
+
+    channel->update = __ex_clock();
 }
 
 static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
@@ -366,7 +370,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
             channel->sendbuf->upos++;
             pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
             pack->ts.value = pack;
-            xheap_push(channel->timerheap, &pack->ts);
+            xheap_push(channel->timer, &pack->ts);
             ___atom_sub(&channel->msger->send_queue_length, 1);
             pack->resending = 0;
         }else {
@@ -382,15 +386,15 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
         }
     }
 
-    while (channel->timerheap->pos > 0 && (int64_t)(__heap_min(channel->timerheap)->key - __ex_clock()) < 0){
-        __xlogd("xchannel_send >>>>------------------------------------> pack time out resend\n");
-        pack = (xmsgpack_ptr)__heap_min(channel->timerheap)->value;
+    while (channel->timer->pos > 0 && (int64_t)(__heap_min(channel->timer)->key - __ex_clock()) < 0){
+        __xlogd("xchannel_send >>>>------------------------------------> pack time out resend %lu %lu\n", __heap_min(channel->timer)->key, __ex_clock());
+        pack = (xmsgpack_ptr)__heap_min(channel->timer)->value;
         result = channel->msger->msgsock->sendto(channel->msger->msgsock, &pack->channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
         if (result == PACK_HEAD_SIZE + pack->head.pack_size){
-            xheap_pop(channel->timerheap);
+            xheap_pop(channel->timer);
             pack->ts.key = __ex_clock() + TRANSUNIT_TIMEOUT_INTERVAL;
             pack->ts.value = pack;
-            xheap_push(channel->timerheap, &pack->ts);
+            xheap_push(channel->timer, &pack->ts);
             pack->resending ++;
         }else {
             __xlogd("xchannel_send >>>>------------------------> failed\n");
@@ -398,8 +402,8 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
         }
     }
 
-    if (channel->timerheap->pos > 0){
-        result = (int64_t)__heap_min(channel->timerheap)->key - __ex_clock();
+    if (channel->timer->pos > 0){
+        result = (int64_t)__heap_min(channel->timer)->key - __ex_clock();
     }else {
         result = 0;
     }
@@ -420,6 +424,9 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
         __xlogd("xchannel_recv >>>>------------> MSG and ACK\n");
         // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
         xchannel_pull(channel, unit);
+    }else {
+        // 只有在接收到对端的消息时，才更新超时时间戳
+        channel->update = __ex_clock();
     }
 
     channel->ack = unit->head;
@@ -521,9 +528,6 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
         index = __transbuf_rpos(channel->msgbuf);
     }
 
-    // 只有在接收到对端的消息时，才更新超时时间戳
-    channel->update = __ex_clock();
-
     __xlogd("xchannel_recv >>>>------------> exit\n");
 }
 
@@ -541,7 +545,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
     channel->msgbuf->range = PACK_WINDOW_RANGE;
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
-    channel->timerheap = xheap_create(PACK_WINDOW_RANGE);
+    channel->timer = xheap_create(PACK_WINDOW_RANGE);
     channel->peer_cid = 0;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
@@ -557,7 +561,7 @@ static inline void xchannel_release(xchannel_ptr channel)
 {
     __xlogd("xchannel_release enter\n");
     __ex_mutex_free(channel->mtx);
-    xheap_free(&channel->timerheap);
+    xheap_free(&channel->timer);
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
@@ -725,6 +729,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_PONG){
+                    __xlogd("xmsger_loop receive PONG\n");
 
                     channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
                     if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
@@ -738,6 +743,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
+                    __xlogd("xmsger_loop receive ACK\n");
 
                     channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
                     if (channel && rpack->head.cid == 0 && rpack->head.x ^ channel->key == XMSG_VAL){
