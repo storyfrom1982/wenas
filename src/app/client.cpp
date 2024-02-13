@@ -23,15 +23,15 @@ extern "C" {
 
 
 typedef struct client{
-    int socket;
-    int local_socket;
+    int lsock, rsock, maxsock;
     socklen_t addlen;
-    struct sockaddr_in local_addr;
-    struct sockaddr_in remote_addr;
+    struct sockaddr_in laddr;
+    struct sockaddr_in raddr;
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
     xmsger_ptr msger;
     xchannel_ptr channel;
+    uint8_t lmsgpack[PACK_ONLINE_SIZE];
 }*client_ptr;
 
 
@@ -41,22 +41,42 @@ static void malloc_debug_cb(const char *debug)
     __xloge("%s\n", debug);
 }
 
-static void listening(struct xmsgsocket *socket)
+
+static void recv_local_msg(client_ptr client)
 {
-    client_ptr client = (client_ptr)socket->ctx;
+    struct sockaddr_in client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    // 从客户端接收数据
+    ssize_t result = recvfrom(client->lsock, client->lmsgpack, PACK_ONLINE_SIZE, 0, (struct sockaddr*)&client_addr, &addr_len);
+}
+
+static void listening(struct xmsgsocket *rsock)
+{
+    client_ptr client = (client_ptr)rsock->ctx;
 	fd_set fds;
 	FD_ZERO(&fds);
-    FD_SET(client->local_socket, &fds);
-	FD_SET(client->socket, &fds);
+    FD_SET(client->lsock, &fds);
+	FD_SET(client->rsock, &fds);
     struct timeval timeout;
     // timeout.tv_sec  = 10;
     // timeout.tv_usec = 0;
-    // select(client->socket + 1, &fds, NULL, NULL, &timeout);
-    select(client->socket + 1, &fds, NULL, NULL, NULL);
+    // select(client->rsock + 1, &fds, NULL, NULL, &timeout);
+    select(client->maxsock + 1, &fds, NULL, NULL, NULL);
+
+    // 有数据可读
+    if (FD_ISSET(client->lsock, &fds)) {
+
+        recv_local_msg(client);
+
+    }else {
+
+        xmsger_wake(client->msger);
+    }
+
 }
 
 static uint64_t send_number = 0, lost_number = 0;
-static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr remote_addr, void *data, size_t size)
+static size_t send_msg(struct xmsgsocket *rsock, xmsgaddr_ptr raddr, void *data, size_t size)
 {
     // send_number++;
     // uint64_t randtime = __ex_clock() / 1000ULL;
@@ -64,28 +84,28 @@ static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr remote_addr, void
     //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
     //     return size;
     // }
-    client_ptr client = (client_ptr)socket->ctx;
-    ssize_t result = sendto(client->socket, data, size, 0, (struct sockaddr*)remote_addr->addr, (socklen_t)remote_addr->addrlen);
+    client_ptr client = (client_ptr)rsock->ctx;
+    ssize_t result = sendto(client->rsock, data, size, 0, (struct sockaddr*)raddr->addr, (socklen_t)raddr->addrlen);
     // __logi("send_msg result %d", result);
     return result;
 }
 
-static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct xmsgsocket *rsock, xmsgaddr_ptr addr, void *buf, size_t size)
 {
-    client_ptr client = (client_ptr)socket->ctx;
+    client_ptr client = (client_ptr)rsock->ctx;
     if (addr->addr == NULL){
         addr->addr = malloc(sizeof(struct sockaddr_in));
         addr->keylen = 6;
     }    
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(client->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    ssize_t result = recvfrom(client->rsock, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     if (result > 0){
         addr->ip = fromaddr->sin_addr.s_addr;
         addr->port = fromaddr->sin_port;
         addr->keylen = 6;
     }
-    // __logi("recv_msg ip: %u port: %u", remote_addr->ip, remote_addr->port);
+    // __logi("recv_msg ip: %u port: %u", raddr->ip, raddr->port);
     // __logi("recv_msg result %d", result);
     return result;
 }
@@ -134,36 +154,37 @@ int main(int argc, char *argv[])
 
     // const char *host = "127.0.0.1";
     const char *host = "47.99.146.226";
+    // const char *host = "18.138.128.58";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 9256;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
-    xmsgaddr_ptr remote_addr = &client->xmsgaddr;
+    xmsgaddr_ptr raddr = &client->xmsgaddr;
     xmsglistener_ptr listener = &client->listener;
 
-    client->local_addr.sin_family = AF_INET;
-    client->local_addr.sin_port = htons(3721);
-    client->local_addr.sin_addr.s_addr = INADDR_ANY;
-    if((client->local_socket = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __xloge("socket error\n");
+    client->laddr.sin_family = AF_INET;
+    client->laddr.sin_port = htons(9613);
+    client->laddr.sin_addr.s_addr = INADDR_ANY;
+    if((client->lsock = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+        __xloge("rsock error\n");
     }
-    if (bind(client->local_socket, (const struct sockaddr *)&client->local_addr, sizeof(client->local_addr)) == -1){
+    if (bind(client->lsock, (const struct sockaddr *)&client->laddr, sizeof(client->laddr)) == -1){
         __xloge("bind error\n");
     }    
-	int event_flags = fcntl(client->local_socket, F_GETFL, 0);
-    if (fcntl(client->local_socket, F_SETFL, event_flags | O_NONBLOCK) == -1){
+	int event_flags = fcntl(client->lsock, F_GETFL, 0);
+    if (fcntl(client->lsock, F_SETFL, event_flags | O_NONBLOCK) == -1){
         __xloge("set no block failed\n");
     }
 
-    client->remote_addr.sin_family = AF_INET;
-    client->remote_addr.sin_port = htons(port);
-    // client->remote_addr.sin_addr.s_addr = INADDR_ANY;
-    inet_aton(host, &client->remote_addr.sin_addr);
+    client->raddr.sin_family = AF_INET;
+    client->raddr.sin_port = htons(port);
+    // client->raddr.sin_addr.s_addr = INADDR_ANY;
+    inet_aton(host, &client->raddr.sin_addr);
 
-    remote_addr->keylen = 6;
-    remote_addr->ip = client->remote_addr.sin_addr.s_addr;
-    remote_addr->port =client->remote_addr.sin_port;
-    remote_addr->addr = &client->remote_addr;
-    remote_addr->addrlen = sizeof(client->remote_addr);
+    raddr->keylen = 6;
+    raddr->ip = client->raddr.sin_addr.s_addr;
+    raddr->port =client->raddr.sin_port;
+    raddr->addr = &client->raddr;
+    raddr->addrlen = sizeof(client->raddr);
 
     listener->onConnectionToPeer = on_connection_to_peer;
     listener->onConnectionFromPeer = on_connection_from_peer;
@@ -175,7 +196,7 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __xloge("socket error\n");
+        __xloge("rsock error\n");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
         __xloge("setsockopt error\n");
@@ -188,7 +209,9 @@ int main(int argc, char *argv[])
         __xloge("set no block failed\n");
     }
 
-    client->socket = fd;
+    client->rsock = fd;
+    client->maxsock = (client->rsock > client->lsock) ? client->rsock : client->lsock;
+
     msgsock->ctx = client;
     msgsock->sendto = send_msg;
     msgsock->recvfrom = recv_msg;
@@ -201,7 +224,7 @@ int main(int argc, char *argv[])
     //     xmsger_wake(client->mtp);
     // });
 
-    xmsger_connect(client->msger, remote_addr);
+    xmsger_connect(client->msger, raddr);
 
     char str[1024];
 
@@ -231,6 +254,7 @@ int main(int argc, char *argv[])
         xmaker maker;
         xline_maker_setup(&maker, NULL, 1024);
         xline_add_text(&maker, "msg", str, slength(str));
+        xchannel_push_task(client->channel, maker.wpos + 9);
         xmsger_send(client->msger, client->channel, maker.addr, maker.wpos + 9);
         xline_maker_clear(&maker);
     }
@@ -243,7 +267,7 @@ int main(int argc, char *argv[])
 
     ___set_false(&client->msger->running);
     int data = 0;
-    ssize_t result = sendto(client->local_socket, &data, sizeof(data), 0, (struct sockaddr*)&client->local_addr, (socklen_t)sizeof(client->local_addr));
+    ssize_t result = sendto(client->lsock, &data, sizeof(data), 0, (struct sockaddr*)&client->laddr, (socklen_t)sizeof(client->laddr));
     
     __xlogi("xmsger_free\n");
     xmsger_free(&client->msger);

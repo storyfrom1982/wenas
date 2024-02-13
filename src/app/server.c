@@ -14,7 +14,7 @@
 
 
 typedef struct server {
-    int socket;
+    int rsock;
     ___atom_bool listening;
     socklen_t addlen;
     struct sockaddr_in addr;
@@ -40,12 +40,12 @@ static void listening(xmaker_ptr task_ctx)
         __xlogd("listening server = %p\n", server);
         fd_set fds;
         FD_ZERO(&fds);
-        FD_SET(server->socket, &fds);
+        FD_SET(server->rsock, &fds);
         struct timeval timeout;
         // timeout.tv_sec  = 10;
         // timeout.tv_usec = 0;
-        // select(server->socket + 1, &fds, NULL, NULL, &timeout);
-        select(server->socket + 1, &fds, NULL, NULL, NULL);
+        // select(server->rsock + 1, &fds, NULL, NULL, &timeout);
+        select(server->rsock + 1, &fds, NULL, NULL, NULL);
         xmsger_wake(server->messenger);
         ___set_false(&server->listening);
     }
@@ -53,7 +53,7 @@ static void listening(xmaker_ptr task_ctx)
 }
 
 static uint64_t send_number = 0, lost_number = 0;
-static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size)
+static size_t send_msg(struct xmsgsocket *rsock, xmsgaddr_ptr addr, void *data, size_t size)
 {
     // // __logi("send_msg enter");
     // send_number++;
@@ -62,24 +62,24 @@ static size_t send_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data,
     //     __xlogi("send_msg lost number &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& %llu\n", ++lost_number);
     //     return size;
     // }
-    server_t *server = (server_t*)socket->ctx;
+    server_t *server = (server_t*)rsock->ctx;
     struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
     addr->addrlen = sizeof(struct sockaddr_in);
     // __logi("send_msg sendto enter");
-    ssize_t result = sendto(server->socket, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
+    ssize_t result = sendto(server->rsock, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
     // __logi("send_msg sendto exit");
     // __logi("send_msg exit");
     return result;
 }
 
-static size_t recv_msg(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *buf, size_t size)
+static size_t recv_msg(struct xmsgsocket *rsock, xmsgaddr_ptr addr, void *buf, size_t size)
 {
-    server_t *server = (server_t*)socket->ctx;
+    server_t *server = (server_t*)rsock->ctx;
     if (addr->addr == NULL){
         addr->addr = malloc(sizeof(struct sockaddr_in));
     }
     addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(server->socket, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    ssize_t result = recvfrom(server->rsock, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
     if (result > 0){
         // struct sockaddr_in *addr_in = (struct sockaddr_in*)addr->addr;
         addr->ip = ((struct sockaddr_in*)addr->addr)->sin_addr.s_addr;
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __xloge("socket error");
+        __xloge("rsock error");
     }
     if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
         __xloge("setsockopt error");
@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
         __xloge("set no block failed");
     }
 
-    server.socket = fd;
+    server.rsock = fd;
     msgsock->ctx = &server;
     // msgsock->listening = listening;
     msgsock->sendto = send_msg;
@@ -247,14 +247,14 @@ int main(int argc, char *argv[])
 
     ___set_false(&server.messenger->running);
     int data = 0;
-    ssize_t result = sendto(server.socket, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
+    ssize_t result = sendto(server.rsock, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
     __xlogi("xmsger_disconnect");
     xmsger_free(&server.messenger);
     __xlogi("xmsger_free\n");
 
     __ex_task_free(&server.task);
 
-    __xlogi("close socket\n");
+    __xlogi("close rsock\n");
     free(msgsock);
 
     close(fd);

@@ -24,7 +24,7 @@ enum {
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
 #define PACK_WINDOW_RANGE           16
 
-#define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.4K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
+#define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
 
@@ -98,11 +98,12 @@ struct xchannel {
     xchannel_ptr prev, next;
     int status;
     __ex_mutex_ptr mtx;
-    ___atom_bool is_connected;
-    ___atom_bool bye;
+    // ___atom_bool is_connected;
+    // ___atom_bool bye;
     ___atom_bool breaker;
     ___atom_bool connected;
-    ___atom_bool termination;
+    // ___atom_bool termination;
+    ___atom_size tasklen;
     uint8_t delay;
     uint64_t timestamp;
     uint64_t update;
@@ -162,7 +163,7 @@ struct xmsger {
     xmsgsocket_ptr msgsock;
     xmaker_ptr mainloop_func;
     __ex_task_ptr mainloop_task;
-    ___atom_size send_queue_length;
+    ___atom_size tasklen;
     ___atom_bool connection_buf_lock;
     xmsgpackbuf_ptr connection_buf;
     __ex_msg_pipe *pipe;
@@ -211,31 +212,37 @@ static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
     
 }
 
+static inline void xchannel_push_task(xchannel_ptr channel, uint64_t len)
+{
+    ___atom_add(&channel->tasklen, len);
+    ___atom_add(&channel->msger->tasklen, len);
+}
+
 static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
 {
     unit->channel = channel;
     unit->resending = 0;
     unit->comfirmed = false;
 
-    if (___is_true(&channel->bye)){
-        return;
-    }
+    // if (___is_true(&channel->bye)){
+    //     return;
+    // }
 
-    while (__transbuf_writable(channel->sendbuf) == 0){
-        // 不进行阻塞，添加续传逻辑
-        // TODO 设置当前 channel 的等待写入标志
-        ___lock lk = __ex_mutex_lock(channel->mtx);
-        if (___is_true(&channel->bye)){
-            __ex_mutex_unlock(channel->mtx, lk);
-            return;
-        }
-        __ex_mutex_wait(channel->mtx, lk);
-        if (___is_true(&channel->bye)){
-            __ex_mutex_unlock(channel->mtx, lk);
-            return;
-        }
-        __ex_mutex_unlock(channel->mtx, lk);
-    }
+    // while (__transbuf_writable(channel->sendbuf) == 0){
+    //     // 不进行阻塞，添加续传逻辑
+    //     // TODO 设置当前 channel 的等待写入标志
+    //     ___lock lk = __ex_mutex_lock(channel->mtx);
+    //     if (___is_true(&channel->bye)){
+    //         __ex_mutex_unlock(channel->mtx, lk);
+    //         return;
+    //     }
+    //     __ex_mutex_wait(channel->mtx, lk);
+    //     if (___is_true(&channel->bye)){
+    //         __ex_mutex_unlock(channel->mtx, lk);
+    //         return;
+    //     }
+    //     __ex_mutex_unlock(channel->mtx, lk);
+    // }
 
     // 再将 unit 放入缓冲区 
     unit->head.sn = channel->sendbuf->wpos;
@@ -244,13 +251,13 @@ static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     ___atom_add(&channel->sendbuf->wpos, 1);
 
-    // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
-    // 是否统计所有 channel 的待发送包数量？
-    if (___atom_add(&channel->msger->send_queue_length, 1) == 1){
-        ___lock lk = __ex_mutex_lock(channel->msger->mtx);
-        __ex_mutex_notify(channel->msger->mtx);
-        __ex_mutex_unlock(channel->msger->mtx, lk);
-    }
+    // // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
+    // // 是否统计所有 channel 的待发送包数量？
+    // if (___atom_add(&channel->msger->tasklen, 1) == 1){
+    //     ___lock lk = __ex_mutex_lock(channel->msger->mtx);
+    //     __ex_mutex_notify(channel->msger->mtx);
+    //     __ex_mutex_unlock(channel->msger->mtx, lk);
+    // }
 }
 
 static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
@@ -282,6 +289,11 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 // 释放所有已经确认的 SN
                 index = __transbuf_rpos(channel->sendbuf);
                 pack = channel->sendbuf->buf[index];
+
+                // 数据已送达，从待发送数据中减掉这部分长度
+                ___atom_sub(&channel->tasklen, pack->head.pack_size);
+                ___atom_sub(&channel->msger->tasklen, pack->head.pack_size);
+                __xlogd("xchannel_pull >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->tasklen - 0, channel->msger->tasklen - 0);
 
                 if (!pack->comfirmed){
                     // 移除定时器，设置确认状态
@@ -378,7 +390,6 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
             pack->ts.value = pack;
             xheap_push(channel->timer, &pack->ts);
             __xlogd("xchannel_send >>>>------------------------> channel timer count %lu\n", channel->timer->pos);
-            ___atom_sub(&channel->msger->send_queue_length, 1);
             pack->resending = 0;
         }else {
             __xlogd("xchannel_send >>>>------------------------> failed\n");
@@ -541,9 +552,10 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
 
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
 {
-    xchannel_ptr channel = (xchannel_ptr) malloc(sizeof(struct xchannel));
+    xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
     channel->connected = false;
-    channel->bye = false;
+    // channel->bye = false;
+    channel->breaker = false;
     channel->update = __ex_clock();
     channel->delay = 0;
     channel->msger = msger;
@@ -749,6 +761,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                             xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
                             xline_add_uint32(&kv, "cid", channel->cid);
                             spack->head.pack_size = kv.wpos + 9; //TODO
+                            xchannel_push_task(channel, spack->head.pack_size);
                             xchannel_push(channel, spack);
 
                             xchannel_recv(channel, rpack);
@@ -806,17 +819,17 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
-            if (msger->send_queue_length == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
+            if (msger->tasklen == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
                 if (___set_false(&msger->working)){
                     msger->listener->onIdle(msger->listener, channel);
                 }
                 ___lock lk = __ex_mutex_lock(msger->mtx);
                 __ex_mutex_notify(msger->mtx);
-                if (msger->send_queue_length == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
+                if (msger->tasklen == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
                     __ex_mutex_timed_wait(msger->mtx, lk, timer);
                 }
                 __ex_mutex_unlock(msger->mtx, lk);
-                timer = 1000000000ULL * 10;
+                timer = 1000000000ULL;
             }
         }
 
@@ -842,6 +855,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     xline_add_uint32(&kv, "cid", channel->cid);
                     xline_add_uint64(&kv, "time", __ex_clock());
                     spack->head.pack_size = kv.wpos + 9;
+                    xchannel_push_task(channel, spack->head.pack_size);
                     xchannel_push(channel, spack);
                 }
                 __ex_msg_pipe_update_reader(msger->pipe);
@@ -889,7 +903,7 @@ static inline xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr 
     msger->running = true;
     msger->msgsock = msgsock;
     msger->listener = listener;
-    msger->send_queue_length = 0;
+    msger->tasklen = 0;
     msger->mtx = __ex_mutex_create();
     msger->peers = xtree_create();
     
@@ -986,7 +1000,7 @@ static inline void xmsger_disconnect(xmsger_ptr mtp, xchannel_ptr channel)
     //主动发送 BEY，要设置 channel 主动状态。
     ___set_true(&channel->breaker);
     //向对方发送 BEY，对方回应后，再移除 channel。
-    ___set_true(&channel->bye);
+    // ___set_true(&channel->bye);
     //主动断开的一端，发送第一个 BEY，并且启动超时重传。
     xchannel_push(channel, unit);
     __xlogd("xmsger_disconnect exit");
