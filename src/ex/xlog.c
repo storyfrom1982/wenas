@@ -154,7 +154,7 @@ void __xlog_close()
     }
 
 #if defined(ENV_MALLOC_BACKTRACE)
-    __ex_memory_leak_trace(memory_leak_cb);
+    xmalloc_leak_trace(memory_leak_cb);
 #endif
 }
 

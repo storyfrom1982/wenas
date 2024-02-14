@@ -94,7 +94,6 @@ __ex_export xmaker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe);
 __ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
 
 __ex_export void __ex_backtrace_setup();
-__ex_export void __ex_memory_leak_trace(void (*cb)(const char *leak_location));
 
 ///////////////////////////////////////////////////////
 ///// 日志存储
