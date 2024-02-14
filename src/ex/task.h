@@ -1,6 +1,7 @@
 #ifndef __EX_TASK_H__
 #define __EX_TASK_H__
 
+#if 0
 #define __EX_TIMEDOUT           1
 
 #define __EX_NANO_SECONDS       1000000000ULL
@@ -366,6 +367,6 @@ static inline void __ex_mutex_free(__ex_mutex_ptr mtx)
 
 
 #endif //__cplusplus
-
+#endif //0
 
 #endif //

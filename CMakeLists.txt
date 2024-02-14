@@ -50,6 +50,7 @@ check_c_source_compiles("
 set(kzx_sources
     # src/main.c
     # src/sys/struct/xline.c
+    src/ex/ex.c
     src/ex/malloc.c
     src/ex/pipe.c 
     src/ex/file.c

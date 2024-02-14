@@ -148,9 +148,11 @@ int main(int argc, char *argv[])
 {
     __ex_backtrace_setup();
     __xlog_open("./tmp/client/log", NULL);
-    __xlogi("start client");
+    __xlogi("start client\n");
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
+
+    __xlogi("start client 1\n");
 
     // const char *host = "127.0.0.1";
     const char *host = "47.99.146.226";
@@ -160,6 +162,8 @@ int main(int argc, char *argv[])
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
     xmsgaddr_ptr raddr = &client->xmsgaddr;
     xmsglistener_ptr listener = &client->listener;
+
+    __xlogi("start client 2\n");
 
     client->laddr.sin_family = AF_INET;
     client->laddr.sin_port = htons(9613);
@@ -174,6 +178,8 @@ int main(int argc, char *argv[])
     if (fcntl(client->lsock, F_SETFL, event_flags | O_NONBLOCK) == -1){
         __xloge("set no block failed\n");
     }
+
+    __xlogi("start client 3\n");
 
     client->raddr.sin_family = AF_INET;
     client->raddr.sin_port = htons(port);
@@ -193,6 +199,8 @@ int main(int argc, char *argv[])
     listener->onSendable = on_sendable;
     listener->onIdle = on_idle;
 
+    __xlogi("start client 4\n");
+
     int fd;
     int enable = 1;
     if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
@@ -209,6 +217,8 @@ int main(int argc, char *argv[])
         __xloge("set no block failed\n");
     }
 
+    __xlogi("start client 5\n");
+
     client->rsock = fd;
     client->maxsock = (client->rsock > client->lsock) ? client->rsock : client->lsock;
 
@@ -217,6 +227,7 @@ int main(int argc, char *argv[])
     msgsock->recvfrom = recv_msg;
     
     listener->ctx = client;
+    __xlogi("start client 2\n");
     client->msger = xmsger_create(msgsock, &client->listener);
     xmsger_run(client->msger);
 

@@ -18,6 +18,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <assert.h>
+#include <errno.h>
+
+
+///////////////////////////////////////////////////////
+///// 线程间通信
+///////////////////////////////////////////////////////
+
+
+#define __XAPI_TIMEDOUT           1
+
+
+typedef void* __xmutex_ptr;
+typedef void* __xprocess_ptr;
+
+typedef struct __xapi_enter {
+
+    uint64_t (*time)(void);
+    uint64_t (*clock)(void);
+
+    __xprocess_ptr (*process_create)(void*(*task_enter)(void*), void *ctx);
+    void (*process_free)(__xprocess_ptr pid);
+    __xprocess_ptr (*process_self)();
+
+    __xmutex_ptr (*mutex_create)();
+    void (*mutex_free)(__xmutex_ptr mutex);
+    void (*mutex_lock)(__xmutex_ptr mutex);
+    void (*mutex_unlock)(__xmutex_ptr mutex);
+    void (*mutex_wait)(__xmutex_ptr mutex);
+    int (*mutex_timedwait)(__xmutex_ptr mutex, uint64_t delay);
+    void (*mutex_notify)(__xmutex_ptr mutex);
+    void (*mutex_broadcast)(__xmutex_ptr mutex);
+
+}*__xapi_enter_ptr;
+
+extern __xapi_enter_ptr __xapi;
+
 
 /////////////////////////////////////////////////////////
 /////// 可变类型指针
@@ -28,14 +65,9 @@
 /////// 时间相关
 /////////////////////////////////////////////////////////
 
-#define MILLI_SECONDS    1000ULL
-#define MICRO_SECONDS    1000000ULL
-
-///////////////////////////////////////////////////////
-///// 线程间通信
-///////////////////////////////////////////////////////
-
-#include "task.h"
+#define MILLI_SECONDS       1000ULL
+#define MICRO_SECONDS       1000000ULL
+#define NANO_SECONDS        1000000000ULL
 
 
 #ifdef __cplusplus

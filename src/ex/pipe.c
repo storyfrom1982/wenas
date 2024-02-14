@@ -22,7 +22,7 @@ typedef struct ex_pipe {
     __atom_size writer;
     __atom_size reader;
     __atom_bool breaking;
-    __ex_mutex_ptr mutex;
+    __xmutex_ptr mutex;
 
 }__ex_pipe;
 
@@ -46,7 +46,7 @@ __ex_pipe* __ex_pipe_create(uint64_t len)
     pipe->buf = (char *)malloc(pipe->len);
     __xcheck(pipe->buf);
 
-    pipe->mutex = __ex_mutex_create();
+    pipe->mutex = __xapi->mutex_create();
     __xcheck(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
@@ -70,7 +70,8 @@ void __ex_pipe_free(__ex_pipe **pptr)
             __ex_pipe_clear(pipe);
             if (pipe->mutex){
                 __ex_pipe_break(pipe);
-                __ex_mutex_free(pipe->mutex);
+                // __ex_mutex_free(pipe->mutex);
+                __xapi->mutex_free(pipe->mutex);
             }
         }
         if (pipe->buf){
@@ -99,7 +100,8 @@ static inline uint64_t pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
             memcpy(pipe->buf, ((char*)data) + pipe->leftover, writable - pipe->leftover);
         }
         __atom_add(pipe->writer, writable);
-        __ex_mutex_notify(pipe->mutex);
+        // __ex_mutex_notify(pipe->mutex);
+        __xapi->mutex_notify(pipe->mutex);
     }
 
     return writable;
@@ -118,14 +120,14 @@ uint64_t __ex_pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
 
         pos += pipe_write(pipe, data + pos, len - pos);
         if (pos != len){
-            ___lock lk = __ex_mutex_lock(pipe->mutex);
+            __xapi->mutex_lock(pipe->mutex);
             // pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
-            __ex_mutex_notify(pipe->mutex);
+            __xapi->mutex_notify(pipe->mutex);
             // printf("__ex_pipe_write waiting --------------- enter     len: %lu pos: %lu\n", len, pos);
-            __ex_mutex_wait(pipe->mutex, lk);
+            __xapi->mutex_wait(pipe->mutex);
             // printf("__ex_pipe_write waiting --------------- exit\n");
-            __ex_mutex_unlock(pipe->mutex, lk);
+            __xapi->mutex_unlock(pipe->mutex);
         }
     }
 
@@ -152,7 +154,7 @@ static inline uint64_t pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
             memcpy(((char*)buf) + pipe->leftover, pipe->buf, readable - pipe->leftover);
         }
         __atom_add(pipe->reader, readable);
-        __ex_mutex_notify(pipe->mutex);
+        __xapi->mutex_notify(pipe->mutex);
     }
 
     return readable;
@@ -174,19 +176,19 @@ uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
         pos += pipe_read(pipe, buf + pos, len - pos);
 
         if (pos != len){
-            ___lock lk = __ex_mutex_lock(pipe->mutex);
+            __xapi->mutex_lock(pipe->mutex);
             // pipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
-            __ex_mutex_notify(pipe->mutex);
+            __xapi->mutex_notify(pipe->mutex);
             if (__is_false(pipe->breaking)){
                 // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ enter     len: %lu pos: %lu\n", len, pos);
-                __ex_mutex_wait(pipe->mutex, lk);
+                __xapi->mutex_wait(pipe->mutex);
                 // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ exit\n");
             }
-            __ex_mutex_unlock(pipe->mutex, lk);
+            __xapi->mutex_unlock(pipe->mutex);
             if (__is_true(pipe->breaking)){
                 break;
-            }            
+            }
         }
     }
 
@@ -209,10 +211,10 @@ void __ex_pipe_clear(__ex_pipe *pipe){
 }
 
 void __ex_pipe_break(__ex_pipe *pipe){
-    ___lock lk = __ex_mutex_lock(pipe->mutex);
+    __xapi->mutex_lock(pipe->mutex);
     __set_true(pipe->breaking);
-    __ex_mutex_broadcast(pipe->mutex);
-    __ex_mutex_unlock(pipe->mutex, lk);
+    __xapi->mutex_broadcast(pipe->mutex);
+    __xapi->mutex_unlock(pipe->mutex);
 }
 
 
@@ -224,7 +226,7 @@ struct msg_pipe {
     __atom_size reader;
     // __atom_size holder;
     __atom_bool breaking;
-    __ex_mutex_ptr mutex;
+    __xmutex_ptr mutex;
     xmaker_ptr buf;
 };
 
@@ -257,7 +259,7 @@ __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
         xline_maker_setup(&pipe->buf[i], NULL, 2);
     }
 
-    pipe->mutex = __ex_mutex_create();
+    pipe->mutex = __xapi->mutex_create();
     __xcheck(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
@@ -278,10 +280,10 @@ void __ex_msg_pipe_free(__ex_msg_pipe **pptr)
         __ex_pipe *pipe = *pptr;
         *pptr = NULL;
         if (pipe){
-            __ex_pipe_clear(pipe);
+            __ex_msg_pipe_clear(pipe);
             if (pipe->mutex){
-                __ex_pipe_break(pipe);
-                __ex_mutex_free(pipe->mutex);
+                __ex_msg_pipe_break(pipe);
+                __xapi->mutex_free(pipe->mutex);
             }
         }
         if (pipe->buf){
@@ -314,10 +316,10 @@ void __ex_msg_pipe_clear(__ex_msg_pipe *pipe)
 
 void __ex_msg_pipe_break(__ex_msg_pipe *pipe)
 {
-    ___lock lk = __ex_mutex_lock(pipe->mutex);
+    __xapi->mutex_lock(pipe->mutex);
     __set_true(pipe->breaking);
-    __ex_mutex_broadcast(pipe->mutex);
-    __ex_mutex_unlock(pipe->mutex, lk);
+    __xapi->mutex_broadcast(pipe->mutex);
+    __xapi->mutex_unlock(pipe->mutex);
 }
 
 xmaker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe)
@@ -327,12 +329,12 @@ xmaker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe)
         if (__is_true(pipe->breaking)){
             return NULL;
         }
-        ___lock lk = __ex_mutex_lock(pipe->mutex);
+        __xapi->mutex_lock(pipe->mutex);
         // 写入线程不能确保被 __ex_msg_pipe_update_writer 唤醒
         // 因为 __ex_msg_pipe_update_writer 的唤醒没有加锁
-        __ex_mutex_notify(pipe->mutex);
-        __ex_mutex_wait(pipe->mutex, lk);
-        __ex_mutex_unlock(pipe->mutex, lk);
+        __xapi->mutex_notify(pipe->mutex);
+        __xapi->mutex_wait(pipe->mutex);
+        __xapi->mutex_unlock(pipe->mutex);
         if (__is_true(pipe->breaking)){
             return NULL;
         }        
@@ -348,7 +350,7 @@ void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe)
 {
     // 用户完成一次写入，增加一个可读区域
     __atom_add(pipe->writer, 1);
-    __ex_mutex_notify(pipe->mutex);
+    __xapi->mutex_notify(pipe->mutex);
 }
 
 xmaker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe)
@@ -358,12 +360,12 @@ xmaker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe)
         if (__is_true(pipe->breaking)){
             return NULL;
         }
-        ___lock lk = __ex_mutex_lock(pipe->mutex);
+        __xapi->mutex_lock(pipe->mutex);
         // 写入线程不能确保被 __ex_msg_pipe_update_reader 唤醒
         // 因为 __ex_msg_pipe_update_reader 的唤醒没有加锁
-        __ex_mutex_notify(pipe->mutex);
-        __ex_mutex_wait(pipe->mutex, lk);
-        __ex_mutex_unlock(pipe->mutex, lk);
+        __xapi->mutex_notify(pipe->mutex);
+        __xapi->mutex_wait(pipe->mutex);
+        __xapi->mutex_unlock(pipe->mutex);
         if (__is_true(pipe->breaking)){
             return NULL;
         }        
@@ -379,5 +381,5 @@ void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe)
     // 完成一次读取，增加一个可写区域
     __atom_add(pipe->reader, 1);
     // 执行一次唤醒
-    __ex_mutex_notify(pipe->mutex);
+    __xapi->mutex_notify(pipe->mutex);
 }

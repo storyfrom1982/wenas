@@ -16,7 +16,7 @@ extern "C" {
 
 struct ex_task {
     __atom_bool running;
-    __ex_thread_ptr tid;
+    __xprocess_ptr tid;
     __ex_msg_pipe *pipe;
 };
 
@@ -31,7 +31,7 @@ static void* __ex_task_loop(void *p)
     __ex_task_func post_func;
     __ex_task_ptr task = (__ex_task_ptr)p;
 
-    __xlogi("__ex_task_loop(0x%X) enter\n", __ex_thread_id());
+    __xlogi("__ex_task_loop(0x%X) enter\n", __xapi->process_self());
     
     while (__is_true(task->running)) {
 
@@ -48,7 +48,7 @@ static void* __ex_task_loop(void *p)
         __ex_msg_pipe_update_reader(task->pipe);
     }
 
-    __xlogi("__ex_task_loop(0x%X) exit\n", __ex_thread_id());
+    __xlogi("__ex_task_loop(0x%X) exit\n", __xapi->process_self());
 
     return NULL;
 }
@@ -66,7 +66,7 @@ __ex_task_ptr __ex_task_create()
     assert(task->pipe);
 
     task->running = true;
-    task->tid = __ex_thread_create(__ex_task_loop, task);
+    task->tid = __xapi->process_create(__ex_task_loop, task);
     assert(task->tid);
 
     __xlogi("__ex_task_create exit\n");
@@ -83,7 +83,8 @@ void __ex_task_free(__ex_task_ptr *pptr)
         *pptr = NULL;
 
         __ex_msg_pipe_break(task->pipe);
-        __ex_thread_join(task->tid);
+        // __xapi->process_join(task->tid);
+        __xapi->process_free(task->tid);
         __ex_msg_pipe_free(&task->pipe);
 
         free(task);

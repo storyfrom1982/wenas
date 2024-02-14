@@ -237,12 +237,12 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     uint64_t n = 0;
     char text[__log_text_size];
 
-    uint64_t millisecond = __ex_time() / MICRO_SECONDS;
+    uint64_t millisecond = __xapi->time() / MICRO_SECONDS;
     // memory leak
     // n = ___sys_strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
-                    __ex_thread_id(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
+                    __xapi->process_self(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
