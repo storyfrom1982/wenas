@@ -11,6 +11,7 @@
 #include <pthread.h>
 
 #include "task.h"
+#include "xatom.h"
 
 #define __log_text_size			4096
 #define __log_text_end			( __log_text_size - 2 )
@@ -25,9 +26,9 @@ static const char *s_log_level_strings[__XLOG_LEVEL_ERROR + 1] = {"D", "I", "E"}
 
 
 typedef struct xlog_file {
-    ___atom_bool lock;
-    ___atom_bool running;
-    ___atom_bool writing;
+    __atom_bool lock;
+    __atom_bool running;
+    __atom_bool writing;
     char *log0, *log1;
     __ex_fp fp;
     __ex_pipe *pipe;
@@ -53,7 +54,7 @@ static void __xlog_file_write_loop(xmaker_ptr ctx)
         __xlogd("buf addr: %llu.%llu\n", *a, *b);
     }
 
-    ___set_true(&g_log_file.writing);
+    __set_true(g_log_file.writing);
     
     while (1)
     {
@@ -81,7 +82,7 @@ static void __xlog_file_write_loop(xmaker_ptr ctx)
                 __xbreak(g_log_file.fp != NULL);
             }
         }else {
-            if (___is_false(&g_log_file.running)){
+            if (__is_false(g_log_file.running)){
                 break;
             }
         }
@@ -133,8 +134,8 @@ static void memory_leak_cb(const char *leak_location)
 void __xlog_close()
 {
     //先设置关闭状态    
-    if (___set_false(&g_log_file.running)){
-        ___set_false(&g_log_file.writing);
+    if (__set_false(g_log_file.running)){
+        __set_false(g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         __ex_pipe_break(g_log_file.pipe);
         __ex_task_free(&g_log_file.task);
@@ -146,9 +147,9 @@ void __xlog_close()
         __xlogi("Log stop >>>>-------------->\n");
         __xlogi(">>>>-------------->\n");
 
-        ___atom_lock(&g_log_file.lock);
+        __atom_lock(g_log_file.lock);
         __ex_fclose(g_log_file.fp);
-        ___atom_unlock(&g_log_file.lock);
+        __atom_unlock(g_log_file.lock);
 
         memset(&g_log_file, 0, sizeof(g_log_file));
     }
@@ -182,9 +183,9 @@ int __xlog_open(const char *path, __xlog_cb cb)
     snprintf(g_log_file.log0, len, "%s/0.log", path);
     snprintf(g_log_file.log1, len, "%s/1.log", path);
 
-    ___atom_lock(&g_log_file.lock);
+    __atom_lock(g_log_file.lock);
     g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
-    ___atom_unlock(&g_log_file.lock);
+    __atom_unlock(g_log_file.lock);
 
     __xcheck(g_log_file.fp);
     
@@ -198,7 +199,7 @@ int __xlog_open(const char *path, __xlog_cb cb)
     g_log_file.task = __ex_task_run(__xlog_file_write_loop, &g_log_file);
     __xcheck(g_log_file.task);
 
-    ___set_true(&g_log_file.running);
+    __set_true(g_log_file.running);
 
     return 0;
 
@@ -224,9 +225,9 @@ Clean:
         __ex_fclose(g_log_file.fp);
         g_log_file.fp = NULL;
     }
-    ___set_false(&g_log_file.running);
-    ___set_false(&g_log_file.writing);
-    ___set_false(&g_log_file.lock);
+    __set_false(g_log_file.running);
+    __set_false(g_log_file.writing);
+    __set_false(g_log_file.lock);
 
     return -1;
 }
@@ -249,11 +250,11 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     n += vsnprintf(text + n, __log_text_end - n, fmt, args);
     va_end (args);
 
-    ___atom_lock(&g_log_file.lock);
+    __atom_lock(g_log_file.lock);
 
     // 这里只向文件写入实际的输入的内容
     // 最大输入内容 0-4094=4095
-    if (___is_true(&g_log_file.writing)){
+    if (__is_true(g_log_file.writing)){
         // 写入管道
         __ex_pipe_write(g_log_file.pipe, text, n);
     }else {
@@ -263,7 +264,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
         }
     }
 
-    ___atom_unlock(&g_log_file.lock);
+    __atom_unlock(g_log_file.lock);
 
     // 长度 n 不会越界，因为 snprintf 限制了写入长度
     if (text[n] != '\0'){

@@ -91,24 +91,24 @@ static inline uint64_t __ex_thread_id()
 //////////////////////////////////////
 
 
-typedef size_t ___atom_bool;
-typedef size_t ___atom_size;
-typedef uint8_t ___atom_8bit;
-typedef uint16_t ___atom_size16bit;
+// typedef size_t ___atom_bool;
+// typedef size_t ___atom_size;
+// typedef uint8_t ___atom_8bit;
+// typedef uint16_t ___atom_size16bit;
 
-#define	___is_true(x)	    	__sync_bool_compare_and_swap((x), true, true)
-#define	___is_false(x)	    	__sync_bool_compare_and_swap((x), false, false)
-#define	___set_true(x)		    __sync_bool_compare_and_swap((x), false, true)
-#define	___set_false(x)		    __sync_bool_compare_and_swap((x), true, false)
+// #define	___is_true(x)	    	__sync_bool_compare_and_swap((x), true, true)
+// #define	___is_false(x)	    	__sync_bool_compare_and_swap((x), false, false)
+// #define	___set_true(x)		    __sync_bool_compare_and_swap((x), false, true)
+// #define	___set_false(x)		    __sync_bool_compare_and_swap((x), true, false)
 
-#define ___atom_set(x, y)       __sync_bool_compare_and_swap((x), *(x), (y))
+// #define ___atom_set(x, y)       __sync_bool_compare_and_swap((x), *(x), (y))
 
-#define ___atom_sub(x, y)		__sync_sub_and_fetch((x), (y))
-#define ___atom_add(x, y)		__sync_add_and_fetch((x), (y))
+// #define ___atom_sub(x, y)		__sync_sub_and_fetch((x), (y))
+// #define ___atom_add(x, y)		__sync_add_and_fetch((x), (y))
 
-#define ___atom_lock(x)			while(!___set_true(x)) nanosleep((const struct timespec[]){{0, 1000L}}, NULL)
-#define ___atom_try_lock(x)		___set_true(x)
-#define ___atom_unlock(x)		___set_false(x)
+// #define ___atom_lock(x)			while(!___set_true(x)) nanosleep((const struct timespec[]){{0, 1000L}}, NULL)
+// #define ___atom_try_lock(x)		___set_true(x)
+// #define ___atom_unlock(x)		___set_false(x)
 
 
 //////////////////////////////////////
@@ -262,36 +262,36 @@ static inline uint64_t __ex_thread_id()
 //////////////////////////////////////
 
 
-typedef std::atomic<size_t>                 ___atom_bool;
-typedef std::atomic<size_t>                 ___atom_size;
-typedef std::atomic<uint8_t>                 ___atom_8bit;
-typedef std::atomic<uint16_t>                 ___atom_size16bit;
+// typedef std::atomic<size_t>                 ___atom_bool;
+// typedef std::atomic<size_t>                 ___atom_size;
+// typedef std::atomic<uint8_t>                 ___atom_8bit;
+// typedef std::atomic<uint16_t>                 ___atom_size16bit;
 
 
-#define ___atom_set(x, y)                   (x)->store((y))
-#define ___atom_sub(x, y)                   ((x)->fetch_sub((y)) - 1)
-#define ___atom_add(x, y)                   ((x)->fetch_add((y)) + 1)
+// #define ___atom_set(x, y)                   (x)->store((y))
+// #define ___atom_sub(x, y)                   ((x)->fetch_sub((y)) - 1)
+// #define ___atom_add(x, y)                   ((x)->fetch_add((y)) + 1)
 
-#define	___is_true(x)                       ((x)->load() == true)
-#define	___is_false(x)                      ((x)->load() == false)
+// #define	___is_true(x)                       ((x)->load() == true)
+// #define	___is_false(x)                      ((x)->load() == false)
 
-static inline bool ___set_true(___atom_bool *obj)
-{
-    size_t ___atom_false = false;
-    return obj->compare_exchange_strong(___atom_false, true);
-}
+// static inline bool ___set_true(___atom_bool *obj)
+// {
+//     size_t ___atom_false = false;
+//     return obj->compare_exchange_strong(___atom_false, true);
+// }
 
-static inline bool ___set_false(___atom_bool *obj)
-{
-    size_t ___atom_true = true;
-    return obj->compare_exchange_strong(___atom_true, false);
-}
+// static inline bool ___set_false(___atom_bool *obj)
+// {
+//     size_t ___atom_true = true;
+//     return obj->compare_exchange_strong(___atom_true, false);
+// }
 
-#define ___atom_lock(x) \
-    while(!___set_true(x)) \
-        std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::nanoseconds(1000))
-#define ___atom_try_lock(x)                 ___set_true(x)
-#define ___atom_unlock(x)                   ___set_false(x)
+// #define ___atom_lock(x) \
+//     while(!___set_true(x)) \
+//         std::this_thread::sleep_until(std::chrono::system_clock::now() + std::chrono::nanoseconds(1000))
+// #define ___atom_try_lock(x)                 ___set_true(x)
+// #define ___atom_unlock(x)                   ___set_false(x)
 
 
 //////////////////////////////////////

@@ -1,5 +1,6 @@
 #include "ex/ex.h"
 #include "ex/task.h"
+#include "ex/xatom.h"
 
 
 #ifdef __cplusplus
@@ -14,7 +15,7 @@ extern "C" {
 
 
 struct ex_task {
-    ___atom_bool running;
+    __atom_bool running;
     __ex_thread_ptr tid;
     __ex_msg_pipe *pipe;
 };
@@ -32,7 +33,7 @@ static void* __ex_task_loop(void *p)
 
     __xlogi("__ex_task_loop(0x%X) enter\n", __ex_thread_id());
     
-    while (___is_true(&task->running)) {
+    while (__is_true(task->running)) {
 
         
         if ((ctx = __ex_msg_pipe_hold_reader(task->pipe)) == NULL){

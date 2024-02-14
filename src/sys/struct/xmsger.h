@@ -6,6 +6,7 @@
 #include <sys/struct/xheap.h>
 #include <sys/struct/xtree.h>
 #include <sys/struct/xline.h>
+#include <ex/xatom.h>
 
 
 enum {
@@ -70,7 +71,7 @@ typedef struct xmsgpack {
 
 typedef struct xmsgpackbuf {
     uint8_t range;
-    ___atom_8bit upos, rpos, wpos;
+    __atom_size upos, rpos, wpos;
     struct xmsgpack *buf[1];
 }*xmsgpackbuf_ptr;
 
@@ -98,12 +99,12 @@ struct xchannel {
     xchannel_ptr prev, next;
     int status;
     __ex_mutex_ptr mtx;
-    // ___atom_bool is_connected;
-    // ___atom_bool bye;
-    ___atom_bool breaker;
-    ___atom_bool connected;
-    // ___atom_bool termination;
-    ___atom_size tasklen;
+    // __atom_bool is_connected;
+    // __atom_bool bye;
+    __atom_bool breaker;
+    __atom_bool connected;
+    // __atom_bool termination;
+    __atom_size tasklen;
     uint8_t delay;
     uint64_t timestamp;
     uint64_t update;
@@ -118,8 +119,8 @@ struct xchannel {
 
 //channellist
 typedef struct xchannellist {
-    ___atom_size len;
-    ___atom_bool lock;
+    __atom_size len;
+    __atom_bool lock;
     struct xchannel head, end;
 }*xchannellist_ptr;
 
@@ -156,15 +157,15 @@ struct xmsger {
     //所有待重传的 pack 的定时器，不区分链接
     xtree timers;
     __ex_mutex_ptr mtx;
-    ___atom_bool running;
+    __atom_bool running;
     //socket可读或者有数据待发送时为true
-    ___atom_bool working;
+    __atom_bool working;
     xmsglistener_ptr listener;
     xmsgsocket_ptr msgsock;
     xmaker_ptr mainloop_func;
     __ex_task_ptr mainloop_task;
-    ___atom_size tasklen;
-    ___atom_bool connection_buf_lock;
+    __atom_size tasklen;
+    __atom_bool connection_buf_lock;
     xmsgpackbuf_ptr connection_buf;
     __ex_msg_pipe *pipe;
     xchannellist_ptr sendqueue;
@@ -190,14 +191,14 @@ static inline void xmsger_enqueue_channel(xmsger_ptr msger, xchannel_ptr channel
     channel->prev = msger->sendqueue->end.prev;
     channel->next->prev = channel;
     channel->prev->next = channel;
-    ___atom_add(&msger->sendqueue->len, 1);
+    __atom_add(msger->sendqueue->len, 1);
 }
 
 static inline void xmsger_dequeue_channel(xmsger_ptr msger, xchannel_ptr channel)
 {
     channel->prev->next = channel->next;
     channel->next->prev = channel->prev;
-    ___atom_sub(&msger->sendqueue->len, 1);
+    __atom_sub(msger->sendqueue->len, 1);
 }
 
 static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
@@ -214,8 +215,8 @@ static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
 
 static inline void xchannel_push_task(xchannel_ptr channel, uint64_t len)
 {
-    ___atom_add(&channel->tasklen, len);
-    ___atom_add(&channel->msger->tasklen, len);
+    __atom_add(channel->tasklen, len);
+    __atom_add(channel->msger->tasklen, len);
 }
 
 static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
@@ -224,7 +225,7 @@ static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
     unit->resending = 0;
     unit->comfirmed = false;
 
-    // if (___is_true(&channel->bye)){
+    // if (__is_true(channel->bye)){
     //     return;
     // }
 
@@ -232,12 +233,12 @@ static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
     //     // 不进行阻塞，添加续传逻辑
     //     // TODO 设置当前 channel 的等待写入标志
     //     ___lock lk = __ex_mutex_lock(channel->mtx);
-    //     if (___is_true(&channel->bye)){
+    //     if (__is_true(channel->bye)){
     //         __ex_mutex_unlock(channel->mtx, lk);
     //         return;
     //     }
     //     __ex_mutex_wait(channel->mtx, lk);
-    //     if (___is_true(&channel->bye)){
+    //     if (__is_true(channel->bye)){
     //         __ex_mutex_unlock(channel->mtx, lk);
     //         return;
     //     }
@@ -249,11 +250,11 @@ static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
     // 设置校验码
     unit->head.x = XMSG_VAL ^ channel->peer_key;
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
-    ___atom_add(&channel->sendbuf->wpos, 1);
+    __atom_add(channel->sendbuf->wpos, 1);
 
     // // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
     // // 是否统计所有 channel 的待发送包数量？
-    // if (___atom_add(&channel->msger->tasklen, 1) == 1){
+    // if (__atom_add(channel->msger->tasklen, 1) == 1){
     //     ___lock lk = __ex_mutex_lock(channel->msger->mtx);
     //     __ex_mutex_notify(channel->msger->mtx);
     //     __ex_mutex_unlock(channel->msger->mtx, lk);
@@ -291,8 +292,8 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 pack = channel->sendbuf->buf[index];
 
                 // 数据已送达，从待发送数据中减掉这部分长度
-                ___atom_sub(&channel->tasklen, pack->head.pack_size);
-                ___atom_sub(&channel->msger->tasklen, pack->head.pack_size);
+                __atom_sub(channel->tasklen, pack->head.pack_size);
+                __atom_sub(channel->msger->tasklen, pack->head.pack_size);
                 __xlogd("xchannel_pull >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->tasklen - 0, channel->msger->tasklen - 0);
 
                 if (!pack->comfirmed){
@@ -312,7 +313,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 // 索引位置空
                 channel->sendbuf->buf[index] = NULL;
 
-                ___atom_add(&channel->sendbuf->rpos, 1);
+                __atom_add(channel->sendbuf->rpos, 1);
                 // TODO 通知 channel 可写
                 // channel->msger->listener->onSendable();
                 __ex_mutex_notify(channel->mtx);
@@ -595,7 +596,7 @@ static inline void xmsger_wake(xmsger_ptr mesger)
 {
     __xlogd("xmsger_wake enter %p\n", mesger);
     ___lock lk = __ex_mutex_lock(mesger->mtx);
-    ___set_true(&mesger->working);
+    __set_true(mesger->working);
     __ex_mutex_notify(mesger->mtx);
     __ex_mutex_unlock(mesger->mtx, lk);
     __xlogd("xmsger_wake exit\n");
@@ -636,7 +637,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
     addr.addr = NULL;
 
-    while (___is_true(&msger->running))
+    while (__is_true(msger->running))
     {
 
         if (rpack == NULL){
@@ -677,7 +678,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("xmsger_loop receive BYE\n");
                         // 判断是否为主动断开的一方
-                        if (___is_true(&channel->breaker)){
+                        if (__is_true(channel->breaker)){
                             __xlogd("xmsger_loop is breaker\n");
                             // 主动方，回复 FINAL 释放连接
                             xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_FINAL);
@@ -782,7 +783,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                         rpack->head.type = XMSG_PACK_ACK;
                         rpack->head.x = XMSG_VAL ^ XMSG_KEY;
                         xchannel_recv(channel, rpack);
-                        if (___set_true(&channel->connected)){
+                        if (__set_true(channel->connected)){
                             //这里是被动建立连接 onConnectionFromPeer
                             channel->msger->listener->onConnectionToPeer(channel->msger->listener, channel);
                         }
@@ -820,7 +821,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
             if (msger->tasklen == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
-                if (___set_false(&msger->working)){
+                if (__set_false(msger->working)){
                     msger->listener->onIdle(msger->listener, channel);
                 }
                 ___lock lk = __ex_mutex_lock(msger->mtx);
@@ -944,7 +945,7 @@ static inline void xmsger_free(xmsger_ptr *pptr)
     if (pptr && *pptr){        
         xmsger_ptr msger = *pptr;
         *pptr = NULL;
-        ___set_false(&msger->running);
+        __set_false(msger->running);
         __ex_mutex_broadcast(msger->mtx);
         __ex_task_free(&msger->mainloop_task);
         xline_maker_clear(msger->mainloop_func);
@@ -998,9 +999,9 @@ static inline void xmsger_disconnect(xmsger_ptr mtp, xchannel_ptr channel)
     unit->head.pack_size = 0;
     unit->head.pack_range = 1;
     //主动发送 BEY，要设置 channel 主动状态。
-    ___set_true(&channel->breaker);
+    __set_true(channel->breaker);
     //向对方发送 BEY，对方回应后，再移除 channel。
-    // ___set_true(&channel->bye);
+    // __set_true(channel->bye);
     //主动断开的一端，发送第一个 BEY，并且启动超时重传。
     xchannel_push(channel, unit);
     __xlogd("xmsger_disconnect exit");

@@ -265,7 +265,7 @@ int main(int argc, char *argv[])
     __xlogi("xmsger_disconnect\n");
     // xmsger_disconnect(client->mtp, channel);
 
-    ___set_false(&client->msger->running);
+    __set_false(client->msger->running);
     int data = 0;
     ssize_t result = sendto(client->lsock, &data, sizeof(data), 0, (struct sockaddr*)&client->laddr, (socklen_t)sizeof(client->laddr));
     
