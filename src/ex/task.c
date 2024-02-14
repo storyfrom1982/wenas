@@ -62,7 +62,7 @@ __ex_task_ptr __ex_task_create()
     __ex_task_ptr task = (__ex_task_ptr)malloc(sizeof(struct ex_task));
     assert(task);
 
-    task->pipe = __ex_msg_pipe_create(256);
+    task->pipe = __ex_msg_pipe_create(2);
     assert(task->pipe);
 
     task->running = true;

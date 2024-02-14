@@ -88,7 +88,9 @@ static __xmutex_ptr __posix_mutex_create()
 {
     __posix_mutex_ptr ptr = (__posix_mutex_ptr)malloc(sizeof(struct posix_mutex));
     assert(ptr);
+    __xlogd("__posix_mutex_create ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
     int ret = pthread_mutex_init(ptr->mutex, NULL);
+    __xlogd("create mutex == 0x%X\n", ptr->mutex);
     assert(ret == 0);
     ret = pthread_cond_init(ptr->cond, NULL);
     assert(ret == 0);
@@ -99,10 +101,12 @@ static void __posix_mutex_free(__xmutex_ptr ptr)
 {
     int ret;
     assert(ptr);
+    __xlogd("free mutex == 0x%X\n", ((__posix_mutex_ptr)ptr)->mutex);
     ret = pthread_mutex_destroy(((__posix_mutex_ptr)ptr)->mutex);
     assert(ret == 0);
     ret = pthread_cond_destroy(((__posix_mutex_ptr)ptr)->cond);
     assert(ret == 0);
+    __xlogd("__posix_mutex_free ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
     free(ptr);
 }
 

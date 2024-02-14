@@ -154,7 +154,7 @@ void __xlog_close()
         memset(&g_log_file, 0, sizeof(g_log_file));
     }
 
-#if defined(ENV_MALLOC_BACKTRACE)
+#if defined(XMALLOC_BACKTRACE)
     xmalloc_leak_trace(memory_leak_cb);
 #endif
 }

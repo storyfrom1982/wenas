@@ -257,6 +257,7 @@ __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len)
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
         // pipe->buf[i] = calloc(1, sizeof(struct xmaker));
         xline_maker_setup(&pipe->buf[i], NULL, 2);
+        __xlogi("__ex_msg_pipe_create ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
     }
 
     pipe->mutex = __xapi->mutex_create();
@@ -277,20 +278,23 @@ Clean:
 void __ex_msg_pipe_free(__ex_msg_pipe **pptr)
 {
     if (pptr && *pptr){
-        __ex_pipe *pipe = *pptr;
+        __ex_msg_pipe *pipe = *pptr;
         *pptr = NULL;
         if (pipe){
             __ex_msg_pipe_clear(pipe);
             if (pipe->mutex){
                 __ex_msg_pipe_break(pipe);
+                __xlogd("__ex_msg_pipe_free ============================== 1\n");
                 __xapi->mutex_free(pipe->mutex);
             }
         }
         if (pipe->buf){
+            __xlogd("__ex_msg_pipe_free ==============================\n");
             for (int i = 0; i < pipe->len; ++i){
                 // 如果使用二级指针，这里需要释放内存
-                // xline_maker_clear(pipe->buf[i]);
-                free(pipe->buf[i]);
+                __xlogd("__ex_msg_pipe_free ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
+                xline_maker_clear(&pipe->buf[i]);
+                // free(pipe->buf[i]);
             }
             free(pipe->buf);
         }

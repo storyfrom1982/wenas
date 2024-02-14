@@ -293,6 +293,7 @@ static inline uint64_t xkey_fill(xkey_ptr xkey, const char *str, size_t len)
 static inline void xline_maker_clear(xmaker_ptr maker)
 {
     if (maker && maker->addr){
+        __xlogd("xline_maker_clear ============================== xmaker.addr: 0x%X\n", maker->addr);
         free(maker->addr);
     }
     *maker = (struct xmaker){0};
@@ -300,13 +301,14 @@ static inline void xline_maker_clear(xmaker_ptr maker)
 
 static inline void xline_maker_setup(xmaker_ptr maker, uint8_t *ptr, uint64_t len)
 {
-    maker->len = len;
     maker->wpos = maker->rpos = 0;
     if (ptr){
+        maker->len = len;
         maker->head = ptr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)ptr;
     }else {
-        maker->addr = (uint8_t*) malloc(len);
+        maker->len = len + XLINE_STATIC_SIZE;
+        maker->addr = (uint8_t*) malloc(maker->len);
         maker->head = maker->addr + XLINE_STATIC_SIZE;
         maker->xline = (xline_ptr)maker->addr;
     }

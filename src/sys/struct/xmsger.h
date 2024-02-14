@@ -951,13 +951,21 @@ static inline void xmsger_free(xmsger_ptr *pptr)
         __set_false(msger->running);
         __xapi->mutex_broadcast(msger->mtx);
         __ex_task_free(&msger->mainloop_task);
-        xline_maker_clear(msger->mainloop_func);
+        __xlogd("xmsger_free 1\n");
+        // xline_maker_clear(msger->mainloop_func);
+        __xlogd("xmsger_free 2\n");
         xtree_clear(msger->peers, free_channel);
+        __xlogd("xmsger_free 3\n");
         xtree_free(&msger->peers);
+        __xlogd("xmsger_free 4\n");
         __xapi->mutex_free(msger->mtx);
+        __xlogd("xmsger_free 5\n");
         if (msger->sendqueue){
+            __xlogd("xmsger_free 6\n");
             free(msger->sendqueue);
         }
+        __xlogd("xmsger_free 7\n");
+        __ex_msg_pipe_free(&msger->pipe);
         free(msger);
     }
     __xlogd("xmsger_free exit\n");
