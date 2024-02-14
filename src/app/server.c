@@ -12,10 +12,12 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 
+#include <ex/xatom.h>
+
 
 typedef struct server {
     int rsock;
-    ___atom_bool listening;
+    __atom_bool listening;
     socklen_t addlen;
     struct sockaddr_in addr;
     struct xmsgaddr xmsgaddr;
@@ -36,7 +38,7 @@ static void listening(xmaker_ptr task_ctx)
     __xlogd("listening enter\n");
     __xlogd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
     server_t *server = (server_t *)xline_find_ptr(task_ctx, "ctx");
-    if (___set_true(&server->listening)){
+    if (__set_true(server->listening)){
         __xlogd("listening server = %p\n", server);
         fd_set fds;
         FD_ZERO(&fds);
@@ -47,7 +49,7 @@ static void listening(xmaker_ptr task_ctx)
         // select(server->rsock + 1, &fds, NULL, NULL, &timeout);
         select(server->rsock + 1, &fds, NULL, NULL, NULL);
         xmsger_wake(server->messenger);
-        ___set_false(&server->listening);
+        __set_false(server->listening);
     }
     __xlogd("listening exit\n");
 }
@@ -245,7 +247,7 @@ int main(int argc, char *argv[])
         xmsger_wait(server.messenger);
     }
 
-    ___set_false(&server.messenger->running);
+    __set_false(server.messenger->running);
     int data = 0;
     ssize_t result = sendto(server.rsock, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
     __xlogi("xmsger_disconnect");
