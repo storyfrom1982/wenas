@@ -159,8 +159,11 @@ void __xlog_close()
 #endif
 }
 
+extern void __ex_backtrace_setup();
+
 int __xlog_open(const char *path, __xlog_cb cb)
 {
+    __ex_backtrace_setup();
     // test();
 
     static char buf[BUFSIZ];

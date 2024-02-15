@@ -2,11 +2,12 @@
 #define __XMSGER_H__
 
 
-#include <ex/ex.h>
+#include "xmalloc.h"
+
 #include <sys/struct/xheap.h>
 #include <sys/struct/xtree.h>
 #include <sys/struct/xbuf.h>
-#include <ex/xatom.h>
+
 
 
 enum {

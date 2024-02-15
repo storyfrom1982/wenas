@@ -2,7 +2,7 @@
 #define __XHEAP_H__
 
 
-#include <ex/ex.h>
+#include "xmalloc.h"
 
 
 typedef struct xheapnode {
@@ -62,10 +62,11 @@ static inline size_t xheap_push(xheap_ptr h, xheapnode_ptr node)
         // 小于父节点时，找到自己的位置
         h->array[i] = node;
         h->array[i]->pos = i;
-        if (i <= 0){
-            __xlogi("heap_push %llu", i);
-            exit(0);
-        }
+        __xcheck(i > 0);
+        // if (i <= 0){
+        //     __xlogi("heap_push %llu", i);
+        //     exit(0);
+        // }
         return i;
     }
 
@@ -157,10 +158,11 @@ static inline xheapnode_ptr xheap_remove(xheap_ptr h, xheapnode_ptr node)
     }
 
     // 节点的 key 值必然一致
-    if (h->array[smallest]->key != node->key){
-        __xlogi("heap_delete h->array[smallest]->key != node->key");
-        exit(0);
-    }
+    __xcheck(h->array[smallest]->key == node->key);
+    // if (h->array[smallest]->key != node->key){
+    //     __xlogi("heap_delete h->array[smallest]->key != node->key");
+    //     exit(0);
+    // }
 
     // 把堆顶端最小的元素先放到数组的 0 下标处
     h->array[0] = h->array[smallest];

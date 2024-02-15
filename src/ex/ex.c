@@ -1,5 +1,6 @@
 #include <ex/ex.h>
 
+#include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -154,8 +155,6 @@ static void __posix_mutex_unlock(__xmutex_ptr ptr)
 
 
 #include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <limits.h>
@@ -167,7 +166,7 @@ static __xfile_ptr __ex_fopen(const char* path, const char* mode)
 	return fopen(path, mode);
 }
 
-static bool __ex_fclose(__xfile_ptr fp)
+static int __ex_fclose(__xfile_ptr fp)
 {
 	return fclose((FILE*)fp) == 0 ? true : false;
 }
@@ -292,6 +291,19 @@ static bool __ex_make_path(const char* path)
 }
 
 
+#include <sys/mman.h>
+
+void* __ex_mmap(void *addr, size_t len)
+{
+    return mmap(addr, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+}
+
+int __ex_munmap(void *addr, size_t len)
+{
+    return munmap(addr, len);
+}
+
+
 struct __xapi_enter posix_api_enter = {
 
     .time = __unix_time,
@@ -325,6 +337,8 @@ struct __xapi_enter posix_api_enter = {
     .fread = __ex_fread,
     .fseek = __ex_fseek,
     
+    .mmap = __ex_mmap,
+    .munmap = __ex_munmap,
 };
 
 __xapi_enter_ptr __xapi = &posix_api_enter;

@@ -1,7 +1,7 @@
 #ifndef __XLINE_H__
 #define __XLINE_H__
 
-#include <ex/malloc.h>
+#include "xmalloc.h"
 
 // #define XLINE_NUMBER_SIZE_MASK     0x1f //00011111 开启 XLINE_TYPE_4BIT 字节（ 保留低位 5bit，64bit 是 16 个字节，16 需要占用 5bit ）
 #define XLINE_NUMBER_SIZE_MASK     0x0f //00011111 保留低位 4bit，获取 xline 为 number 类型时，数据的长度
@@ -331,10 +331,11 @@ static inline void xline_maker_update(xmaker_ptr parent, xmaker_ptr child)
 static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
 {
     while ((maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < (XKEY_HEAD_SIZE + keylen + XLINE_STATIC_SIZE + size)){
-        if (maker->addr == NULL){
-            __xloge("maker->addr == NULL\n");
-            exit(0);
-        }
+        __xcheck(maker->addr != NULL);
+        // if (maker->addr == NULL){
+        //     __xloge("maker->addr == NULL\n");
+        //     exit(0);
+        // }
         maker->len += maker->len;
         maker->addr = (uint8_t *)malloc(maker->len);
         mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);
@@ -373,10 +374,11 @@ static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t
 {
     // 最小长度 = 根 xline 的头 (XLINE_STATIC_SIZE) + key 长度 (keylen + XKEY_HEAD_SIZE) + value 长度 (XLINE_STATIC_SIZE)
     while ((int64_t)(maker->len - (XLINE_STATIC_SIZE + maker->wpos)) < ((keylen + XKEY_HEAD_SIZE) + XLINE_STATIC_SIZE)){
-        if (maker->addr == NULL){
-            __xloge("maker->addr == NULL\n");
-            exit(0);
-        }
+        __xcheck(maker->addr != NULL);
+        // if (maker->addr == NULL){
+        //     __xloge("maker->addr == NULL\n");
+        //     exit(0);
+        // }
         maker->len += maker->len;
         maker->addr = (uint8_t *)malloc(maker->len);
         if (maker->wpos > 0){
@@ -640,9 +642,10 @@ static inline void xline_list_append(xmaker_ptr maker, xline_ptr x)
 {
     uint64_t len = __xline_sizeof(x);
     while ((maker->len - (maker->wpos + XLINE_STATIC_SIZE)) < len){
-        if (maker->addr == NULL){
-            exit(0);
-        }
+        __xcheck(maker->addr != NULL);
+        // if (maker->addr == NULL){
+        //     exit(0);
+        // }
         maker->len *= 2;
         maker->addr = (uint8_t *)malloc(maker->len);
         mcopy(maker->addr + XLINE_STATIC_SIZE, maker->head, maker->wpos);

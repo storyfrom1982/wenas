@@ -1,8 +1,7 @@
-#ifndef ____UNIX_MALLOC_H__
-#define ____UNIX_MALLOC_H__
+#ifndef __XMALLOC_H__
+#define __XMALLOC_H__
 
-#include <stddef.h>
-#include <stdint.h>
+#include <ex/ex.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,4 +30,4 @@ extern void mclear(void *ptr, size_t len);
 }
 #endif
 
-#endif //#ifndef ____UNIX_MALLOC_H__
+#endif //__XMALLOC_H__

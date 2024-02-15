@@ -1,7 +1,7 @@
 #ifndef __SYS_TREE_H__
 #define __SYS_TREE_H__
 
-#include <ex/ex.h>
+#include "xmalloc.h"
 
 #define NODE_DIMENSION          4
 #define TREE_DIMENSION          16

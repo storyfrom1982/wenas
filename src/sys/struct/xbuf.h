@@ -2,7 +2,6 @@
 #define __XBUF_H__
 
 
-#include <ex/ex.h>
 #include "xline.h"
 
 
@@ -29,10 +28,10 @@ static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
         pipe->leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
         if (pipe->leftover >= writable){
-            memcpy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), writable);
+            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), writable);
         }else {
-            memcpy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), pipe->leftover);
-            memcpy(pipe->buf, ((uint8_t*)data) + pipe->leftover, writable - pipe->leftover);
+            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), pipe->leftover);
+            mcopy(pipe->buf, ((uint8_t*)data) + pipe->leftover, writable - pipe->leftover);
         }
         __atom_add(pipe->writer, writable);
         __xapi->mutex_notify(pipe->mutex);
@@ -79,10 +78,10 @@ static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
         pipe->leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
         if (pipe->leftover >= readable){
-            memcpy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
+            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
         }else {
-            memcpy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), pipe->leftover);
-            memcpy(((uint8_t*)buf) + pipe->leftover, pipe->buf, readable - pipe->leftover);
+            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), pipe->leftover);
+            mcopy(((uint8_t*)buf) + pipe->leftover, pipe->buf, readable - pipe->leftover);
         }
         __atom_add(pipe->reader, readable);
         __xapi->mutex_notify(pipe->mutex);

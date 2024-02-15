@@ -1,16 +1,4 @@
-#include "malloc.h"
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <string.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <time.h>
-#include <assert.h>
-
-#include "xatom.h"
+#include "xmalloc.h"
 
 #ifdef XMALLOC_BACKTRACE
 
@@ -239,14 +227,13 @@ static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_s
 	pool->aligned_address = NULL;
 
 	do{
-		page->start_address = mmap(pool->aligned_address,
-				page->size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-		if (page->start_address == MAP_FAILED){
-			abort();
+		page->start_address = __xapi->mmap(pool->aligned_address, page->size);
+		if (page->start_address == __XAPI_MAP_FAILED){
+			__xcheck(page->start_address != __XAPI_MAP_FAILED);
 		}else{
 			if (((size_t)(page->start_address) & __align_mask) != 0){
 				pool->aligned_address = (void *)(((size_t)(page->start_address) + __align_mask) & ~__align_mask);
-				munmap(page->start_address, page->size);
+				__xapi->munmap(page->start_address, page->size);
 			}else{
 				pool->aligned_address = page->start_address + page->size;
 				break;
@@ -271,7 +258,7 @@ static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_s
 	page->end->prev = page->head;
 	page->end->next = NULL;
 
-	memset(&(page->recycle_pool), 0, sizeof(page->recycle_pool));
+	mclear(&(page->recycle_pool), sizeof(page->recycle_pool));
 
 	return 0;
 }
@@ -288,7 +275,8 @@ static int malloc_pool()
 
     mm->page_size = __page_size;
     mm->preloading_page = 2;
-    mm->page_aligned_mask = sysconf(_SC_PAGESIZE) - 1;
+    // mm->page_aligned_mask = sysconf(_SC_PAGESIZE) - 1;
+	mm->page_aligned_mask = 4096 - 1;
 
     for (mm->pool_number = 0; mm->pool_number < __max_pool_number; ++mm->pool_number){
         mm->pool[mm->pool_number].id = mm->pool_number;
@@ -446,24 +434,26 @@ void free(void* address)
 
 	if (address){
 		ptr = __address2pointer(address);
-
-		if (ptr->size == 0 || ptr->flag == 0){
-			// printf("ptr->size == 0 || ptr->flag == 0");
-			abort();
-		}
+		__xcheck(ptr->size != 0 && ptr->flag != 0);
+		// if (ptr->size == 0 || ptr->flag == 0){
+		// 	// printf("ptr->size == 0 || ptr->flag == 0");
+		// 	abort();
+		// }
 
 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
-		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-			// printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
-			abort();
-		}
+		__xcheck(pool_id == mm->pool[pool_id].id);
+		// if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
+		// 	// printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
+		// 	abort();
+		// }
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
-		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-			// printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
-			abort();
-		}
+		__xcheck(page_id == pool->page[page_id].id);
+		// if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
+		// 	// printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
+		// 	abort();
+		// }
 
 		page = &(pool->page[page_id]);
 		if (__atom_try_lock(page->lock)){
@@ -583,22 +573,25 @@ void* malloc(size_t size)
 		}
 	}
 
-	if (pool->page_number >= __max_page_number){
-		__atom_unlock(page->lock);
-		abort();
-	}
+	__xcheck(pool->page_number < __max_page_number);
+	// if (pool->page_number >= __max_page_number){
+	// 	__atom_unlock(page->lock);
+	// 	abort();
+	// }
 
-	if (size > mm->page_size){
-		if (malloc_page(pool, page, size) != 0){
-			__atom_unlock(page->lock);
-			abort();
-		}
-	}else{
-		if (malloc_page(pool, page, mm->page_size) != 0){
-			__atom_unlock(page->lock);
-			abort();
-		}
-	}
+
+	__xcheck((malloc_page(pool, page, mm->page_size + size) == 0));
+	// if (size > mm->page_size){
+	// 	if (malloc_page(pool, page, size) != 0){
+	// 		__atom_unlock(page->lock);
+	// 		abort();
+	// 	}
+	// }else{
+	// 	if (malloc_page(pool, page, mm->page_size) != 0){
+	// 		__atom_unlock(page->lock);
+	// 		abort();
+	// 	}
+	// }
 
 	//分配一个新的指针
 	ptr = __assign_pointer(page->ptr, size);
@@ -644,7 +637,7 @@ void* calloc(size_t number, size_t size)
 		// char *c = (char*)ptr;
 		// for (size_t t = 0; t < size; ++t){
 		// 	if (c[t] != 0){
-		// 		printf("memset failed\n");
+		// 		printf("mclear failed\n");
 		// 		exit(0);
 		// 	}
 		// }
@@ -670,9 +663,9 @@ void* realloc(void* address, size_t size)
 
 			if (address != NULL){
 				if (size > old_pointer->size - __work_ptr_size){
-					memcpy(new_address, address, old_pointer->size - __work_ptr_size);
+					mcopy(new_address, address, old_pointer->size - __work_ptr_size);
 				}else{
-					memcpy(new_address, address, size);
+					mcopy(new_address, address, size);
 				}
 			}
 
@@ -706,7 +699,7 @@ void* aligned_alloc(size_t alignment, size_t size)
 	if (size == 0 || alignment == 0
 			|| (alignment & (sizeof (void *) - 1)) != 0
 			|| (alignment & (alignment - 1)) != 0){
-		errno = EINVAL;
+		// errno = EINVAL;
 		return NULL;
 	}
 
@@ -726,14 +719,14 @@ void* aligned_alloc(size_t alignment, size_t size)
 		pointer->size = free_size;
 
 #ifdef XMALLOC_BACKTRACE
-		memcpy(aligned_pointer->trace, pointer->trace, __backtrace_size);
+		mcopy(aligned_pointer->trace, pointer->trace, __backtrace_size);
 #endif
 
 		free(address);
 		return aligned_address;
 	}
 
-	errno = ENOMEM;
+	// errno = ENOMEM;
 
 	return NULL;
 }
@@ -765,12 +758,12 @@ char* strdup(const char *s)
 {
 	char *result = NULL;
 	if (s){
-		size_t len = strlen(s);
+		size_t len = slength(s);
 
 		result = (char *)malloc(len + 1);
 
 		if (result != NULL){
-		    memcpy(result, s, len);
+		    mcopy(result, s, len);
 		    result[len] = '\0';
 		}
 	}
@@ -786,7 +779,7 @@ char* strndup(const char *s, size_t n)
 		result = (char *)malloc(n + 1);
 
 		if (result != NULL){
-			memcpy(result, s, n);
+			mcopy(result, s, n);
 			result[n] = '\0';
 		}
 	}
@@ -849,7 +842,7 @@ void mclear(void *ptr, size_t len)
 		// char *c = (char*)ptr;
 		// for (size_t t = 0; t < len; ++t){
 		// 	if (c[t] != 0){
-		// 		// printf("memset failed\n");
+		// 		// printf("mclear failed\n");
 		// 		exit(0);
 		// 	}
 		// }
@@ -867,11 +860,11 @@ void xmalloc_release()
         xmalloc_pool_t *pool = &(mm->pool[pool_id]);
         for (int page_id = 0; page_id < pool->page_number; ++page_id){
             if ( pool->page[page_id].start_address != NULL){
-                munmap(pool->page[page_id].start_address, pool->page[page_id].size);
+                __xapi->munmap(pool->page[page_id].start_address, pool->page[page_id].size);
             }
         }
     }
-    memset(mm, 0, sizeof(xmalloc_t));
+    mclear(mm, sizeof(xmalloc_t));
     __atom_unlock(mm->lock);
 }
 
@@ -911,7 +904,7 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location))
 							const void* addr = buffer[idx];
 							Dl_info info= {0};
 							if (dladdr(addr, &info) && info.dli_sname) {
-								if (n + strlen(info.dli_sname) > buf_size - 1){
+								if (n + slength(info.dli_sname) > buf_size - 1){
 									break;
 								}
 								n += snprintf(buf + n, buf_size - 1 - n, "@%s ", info.dli_sname);

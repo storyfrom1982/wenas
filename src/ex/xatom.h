@@ -1,6 +1,7 @@
 #ifndef __XATOM_H__
 #define __XATOM_H__
 
+#include <time.h>
 #include <stdint.h>
 #include <stdbool.h>
 

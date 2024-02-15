@@ -1,4 +1,3 @@
-#include <ex/ex.h>
 #include <sys/struct/xmsger.h>
 
 #include <sys/time.h>
@@ -11,8 +10,6 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <stdio.h>
-
-#include <ex/xatom.h>
 
 
 typedef struct server {
@@ -165,7 +162,6 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
 
 int main(int argc, char *argv[])
 {
-    __ex_backtrace_setup();
     __xlog_open("./tmp/server/log", NULL);
     __xlogi("start server\n");
 

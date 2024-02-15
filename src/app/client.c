@@ -1,6 +1,5 @@
 #include "ex/ex.h"
 
-#include "ex/malloc.h"
 #include <sys/struct/xmsger.h>
 
 #include <sys/time.h>
@@ -144,7 +143,6 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 
 int main(int argc, char *argv[])
 {
-    __ex_backtrace_setup();
     __xlog_open("./tmp/client/log", NULL);
     __xlogi("start client\n");
 

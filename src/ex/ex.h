@@ -16,7 +16,8 @@
 #define MICRO_SECONDS       1000000ULL
 #define NANO_SECONDS        1000000000ULL
 
-#define __XAPI_TIMEDOUT           1
+#define __XAPI_TIMEDOUT             1
+#define __XAPI_MAP_FAILED           ((void *) -1)
 
 
 typedef void* __xmutex_ptr;
@@ -61,7 +62,7 @@ typedef struct __xapi_enter {
     bool (*move_path)(const char* from, const char* to);
 
     __xfile_ptr (*fopen)(const char* path, const char* mode);
-    void (*fclose)(__xfile_ptr);
+    int (*fclose)(__xfile_ptr);
     int64_t (*ftell)(__xfile_ptr);
     int64_t (*fflush)(__xfile_ptr);
     int64_t (*fwrite)(__xfile_ptr, void* data, uint64_t size);
