@@ -21,6 +21,8 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "xatom.h"
+
 
 ///////////////////////////////////////////////////////
 ///// 线程间通信
@@ -103,27 +105,29 @@ __ex_export bool __ex_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 typedef struct xmaker* xmaker_ptr;
 
-typedef struct xpipe* xpipe_ptr;
-__ex_export xpipe_ptr xpipe_create(uint64_t len);
-__ex_export void xpipe_free(xpipe_ptr *pp_pipe);
-__ex_export uint64_t xpipe_write(xpipe_ptr pipe, void* data, uint64_t len);
-__ex_export uint64_t xpipe_read(xpipe_ptr pipe, void* buf, uint64_t len);
-__ex_export uint64_t xpipe_readable(xpipe_ptr pipe);
-__ex_export uint64_t xpipe_writable(xpipe_ptr pipe);
-__ex_export void xpipe_clear(xpipe_ptr pipe);
-__ex_export void xpipe_break(xpipe_ptr pipe);
+// // 这个缓冲区支持线程间通信，一对一，一对多，多对一，多对多
+// typedef struct xpipe* xpipe_ptr;
+// __ex_export xpipe_ptr xpipe_create(uint64_t len);
+// __ex_export void xpipe_free(xpipe_ptr *pptr);
+// __ex_export uint64_t xpipe_write(xpipe_ptr ptr, void* data, uint64_t len);
+// __ex_export uint64_t xpipe_read(xpipe_ptr ptr, void* buf, uint64_t len);
+// __ex_export uint64_t xpipe_readable(xpipe_ptr ptr);
+// __ex_export uint64_t xpipe_writable(xpipe_ptr ptr);
+// __ex_export void xpipe_clear(xpipe_ptr ptr);
+// __ex_export void xpipe_break(xpipe_ptr ptr);
 
-typedef struct msg_pipe __ex_msg_pipe;
-__ex_export __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len);
-__ex_export void __ex_msg_pipe_free(__ex_msg_pipe **pptr);
-__ex_export uint64_t __ex_msg_pipe_readable(__ex_msg_pipe *pipe);
-__ex_export uint64_t __ex_msg_pipe_writable(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_clear(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_break(__ex_msg_pipe *pipe);
-__ex_export xmaker_ptr __ex_msg_pipe_hold_writer(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_update_writer(__ex_msg_pipe *pipe);
-__ex_export xmaker_ptr __ex_msg_pipe_hold_reader(__ex_msg_pipe *pipe);
-__ex_export void __ex_msg_pipe_update_reader(__ex_msg_pipe *pipe);
+// // 这个缓冲区只能支持一对一线程间通信，一进一出
+// typedef struct xbuf* xbuf_ptr;
+// __ex_export xbuf_ptr xbuf_create(uint64_t len);
+// __ex_export void xbuf_free(xbuf_ptr *pptr);
+// __ex_export uint64_t xbuf_readable(xbuf_ptr ptr);
+// __ex_export uint64_t xbuf_writable(xbuf_ptr ptr);
+// __ex_export void xbuf_clear(xbuf_ptr ptr);
+// __ex_export void xbuf_break(xbuf_ptr ptr);
+// __ex_export xmaker_ptr xbuf_hold_writer(xbuf_ptr ptr);
+// __ex_export void xbuf_update_writer(xbuf_ptr ptr);
+// __ex_export xmaker_ptr xbuf_hold_reader(xbuf_ptr ptr);
+// __ex_export void xbuf_update_reader(xbuf_ptr ptr);
 
 __ex_export void __ex_backtrace_setup();
 

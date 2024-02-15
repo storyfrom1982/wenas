@@ -52,7 +52,7 @@ set(kzx_sources
     # src/sys/struct/xline.c
     src/ex/ex.c
     src/ex/malloc.c
-    src/ex/pipe.c 
+    # src/ex/pipe.c 
     src/ex/file.c
     src/ex/xlog.c
     src/ex/task.c

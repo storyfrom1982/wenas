@@ -12,6 +12,7 @@
 
 #include "task.h"
 #include "xatom.h"
+#include "sys/struct/xbuf.h"
 
 #define __log_text_size			4096
 #define __log_text_end			( __log_text_size - 2 )

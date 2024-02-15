@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 
-#include "sys/struct/xline.h"
+#include "sys/struct/xbuf.h"
 
 
 #define EX_TASK_BUF_SIZE        256
@@ -17,7 +17,7 @@ extern "C" {
 struct ex_task {
     __atom_bool running;
     __xprocess_ptr tid;
-    __ex_msg_pipe *pipe;
+    xbuf_ptr pipe;
 };
 
 
@@ -36,7 +36,7 @@ static void* __ex_task_loop(void *p)
     while (__is_true(task->running)) {
 
         
-        if ((ctx = __ex_msg_pipe_hold_reader(task->pipe)) == NULL){
+        if ((ctx = xbuf_hold_reader(task->pipe)) == NULL){
             break;
         }
 
@@ -45,7 +45,7 @@ static void* __ex_task_loop(void *p)
             (post_func)(ctx);
         }
 
-        __ex_msg_pipe_update_reader(task->pipe);
+        xbuf_update_reader(task->pipe);
     }
 
     __xlogi("__ex_task_loop(0x%X) exit\n", __xapi->process_self());
@@ -62,7 +62,7 @@ __ex_task_ptr __ex_task_create()
     __ex_task_ptr task = (__ex_task_ptr)malloc(sizeof(struct ex_task));
     assert(task);
 
-    task->pipe = __ex_msg_pipe_create(2);
+    task->pipe = xbuf_create(2);
     assert(task->pipe);
 
     task->running = true;
@@ -82,10 +82,10 @@ void __ex_task_free(__ex_task_ptr *pptr)
         __ex_task_ptr task = *pptr;
         *pptr = NULL;
 
-        __ex_msg_pipe_break(task->pipe);
+        xbuf_break(task->pipe);
         // __xapi->process_join(task->tid);
         __xapi->process_free(task->tid);
-        __ex_msg_pipe_free(&task->pipe);
+        xbuf_free(&task->pipe);
 
         free(task);
     }
@@ -96,12 +96,12 @@ void __ex_task_free(__ex_task_ptr *pptr)
 
 xmaker_ptr __ex_task_hold_pusher(__ex_task_ptr task)
 {
-    return __ex_msg_pipe_hold_writer(task->pipe);
+    return xbuf_hold_writer(task->pipe);
 }
 
 void __ex_task_update_pusher(__ex_task_ptr task)
 {
-    __ex_msg_pipe_update_writer(task->pipe);
+    xbuf_update_writer(task->pipe);
 }
 
 __ex_task_ptr __ex_task_run(__ex_task_func func, void *ctx)

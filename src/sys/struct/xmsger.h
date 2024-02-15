@@ -5,7 +5,7 @@
 #include <ex/ex.h>
 #include <sys/struct/xheap.h>
 #include <sys/struct/xtree.h>
-#include <sys/struct/xline.h>
+#include <sys/struct/xbuf.h>
 #include <ex/xatom.h>
 
 
@@ -167,7 +167,7 @@ struct xmsger {
     __atom_size tasklen;
     __atom_bool connection_buf_lock;
     xmsgpackbuf_ptr connection_buf;
-    __ex_msg_pipe *pipe;
+    xbuf_ptr pipe;
     xchannellist_ptr sendqueue;
 };
 
@@ -820,13 +820,13 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
-            if (msger->tasklen == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
+            if (msger->tasklen == 0 && xbuf_readable(msger->pipe) == 0){
                 if (__set_false(msger->working)){
                     msger->listener->onIdle(msger->listener, channel);
                 }
                 __xapi->mutex_lock(msger->mtx);
                 __xapi->mutex_notify(msger->mtx);
-                if (msger->tasklen == 0 && __ex_msg_pipe_readable(msger->pipe) == 0){
+                if (msger->tasklen == 0 && xbuf_readable(msger->pipe) == 0){
                     __xapi->mutex_timedwait(msger->mtx, timer);
                 }
                 __xapi->mutex_unlock(msger->mtx);
@@ -835,9 +835,9 @@ static inline void xmsger_loop(xmaker_ptr ctx)
         }
 
 
-        if (__ex_msg_pipe_readable(msger->pipe) > 0){
+        if (xbuf_readable(msger->pipe) > 0){
             __xlogd("xmsger_loop create channel to peer\n");
-            xmaker_ptr ctx = __ex_msg_pipe_hold_reader(msger->pipe);
+            xmaker_ptr ctx = xbuf_hold_reader(msger->pipe);
             if (ctx){
                 xmsgaddr_ptr addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
                 // TODO 对方应答后要设置 peer_cid 和 key；
@@ -859,7 +859,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
                     xchannel_push_task(channel, spack->head.pack_size);
                     xchannel_push(channel, spack);
                 }
-                __ex_msg_pipe_update_reader(msger->pipe);
+                xbuf_update_reader(msger->pipe);
             }
         }
 
@@ -919,7 +919,7 @@ static inline xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr 
     msger->sendqueue->head.next = &msger->sendqueue->end;
     msger->sendqueue->end.prev = &msger->sendqueue->head;
 
-    msger->pipe = __ex_msg_pipe_create(2);
+    msger->pipe = xbuf_create(2);
     __xcheck(msger->pipe != NULL);
 
     __xlogd("xmsger_create exit\n");
@@ -965,7 +965,7 @@ static inline void xmsger_free(xmsger_ptr *pptr)
             free(msger->sendqueue);
         }
         __xlogd("xmsger_free 7\n");
-        __ex_msg_pipe_free(&msger->pipe);
+        xbuf_free(&msger->pipe);
         free(msger);
     }
     __xlogd("xmsger_free exit\n");
@@ -983,7 +983,7 @@ static inline void xmsger_wait(xmsger_ptr messenger)
 static inline int xmsger_connect(xmsger_ptr messenger, xmsgaddr_ptr addr)
 {
     __xlogd("xmsger_connect enter\n");
-    xmaker_ptr ctx = __ex_msg_pipe_hold_writer(messenger->pipe);
+    xmaker_ptr ctx = xbuf_hold_writer(messenger->pipe);
     __xlogd("xmsger_connect ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     if (ctx == NULL){
         return -1;
@@ -997,7 +997,7 @@ static inline int xmsger_connect(xmsger_ptr messenger, xmsgaddr_ptr addr)
     // }
     // __xlogd("str len %lu\n", len);
     // xline_add_text(ctx, "msg", output, len);
-    __ex_msg_pipe_update_writer(messenger->pipe);
+    xbuf_update_writer(messenger->pipe);
     __xlogd("xmsger_connect exit\n");
     return 0;
 }
