@@ -50,7 +50,7 @@ static void mutex_task(xmaker_ptr kv)
 
 int main(int argc, char *argv[])
 {
-    __ex_backtrace_setup();
+    env_backtrace_setup();
     __xlog_open("./tmp/log", NULL);
 #if 1
     

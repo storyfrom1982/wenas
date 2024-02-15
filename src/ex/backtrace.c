@@ -102,7 +102,7 @@ static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
     exit(0);
 }
 
-void __ex_backtrace_setup()
+void env_backtrace_setup()
 {
     struct sigaction action = {};
     memset(&action, 0, sizeof(action));

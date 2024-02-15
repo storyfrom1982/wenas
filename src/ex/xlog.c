@@ -103,7 +103,7 @@ Clean:
 
 void test3()
 {
-    void *p = malloc(256);
+    void *p = strdup("test");
     // free(p);
     p = NULL;
     // *(int*)p = 0;
@@ -111,7 +111,7 @@ void test3()
 
 void test2()
 {
-    void *p = malloc(256);
+    void *p = strndup("test", strlen("test"));
     test3();
 }
 
@@ -159,12 +159,12 @@ void __xlog_close()
 #endif
 }
 
-extern void __ex_backtrace_setup();
+extern void env_backtrace_setup();
 
 int __xlog_open(const char *path, __xlog_cb cb)
 {
-    __ex_backtrace_setup();
-    // test();
+    env_backtrace_setup();
+    test();
 
     static char buf[BUFSIZ];
     setvbuf(stdout, buf, _IONBF, BUFSIZ);
@@ -245,7 +245,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     // n = ___sys_strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
 
     n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
-                    __xapi->process_self(), (millisecond / 1000) % 1000, (unsigned int)(millisecond % 1000), 
+                    __xapi->process_self(), (millisecond / 1000), (unsigned int)(millisecond % 1000), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;

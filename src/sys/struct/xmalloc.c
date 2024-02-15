@@ -1,58 +1,5 @@
 #include "xmalloc.h"
 
-#ifdef XMALLOC_BACKTRACE
-
-#define __USE_GNU
-#include <dlfcn.h>
-#include <stdio.h>
-#include <unwind.h>
-#define XMALLOC_BACKTRACE_DEPTH	    16
-
-struct backtrace_stack {
-    void** head;
-    void** end;
-};
-
-static inline _Unwind_Reason_Code __unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* vp)
-{
-    struct backtrace_stack* stack = (struct backtrace_stack*)vp;
-    if (stack->head == stack->end) {
-		//数组已满
-        return _URC_END_OF_STACK;
-    }
-    *stack->head = (void*)_Unwind_GetIP(unwind_context);
-    if (*stack->head == NULL) {
-        return _URC_END_OF_STACK;
-    }
-    ++stack->head;
-    return _URC_NO_REASON;
-}
-
-static inline int64_t __backtrace(void** array, int depth)
-{
-    struct backtrace_stack stack = {0};
-    stack.head = &array[0];
-    stack.end = &array[0] + (depth - 2);
-    _Unwind_Backtrace(__unwind_backtrace_callback, &stack);
-    return stack.head - &array[0];
-}
-
-#endif //#ifdef XMALLOC_BACKTRACE
-
-// typedef size_t	__atombool;
-
-// #define	__is_true(x)	    	__sync_bool_compare_and_swap(&(x), true, true)
-// #define	__is_false(x)	    	__sync_bool_compare_and_swap(&(x), false, false)
-// #define	__set_true(x)		    __sync_bool_compare_and_swap(&(x), false, true)
-// #define	__set_false(x)		    __sync_bool_compare_and_swap(&(x), true, false)
-
-// #define __atom_sub(x, y)		__sync_sub_and_fetch(&(x), (y))
-// #define __atom_add(x, y)		__sync_add_and_fetch(&(x), (y))
-
-// #define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 10L}}, NULL)
-// #define __atom_try_lock(x)		__set_true(x)
-// #define __atom_unlock(x)		__set_false(x)
-
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
@@ -82,8 +29,9 @@ static inline int64_t __backtrace(void** array, int depth)
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef XMALLOC_BACKTRACE_DEPTH
-# define __backtrace_size			( sizeof(void*) * XMALLOC_BACKTRACE_DEPTH )
+#ifdef XMALLOC_BACKTRACE
+# define __backtrace_depth			16
+# define __backtrace_size			( sizeof(void*) * __backtrace_depth )
 #else
 # define __backtrace_size			0
 #endif //XMALLOC_BACKTRACE
@@ -550,7 +498,7 @@ void* malloc(size_t size)
 
 #ifdef XMALLOC_BACKTRACE
 		// ptr->trace 的开始位置用来存储获取跟踪堆栈的深度
-		*((int64_t*)ptr->trace) = __backtrace(((void**)ptr->trace) + 1, XMALLOC_BACKTRACE_DEPTH - 1);
+		*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 1);
 #endif
 
 		// printf("malloc >>>>>>>--------------------------------------------------->>>> exit\n");
@@ -607,7 +555,7 @@ void* malloc(size_t size)
 	__atom_unlock(page->lock);
 
 #ifdef XMALLOC_BACKTRACE
-    *((int64_t*)ptr->trace) = __backtrace(((void**)ptr->trace) + 1, XMALLOC_BACKTRACE_DEPTH - 1);
+	*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 1);
 #endif
 
 	return __pointer2address(ptr);
@@ -754,38 +702,38 @@ int posix_memalign(void* *ptr, size_t align, size_t size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-char* strdup(const char *s)
-{
-	char *result = NULL;
-	if (s){
-		size_t len = slength(s);
+// char* strdup(const char *s)
+// {
+// 	char *result = NULL;
+// 	if (s){
+// 		size_t len = slength(s);
 
-		result = (char *)malloc(len + 1);
+// 		result = (char *)malloc(len + 1);
 
-		if (result != NULL){
-		    mcopy(result, s, len);
-		    result[len] = '\0';
-		}
-	}
+// 		if (result != NULL){
+// 		    mcopy(result, s, len);
+// 		    result[len] = '\0';
+// 		}
+// 	}
 
-	return result;
-}
+// 	return result;
+// }
 
-char* strndup(const char *s, size_t n)
-{
-	char *result = NULL;
-	if (s && n > 0){
+// char* strndup(const char *s, size_t n)
+// {
+// 	char *result = NULL;
+// 	if (s && n > 0){
 
-		result = (char *)malloc(n + 1);
+// 		result = (char *)malloc(n + 1);
 
-		if (result != NULL){
-			mcopy(result, s, n);
-			result[n] = '\0';
-		}
-	}
+// 		if (result != NULL){
+// 			mcopy(result, s, n);
+// 			result[n] = '\0';
+// 		}
+// 	}
 
-	return result;
-}
+// 	return result;
+// }
 
 size_t slength(const char *s)
 {
@@ -881,7 +829,8 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location))
 		return;
 	}
 
-	size_t buf_size = 10240;
+	int result = 0;
+	size_t len = 10240;
 	char buf[10240];
 
 	flush_cache();
@@ -901,14 +850,11 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location))
 						int64_t count = *((int64_t*)ptr->trace);
 						void** buffer = ((void**)ptr->trace) + 1;
 						for (size_t idx = 0; idx < count; ++idx) {
-							const void* addr = buffer[idx];
-							Dl_info info= {0};
-							if (dladdr(addr, &info) && info.dli_sname) {
-								if (n + slength(info.dli_sname) > buf_size - 1){
-									break;
-								}
-								n += snprintf(buf + n, buf_size - 1 - n, "@%s ", info.dli_sname);
+							result = __xapi->dladdr((const void*)(buffer[idx]), buf + n, len - n - 1);
+							if (result == -1){
+								break;
 							}
+							n += result;
 						}
 						buf[n] = '\0';
 						cb(buf);

@@ -13,12 +13,13 @@ extern void* realloc(void* address, size_t size);
 extern void* memalign(size_t boundary, size_t size);
 extern void* aligned_alloc(size_t alignment, size_t size);
 extern void* _aligned_alloc(size_t alignment, size_t size);
-extern char* strdup(const char *s);
-extern char* strndup(const char *s, size_t n);
 extern int posix_memalign(void* *ptr, size_t align, size_t size);
 extern void free(void* address);
 // extern void free_test(void* address);
 extern void xmalloc_leak_trace(void (*cb)(const char *leak_location));
+
+// extern char* strdup(const char *s);
+// extern char* strndup(const char *s, size_t n);
 
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
 extern size_t slength(const char *s);

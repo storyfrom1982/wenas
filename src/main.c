@@ -43,7 +43,7 @@ extern void test();
 
 int main(int argc, char *argv[])
 {
-    __ex_backtrace_setup();
+    env_backtrace_setup();
     __xlog_open("./tmp/log", NULL);
     
 #if 1

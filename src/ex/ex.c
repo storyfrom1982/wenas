@@ -304,6 +304,58 @@ int __ex_munmap(void *addr, size_t len)
 }
 
 
+#ifdef XMALLOC_BACKTRACE
+
+#define __USE_GNU
+#include <dlfcn.h>
+#include <stdio.h>
+#include <unwind.h>
+
+struct backtrace_stack {
+    void** head;
+    void** end;
+};
+
+static inline _Unwind_Reason_Code __unwind_backtrace_callback(struct _Unwind_Context* unwind_context, void* vp)
+{
+    struct backtrace_stack* stack = (struct backtrace_stack*)vp;
+    if (stack->head == stack->end) {
+		//数组已满
+        return _URC_END_OF_STACK;
+    }
+    *stack->head = (void*)_Unwind_GetIP(unwind_context);
+    if (*stack->head == NULL) {
+        return _URC_END_OF_STACK;
+    }
+    ++stack->head;
+    return _URC_NO_REASON;
+}
+
+static int64_t __ex_unwind_backtrace(void** stacks, int depth)
+{
+    struct backtrace_stack stack = {0};
+    stack.head = &stacks[0];
+    stack.end = &stacks[0] + (depth - 2);
+    _Unwind_Backtrace(__unwind_backtrace_callback, &stack);
+    return stack.head - &stacks[0];
+}
+
+static int __ex_dladdr(const void* addr, void *buf, size_t size)
+{
+    Dl_info info= {0};
+    if (dladdr(addr, &info) && info.dli_sname) {
+        if (strlen(info.dli_sname) > size){
+            return -1;
+        }
+        return snprintf(buf, size, "@%s ", info.dli_sname);
+    }
+    return 0;
+}
+
+#endif //#ifdef XMALLOC_BACKTRACE
+
+
+
 struct __xapi_enter posix_api_enter = {
 
     .time = __unix_time,
@@ -339,6 +391,11 @@ struct __xapi_enter posix_api_enter = {
     
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,
+
+#ifdef XMALLOC_BACKTRACE
+    .backtrace = __ex_unwind_backtrace,
+    .dladdr = __ex_dladdr,
+#endif    
 };
 
 __xapi_enter_ptr __xapi = &posix_api_enter;
