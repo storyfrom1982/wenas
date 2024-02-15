@@ -164,7 +164,7 @@ extern void env_backtrace_setup();
 int __xlog_open(const char *path, __xlog_cb cb)
 {
     env_backtrace_setup();
-    test();
+    // test();
 
     static char buf[BUFSIZ];
     setvbuf(stdout, buf, _IONBF, BUFSIZ);

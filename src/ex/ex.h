@@ -25,7 +25,7 @@ typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
 
 
-typedef struct xmsgaddr {
+typedef struct __xipaddr {
     void *addr;
     unsigned int addrlen;
     uint8_t keylen;
@@ -36,7 +36,7 @@ typedef struct xmsgaddr {
             uint16_t port;
         };
     };
-}*xmsgaddr_ptr;
+}*__xipaddr_ptr;
 
 
 typedef struct __xapi_enter {
@@ -71,12 +71,12 @@ typedef struct __xapi_enter {
 
     int (*udp_open)();
     int (*udp_close)(int sock);
-    int (*udp_bind)(int sock, xmsgaddr_ptr addr);
-    int (*udp_sendto)(int sock, xmsgaddr_ptr addr, void *data, size_t size);
-    int (*udp_recvfrom)(int sock, xmsgaddr_ptr addr, void *buf, size_t size);
+    int (*udp_bind)(int sock, __xipaddr_ptr ipaddr);
+    int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
+    int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock);
-    struct xmsgaddr (*udp_build_addr)(const char *ip, uint16_t port);
-    void (*udp_destoy_addr)(struct xmsgaddr addr);
+    struct __xipaddr (*udp_make_ipaddr)(const char *ipaddr, uint16_t port);
+    void (*udp_clear_ipaddr)(struct __xipaddr ipaddr);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储

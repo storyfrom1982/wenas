@@ -100,7 +100,7 @@ struct xchannel {
     struct xmsghead ack;
     xmsgbuf_ptr msgbuf;
     // xchannellist_ptr queue;
-    struct xmsgaddr addr;
+    struct __xipaddr addr;
     xmsgpackbuf_ptr sendbuf;
     xmsger_ptr msger;
 };
@@ -129,8 +129,8 @@ typedef struct xmsgsocket {
     void *ctx;
     //不需要内部监听，监听网络接口由用户层的线程处理
     // void (*listening)(struct xmsgsocket *socket);
-    size_t (*sendto)(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size);
-    size_t (*recvfrom)(struct xmsgsocket *socket, xmsgaddr_ptr addr, void *data, size_t size);
+    size_t (*sendto)(struct xmsgsocket *socket, __xipaddr_ptr addr, void *data, size_t size);
+    size_t (*recvfrom)(struct xmsgsocket *socket, __xipaddr_ptr addr, void *data, size_t size);
 }*xmsgsocket_ptr;
 
 
@@ -539,7 +539,7 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
     __xlogd("xchannel_recv >>>>------------> exit\n");
 }
 
-static inline xchannel_ptr xchannel_create(xmsger_ptr msger, xmsgaddr_ptr addr)
+static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
 {
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
     channel->connected = false;
@@ -614,7 +614,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
     int64_t timeout;
     uint64_t timer = 1000000000ULL;
     // transack_ptr ack;
-    struct xmsgaddr addr;
+    
     xmsgpack_ptr rpack = NULL;
     xheapnode_ptr timenode;
     xmsgpack_ptr sendunit = NULL;
@@ -623,7 +623,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
     xmsger_ptr msger = (xmsger_ptr)xline_find_ptr(ctx, "ctx");
 
-    addr.addr = NULL;
+    struct __xipaddr addr = __xapi->udp_make_ipaddr(NULL, 1234);
 
     while (__is_true(msger->running))
     {
@@ -824,7 +824,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
             __xlogd("xmsger_loop create channel to peer\n");
             xmaker_ptr ctx = xbuf_hold_reader(msger->pipe);
             if (ctx){
-                xmsgaddr_ptr addr = (xmsgaddr_ptr)xline_find_ptr(ctx, "addr");
+                __xipaddr_ptr addr = (__xipaddr_ptr)xline_find_ptr(ctx, "addr");
                 // TODO 对方应答后要设置 peer_cid 和 key；
                 xchannel_ptr channel = xchannel_create(msger, addr);
                 if (channel){
@@ -874,7 +874,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
         free(rpack);
     }
 
-    free(addr.addr);
+    __xapi->udp_clear_ipaddr(addr);
 
     __xlogd("xmsger_loop exit\n");
 }
@@ -965,7 +965,7 @@ static inline void xmsger_wait(xmsger_ptr messenger)
 
 //TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
 //TODO 增加一个加密验证数据，messenger 只负责将消息发送到对端，连接能否建立，取决于对端验证结果。
-static inline int xmsger_connect(xmsger_ptr messenger, xmsgaddr_ptr addr)
+static inline int xmsger_connect(xmsger_ptr messenger, __xipaddr_ptr addr)
 {
     __xlogd("xmsger_connect enter\n");
     xmaker_ptr ctx = xbuf_hold_writer(messenger->pipe);
