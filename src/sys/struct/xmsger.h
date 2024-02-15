@@ -35,19 +35,6 @@ typedef struct xchannel* xchannel_ptr;
 typedef struct xchannellist* xchannellist_ptr;
 typedef struct xmsglistener* xmsglistener_ptr;
 
-typedef struct xmsgaddr {
-    void *addr;
-    unsigned int addrlen;
-    uint8_t keylen;
-    union {
-        char key[6];
-        struct {
-            uint32_t ip;
-            uint16_t port;
-        };
-    };
-}*xmsgaddr_ptr;
-
 
 typedef struct xmsghead {
     uint8_t type;

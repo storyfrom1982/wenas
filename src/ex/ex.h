@@ -24,6 +24,21 @@ typedef void* __xmutex_ptr;
 typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
 
+
+typedef struct xmsgaddr {
+    void *addr;
+    unsigned int addrlen;
+    uint8_t keylen;
+    union {
+        char key[6];
+        struct {
+            uint32_t ip;
+            uint16_t port;
+        };
+    };
+}*xmsgaddr_ptr;
+
+
 typedef struct __xapi_enter {
 
 /////////////////////////////////////////////////////////
@@ -49,6 +64,19 @@ typedef struct __xapi_enter {
     int (*mutex_timedwait)(__xmutex_ptr mutex, uint64_t delay);
     void (*mutex_notify)(__xmutex_ptr mutex);
     void (*mutex_broadcast)(__xmutex_ptr mutex);
+
+///////////////////////////////////////////////////////
+///// 网络接口
+///////////////////////////////////////////////////////
+
+    int (*udp_open)();
+    int (*udp_close)(int sock);
+    int (*udp_bind)(int sock, xmsgaddr_ptr addr);
+    int (*udp_sendto)(int sock, xmsgaddr_ptr addr, void *data, size_t size);
+    int (*udp_recvfrom)(int sock, xmsgaddr_ptr addr, void *buf, size_t size);
+    int (*udp_listen)(int sock);
+    struct xmsgaddr (*udp_build_addr)(const char *ip, uint16_t port);
+    void (*udp_destoy_addr)(struct xmsgaddr addr);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储

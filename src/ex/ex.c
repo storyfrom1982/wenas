@@ -290,6 +290,103 @@ static bool __ex_make_path(const char* path)
     return ret;
 }
 
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <arpa/inet.h>
+
+static int udp_open()
+{
+    int sock;
+    int flags;
+    int enable = 1;
+    __xcheck((sock = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
+    __xcheck(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == 0);
+    __xcheck(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == 0);
+    flags = fcntl(sock, F_GETFL, 0);
+    __xcheck(fcntl(sock, F_SETFL, flags | O_NONBLOCK) != -1);
+    return sock;
+}
+
+static int udp_close(int sock)
+{
+    __xcheck(sock > 0);
+    return close(sock);
+}
+
+static int udp_bind(int sock, xmsgaddr_ptr msgaddr)
+{
+    __xcheck(sock > 0);
+    struct sockaddr_in *addr = (struct sockaddr_in *)msgaddr->addr;
+    msgaddr->addrlen = sizeof(struct sockaddr_in);
+    __xcheck(bind(sock, (const struct sockaddr *)addr, msgaddr->addrlen) != -1);
+    return 0;
+}
+
+static int udp_sendto(int sock, xmsgaddr_ptr msgaddr, void *data, size_t size)
+{
+    __xcheck(sock > 0);
+    ssize_t result = sendto(sock, data, size, 0, (struct sockaddr*)msgaddr->addr, (socklen_t)msgaddr->addrlen);
+    return result;
+}
+
+static int udp_recvfrom(int sock, xmsgaddr_ptr addr, void *buf, size_t size)
+{
+    __xcheck(sock > 0);
+    if (addr->addr == NULL){
+        addr->addr = malloc(sizeof(struct sockaddr_in));
+        __xcheck(addr->addr);
+    }
+    addr->addrlen = sizeof(struct sockaddr_in);
+    ssize_t result = recvfrom(sock, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    if (result > 0){
+        addr->ip = ((struct sockaddr_in*)addr->addr)->sin_addr.s_addr;
+        addr->port = ((struct sockaddr_in*)addr->addr)->sin_port;
+        addr->keylen = 6;
+    }
+    return result;
+}
+
+static int udp_listen(int sock)
+{
+    __xcheck(sock > 0);
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(sock, &fds);
+    struct timeval timeout;
+    return select(sock + 1, &fds, NULL, NULL, NULL);
+}
+
+struct xmsgaddr udp_build_addr(const char *ip, uint16_t port)
+{
+    struct xmsgaddr msgaddr;
+    msgaddr.addrlen = sizeof(struct sockaddr_in);
+    struct sockaddr_in *addr = (struct sockaddr_in *)malloc(msgaddr.addrlen);
+    __xcheck(addr);
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(port);
+    if (ip == NULL){
+        addr->sin_addr.s_addr = INADDR_ANY;        
+    }else {
+        inet_aton(ip, &(addr->sin_addr));
+    }
+    msgaddr.keylen = 6;
+    msgaddr.ip = addr->sin_addr.s_addr;
+    msgaddr.port = addr->sin_port;
+    msgaddr.addr = addr;
+    return msgaddr;
+}
+
+void udp_destoy_addr(struct xmsgaddr addr)
+{
+    if (addr.addr){
+        free(addr.addr);
+        addr.addr = NULL;
+    }
+}
+
 
 #include <sys/mman.h>
 
@@ -373,6 +470,15 @@ struct __xapi_enter posix_api_enter = {
     .mutex_timedwait = __posix_mutex_timedwait,
     .mutex_notify = __posix_mutex_notify,
     .mutex_broadcast = __posix_mutex_broadcast,
+
+    .udp_open = udp_open,
+    .udp_close = udp_close,
+    .udp_bind = udp_bind,
+    .udp_sendto = udp_sendto,
+    .udp_recvfrom = udp_recvfrom,
+    .udp_listen = udp_listen,
+    .udp_build_addr = udp_build_addr,
+    .udp_destoy_addr = udp_destoy_addr,
 
     .make_path = __ex_make_path,
     .check_path = __ex_check_path,

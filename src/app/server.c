@@ -1,23 +1,23 @@
 #include <sys/struct/xmsger.h>
 
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <sys/select.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <string.h>
+// #include <sys/time.h>
+// #include <sys/types.h>
+// #include <sys/ioctl.h>
+// #include <sys/socket.h>
+// #include <unistd.h>
+// #include <netinet/in.h>
+// #include <sys/select.h>
+// #include <fcntl.h>
+// #include <arpa/inet.h>
+// #include <stdio.h>
+// #include <string.h>
 
 
 typedef struct server {
     int rsock;
     __atom_bool listening;
-    socklen_t addlen;
-    struct sockaddr_in addr;
+    // socklen_t addlen;
+    // struct sockaddr_in addr;
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
     xkey_ptr func;
@@ -38,14 +38,15 @@ static void listening(xmaker_ptr task_ctx)
     server_t *server = (server_t *)xline_find_ptr(task_ctx, "ctx");
     if (__set_true(server->listening)){
         __xlogd("listening server = %p\n", server);
-        fd_set fds;
-        FD_ZERO(&fds);
-        FD_SET(server->rsock, &fds);
-        struct timeval timeout;
-        // timeout.tv_sec  = 10;
-        // timeout.tv_usec = 0;
-        // select(server->rsock + 1, &fds, NULL, NULL, &timeout);
-        select(server->rsock + 1, &fds, NULL, NULL, NULL);
+        // fd_set fds;
+        // FD_ZERO(&fds);
+        // FD_SET(server->rsock, &fds);
+        // struct timeval timeout;
+        // // timeout.tv_sec  = 10;
+        // // timeout.tv_usec = 0;
+        // // select(server->rsock + 1, &fds, NULL, NULL, &timeout);
+        // select(server->rsock + 1, &fds, NULL, NULL, NULL);
+        __xapi->udp_listen(server->rsock);
         xmsger_wake(server->messenger);
         __set_false(server->listening);
     }
@@ -63,30 +64,34 @@ static size_t send_msg(struct xmsgsocket *rsock, xmsgaddr_ptr addr, void *data, 
     //     return size;
     // }
     server_t *server = (server_t*)rsock->ctx;
-    struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
-    addr->addrlen = sizeof(struct sockaddr_in);
-    // __logi("send_msg sendto enter");
-    ssize_t result = sendto(server->rsock, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
-    // __logi("send_msg sendto exit");
-    // __logi("send_msg exit");
+    // struct sockaddr_in *fromaddr = (struct sockaddr_in *)addr->addr;
+    // addr->addrlen = sizeof(struct sockaddr_in);
+    // // __logi("send_msg sendto enter");
+    // ssize_t result = sendto(server->rsock, data, size, 0, (struct sockaddr*)fromaddr, (socklen_t)addr->addrlen);
+    // // __logi("send_msg sendto exit");
+    // // __logi("send_msg exit");
+
+    long result = __xapi->udp_sendto(server->rsock, addr, data, size);
     return result;
 }
 
 static size_t recv_msg(struct xmsgsocket *rsock, xmsgaddr_ptr addr, void *buf, size_t size)
 {
     server_t *server = (server_t*)rsock->ctx;
-    if (addr->addr == NULL){
-        addr->addr = malloc(sizeof(struct sockaddr_in));
-    }
-    addr->addrlen = sizeof(struct sockaddr_in);
-    ssize_t result = recvfrom(server->rsock, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
-    if (result > 0){
-        // struct sockaddr_in *addr_in = (struct sockaddr_in*)addr->addr;
-        addr->ip = ((struct sockaddr_in*)addr->addr)->sin_addr.s_addr;
-        addr->port = ((struct sockaddr_in*)addr->addr)->sin_port;
-        addr->keylen = 6;
-    }
-    // __logi("error: %s", strerror(errno));
+    // if (addr->addr == NULL){
+    //     addr->addr = malloc(sizeof(struct sockaddr_in));
+    // }
+    // addr->addrlen = sizeof(struct sockaddr_in);
+    // ssize_t result = recvfrom(server->rsock, buf, size, 0, (struct sockaddr*)addr->addr, (socklen_t*)&addr->addrlen);
+    // if (result > 0){
+    //     // struct sockaddr_in *addr_in = (struct sockaddr_in*)addr->addr;
+    //     addr->ip = ((struct sockaddr_in*)addr->addr)->sin_addr.s_addr;
+    //     addr->port = ((struct sockaddr_in*)addr->addr)->sin_port;
+    //     addr->keylen = 6;
+    // }
+    // // __logi("error: %s", strerror(errno));
+
+    long result = __xapi->udp_recvfrom(server->rsock, addr, buf, size);
     return result;
 }
 
@@ -174,6 +179,8 @@ int main(int argc, char *argv[])
     xmsgaddr_ptr addr = &server.xmsgaddr;
     xmsglistener_ptr listener = &server.listener;
 
+    server.xmsgaddr = __xapi->udp_build_addr(NULL, port);
+
     // server.udpbuf = (udpqueue_ptr)malloc(sizeof(struct udpqueue));
     // server.udpbuf->mtx = ___mutex_create();
     // server.udpbuf->len = 0;
@@ -182,16 +189,16 @@ int main(int argc, char *argv[])
     // server.udpbuf->head.next = &server.udpbuf->end;
     // server.udpbuf->end.prev = &server.udpbuf->head;
 
-    server.addr.sin_family = AF_INET;
-    server.addr.sin_port = htons(port);
-    server.addr.sin_addr.s_addr = INADDR_ANY;
-    // inet_aton(host, &server.addr.sin_addr);
+    // server.addr.sin_family = AF_INET;
+    // server.addr.sin_port = htons(port);
+    // server.addr.sin_addr.s_addr = INADDR_ANY;
+    // // inet_aton(host, &server.addr.sin_addr);
 
-    addr->keylen = 6;
-    addr->ip = server.addr.sin_addr.s_addr;
-    addr->port =server.addr.sin_port;
-    addr->addr = &server.addr;
-    addr->addrlen = sizeof(server.addr);
+    // addr->keylen = 6;
+    // addr->ip = server.addr.sin_addr.s_addr;
+    // addr->port =server.addr.sin_port;
+    // addr->addr = &server.addr;
+    // addr->addrlen = sizeof(server.addr);
 
     listener->onConnectionToPeer = on_connection_to_peer;
     listener->onConnectionFromPeer = on_connection_from_peer;
@@ -200,24 +207,25 @@ int main(int argc, char *argv[])
     listener->onSendable = on_sendable;
     listener->onIdle = on_idle;
 
-    int fd;
-    int enable = 1;
-    if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
-        __xloge("rsock error");
-    }
-    if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
-        __xloge("setsockopt error");
-    }
-	if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
-        __xloge("setsockopt error");
-    }
-    if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
-        __xloge("bind error");
-    }
-	int flags = fcntl(fd, F_GETFL, 0);
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
-        __xloge("set no block failed");
-    }
+    int fd = __xapi->udp_open();
+    __xapi->udp_bind(fd, &server.xmsgaddr);
+    // int enable = 1;
+    // if((fd = socket(PF_INET, SOCK_DGRAM, 0)) < 0){
+    //     __xloge("rsock error");
+    // }
+    // if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0){
+    //     __xloge("setsockopt error");
+    // }
+	// if(setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0){
+    //     __xloge("setsockopt error");
+    // }
+    // if (bind(fd, (const struct sockaddr *)&server.addr, sizeof(server.addr)) == -1){
+    //     __xloge("bind error");
+    // }
+	// int flags = fcntl(fd, F_GETFL, 0);
+    // if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1){
+    //     __xloge("set no block failed");
+    // }
 
     server.rsock = fd;
     msgsock->ctx = &server;
@@ -245,8 +253,8 @@ int main(int argc, char *argv[])
     }
 
     __set_false(server.messenger->running);
-    int data = 0;
-    ssize_t result = sendto(server.rsock, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
+    // int data = 0;
+    // ssize_t result = sendto(server.rsock, &data, sizeof(data), 0, (struct sockaddr*)&server.addr, (socklen_t)sizeof(server.addr));
     __xlogi("xmsger_disconnect");
     xmsger_free(&server.messenger);
     __xlogi("xmsger_free\n");
@@ -256,7 +264,8 @@ int main(int argc, char *argv[])
     __xlogi("close rsock\n");
     free(msgsock);
 
-    close(fd);
+    __xapi->udp_close(fd);
+    __xapi->udp_destoy_addr(server.xmsgaddr);
 
     __xlog_close();
 

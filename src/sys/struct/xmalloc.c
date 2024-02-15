@@ -702,38 +702,38 @@ int posix_memalign(void* *ptr, size_t align, size_t size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-// char* strdup(const char *s)
-// {
-// 	char *result = NULL;
-// 	if (s){
-// 		size_t len = slength(s);
+char* strdup(const char *s)
+{
+	char *result = NULL;
+	if (s){
+		size_t len = slength(s);
 
-// 		result = (char *)malloc(len + 1);
+		result = (char *)malloc(len + 1);
 
-// 		if (result != NULL){
-// 		    mcopy(result, s, len);
-// 		    result[len] = '\0';
-// 		}
-// 	}
+		if (result != NULL){
+		    mcopy(result, s, len);
+		    result[len] = '\0';
+		}
+	}
 
-// 	return result;
-// }
+	return result;
+}
 
-// char* strndup(const char *s, size_t n)
-// {
-// 	char *result = NULL;
-// 	if (s && n > 0){
+char* strndup(const char *s, size_t n)
+{
+	char *result = NULL;
+	if (s && n > 0){
 
-// 		result = (char *)malloc(n + 1);
+		result = (char *)malloc(n + 1);
 
-// 		if (result != NULL){
-// 			mcopy(result, s, n);
-// 			result[n] = '\0';
-// 		}
-// 	}
+		if (result != NULL){
+			mcopy(result, s, n);
+			result[n] = '\0';
+		}
+	}
 
-// 	return result;
-// }
+	return result;
+}
 
 size_t slength(const char *s)
 {
