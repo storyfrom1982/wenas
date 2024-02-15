@@ -13,7 +13,7 @@
 #include "ex/xatom.h"
 
 
-typedef struct ex_pipe {
+typedef struct xpipe {
 
     char *buf;
     uint64_t len;
@@ -24,12 +24,12 @@ typedef struct ex_pipe {
     __atom_bool breaking;
     __xmutex_ptr mutex;
 
-}__ex_pipe;
+}*xpipe_ptr;
 
 
-__ex_pipe* __ex_pipe_create(uint64_t len)
+xpipe_ptr xpipe_create(uint64_t len)
 {
-    __ex_pipe *pipe = (__ex_pipe *)malloc(sizeof(__ex_pipe));
+    xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
     __xcheck(pipe);
 
    if ((len & (len - 1)) == 0){
@@ -56,21 +56,22 @@ __ex_pipe* __ex_pipe_create(uint64_t len)
 
 Clean:
 
-    __ex_pipe_free(&pipe);
+    xpipe_free(&pipe);
 
     return NULL;
 }
 
-void __ex_pipe_free(__ex_pipe **pptr)
+void xpipe_free(xpipe_ptr *pptr)
 {
     if (pptr && *pptr){
-        __ex_pipe *pipe = *pptr;
+        xpipe_ptr pipe = *pptr;
         *pptr = NULL;
         if (pipe){
-            __ex_pipe_clear(pipe);
+            xpipe_clear(pipe);
             if (pipe->mutex){
-                __ex_pipe_break(pipe);
-                // __ex_mutex_free(pipe->mutex);
+                xpipe_break(pipe);
+                // 断开两次，确保没有其他线程阻塞在管道上
+                xpipe_break(pipe);
                 __xapi->mutex_free(pipe->mutex);
             }
         }
@@ -82,7 +83,7 @@ void __ex_pipe_free(__ex_pipe **pptr)
 }
 
 
-static inline uint64_t pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
+static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 {
     uint64_t  writable = pipe->len - pipe->writer + pipe->reader;
 
@@ -100,43 +101,39 @@ static inline uint64_t pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
             memcpy(pipe->buf, ((char*)data) + pipe->leftover, writable - pipe->leftover);
         }
         __atom_add(pipe->writer, writable);
-        // __ex_mutex_notify(pipe->mutex);
         __xapi->mutex_notify(pipe->mutex);
     }
 
     return writable;
 }
 
-uint64_t __ex_pipe_write(__ex_pipe *pipe, void *data, uint64_t len)
+uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 {
     uint64_t pos = 0;
 
-    // __xcheck(pipe->buf && data);
     if (pipe == NULL || data == NULL){
         return pos;
     }
 
     while (__is_false(pipe->breaking) && pos < len) {
 
-        pos += pipe_write(pipe, data + pos, len - pos);
+        pos += __pipe_write(pipe, data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
+            // __pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
             __xapi->mutex_notify(pipe->mutex);
-            // printf("__ex_pipe_write waiting --------------- enter     len: %lu pos: %lu\n", len, pos);
+            // printf("xpipe_write waiting --------------- enter     len: %lu pos: %lu\n", len, pos);
             __xapi->mutex_wait(pipe->mutex);
-            // printf("__ex_pipe_write waiting --------------- exit\n");
+            // printf("xpipe_write waiting --------------- exit\n");
             __xapi->mutex_unlock(pipe->mutex);
         }
     }
 
-// Clean:    
-
     return pos;
 }
 
-static inline uint64_t pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
+static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 {
     uint64_t readable = pipe->writer - pipe->reader;
 
@@ -160,12 +157,11 @@ static inline uint64_t pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
     return readable;
 }
 
-uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
+uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 {
     uint64_t pos = 0;
 
     // 如果日志线程触发了下面的日志写入，会造成原本负责读管道的线程向管道写数据，如果这时管道的空间不够大，就会造成日志线程阻塞
-    // __xcheck(pipe->buf && buf);
     if (pipe == NULL || buf == NULL){
         return pos;
     }
@@ -173,17 +169,17 @@ uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
     // 长度大于 0 才能进入读循环
     while (pos < len) {
 
-        pos += pipe_read(pipe, buf + pos, len - pos);
+        pos += __pipe_read(pipe, buf + pos, len - pos);
 
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // pipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
+            // __pipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
             __xapi->mutex_notify(pipe->mutex);
             if (__is_false(pipe->breaking)){
-                // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ enter     len: %lu pos: %lu\n", len, pos);
+                // printf("xpipe_read waiting +++++++++++++++++++++++++++++++ enter     len: %lu pos: %lu\n", len, pos);
                 __xapi->mutex_wait(pipe->mutex);
-                // printf("__ex_pipe_read waiting +++++++++++++++++++++++++++++++ exit\n");
+                // printf("xpipe_read waiting +++++++++++++++++++++++++++++++ exit\n");
             }
             __xapi->mutex_unlock(pipe->mutex);
             if (__is_true(pipe->breaking)){
@@ -192,25 +188,23 @@ uint64_t __ex_pipe_read(__ex_pipe *pipe, void *buf, uint64_t len)
         }
     }
 
-// Clean:
-
     return pos;
 }
 
-uint64_t __ex_pipe_readable(__ex_pipe *pipe){
+uint64_t xpipe_readable(xpipe_ptr pipe){
     return pipe->writer - pipe->reader;
 }
 
-uint64_t __ex_pipe_writable(__ex_pipe *pipe){
+uint64_t xpipe_writable(xpipe_ptr pipe){
     return pipe->len - pipe->writer + pipe->reader;
 }
 
-void __ex_pipe_clear(__ex_pipe *pipe){
+void xpipe_clear(xpipe_ptr pipe){
     __atom_sub(pipe->reader, pipe->reader);
     __atom_sub(pipe->writer, pipe->writer);
 }
 
-void __ex_pipe_break(__ex_pipe *pipe){
+void xpipe_break(xpipe_ptr pipe){
     __xapi->mutex_lock(pipe->mutex);
     __set_true(pipe->breaking);
     __xapi->mutex_broadcast(pipe->mutex);

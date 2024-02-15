@@ -31,7 +31,7 @@ typedef struct xlog_file {
     __atom_bool writing;
     char *log0, *log1;
     __ex_fp fp;
-    __ex_pipe *pipe;
+    xpipe_ptr pipe;
     __ex_task_ptr task;
     __xlog_cb print_cb;
 }__xlog_file;
@@ -58,13 +58,13 @@ static void __xlog_file_write_loop(xmaker_ptr ctx)
     
     while (1)
     {
-        // printf("__ex_pipe_read enter\n");
-        if ((res = __ex_pipe_read(g_log_file.pipe, buf, 1)) == 1){
-            // printf("__ex_pipe_read 1\n");
-            n = __ex_pipe_readable(g_log_file.pipe);
-            // printf("__ex_pipe_readable %lu\n", n);
-            res += __ex_pipe_read(g_log_file.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
-            // printf("__ex_pipe_read exit\n");
+        // printf("xpipe_read enter\n");
+        if ((res = xpipe_read(g_log_file.pipe, buf, 1)) == 1){
+            // printf("xpipe_read 1\n");
+            n = xpipe_readable(g_log_file.pipe);
+            // printf("xpipe_readable %lu\n", n);
+            res += xpipe_read(g_log_file.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
+            // printf("xpipe_read exit\n");
         }
 
         if (res > 0){
@@ -137,9 +137,9 @@ void __xlog_close()
     if (__set_false(g_log_file.running)){
         __set_false(g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
-        __ex_pipe_break(g_log_file.pipe);
+        xpipe_break(g_log_file.pipe);
         __ex_task_free(&g_log_file.task);
-        __ex_pipe_free(&g_log_file.pipe);
+        xpipe_free(&g_log_file.pipe);
         free(g_log_file.log0);
         free(g_log_file.log1);
 
@@ -193,7 +193,7 @@ int __xlog_open(const char *path, __xlog_cb cb)
     __xlogi("Log start >>>>--------------> %s\n", g_log_file.log0);
     __xlogi(">>>>-------------->\n");  
 
-    g_log_file.pipe = __ex_pipe_create(__log_pipe_size);
+    g_log_file.pipe = xpipe_create(__log_pipe_size);
     __xcheck(g_log_file.pipe);
 
     g_log_file.task = __ex_task_run(__xlog_file_write_loop, &g_log_file);
@@ -214,7 +214,7 @@ Clean:
         g_log_file.log1 = NULL;
     }
     if (g_log_file.pipe){
-        __ex_pipe_free(&g_log_file.pipe);
+        xpipe_free(&g_log_file.pipe);
         g_log_file.pipe = NULL;
     }
     if (g_log_file.task){
@@ -256,7 +256,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     // 最大输入内容 0-4094=4095
     if (__is_true(g_log_file.writing)){
         // 写入管道
-        __ex_pipe_write(g_log_file.pipe, text, n);
+        xpipe_write(g_log_file.pipe, text, n);
     }else {
         // 直接写文件
         if (g_log_file.fp){

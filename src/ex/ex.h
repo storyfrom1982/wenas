@@ -103,15 +103,15 @@ __ex_export bool __ex_move_path(const char* from, const char* to);
 ///////////////////////////////////////////////////////
 typedef struct xmaker* xmaker_ptr;
 
-typedef struct ex_pipe __ex_pipe;
-__ex_export __ex_pipe* __ex_pipe_create(uint64_t len);
-__ex_export void __ex_pipe_free(__ex_pipe **pp_pipe);
-__ex_export uint64_t __ex_pipe_write(__ex_pipe *pipe, void* data, uint64_t len);
-__ex_export uint64_t __ex_pipe_read(__ex_pipe *pipe, void* buf, uint64_t len);
-__ex_export uint64_t __ex_pipe_readable(__ex_pipe *pipe);
-__ex_export uint64_t __ex_pipe_writable(__ex_pipe *pipe);
-__ex_export void __ex_pipe_clear(__ex_pipe *pipe);
-__ex_export void __ex_pipe_break(__ex_pipe *pipe);
+typedef struct xpipe* xpipe_ptr;
+__ex_export xpipe_ptr xpipe_create(uint64_t len);
+__ex_export void xpipe_free(xpipe_ptr *pp_pipe);
+__ex_export uint64_t xpipe_write(xpipe_ptr pipe, void* data, uint64_t len);
+__ex_export uint64_t xpipe_read(xpipe_ptr pipe, void* buf, uint64_t len);
+__ex_export uint64_t xpipe_readable(xpipe_ptr pipe);
+__ex_export uint64_t xpipe_writable(xpipe_ptr pipe);
+__ex_export void xpipe_clear(xpipe_ptr pipe);
+__ex_export void xpipe_break(xpipe_ptr pipe);
 
 typedef struct msg_pipe __ex_msg_pipe;
 __ex_export __ex_msg_pipe* __ex_msg_pipe_create(uint64_t len);
