@@ -9,9 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <errno.h>
 
-#include "task.h"
-#include "xatom.h"
 #include "sys/struct/xbuf.h"
 
 #define __log_text_size			4096
@@ -31,9 +30,9 @@ typedef struct xlog_file {
     __atom_bool running;
     __atom_bool writing;
     char *log0, *log1;
-    __ex_fp fp;
+    __xfile_ptr fp;
     xpipe_ptr pipe;
-    __ex_task_ptr task;
+    xtask_ptr task;
     __xlog_cb print_cb;
 }__xlog_file;
 
@@ -69,18 +68,18 @@ static void __xlog_file_write_loop(xmaker_ptr ctx)
         }
 
         if (res > 0){
-            n = __ex_fwrite(g_log_file.fp, buf, res);
+            n = __xapi->fwrite(g_log_file.fp, buf, res);
             // 日志线程本身不能同时读写日志管道
             // __xcheck(n == res);
-            __xbreak(n == res);
+            __xcheck(n == res);
 
-            if (__ex_ftell(g_log_file.fp) > __log_file_size){
-                __ex_fclose(g_log_file.fp);
-                __ex_move_path(g_log_file.log0, g_log_file.log1);
-                g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
+            if (__xapi->ftell(g_log_file.fp) > __log_file_size){
+                __xapi->fclose(g_log_file.fp);
+                __xapi->move_path(g_log_file.log0, g_log_file.log1);
+                g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
                 // 日志线程本身不能同时读写日志管道
                 // __xcheck(g_log_file.fp != NULL);
-                __xbreak(g_log_file.fp != NULL);
+                __xcheck(g_log_file.fp != NULL);
             }
         }else {
             if (__is_false(g_log_file.running)){
@@ -139,7 +138,7 @@ void __xlog_close()
         __set_false(g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         xpipe_break(g_log_file.pipe);
-        __ex_task_free(&g_log_file.task);
+        xtask_free(&g_log_file.task);
         xpipe_free(&g_log_file.pipe);
         free(g_log_file.log0);
         free(g_log_file.log1);
@@ -149,10 +148,10 @@ void __xlog_close()
         __xlogi(">>>>-------------->\n");
 
         __atom_lock(g_log_file.lock);
-        __ex_fclose(g_log_file.fp);
+        __xapi->fclose(g_log_file.fp);
         __atom_unlock(g_log_file.lock);
 
-        memset(&g_log_file, 0, sizeof(g_log_file));
+        mclear(&g_log_file, sizeof(g_log_file));
     }
 
 #if defined(XMALLOC_BACKTRACE)
@@ -172,8 +171,8 @@ int __xlog_open(const char *path, __xlog_cb cb)
     g_log_file.print_cb = cb;
 
     int len = strlen(path) + strlen("/0.log") + 1;
-    if (!__ex_find_path(path)){
-        __xcheck(__ex_make_path(path));
+    if (!__xapi->check_path(path)){
+        __xcheck(__xapi->make_path(path));
     }
 
     g_log_file.log0 = calloc(1, len);
@@ -185,7 +184,7 @@ int __xlog_open(const char *path, __xlog_cb cb)
     snprintf(g_log_file.log1, len, "%s/1.log", path);
 
     __atom_lock(g_log_file.lock);
-    g_log_file.fp = __ex_fopen(g_log_file.log0, "a+t");
+    g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
     __atom_unlock(g_log_file.lock);
 
     __xcheck(g_log_file.fp);
@@ -197,7 +196,7 @@ int __xlog_open(const char *path, __xlog_cb cb)
     g_log_file.pipe = xpipe_create(__log_pipe_size);
     __xcheck(g_log_file.pipe);
 
-    g_log_file.task = __ex_task_run(__xlog_file_write_loop, &g_log_file);
+    g_log_file.task = xtask_run(__xlog_file_write_loop, &g_log_file);
     __xcheck(g_log_file.task);
 
     __set_true(g_log_file.running);
@@ -219,11 +218,11 @@ Clean:
         g_log_file.pipe = NULL;
     }
     if (g_log_file.task){
-        __ex_task_free(&g_log_file.task);
+        xtask_free(&g_log_file.task);
         g_log_file.task = NULL;
     }
     if (g_log_file.fp){
-        __ex_fclose(g_log_file.fp);
+        __xapi->fclose(g_log_file.fp);
         g_log_file.fp = NULL;
     }
     __set_false(g_log_file.running);
@@ -261,7 +260,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     }else {
         // 直接写文件
         if (g_log_file.fp){
-            __ex_fwrite(g_log_file.fp, text, n);
+            __xapi->fwrite(g_log_file.fp, text, n);
         }
     }
 

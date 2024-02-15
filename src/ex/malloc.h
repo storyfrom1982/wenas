@@ -1,8 +1,8 @@
 #ifndef ____UNIX_MALLOC_H__
 #define ____UNIX_MALLOC_H__
 
-
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

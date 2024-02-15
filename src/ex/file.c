@@ -54,7 +54,7 @@ int64_t __ex_fseek(__ex_fp fp, int64_t offset, int32_t whence)
 
 /*** The following code is referencing: https://github.com/ireader/sdk.git ***/
 
-bool __ex_find_file(const char* path)
+bool __ex_check_file(const char* path)
 {
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFREG)) ? true : false;
@@ -62,7 +62,7 @@ bool __ex_find_file(const char* path)
 
 /// get file size in bytes
 /// return file size
-uint64_t env_file_size(const char* filename)
+uint64_t __ex_file_size(const char* filename)
 {
 	struct stat st;
 	if (0 == stat(filename, &st) && (st.st_mode & S_IFREG))
@@ -70,7 +70,7 @@ uint64_t env_file_size(const char* filename)
 	return -1;
 }
 
-bool __ex_find_path(const char* path)
+bool __ex_check_path(const char* path)
 {
 	struct stat info;
 	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
@@ -82,13 +82,13 @@ static bool __ex_mkdir(const char* path)
 	return 0 == r ? true : false;
 }
 
-bool __ex_remove_path(const char* path)
+bool __ex_delete_path(const char* path)
 {
 	int r = rmdir(path);
 	return 0 == r ? true : false;
 }
 
-bool env_realpath(const char* path, char resolved_path[PATH_MAX])
+bool __ex_realpath(const char* path, char resolved_path[PATH_MAX])
 {
 	char* p = realpath(path, resolved_path);
 	return p ? true : false;
@@ -96,7 +96,7 @@ bool env_realpath(const char* path, char resolved_path[PATH_MAX])
 
 /// delete a name and possibly the file it refers to
 /// 0-ok, other-error
-bool __ex_remove_file(const char* path)
+bool __ex_delete_file(const char* path)
 {
 	int r = remove(path);
 	return 0 == r ? true : false;
@@ -119,7 +119,7 @@ bool __ex_make_path(const char* path)
     bool ret = true;
     uint64_t len = strlen(path);
 
-    if (!__ex_find_path(path)){
+    if (!__ex_check_path(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -128,7 +128,7 @@ bool __ex_make_path(const char* path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!__ex_find_path(buf)){
+                if (!__ex_check_path(buf)){
                     ret = __ex_mkdir(buf);
                     if (!ret){
                         break;

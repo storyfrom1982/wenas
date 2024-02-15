@@ -23,7 +23,7 @@ typedef struct server {
     struct xmsgaddr xmsgaddr;
     struct xmsglistener listener;
     xkey_ptr func;
-    __ex_task_ptr task;
+    xtask_ptr task;
     xmsger_ptr messenger;
 }server_t;
 
@@ -96,14 +96,14 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
     __xlogd("on_idle server = %p\n", server);
-    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = xtask_hold_pusher(server->task);
     __xlogd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
     __xlogd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
     xline_add_ptr(ctx, "func", listening);
     __xlogd("2 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
     xline_add_ptr(ctx, "ctx", server);
     __xlogd("2 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
-    __ex_task_update_pusher(server->task);
+    xtask_update_pusher(server->task);
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
@@ -132,10 +132,10 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_disconnection enter\n");
     server_t *server = (server_t*)listener->ctx;
-    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = xtask_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", disconnect_task);
     xline_add_ptr(ctx, "ctx", channel);
-    __ex_task_update_pusher(server->task);
+    xtask_update_pusher(server->task);
     __xlogd("on_disconnection exit\n");
 }
 
@@ -156,11 +156,11 @@ static void process_message(xmaker_ptr task_ctx)
 static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
-    xmaker_ptr ctx = __ex_task_hold_pusher(server->task);
+    xmaker_ptr ctx = xtask_hold_pusher(server->task);
     xline_add_ptr(ctx, "func", process_message);
     xline_add_ptr(ctx, "ctx", channel);
     xline_add_ptr(ctx, "msg", msg);
-    __ex_task_update_pusher(server->task);
+    xtask_update_pusher(server->task);
 }
 
 int main(int argc, char *argv[])
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
     msgsock->sendto = send_msg;
     msgsock->recvfrom = recv_msg;
     
-    server.task = __ex_task_create();
+    server.task = xtask_create();
 
     listener->ctx = &server;
     server.messenger = xmsger_create(msgsock, &server.listener);
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
     xmsger_free(&server.messenger);
     __xlogi("xmsger_free\n");
 
-    __ex_task_free(&server.task);
+    xtask_free(&server.task);
 
     __xlogi("close rsock\n");
     free(msgsock);

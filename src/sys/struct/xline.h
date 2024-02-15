@@ -1,7 +1,6 @@
 #ifndef __XLINE_H__
 #define __XLINE_H__
 
-#include <stdint.h>
 #include <ex/malloc.h>
 
 // #define XLINE_NUMBER_SIZE_MASK     0x1f //00011111 开启 XLINE_TYPE_4BIT 字节（ 保留低位 5bit，64bit 是 16 个字节，16 需要占用 5bit ）

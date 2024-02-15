@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     targ.mtx = mtx;
     targ.testTrue = &testTrue;
 
-    __ex_task_ptr task = __ex_task_create();
+    xtask_ptr task = xtask_create();
     struct xmaker ctx;
     xline_maker_setup(&ctx, NULL, 1024);
     xline_add_ptr(&ctx, "func", (void*)mutex_task);
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 
     std::cout << "join thread " << __ex_thread_id() << std::endl;
     // ___thread_join(tid);
-    __ex_task_free(&task);
+    xtask_free(&task);
 
     __ex_mutex_free(mtx);
 #endif

@@ -28,7 +28,7 @@ typedef struct xpipe {
 xpipe_ptr xpipe_create(uint64_t len)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
-    __xcheck(pipe);
+    __xbreak(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -42,10 +42,10 @@ xpipe_ptr xpipe_create(uint64_t len)
     pipe->leftover = pipe->len;
 
     pipe->buf = (char *)malloc(pipe->len);
-    __xcheck(pipe->buf);
+    __xbreak(pipe->buf);
 
     pipe->mutex = __xapi->mutex_create();
-    __xcheck(pipe->mutex);
+    __xbreak(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -225,7 +225,7 @@ struct xbuf {
 xbuf_ptr xbuf_create(uint64_t len)
 {
     xbuf_ptr pipe = (xbuf_ptr)malloc(sizeof(struct xbuf));
-    __xcheck(pipe);
+    __xbreak(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -242,7 +242,7 @@ xbuf_ptr xbuf_create(uint64_t len)
     // 二维指针 (struct xmaker**) 也可以像使用数组那样，进行下标操作，但是每个下标指向的是 xmaker 类型的结构体指针 (xmaker*)
     pipe->buf = (xmaker_ptr)calloc(pipe->len, sizeof(struct xmaker));
     // pipe->buf = (xline_maker_ptr*)calloc(pipe->len, sizeof(xline_maker_ptr*));
-    __xcheck(pipe->buf);
+    __xbreak(pipe->buf);
 
     for (int i = 0; i < pipe->len; ++i){
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
@@ -252,7 +252,7 @@ xbuf_ptr xbuf_create(uint64_t len)
     }
 
     pipe->mutex = __xapi->mutex_create();
-    __xcheck(pipe->mutex);
+    __xbreak(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;

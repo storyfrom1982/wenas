@@ -1,9 +1,7 @@
 #include "ex/ex.h"
 
-extern "C" {
-    #include "ex/malloc.h"
-    #include <sys/struct/xmsger.h>
-}
+#include "ex/malloc.h"
+#include <sys/struct/xmsger.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -257,12 +255,12 @@ int main(int argc, char *argv[])
     {
         __xlogi("Enter a value :\n");
         fgets(str, 1000, stdin);
-        size_t len = strlen(str);
+        size_t len = slength(str);
         if (len == 2 && str[0] == 'q'){
             break;
         }
         str[len-1] = '\0';
-        xmaker maker;
+        struct xmaker maker;
         xline_maker_setup(&maker, NULL, 1024);
         xline_add_text(&maker, "msg", str, slength(str));
         xchannel_push_task(client->channel, maker.wpos + 9);

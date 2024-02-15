@@ -53,9 +53,9 @@ set(kzx_sources
     src/ex/ex.c
     src/ex/malloc.c
     # src/ex/pipe.c 
-    src/ex/file.c
+    # src/ex/file.c
     src/ex/xlog.c
-    src/ex/task.c
+    # src/ex/task.c
     # src/env/linetask.c
     # test/env/storage_test.c
     # test/env/logger_test.c
@@ -115,6 +115,6 @@ endfunction(build_executable)
 
 # build_executable(kapp src/main.cpp)
 build_executable(server src/app/server.c)
-build_executable(client src/app/client.cpp)
+build_executable(client src/app/client.c)
 # build_executable(kapp test/sys/struct/tree_test.c)
 # build_executable(kapp test/sys/struct/heap_test.c)

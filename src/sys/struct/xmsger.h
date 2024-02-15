@@ -163,7 +163,7 @@ struct xmsger {
     xmsglistener_ptr listener;
     xmsgsocket_ptr msgsock;
     xmaker_ptr mainloop_func;
-    __ex_task_ptr mainloop_task;
+    xtask_ptr mainloop_task;
     __atom_size tasklen;
     __atom_bool connection_buf_lock;
     xmsgpackbuf_ptr connection_buf;
@@ -370,7 +370,7 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
 {
     // __xlogd("xchannel_send >>>>------------> enter\n");
 
-    ssize_t result;
+    long result;
     xmsgpack_ptr pack;
 
     if (__transbuf_usable(channel->sendbuf) > 0){
@@ -531,7 +531,7 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
             channel->msgbuf->msg->channel = channel;
         }
 
-        memcpy(channel->msgbuf->msg->data + channel->msgbuf->msg->size, 
+        mcopy(channel->msgbuf->msg->data + channel->msgbuf->msg->size, 
             channel->msgbuf->buf[index]->body, 
             channel->msgbuf->buf[index]->head.pack_size);
         channel->msgbuf->msg->size += channel->msgbuf->buf[index]->head.pack_size;
@@ -642,10 +642,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
 
         if (rpack == NULL){
             rpack = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-            if (rpack == NULL){
-                __xlogd("xmsger_loop malloc failed\n");
-                exit(0);
-            }
+            __xcheck(rpack);
         }
 
         rpack->head.type = 0;
@@ -933,7 +930,7 @@ Clean:
 
 static inline void xmsger_run(xmsger_ptr messenger)
 {
-    messenger->mainloop_task = __ex_task_run(xmsger_loop, messenger);
+    messenger->mainloop_task = xtask_run(xmsger_loop, messenger);
 }
 
 static void free_channel(void *val)
@@ -950,7 +947,7 @@ static inline void xmsger_free(xmsger_ptr *pptr)
         *pptr = NULL;
         __set_false(msger->running);
         __xapi->mutex_broadcast(msger->mtx);
-        __ex_task_free(&msger->mainloop_task);
+        xtask_free(&msger->mainloop_task);
         __xlogd("xmsger_free 1\n");
         // xline_maker_clear(msger->mainloop_func);
         __xlogd("xmsger_free 2\n");
@@ -990,7 +987,7 @@ static inline int xmsger_connect(xmsger_ptr messenger, xmsgaddr_ptr addr)
     }
     xline_add_ptr(ctx, "addr", addr);
     // const char *key = "PING";
-    // size_t len = strlen(key);
+    // size_t len = slength(key);
     // char output[len];
     // for (size_t i = 0; i < len; ++i) {
     //     output[i] = key[i] ^ 'k';
@@ -1028,7 +1025,7 @@ static inline void xmsger_ping(xchannel_ptr channel)
         unit->head.pack_range = 1;
         struct xmaker kv;
         xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
-        xline_add_text(&kv, "msg", "PING", strlen("PING"));
+        xline_add_text(&kv, "msg", "PING", slength("PING"));
         unit->head.pack_size = kv.wpos;
         xchannel_push(channel, unit);
     }
@@ -1054,7 +1051,7 @@ static inline void xmsger_send(xmsger_ptr mtp, xchannel_ptr channel, void *data,
         {
             // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
             xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
-            memcpy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
+            mcopy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
             // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = PACK_BODY_SIZE;
             unit->head.pack_range = XMSG_PACK_RANGE - y;
@@ -1077,7 +1074,7 @@ static inline void xmsger_send(xmsger_ptr mtp, xchannel_ptr channel, void *data,
         for (size_t y = 0; y < unit_count; y++){
             // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
             xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
-            memcpy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
+            mcopy(unit->body, msg_data + (y * PACK_BODY_SIZE), PACK_BODY_SIZE);
             // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = PACK_BODY_SIZE;
             unit->head.pack_range = (unit_count + last_unit_id) - y;
@@ -1087,7 +1084,7 @@ static inline void xmsger_send(xmsger_ptr mtp, xchannel_ptr channel, void *data,
         if (last_unit_id){
             // xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
             xmsgpack_ptr unit = make_pack(channel, XMSG_PACK_MSG);
-            memcpy(unit->body, msg_data + (unit_count * PACK_BODY_SIZE), last_unit_size);
+            mcopy(unit->body, msg_data + (unit_count * PACK_BODY_SIZE), last_unit_size);
             // unit->head.type = XMSG_PACK_MSG;
             unit->head.pack_size = last_unit_size;
             unit->head.pack_range = last_unit_id;

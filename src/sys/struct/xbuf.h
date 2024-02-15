@@ -3,7 +3,6 @@
 
 
 #include <ex/ex.h>
-
 #include "xline.h"
 
 
@@ -171,7 +170,7 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 static inline xpipe_ptr xpipe_create(uint64_t len)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
-    __xcheck(pipe);
+    __xbreak(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -185,10 +184,10 @@ static inline xpipe_ptr xpipe_create(uint64_t len)
     pipe->leftover = pipe->len;
 
     pipe->buf = (uint8_t*)malloc(pipe->len);
-    __xcheck(pipe->buf);
+    __xbreak(pipe->buf);
 
     pipe->mutex = __xapi->mutex_create();
-    __xcheck(pipe->mutex);
+    __xbreak(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -330,7 +329,7 @@ static inline void xbuf_free(xbuf_ptr *pptr)
 static inline xbuf_ptr xbuf_create(uint64_t len)
 {
     xbuf_ptr pipe = (xbuf_ptr)malloc(sizeof(struct xbuf));
-    __xcheck(pipe);
+    __xbreak(pipe);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -347,7 +346,7 @@ static inline xbuf_ptr xbuf_create(uint64_t len)
     // 二维指针 (struct xmaker**) 也可以像使用数组那样，进行下标操作，但是每个下标指向的是 xmaker 类型的结构体指针 (xmaker*)
     pipe->buf = (xmaker_ptr)calloc(pipe->len, sizeof(struct xmaker));
     // pipe->buf = (xline_maker_ptr*)calloc(pipe->len, sizeof(xline_maker_ptr*));
-    __xcheck(pipe->buf);
+    __xbreak(pipe->buf);
 
     for (int i = 0; i < pipe->len; ++i){
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
@@ -357,7 +356,7 @@ static inline xbuf_ptr xbuf_create(uint64_t len)
     }
 
     pipe->mutex = __xapi->mutex_create();
-    __xcheck(pipe->mutex);
+    __xbreak(pipe->mutex);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -369,6 +368,106 @@ Clean:
     xbuf_free(&pipe);
 
     return NULL;
+}
+
+
+typedef struct xtask {
+    __atom_bool running;
+    __xprocess_ptr pid;
+    xbuf_ptr buf;
+}*xtask_ptr;
+
+
+typedef void (*__xtask_enter)(xmaker_ptr ctx);
+
+
+static inline void* xtask_loop(void *p)
+{
+    xmaker_ptr ctx;
+    __xtask_enter post_func;
+    xtask_ptr task = (xtask_ptr)p;
+
+    __xlogi("xtask_loop(0x%X) enter\n", __xapi->process_self());
+    
+    while (__is_true(task->running)) {
+
+        
+        if ((ctx = xbuf_hold_reader(task->buf)) == NULL){
+            break;
+        }
+
+        post_func = (__xtask_enter)xline_find_ptr(ctx, "func");
+        if (post_func){
+            (post_func)(ctx);
+        }
+
+        xbuf_update_reader(task->buf);
+    }
+
+    __xlogi("xtask_loop(0x%X) exit\n", __xapi->process_self());
+
+    return NULL;
+}
+
+
+static inline xtask_ptr xtask_create()
+{
+    __xlogi("xtask_create enter\n");
+
+    int ret;
+    xtask_ptr task = (xtask_ptr)malloc(sizeof(struct xtask));
+    assert(task);
+
+    task->buf = xbuf_create(2);
+    assert(task->buf);
+
+    task->running = true;
+    task->pid = __xapi->process_create(xtask_loop, task);
+    assert(task->pid);
+
+    __xlogi("xtask_create exit\n");
+
+    return task;
+}
+
+static inline void xtask_free(xtask_ptr *pptr)
+{
+    __xlogi("xtask_free enter\n");
+
+    if (pptr && *pptr) {
+        xtask_ptr task = *pptr;
+        *pptr = NULL;
+
+        xbuf_break(task->buf);
+        // __xapi->process_join(task->tid);
+        __xapi->process_free(task->pid);
+        xbuf_free(&task->buf);
+
+        free(task);
+    }
+
+    __xlogi("xtask_free exit\n");
+}
+
+
+static inline xmaker_ptr xtask_hold_pusher(xtask_ptr task)
+{
+    return xbuf_hold_writer(task->buf);
+}
+
+static inline void xtask_update_pusher(xtask_ptr task)
+{
+    xbuf_update_writer(task->buf);
+}
+
+static inline xtask_ptr xtask_run(__xtask_enter func, void *ctx)
+{
+    xtask_ptr task = xtask_create();
+    xmaker_ptr maker = xtask_hold_pusher(task);
+    xline_add_ptr(maker, "func", (void*)func);
+    xline_add_ptr(maker, "ctx", ctx);
+    xtask_update_pusher(task);
+    return task;
 }
 
 

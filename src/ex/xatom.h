@@ -2,6 +2,7 @@
 #define __XATOM_H__
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef uint64_t __atom_size;
 typedef uint64_t __atom_bool;
