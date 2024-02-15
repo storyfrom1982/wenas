@@ -41,7 +41,7 @@ uint64_t env_backtrace(void** array, int32_t depth)
 #   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0X%016lX  %s() + %lu\n"
 #   define ENV_BACKTRACE_ADDRESS_LEN 18 /* 0x + 16 (no NUL) */
 #else
-#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0X%08lX  %s() + %lu"
+#   define ENV_BACKTRACE_FORMAT "Stack:  #%-4d%-32s  0X%08lX  %s() + %lu\n"
 #   define ENV_BACKTRACE_ADDRESS_LEN 10 /* 0x + 8 (no NUL) */
 #endif
 
@@ -70,7 +70,7 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 	} else if(info->dli_fname) {
 		symbol = image;
 		symbol_offset = addr - info->dli_fbase;
-	} else if(0 < snprintf(symbuf, sizeof(symbuf), "0x%X", info->dli_saddr)) {
+	} else if(0 < snprintf(symbuf, sizeof(symbuf), "0x%X\n", info->dli_saddr)) {
 		symbol = symbuf;
 		symbol_offset = addr - info->dli_saddr;
 	}

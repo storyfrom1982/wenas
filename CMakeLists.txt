@@ -13,6 +13,13 @@ include (CheckFunctionExists)
 include (CheckIncludeFiles)
 include (CheckTypeSize)
 
+# Check if the system is 64-bit
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "Detected 64-bit system")
+else()
+    message(FATAL_ERROR "Error: This project requires a 64-bit system. Exiting.")
+endif()
+
 TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
 if(IS_BIG_ENDIAN)
     message(STATUS "BIG_ENDIAN")
@@ -22,11 +29,6 @@ else()
     add_definitions(-D__LITTLE_ENDIAN__)
 endif()
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(STATUS "CMAKE_SIZEOF_VOID_P EQUAL 8")
-    add_definitions(-D__PL64__)
-endif()
-
 check_type_size ("long" ENV_LONG)
 if (${ENV_LONG} EQUAL 4)
     message(STATUS "ENV_LONG EQUAL 4")
@@ -34,6 +36,15 @@ if (${ENV_LONG} EQUAL 4)
 elseif (${ENV_LONG} EQUAL 8)
     message(STATUS "ENV_LONG EQUAL 8")
     add_definitions(-D__ENV_LONG_64__)
+endif()
+
+check_type_size ("int" ENV_INT)
+if (${ENV_INT} EQUAL 2)
+    message(STATUS "ENV_INT EQUAL 2")
+    add_definitions(-D__ENV_INT_16__)
+elseif (${ENV_INT} EQUAL 4)
+    message(STATUS "ENV_INT EQUAL 4")
+    add_definitions(-D__ENV_INT_32__)
 endif()
 
 
