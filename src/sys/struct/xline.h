@@ -128,7 +128,7 @@ static inline float __byte_to_float_32bit(xline_ptr p)
     return r.f;
 }
 
-static inline float __byte_to_float_64bit(xline_ptr p)
+static inline double __byte_to_float_64bit(xline_ptr p)
 {
     union real64 r;
     r.byte[0] = p->byte[1];
@@ -221,7 +221,6 @@ static inline float __byte_to_float_64bit(xline_ptr p)
             line = NULL; \
         }
 
-
 static inline uint64_t xline_fill(xline_ptr x, const void *data, uint64_t size, uint8_t flag)
 {
     if (size < 0x100){
@@ -276,6 +275,15 @@ typedef struct xmaker {
     uint8_t *addr, *head;
 }*xmaker_ptr;
 
+typedef struct xholder {
+    xmaker_ptr maker;
+    uint64_t wpos, rpos, len;
+    xkey_ptr key;
+    xline_ptr val;
+    xline_ptr xline;
+    uint8_t *addr, *head;
+}*xholder_ptr;
+
 
 static inline uint64_t xkey_fill(xkey_ptr xkey, const char *str, size_t len)
 {
@@ -320,6 +328,17 @@ static inline void xline_maker_reset(xmaker_ptr maker)
     maker->wpos = maker->rpos = 0;
     maker->key = NULL;
     maker->val = NULL;
+}
+
+static inline struct xholder xline_maker_hold(xmaker_ptr maker, uint8_t *ptr, uint64_t len)
+{
+    struct xholder holder;
+    holder.maker = maker;
+    holder.wpos = holder.rpos = 0;
+    holder.len = len;
+    holder.head = ptr;
+    holder.key = NULL;
+    holder.val = NULL;
 }
 
 static inline void xline_maker_update(xmaker_ptr parent, xmaker_ptr child)
