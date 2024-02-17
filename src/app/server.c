@@ -16,11 +16,10 @@ static void malloc_debug_cb(const char *debug)
     __xlogd("%s\n", debug);
 }
 
-static void listening(xmaker_ptr task_ctx)
+static void listening(xtask_enter_ptr task_ctx)
 {
     __xlogd("listening enter\n");
-    __xlogd("listening ctx = %p ctx->addr = %p\n", task_ctx, task_ctx->addr);
-    server_t *server = (server_t *)xline_find_ptr(task_ctx, "ctx");
+    server_t *server = (server_t *)task_ctx->ctx;
     if (__set_true(server->listening)){
         __xlogd("listening server = %p\n", server);
         __xapi->udp_listen(server->rsock);
@@ -78,9 +77,9 @@ static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
 
 }
 
-static void disconnect_task(xmaker_ptr task)
+static void disconnect_task(xtask_enter_ptr task)
 {
-    xchannel_ptr channel = (xchannel_ptr)xline_find_ptr(task, "ctx");
+    xchannel_ptr channel = task->ctx;
 }
 
 static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
@@ -95,10 +94,10 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
     __xlogd("on_disconnection exit\n");
 }
 
-static void process_message(xmaker_ptr task_ctx)
+static void process_message(xtask_enter_ptr task_ctx)
 {
     __xlogd("process_message enter\n");
-    xmsg_ptr msg = (xmsg_ptr)xline_find_ptr(task_ctx, "msg");
+    xmsg_ptr msg = (xmsg_ptr)task_ctx->ext;
     struct xmaker parser = xline_parse((xline_ptr)msg->data);
     xline_ptr line = xline_find(&parser, "msg");
     if (line){
@@ -115,6 +114,8 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
     struct xtask_enter enter;
     enter.func = process_message;
     enter.ctx = server;
+    enter.param = channel;
+    enter.ext = msg;
     xtask_push(server->task, enter);    
 }
 
