@@ -32,13 +32,13 @@ typedef struct xlog_file {
     char *log0, *log1;
     __xfile_ptr fp;
     xpipe_ptr pipe;
-    xtask_ptr task;
+    __xprocess_ptr pid;
     __xlog_cb print_cb;
 }__xlog_file;
 
 static __xlog_file g_log_file = {0};
 
-static void __xlog_file_write_loop(xmaker_ptr ctx)
+static void* __xlog_file_write_loop(void *ctx)
 {
     __xlogd("__xlog_file_write_loop enter\n");
 
@@ -99,6 +99,8 @@ Clean:
     }
 
     __xlogd("__xlog_file_write_loop exit\n");
+
+    return NULL;
 }
 
 void test3()
@@ -138,7 +140,7 @@ void __xlog_close()
         __set_false(g_log_file.writing);
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
         xpipe_break(g_log_file.pipe);
-        xtask_free(&g_log_file.task);
+        __xapi->process_free(g_log_file.pid);
         xpipe_free(&g_log_file.pipe);
         free(g_log_file.log0);
         free(g_log_file.log1);
@@ -199,8 +201,8 @@ int __xlog_open(const char *path, __xlog_cb cb)
     g_log_file.pipe = xpipe_create(__log_pipe_size);
     __xcheck(g_log_file.pipe);
 
-    g_log_file.task = xtask_run(__xlog_file_write_loop, &g_log_file);
-    __xcheck(g_log_file.task);
+    g_log_file.pid = __xapi->process_create(__xlog_file_write_loop, &g_log_file);
+    __xcheck(g_log_file.pid != 0);
 
     __set_true(g_log_file.running);
 
@@ -220,9 +222,9 @@ Clean:
         xpipe_free(&g_log_file.pipe);
         g_log_file.pipe = NULL;
     }
-    if (g_log_file.task){
-        xtask_free(&g_log_file.task);
-        g_log_file.task = NULL;
+    if (g_log_file.pid != 0){
+        __xapi->process_free(g_log_file.pid);
+        g_log_file.pid = 0;
     }
     if (g_log_file.fp){
         __xapi->fclose(g_log_file.fp);

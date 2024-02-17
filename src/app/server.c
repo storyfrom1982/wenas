@@ -55,15 +55,10 @@ static size_t recv_msg(struct xmsgsocket *rsock, __xipaddr_ptr addr, void *buf, 
 static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
-    __xlogd("on_idle server = %p\n", server);
-    xmaker_ptr ctx = xtask_hold_pusher(server->task);
-    __xlogd("1 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
-    __xlogd("1 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
-    xline_add_ptr(ctx, "func", listening);
-    __xlogd("2 maker len = %lu wpos = %lu\n", ctx->len, ctx->wpos);
-    xline_add_ptr(ctx, "ctx", server);
-    __xlogd("2 on_idle ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
-    xtask_update_pusher(server->task);
+    struct xtask_enter enter;
+    enter.func = listening;
+    enter.ctx = server;
+    xtask_push(server->task, enter);
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
@@ -92,10 +87,11 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_disconnection enter\n");
     server_t *server = (server_t*)listener->ctx;
-    xmaker_ptr ctx = xtask_hold_pusher(server->task);
-    xline_add_ptr(ctx, "func", disconnect_task);
-    xline_add_ptr(ctx, "ctx", channel);
-    xtask_update_pusher(server->task);
+    struct xtask_enter enter;
+    enter.func = disconnect_task;
+    enter.ctx = server;
+    xtask_push(server->task, enter);
+
     __xlogd("on_disconnection exit\n");
 }
 
@@ -116,11 +112,10 @@ static void process_message(xmaker_ptr task_ctx)
 static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
-    xmaker_ptr ctx = xtask_hold_pusher(server->task);
-    xline_add_ptr(ctx, "func", process_message);
-    xline_add_ptr(ctx, "ctx", channel);
-    xline_add_ptr(ctx, "msg", msg);
-    xtask_update_pusher(server->task);
+    struct xtask_enter enter;
+    enter.func = process_message;
+    enter.ctx = server;
+    xtask_push(server->task, enter);    
 }
 
 int main(int argc, char *argv[])

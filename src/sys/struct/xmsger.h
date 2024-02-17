@@ -606,7 +606,7 @@ static inline xmsgpack_ptr make_pack(xchannel_ptr channel, uint8_t type)
     return pack;
 }
 
-static inline void xmsger_loop(xmaker_ptr ctx)
+static inline void xmsger_loop(xtask_enter_ptr enter)
 {
     __xlogd("xmsger_loop enter\n");
 
@@ -621,7 +621,7 @@ static inline void xmsger_loop(xmaker_ptr ctx)
     xchannel_ptr channel = NULL;
     xchannel_ptr next = NULL;
 
-    xmsger_ptr msger = (xmsger_ptr)xline_find_ptr(ctx, "ctx");
+    xmsger_ptr msger = (xmsger_ptr)enter->ctx;
 
     struct __xipaddr addr = __xapi->udp_make_ipaddr(NULL, 1234);
 
