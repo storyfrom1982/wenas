@@ -155,7 +155,7 @@ struct xmsger {
     __atom_size tasklen;
     __atom_bool connection_buf_lock;
     xmsgpackbuf_ptr connection_buf;
-    xbuf_ptr pipe;
+    xpipe_ptr pipe;
     xchannellist_ptr sendqueue;
 };
 
@@ -805,13 +805,13 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
 
             //定时select，使用下一个重传定时器到期时间，如果定时器为空，最大10毫秒间隔。
             //主动创建连接，最多需要10毫秒。
-            if (msger->tasklen == 0 && xbuf_readable(msger->pipe) == 0){
+            if (msger->tasklen == 0 && xpipe_readable(msger->pipe) == 0){
                 if (__set_false(msger->working)){
                     msger->listener->onIdle(msger->listener, channel);
                 }
                 __xapi->mutex_lock(msger->mtx);
                 __xapi->mutex_notify(msger->mtx);
-                if (msger->tasklen == 0 && xbuf_readable(msger->pipe) == 0){
+                if (msger->tasklen == 0 && xpipe_readable(msger->pipe) == 0){
                     __xapi->mutex_timedwait(msger->mtx, timer);
                 }
                 __xapi->mutex_unlock(msger->mtx);
@@ -820,11 +820,11 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
         }
 
 
-        if (xbuf_readable(msger->pipe) > 0){
+        if (xpipe_readable(msger->pipe) > 0){
             __xlogd("xmsger_loop create channel to peer\n");
-            xmaker_ptr ctx = xbuf_hold_reader(msger->pipe);
-            if (ctx){
-                __xipaddr_ptr addr = (__xipaddr_ptr)xline_find_ptr(ctx, "addr");
+            struct xtask_enter enter;
+            if (xpipe_read(msger->pipe, &enter, sizeof(enter)) == sizeof(enter)){
+                __xipaddr_ptr addr = (__xipaddr_ptr)enter.ctx;
                 // TODO 对方应答后要设置 peer_cid 和 key；
                 xchannel_ptr channel = xchannel_create(msger, addr);
                 if (channel){
@@ -844,7 +844,6 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                     xchannel_push_task(channel, spack->head.pack_size);
                     xchannel_push(channel, spack);
                 }
-                xbuf_update_reader(msger->pipe);
             }
         }
 
@@ -904,7 +903,7 @@ static inline xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr 
     msger->sendqueue->head.next = &msger->sendqueue->end;
     msger->sendqueue->end.prev = &msger->sendqueue->head;
 
-    msger->pipe = xbuf_create(2);
+    msger->pipe = xpipe_create(sizeof(struct xtask_enter) * 256);
     __xcheck(msger->pipe != NULL);
 
     __xlogd("xmsger_create exit\n");
@@ -950,7 +949,7 @@ static inline void xmsger_free(xmsger_ptr *pptr)
             free(msger->sendqueue);
         }
         __xlogd("xmsger_free 7\n");
-        xbuf_free(&msger->pipe);
+        xpipe_free(&msger->pipe);
         free(msger);
     }
     __xlogd("xmsger_free exit\n");
@@ -968,21 +967,9 @@ static inline void xmsger_wait(xmsger_ptr messenger)
 static inline int xmsger_connect(xmsger_ptr messenger, __xipaddr_ptr addr)
 {
     __xlogd("xmsger_connect enter\n");
-    xmaker_ptr ctx = xbuf_hold_writer(messenger->pipe);
-    __xlogd("xmsger_connect ctx = %p ctx->addr = %p\n", ctx, ctx->addr);
-    if (ctx == NULL){
-        return -1;
-    }
-    xline_add_ptr(ctx, "addr", addr);
-    // const char *key = "PING";
-    // size_t len = slength(key);
-    // char output[len];
-    // for (size_t i = 0; i < len; ++i) {
-    //     output[i] = key[i] ^ 'k';
-    // }
-    // __xlogd("str len %lu\n", len);
-    // xline_add_text(ctx, "msg", output, len);
-    xbuf_update_writer(messenger->pipe);
+    struct xtask_enter enter;
+    enter.ctx = addr;
+    xpipe_write(messenger->pipe, &enter, sizeof(enter));
     __xlogd("xmsger_connect exit\n");
     return 0;
 }

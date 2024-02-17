@@ -97,7 +97,7 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 static void process_message(xtask_enter_ptr task_ctx)
 {
     __xlogd("process_message enter\n");
-    xmsg_ptr msg = (xmsg_ptr)task_ctx->ext;
+    xmsg_ptr msg = (xmsg_ptr)task_ctx->xline;
     struct xmaker parser = xline_parse((xline_ptr)msg->data);
     xline_ptr line = xline_find(&parser, "msg");
     if (line){
@@ -115,7 +115,7 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
     enter.func = process_message;
     enter.ctx = server;
     enter.param = channel;
-    enter.ext = msg;
+    enter.xline = msg;
     xtask_push(server->task, enter);    
 }
 

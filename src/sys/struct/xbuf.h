@@ -200,7 +200,7 @@ Clean:
     return NULL;
 }
 
-
+#if 0
 typedef struct xbuf {
     uint64_t len;
     __atom_size writer;
@@ -368,7 +368,7 @@ Clean:
 
     return NULL;
 }
-
+#endif
 
 typedef struct xtask {
     __atom_bool running;
@@ -382,7 +382,7 @@ typedef struct xtask_enter {
     void *func;
     void *ctx;
     void *param;
-    void *ext;
+    void *xline;
 }*xtask_enter_ptr;
 
 
