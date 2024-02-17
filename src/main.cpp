@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 
     xtask_ptr task = xtask_create();
     struct xmaker ctx;
-    xline_maker_setup(&ctx, NULL, 1024);
+    xline_maker_create(&ctx, NULL, 1024);
     xline_add_ptr(&ctx, "func", (void*)mutex_task);
     xline_add_ptr(&ctx, "ctx", (void*)&targ);
     __ex_task_post(task, ctx.xline);

@@ -247,7 +247,7 @@ xbuf_ptr xbuf_create(uint64_t len)
     for (int i = 0; i < pipe->len; ++i){
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
         // pipe->buf[i] = calloc(1, sizeof(struct xmaker));
-        xline_maker_setup(&pipe->buf[i], NULL, 2);
+        xline_maker_create(&pipe->buf[i], NULL, 2);
         __xlogi("xbuf_create ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
     }
 
@@ -284,7 +284,7 @@ void xbuf_free(xbuf_ptr *pptr)
             for (int i = 0; i < pipe->len; ++i){
                 // 如果使用二级指针，这里需要释放内存
                 __xlogd("xbuf_free ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
-                xline_maker_clear(&pipe->buf[i]);
+                xline_maker_free(&pipe->buf[i]);
                 // free(pipe->buf[i]);
             }
             free(pipe->buf);

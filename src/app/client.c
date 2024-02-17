@@ -82,6 +82,76 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 }
 
 
+static void build_msg(xmaker_ptr maker)
+{
+    xline_add_text(maker, "type", "udp", slength("udp"));
+    xline_add_text(maker, "api", "pull", slength("pull"));
+    uint64_t ipos = xline_maker_hold(maker, "int");
+    xline_add_int8(maker, "int8", 8);
+    xline_add_int16(maker, "int16", 16);
+    xline_add_uint32(maker, "uint32", 32);
+    xline_add_uint64(maker, "uint64", 64);
+    uint64_t fpos = xline_maker_hold(maker, "float");
+    xline_add_real32(maker, "real32", 32.3232);
+    xline_add_real64(maker, "real64", 64.6464);
+    xline_maker_update(maker, fpos);
+    xline_maker_update(maker, ipos);
+}
+
+static void parse_msg(xline_ptr msg, uint64_t len)
+{
+    struct xmaker m = xline_parse(msg);
+    xmaker_ptr maker = &m;
+    xline_ptr ptr;
+    while ((ptr = xline_next(maker)) != NULL)
+    {
+        __xlogd("xline ----------------- key: %s\n", maker->key->byte);
+        if (__xline_typeif_number(ptr)){
+
+            if (__xline_num_typeif_integer(ptr)){
+
+                if (__xline_number_64bit(ptr)){
+                    __xlogd("xline key: %s value: %ld\n", maker->key->byte, __b2n16(ptr));
+                }else {
+                    __xlogd("xline key: %s value: %d\n", maker->key->byte, __b2n16(ptr));
+                }
+                
+            }else if (__xline_num_typeif_integer(ptr)){
+
+                if (__xline_number_64bit(ptr)){
+                    __xlogd("xline key: %s value: %lu\n", maker->key->byte, __b2n16(ptr));
+                }else {
+                    __xlogd("xline key: %s value: %u\n", maker->key->byte, __b2n16(ptr));
+                }
+
+            }else if (__xline_num_typeif_real(ptr)){
+
+                if (__xline_number_64bit(ptr)){
+                    __xlogd("xline key: %s value: %lf\n", maker->key->byte, __b2f64(ptr));
+                }else {
+                    __xlogd("xline key: %s value: %f\n", maker->key->byte, __b2f32(ptr));
+                }                
+            }
+
+        }else if (__xline_typeif_object(ptr)){
+
+            if (__xline_obj_typeif_map(ptr)){
+
+                parse_msg(ptr, 0);
+                
+            }else if (__xline_obj_typeif_text(ptr)){
+
+                __xlogd("xline text key: %s value: %s\n", maker->key->byte, ptr->byte);
+
+            }
+
+        }else {
+            __xlogd("xline type error\n");
+        }
+    }
+    
+}
+
 int main(int argc, char *argv[])
 {
     __xlog_open("./tmp/client/log", NULL);
@@ -141,12 +211,13 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        struct xmaker maker;
-        xline_maker_setup(&maker, NULL, 1024);
-        xline_add_text(&maker, "msg", str, slength(str));
-        xchannel_push_task(client->channel, maker.wpos + 9);
-        xmsger_send(client->msger, client->channel, maker.addr, maker.wpos + 9);
-        xline_maker_clear(&maker);
+        xmaker_ptr maker = xline_maker_create(2);
+        build_msg(maker);
+        xline_add_text(maker, "msg", str, slength(str));
+        parse_msg((xline_ptr)maker->head, maker->wpos);
+        xchannel_push_task(client->channel, maker->wpos);
+        xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
+        xline_maker_free(maker);
     }
 ;
 
