@@ -116,7 +116,7 @@ static void parse_msg(xline_ptr msg, uint64_t len)
                     __xlogd("xline key: %s value: %d\n", maker->key->byte, __b2n16(ptr));
                 }
                 
-            }else if (__xline_num_typeif_integer(ptr)){
+            }else if (__xline_num_typeif_natural(ptr)){
 
                 if (__xline_number_64bit(ptr)){
                     __xlogd("xline key: %s value: %lu\n", maker->key->byte, __b2n16(ptr));

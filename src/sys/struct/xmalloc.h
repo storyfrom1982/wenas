@@ -3,6 +3,9 @@
 
 #include <ex/ex.h>
 
+#define ENDSYM  0xFFFFFFFFFFFFFFFF
+#define ENDPTR  ((void*)ENDSYM)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

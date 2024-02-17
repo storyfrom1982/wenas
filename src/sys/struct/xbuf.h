@@ -381,7 +381,7 @@ typedef struct xtask {
 typedef struct xtask_enter {
     void *func;
     void *ctx;
-    void *param;
+    void *index;
     void *xline;
 }*xtask_enter_ptr;
 

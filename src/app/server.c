@@ -114,7 +114,7 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
     struct xtask_enter enter;
     enter.func = process_message;
     enter.ctx = server;
-    enter.param = channel;
+    enter.index = channel;
     enter.xline = msg;
     xtask_push(server->task, enter);    
 }
