@@ -150,7 +150,6 @@ struct xmsger {
     __atom_bool working;
     xmsglistener_ptr listener;
     xmsgsocket_ptr msgsock;
-    xmaker_ptr mainloop_func;
     xtask_ptr mainloop_task;
     __atom_size tasklen;
     __atom_bool connection_buf_lock;
@@ -931,7 +930,6 @@ static inline void xmsger_free(xmsger_ptr *pptr)
         __xapi->mutex_broadcast(msger->mtx);
         xtask_free(&msger->mainloop_task);
         __xlogd("xmsger_free 1\n");
-        // xline_maker_clear(msger->mainloop_func);
         __xlogd("xmsger_free 2\n");
         xtree_clear(msger->peers, free_channel);
         __xlogd("xmsger_free 3\n");
@@ -989,16 +987,6 @@ static inline void xmsger_disconnect(xmsger_ptr mtp, xchannel_ptr channel)
 static inline void xmsger_ping(xchannel_ptr channel)
 {
     __xlogd("xmsger_ping enter");
-    if (__xapi->clock() - channel->update >= 1000000000ULL * 10){
-        xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-        unit->head.type = XMSG_PACK_PING;
-        unit->head.pack_range = 1;
-        struct xmaker kv;
-        xline_maker_setup(&kv, unit->body, PACK_BODY_SIZE);
-        xline_add_text(&kv, "msg", "PING", slength("PING"));
-        unit->head.pack_size = kv.wpos;
-        xchannel_push(channel, unit);
-    }
     __xlogd("xmsger_ping exit");
 }
 
