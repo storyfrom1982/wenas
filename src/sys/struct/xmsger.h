@@ -712,10 +712,9 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                     __xlogd("xmsger_loop receive PING\n");
 
                     if (rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
-                        
-                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                        uint32_t peer_cid = xline_find_uint32(&parser, "cid");
-                        uint64_t timestamp = xline_find_uint64(&parser, "time");
+
+                        uint32_t peer_cid = *((uint32_t*)(rpack->body));
+                        uint64_t timestamp = *((uint64_t*)(rpack->body + 4));
 
                         channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
 
@@ -743,10 +742,9 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                             spack->head.cid = 0;
                             spack->head.x = XMSG_VAL ^ XMSG_KEY;
                             spack->head.y = 1;
-                            struct xmaker kv;
-                            xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
-                            xline_add_uint32(&kv, "cid", channel->cid);
-                            spack->head.pack_size = kv.wpos + 9; //TODO
+                            *((uint32_t*)(spack->body)) = channel->cid;
+                            *((uint64_t*)(spack->body + 4)) = __xapi->clock();
+                            spack->head.pack_size = 12;
                             xchannel_push_task(channel, spack->head.pack_size);
                             xchannel_push(channel, spack);
 
@@ -760,8 +758,7 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                     channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
                     if (channel && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
                         xtree_save(msger->peers, &channel->cid, 4, channel);
-                        struct xmaker parser = xline_parse((xline_ptr)rpack->body);
-                        uint32_t cid = xline_find_uint32(&parser, "cid");                            
+                        uint32_t cid = *((uint32_t*)(rpack->body));
                         // 设置对端 cid 与 key
                         channel->peer_cid = cid;
                         channel->peer_key = cid % 255;
@@ -836,11 +833,9 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                     // 这里是协议层验证
                     // TODO 需要更换一个密钥
                     spack->head.x = (XMSG_VAL ^ XMSG_KEY);
-                    struct xmaker kv;
-                    xline_maker_setup(&kv, spack->body, PACK_BODY_SIZE);
-                    xline_add_uint32(&kv, "cid", channel->cid);
-                    xline_add_uint64(&kv, "time", __xapi->clock());
-                    spack->head.pack_size = kv.wpos + 9;
+                    *((uint32_t*)(spack->body)) = channel->cid;
+                    *((uint64_t*)(spack->body + 4)) = __xapi->clock();
+                    spack->head.pack_size = 12;
                     xchannel_push_task(channel, spack->head.pack_size);
                     xchannel_push(channel, spack);
                 }
