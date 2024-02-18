@@ -255,7 +255,7 @@ static inline xmaker_ptr xbuf_hold_writer(xbuf_ptr buf)
     }
     // 重置 xline maker，用户才能重新写入数据
     // update reader 时重置一次就可以了，所以这里不需要重置了
-    // xline_maker_reset(pipe->buf[(pipe->writer & (pipe->len - 1))]);
+    // xmaker_clear(pipe->buf[(pipe->writer & (pipe->len - 1))]);
     // 返回给用户一个可写缓冲区，用户持有这个缓冲区，直接写入数据
     return &buf->buf[(buf->writer & (buf->len - 1))];
 }
@@ -291,7 +291,7 @@ static inline xmaker_ptr xbuf_hold_reader(xbuf_ptr buf)
 static inline void xbuf_update_reader(xbuf_ptr buf)
 {
     // 重置 xline maker，用户才能重新写入数据
-    xline_maker_reset(&buf->buf[(buf->reader & (buf->len - 1))]);
+    xmaker_clear(&buf->buf[(buf->reader & (buf->len - 1))]);
     // 完成一次读取，增加一个可写区域
     __atom_add(buf->reader, 1);
     // 执行一次唤醒
@@ -316,7 +316,7 @@ static inline void xbuf_free(xbuf_ptr *pptr)
             for (int i = 0; i < pipe->len; ++i){
                 // 如果使用二级指针，这里需要释放内存
                 __xlogd("xbuf_free ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
-                xline_maker_free(&pipe->buf[i]);
+                xmaker_free(&pipe->buf[i]);
                 // free(pipe->buf[i]);
             }
             free(pipe->buf);
@@ -350,7 +350,7 @@ static inline xbuf_ptr xbuf_create(uint64_t len)
     for (int i = 0; i < pipe->len; ++i){
         // 如果使用二级指针，需要给每个指针分配实际的内存地址
         // pipe->buf[i] = calloc(1, sizeof(struct xmaker));
-        xline_maker_create(&pipe->buf[i], NULL, 2);
+        xmaker_create(&pipe->buf[i], NULL, 2);
         __xlogi("xbuf_create ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
     }
 

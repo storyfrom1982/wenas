@@ -5,7 +5,6 @@ typedef struct server {
     __atom_bool listening;
     struct __xipaddr xmsgaddr;
     struct xmsglistener listener;
-    xkey_ptr func;
     xtask_ptr task;
     xmsger_ptr messenger;
 }server_t;

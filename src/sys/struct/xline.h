@@ -86,16 +86,6 @@ static inline double __l2f(xline_ptr l)
 #define __sizeof_data(l)        (l)->b[0] > XLINE_TYPE_REAL ? __l2u((l)) : 8
 #define __sizeof_line(l)        (l)->b[0] > XLINE_TYPE_REAL ? __l2u((l)) + XLINE_SIZE : XLINE_SIZE
 
-#define XKEY_HEAD_SIZE          1
-#define XKEY_DATA_MAX_SIZE      255
-#define XKEY_MAX_SIZE           (XKEY_HEAD_SIZE + XKEY_DATA_MAX_SIZE)
-
-typedef struct xkey {
-    char b[1];
-}*xkey_ptr;
-
-#define __xkey_sizeof(xk)       (XKEY_HEAD_SIZE + (xk)->b[0] + 1)
-
 
 typedef struct xmaker {
     uint64_t wpos, rpos, len;
@@ -105,15 +95,7 @@ typedef struct xmaker {
 }*xmaker_ptr;
 
 
-static inline uint64_t xkey_fill(xkey_ptr xkey, const char *str, size_t len)
-{
-    mcopy(xkey->b + XKEY_HEAD_SIZE, str, len);
-    xkey->b[len + 1] = '\0';
-    xkey->b[0] = len + 1;
-    return __xkey_sizeof(xkey);
-}
-
-static inline void xline_maker_free(xmaker_ptr maker)
+static inline void xmaker_free(xmaker_ptr maker)
 {
     if (maker){
         if (maker->head){
@@ -123,7 +105,7 @@ static inline void xline_maker_free(xmaker_ptr maker)
     }
 }
 
-static inline xmaker_ptr xline_maker_create(uint64_t len)
+static inline xmaker_ptr xmaker_create(uint64_t len)
 {
     xmaker_ptr maker = (xmaker_ptr)malloc(sizeof(struct xmaker));
     if (len < XLINE_SIZE){
@@ -134,36 +116,58 @@ static inline xmaker_ptr xline_maker_create(uint64_t len)
     maker->head = (uint8_t*) malloc(maker->len);
 }
 
-static inline void xline_maker_reset(xmaker_ptr maker)
+static inline void xmaker_clear(xmaker_ptr maker)
 {
     maker->wpos = maker->rpos = 0;
     maker->key = NULL;
     maker->val = NULL;
 }
 
-static inline uint64_t xline_maker_hold(xmaker_ptr maker, const char *key)
+static inline uint64_t xmaker_hold_tree(xmaker_ptr maker, const char *key)
 {
     maker->key = maker->head + maker->wpos;
     maker->key[0] = slength(key) + 1;
     mcopy(maker->key + 1, key, maker->key[0]);
-    __xlogd("xline_maker_hold --------===================================----------------------=========================================:(%u)%s %s\n", maker->key[0], maker->key, key);
     maker->wpos += 1 + maker->key[0];
     uint64_t pos = maker->wpos;
     maker->wpos += XLINE_SIZE;
     return pos;
 }
 
-static inline void xline_maker_update(xmaker_ptr maker, uint64_t pos)
+static inline void xmaker_submit_tree(xmaker_ptr maker, uint64_t pos)
 {
     uint64_t len = maker->wpos - pos - XLINE_SIZE;
     *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_TREE);
 }
 
+static inline uint64_t xmaker_hold_list(xmaker_ptr maker, const char *key)
+{
+    return xmaker_hold_tree(maker, key);
+}
+
+static inline void xmaker_submit_list(xmaker_ptr maker, uint64_t pos)
+{
+    uint64_t len = maker->wpos - pos - XLINE_SIZE;
+    *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_LIST);
+}
+
+static inline uint64_t xmaker_list_hold_tree(xmaker_ptr maker)
+{
+    maker->rpos = maker->wpos;
+    maker->wpos += XLINE_SIZE;
+    return maker->rpos;
+}
+
+static inline void xmaker_list_submit_tree(xmaker_ptr maker, uint64_t pos)
+{
+    return xmaker_submit_tree(maker, pos);
+}
+
 static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
 {
-    __xlogd("xline_append_object enter >>>>-------------------------> key: %s  %lu %lu  %lu\n", key, maker->len, size, maker->wpos);
-    __xlogd("xline_append_object len - pos: %ld    size: %ld\n", (int64_t)(maker->len - maker->wpos), (int64_t)(XKEY_HEAD_SIZE + keylen + XLINE_SIZE + size));
-    maker->rpos = (XKEY_HEAD_SIZE + keylen + XLINE_SIZE + size);
+    // key[keylen,key,'\0']
+    // (1 + keylen + 1)
+    maker->rpos = (2 + keylen + XLINE_SIZE + size);
     if ((int64_t)(maker->len - maker->wpos) < maker->rpos){
         maker->len += (maker->len + maker->rpos);
         __xlogd("realloc xmaker %lu\n", maker->len);
@@ -182,12 +186,16 @@ static inline void xline_append_object(xmaker_ptr maker, const char *key, size_t
     maker->wpos += (XLINE_SIZE + size);
     maker->rpos = maker->wpos - XLINE_SIZE;
     *((xline_ptr)(maker->head)) = __s2l(maker->rpos, XLINE_TYPE_TREE);
-    __xlogd("xline_append_object exit >>>>-------------------------> %lu\n", maker->wpos);
 }
 
-static inline void xline_add_text(xmaker_ptr maker, const char *key, const char *text, uint64_t size)
+static inline void xline_add_text(xmaker_ptr maker, const char *key, const char *word)
 {
-    xline_append_object(maker, key, slength(key), text, size, XLINE_TYPE_STR);
+    xline_append_object(maker, key, slength(key), word, slength(word) + 1, XLINE_TYPE_STR);
+}
+
+static inline void xline_add_string(xmaker_ptr maker, const char *key, const char *str, uint64_t size)
+{
+    xline_append_object(maker, key, slength(key), str, size, XLINE_TYPE_STR);
 }
 
 static inline void xline_add_map(xmaker_ptr maker, const char *key, xmaker_ptr xmap)
@@ -207,10 +215,9 @@ static inline void xline_add_binary(xmaker_ptr maker, const char *key, const voi
 
 static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
 {
-    __xlogd("xline_append_number enter >>>>-------------------------> key: %s  %lu %lu  %lu\n", key, maker->len, __sizeof_line(maker->val), maker->wpos);
-    // 最小长度 = 根 xline 的头 (XLINE_SIZE) + key 长度 (keylen + XKEY_HEAD_SIZE) + value 长度 (XLINE_SIZE)
-    __xlogd("xline_append_number len -pos: %ld size: %ld\n", (int64_t)(maker->len - maker->wpos), (int64_t)(XKEY_HEAD_SIZE + keylen + XLINE_SIZE));
-    maker->rpos = (XKEY_HEAD_SIZE + keylen + XLINE_SIZE);
+    // key[keylen,key,'\0']
+    // (1 + keylen + 1)    
+    maker->rpos = (2 + keylen + XLINE_SIZE);
     if ((int64_t)(maker->len - maker->wpos) < maker->rpos){
         maker->len += (maker->len + maker->rpos);
         __xlogd("realloc xmaker %lu\n", maker->len);
@@ -226,10 +233,8 @@ static inline void xline_append_number(xmaker_ptr maker, const char *key, size_t
     maker->val = (xline_ptr)(maker->head + maker->wpos);
     *(maker->val) = val;
     maker->wpos += __sizeof_line(maker->val);
-    // *((xline_ptr)(maker->head)) = __s2l(maker->wpos, XLINE_TYPE_TREE);
     maker->rpos = maker->wpos - XLINE_SIZE;
-    *((xline_ptr)(maker->head)) = __s2l(maker->rpos, XLINE_TYPE_TREE);    
-    __xlogd("xline_append_number exit >>>>-------------------------> %lu\n", maker->wpos);
+    *((xline_ptr)(maker->head)) = __s2l(maker->rpos, XLINE_TYPE_TREE);
 }
 
 static inline void xline_add_int(xmaker_ptr maker, const char *key, int64_t n64)
@@ -253,10 +258,37 @@ static inline void xline_add_ptr(xmaker_ptr maker, const char *key, void *p)
     xline_append_number(maker, key, slength(key), __n2l(n));
 }
 
+static inline void xline_list_append(xmaker_ptr maker, xline_ptr x)
+{
+    maker->rpos = __sizeof_line(x);
+    if ((int64_t)(maker->len - maker->wpos) < maker->rpos){
+        maker->len += (maker->len + maker->rpos);
+        __xlogd("realloc xmaker %lu\n", maker->len);
+        maker->key = (uint8_t*)malloc(maker->len);
+        mcopy(maker->key, maker->head, maker->wpos);
+        free(maker->head);
+        maker->head = maker->key;
+    }
+    
+    mcopy(maker->head + maker->wpos, x->b, maker->rpos);
+    maker->wpos += maker->rpos;
+    maker->rpos = maker->wpos - XLINE_SIZE;
+    *((xline_ptr)(maker->head)) = __s2l(maker->rpos, XLINE_TYPE_TREE);
+}
+
+static inline xline_ptr xline_list_next(xmaker_ptr maker)
+{
+    if (maker->rpos < maker->len){
+        xline_ptr x = (xline_ptr)(maker->head + maker->rpos);
+        maker->rpos += __sizeof_line(x);
+        return x;
+    }
+    return NULL;
+}
+
 static inline struct xmaker xline_parse(xline_ptr xmap)
 {
     // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
-    __xlogd("xline_parse line len       >>>>-------------------------> %lu\n", __sizeof_data(xmap));
     struct xmaker maker = {0};
     maker.rpos = 0;
     maker.len = __sizeof_data(xmap);
@@ -266,46 +298,24 @@ static inline struct xmaker xline_parse(xline_ptr xmap)
 
 static inline xline_ptr xline_next(xmaker_ptr maker)
 {
-    __xlogd("xline_next     line len     enter  >>>>-------------------------> rpos: %lu len: %lu\n", maker->rpos, maker->len);
     if (maker->rpos < maker->len){
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
         maker->key++;
         maker->val = (xline_ptr)(maker->head + maker->rpos);
         maker->rpos += __sizeof_line(maker->val);
-        __xlogd("xline_next     line len       >>>>-------------------------> lsize: %lu rpos: %lu len: %lu\n", __sizeof_line(maker->val), maker->rpos, maker->len);
         return maker->val;
     }
-    __xlogd("xline_next     line len      exit >>>>-------------------------> rpos: %lu len: %lu\n", maker->rpos, maker->len);
     return NULL;
 }
 
-// static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
-// {
-//     maker->rpos = 0;
-//     while (maker->rpos < maker->wpos) {
-//         maker->key = (xkey_ptr)(maker->head + maker->rpos);
-//         maker->rpos += __xkey_sizeof(maker->key);
-//         maker->val = (xline_ptr)(maker->head + maker->rpos);
-//         // printf("get key=%s xkey=%s\n", key, &xobj->key[1]);
-//         if (slength(key) == maker->key->b[0]
-//             && mcompare(key, &maker->key->b[1], maker->key->b[0]) == 0){
-//             return maker->val;
-//         }
-//         maker->rpos += __xline_sizeof(maker->val);
-//     }
-//     return NULL;
-// }
-
 static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 {
-    __xlogd("xline_find() rpos: %lu len: %lu\n", maker->rpos, maker->len);
     maker->wpos = maker->rpos;
 
     while (maker->rpos < maker->len) {
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
-        __xlogd("xline_find() 1 %s\n", maker->key + 1);
         maker->val = (xline_ptr)(maker->head + maker->rpos);
         maker->rpos += __sizeof_line(maker->val);
         if (slength(key) + 1 == maker->key[0]
@@ -319,7 +329,6 @@ static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 
     while (maker->rpos < maker->wpos) {
         maker->key = maker->head + maker->rpos;
-        __xlogd("xline_find() 2 %s\n", maker->key + 1);
         maker->rpos += 1 + maker->key[0];
         maker->val = (xline_ptr)(maker->head + maker->rpos);
         maker->rpos += __sizeof_line(maker->val);
@@ -330,7 +339,6 @@ static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
     }
 
     maker->rpos = 0;
-    __xlogd("xline_find() cannot fond ------------------------\n");
 
     return NULL;
 }
@@ -371,45 +379,5 @@ static inline void* xline_find_ptr(xmaker_ptr maker, const char *key)
     return NULL;
 }
 
-static inline void xline_list_append(xmaker_ptr maker, xline_ptr x)
-{
-    uint64_t len = __sizeof_line(x);
-    // if ((maker->len - maker->wpos) < len){
-    //     maker->len += (maker->len + len);
-    //     maker->key = (xkey_ptr)malloc(maker->len);
-    //     mcopy(maker->key->b, maker->head, maker->wpos);
-    //     free(maker->head);
-    //     maker->head = (uint8_t*)maker->key;
-    // }
-    
-    mcopy(maker->head + maker->wpos, x->b, len);
-    maker->wpos += len;
-    *((xline_ptr)(maker->head)) = __s2l(maker->wpos, XLINE_TYPE_LIST);
-}
-
-static inline struct xmaker xline_list_parse(xline_ptr xlist)
-{
-    // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
-    struct xmaker maker = {0};
-    // maker.addr = NULL;
-    // maker.key = NULL;
-    // maker.len = 0;
-    // maker.rpos = 0;
-    maker.head = (uint8_t*)__l2data(xlist);
-    maker.val = (xline_ptr)maker.head;
-    // 读取 xlist 的长度，然后设置 wpos
-    maker.wpos = __sizeof_data(xlist);
-    return maker;
-}
-
-static inline xline_ptr xline_list_next(xmaker_ptr maker)
-{
-    if (maker->wpos - maker->rpos > 0){
-        xline_ptr x = (xline_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_line(x);
-        return x;
-    }
-    return NULL;
-}
 
 #endif //__XLINE_H__

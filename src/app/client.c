@@ -84,20 +84,38 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 
 static void build_msg(xmaker_ptr maker)
 {
-    xline_add_text(maker, "type", "udp", slength("udp") + 1);
-    xline_add_text(maker, "api", "pull", slength("pull") + 1);
-    uint64_t ipos = xline_maker_hold(maker, "inttttttttttttttttt");
+    xline_add_text(maker, "type", "udp");
+    xline_add_text(maker, "api", "pull");
+    uint64_t ipos = xmaker_hold_tree(maker, "int");
     xline_add_int(maker, "int8", 8);
     xline_add_int(maker, "int16", 16);
     xline_add_uint(maker, "uint32", 32);
     xline_add_uint(maker, "uint64", 64);
-    uint64_t fpos = xline_maker_hold(maker, "float");
+    uint64_t fpos = xmaker_hold_tree(maker, "float");
     xline_add_float(maker, "real32", 32.3232);
     xline_add_float(maker, "real64", 64.6464);
-    xline_maker_update(maker, fpos);
-    xline_maker_update(maker, ipos);
+    xmaker_submit_tree(maker, fpos);
+    xmaker_submit_tree(maker, ipos);
     xline_add_uint(maker, "uint64", 64);
     xline_add_float(maker, "real64", 64.6464);
+
+    uint64_t lpos = xmaker_hold_list(maker, "list");
+    for (int i = 0; i < 10; ++i){
+        struct xline line = __n2l(i);
+        xline_list_append(maker, &line);
+    }
+    xmaker_submit_list(maker, lpos);
+
+    lpos = xmaker_hold_list(maker, "list-tree");
+    for (int i = 0; i < 10; ++i){
+        ipos = xmaker_list_hold_tree(maker);
+        xline_add_text(maker, "key", "tree");
+        xline_add_int(maker, "real32", i);
+        xline_add_float(maker, "real64", 64.6464 * i);
+        xmaker_list_submit_tree(maker, ipos);
+    }
+    xmaker_submit_list(maker, lpos);
+    
 }
 
 static void parse_msg(xline_ptr msg, uint64_t len)
@@ -123,6 +141,23 @@ static void parse_msg(xline_ptr msg, uint64_t len)
         }else if (__typeis_tree(ptr)){
 
             parse_msg(ptr, 0);
+
+        }else if (__typeis_list(ptr)){
+
+            __xlogd("xline list key: %s\n", maker->key);
+            struct xmaker list = xline_parse(ptr);
+
+            while ((ptr = xline_list_next(&list)) != NULL)
+            {
+                if (__typeis_int(ptr)){
+
+                    __xlogd("xline list value: %d\n", __l2i(ptr));
+
+                }else if (__typeis_tree(ptr)){
+                    
+                    parse_msg(ptr, 0);
+                }
+            }
 
         }else {
             __xlogd("xline type error\n");
@@ -207,14 +242,14 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        xmaker_ptr maker = xline_maker_create(2);
+        xmaker_ptr maker = xmaker_create(2);
         build_msg(maker);
-        xline_add_text(maker, "msg", str, slength(str));
+        xline_add_text(maker, "msg", str);
         parse_msg((xline_ptr)maker->head, maker->wpos);
         find_msg((xline_ptr)maker->head);
         xchannel_push_task(client->channel, maker->wpos);
         xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
-        xline_maker_free(maker);
+        xmaker_free(maker);
     }
 ;
 
