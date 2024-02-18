@@ -524,10 +524,13 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
         channel->msgbuf->msg->size += channel->msgbuf->buf[index]->head.pack_size;
         channel->msgbuf->pack_range--;
         if (channel->msgbuf->pack_range == 0){
-            channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
-            // __xlogd("xchannel_recv >>>>------------> %s\n", channel->msgbuf->msg->data);
-            channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msgbuf->msg);
-            channel->msgbuf->msg = NULL;
+            if (channel->msgbuf->msg->size > 0){
+                channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
+                // __xlogd("xchannel_recv >>>>------------> %s\n", channel->msgbuf->msg->data);
+                channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msgbuf->msg);
+                free(channel->msgbuf->msg);
+                channel->msgbuf->msg = NULL;            
+            }
         }
         free(channel->msgbuf->buf[index]);
         channel->msgbuf->buf[index] = NULL;
