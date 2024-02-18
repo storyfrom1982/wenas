@@ -15,7 +15,7 @@ typedef uint64_t __atom_bool;
 //    __int64 Comparand
 // );
 
-#if defined(__linux__) || defined(__linux)
+#if defined(__linux__) || defined(__APPLE__)
 #   define __is_true(x)             __sync_bool_compare_and_swap(&(x), true, true)
 #   define __is_false(x)            __sync_bool_compare_and_swap(&(x), false, false)
 #   define __set_true(x)            __sync_bool_compare_and_swap(&(x), false, true)
