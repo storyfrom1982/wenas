@@ -117,6 +117,23 @@ static void parse_msg(xline_ptr msg, uint64_t len)
 
             parse_msg(ptr, 0);
 
+        }else if (__typeis_list(ptr)){
+
+            __xlogd("xline list key: %s\n", maker->key);
+            struct xmaker list = xline_parse(ptr);
+
+            while ((ptr = xline_list_next(&list)) != NULL)
+            {
+                if (__typeis_int(ptr)){
+
+                    __xlogd("xline list value: %d\n", __l2i(ptr));
+
+                }else if (__typeis_tree(ptr)){
+                    
+                    parse_msg(ptr, 0);
+                }
+            }
+
         }else {
             __xlogd("xline type error\n");
         }
