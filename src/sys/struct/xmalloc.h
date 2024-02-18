@@ -3,7 +3,7 @@
 
 #include <ex/ex.h>
 
-#define ENDSYM  0xFFFFFFFFFFFFFFFF
+#define EENDED  0xFFFFFFFFFFFFFFFF
 // #define NULL  ((void*)0)
 
 #ifdef __cplusplus
