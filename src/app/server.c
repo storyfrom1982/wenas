@@ -94,17 +94,41 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
     __xlogd("on_disconnection exit\n");
 }
 
+static void parse_msg(xline_ptr msg, uint64_t len)
+{
+    struct xmaker m = xline_parse(msg);
+    xmaker_ptr maker = &m;
+    xline_ptr ptr;
+    while ((ptr = xline_next(maker)) != NULL)
+    {
+        __xlogd("xline ----------------- key: %s\n", maker->key);
+        if (__typeis_int(ptr)){
+
+            __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
+
+        }else if (__typeis_float(ptr)){
+
+            __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
+
+        }else if (__typeis_str(ptr)){
+
+            __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
+
+        }else if (__typeis_tree(ptr)){
+
+            parse_msg(ptr, 0);
+
+        }else {
+            __xlogd("xline type error\n");
+        }
+    }
+}
+
 static void process_message(xtask_enter_ptr task_ctx)
 {
     __xlogd("process_message enter\n");
     xmsg_ptr msg = (xmsg_ptr)task_ctx->xline;
-    struct xmaker parser = xline_parse((xline_ptr)msg->data);
-    xline_ptr line = xline_find(&parser, "msg");
-    if (line){
-        char *cmsg = strndup((char*)__xline_to_data(line), (size_t)__xline_sizeof_data(line));
-        __xlogd("process_message >>>>--------------> %s\n", cmsg);
-        free(cmsg);
-    }
+    parse_msg((xline_ptr)msg->data, msg->size);
     __xlogd("process_message exit\n");
 }
 

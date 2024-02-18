@@ -4,7 +4,7 @@
 #include <ex/ex.h>
 
 #define ENDSYM  0xFFFFFFFFFFFFFFFF
-#define ENDPTR  ((void*)ENDSYM)
+// #define NULL  ((void*)0)
 
 #ifdef __cplusplus
 extern "C" {

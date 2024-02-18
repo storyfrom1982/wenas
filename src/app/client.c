@@ -84,18 +84,20 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 
 static void build_msg(xmaker_ptr maker)
 {
-    xline_add_text(maker, "type", "udp", slength("udp"));
-    xline_add_text(maker, "api", "pull", slength("pull"));
-    uint64_t ipos = xline_maker_hold(maker, "int");
-    xline_add_int8(maker, "int8", 8);
-    xline_add_int16(maker, "int16", 16);
-    xline_add_uint32(maker, "uint32", 32);
-    xline_add_uint64(maker, "uint64", 64);
+    xline_add_text(maker, "type", "udp", slength("udp") + 1);
+    xline_add_text(maker, "api", "pull", slength("pull") + 1);
+    uint64_t ipos = xline_maker_hold(maker, "inttttttttttttttttt");
+    xline_add_int(maker, "int8", 8);
+    xline_add_int(maker, "int16", 16);
+    xline_add_uint(maker, "uint32", 32);
+    xline_add_uint(maker, "uint64", 64);
     uint64_t fpos = xline_maker_hold(maker, "float");
-    xline_add_real32(maker, "real32", 32.3232);
-    xline_add_real64(maker, "real64", 64.6464);
+    xline_add_float(maker, "real32", 32.3232);
+    xline_add_float(maker, "real64", 64.6464);
     xline_maker_update(maker, fpos);
     xline_maker_update(maker, ipos);
+    xline_add_uint(maker, "uint64", 64);
+    xline_add_float(maker, "real64", 64.6464);
 }
 
 static void parse_msg(xline_ptr msg, uint64_t len)
@@ -105,51 +107,45 @@ static void parse_msg(xline_ptr msg, uint64_t len)
     xline_ptr ptr;
     while ((ptr = xline_next(maker)) != NULL)
     {
-        __xlogd("xline ----------------- key: %s\n", maker->key->byte);
-        if (__xline_typeif_number(ptr)){
+        __xlogd("xline ----------------- key: %s\n", maker->key);
+        if (__typeis_int(ptr)){
 
-            if (__xline_num_typeif_integer(ptr)){
+            __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
 
-                if (__xline_number_64bit(ptr)){
-                    __xlogd("xline key: %s value: %ld\n", maker->key->byte, __b2n16(ptr));
-                }else {
-                    __xlogd("xline key: %s value: %d\n", maker->key->byte, __b2n16(ptr));
-                }
-                
-            }else if (__xline_num_typeif_natural(ptr)){
+        }else if (__typeis_float(ptr)){
 
-                if (__xline_number_64bit(ptr)){
-                    __xlogd("xline key: %s value: %lu\n", maker->key->byte, __b2n16(ptr));
-                }else {
-                    __xlogd("xline key: %s value: %u\n", maker->key->byte, __b2n16(ptr));
-                }
+            __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
 
-            }else if (__xline_num_typeif_real(ptr)){
+        }else if (__typeis_str(ptr)){
 
-                if (__xline_number_64bit(ptr)){
-                    __xlogd("xline key: %s value: %lf\n", maker->key->byte, __b2f64(ptr));
-                }else {
-                    __xlogd("xline key: %s value: %f\n", maker->key->byte, __b2f32(ptr));
-                }                
-            }
+            __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
 
-        }else if (__xline_typeif_object(ptr)){
+        }else if (__typeis_tree(ptr)){
 
-            if (__xline_obj_typeif_map(ptr)){
-
-                parse_msg(ptr, 0);
-                
-            }else if (__xline_obj_typeif_text(ptr)){
-
-                __xlogd("xline text key: %s value: %s\n", maker->key->byte, ptr->byte);
-
-            }
+            parse_msg(ptr, 0);
 
         }else {
             __xlogd("xline type error\n");
         }
     }
-    
+}
+
+static void find_msg(xline_ptr msg){
+
+    struct xmaker m = xline_parse(msg);
+    xmaker_ptr maker = &m;
+    xline_ptr ptr;
+
+    uint64_t u64 = xline_find_uint(maker, "uint64");
+    __xlogd("xline find uint = %lu\n", u64);
+
+    double f64 = xline_find_float(maker, "real64");
+    __xlogd("xline find real64 = %lf\n", f64);
+
+    ptr = xline_find(maker, "type");
+    __xlogd("xline find type = %s\n", __l2data(ptr));
+    ptr = xline_find(maker, "api");
+    __xlogd("xline find api = %s\n", __l2data(ptr));
 }
 
 int main(int argc, char *argv[])
@@ -215,6 +211,7 @@ int main(int argc, char *argv[])
         build_msg(maker);
         xline_add_text(maker, "msg", str, slength(str));
         parse_msg((xline_ptr)maker->head, maker->wpos);
+        find_msg((xline_ptr)maker->head);
         xchannel_push_task(client->channel, maker->wpos);
         xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
         xline_maker_free(maker);
