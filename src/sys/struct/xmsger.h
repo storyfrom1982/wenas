@@ -526,11 +526,12 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
         if (channel->msgbuf->pack_range == 0){
             if (channel->msgbuf->msg->size > 0){
                 channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
-                // __xlogd("xchannel_recv >>>>------------> %s\n", channel->msgbuf->msg->data);
+                __xlogd("xchannel_recv >>>>------------> %s\n", channel->msgbuf->msg->data);
                 channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msgbuf->msg);
+            }else {
                 free(channel->msgbuf->msg);
-                channel->msgbuf->msg = NULL;            
             }
+            channel->msgbuf->msg = NULL;
         }
         free(channel->msgbuf->buf[index]);
         channel->msgbuf->buf[index] = NULL;
@@ -749,7 +750,7 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                             spack->head.pack_size = 12;
                             xchannel_push_task(channel, spack->head.pack_size);
                             xchannel_push(channel, spack);
-
+                            rpack->head.pack_size = 0;
                             xchannel_recv(channel, rpack);
                         }                        
                     }
@@ -766,6 +767,7 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                         channel->peer_key = cid % 255;
                         rpack->head.type = XMSG_PACK_ACK;
                         rpack->head.x = XMSG_VAL ^ XMSG_KEY;
+                        rpack->head.pack_size = 0;
                         xchannel_recv(channel, rpack);
                         if (__set_true(channel->connected)){
                             //这里是被动建立连接 onConnectionFromPeer
