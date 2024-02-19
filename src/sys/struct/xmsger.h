@@ -275,8 +275,10 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                         }else {
                             __xlogd("xchannel_pull >>>>------------> msg receive finished\n");
                             channel->msg = NULL;
+                            // TODO 将 channel 移出发送队列
                         }
-                    }else if(channel->msg->wpos < channel->msg->len){
+                        // 写线程可以一次性（buflen - 1）个 pack
+                    }else if(channel->msg->wpos < channel->msg->len && __transbuf_readable(channel->sendbuf) < (channel->sendbuf->range >> 1)){
                         channel->msger->listener->onSendable(channel->msger->listener, channel);
                     }
                 }
@@ -860,7 +862,10 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
         }
 
 
+        // 等待创建连接和发送数据的 channel 会加入到这个 pipe
         if (xpipe_readable(msger->pipe) > 0){
+            // TODO 需要根据不同类型处理，需要定义 connect 和 send 两种类型
+            // TODO 将有消息要发送的 channel 加入发送队列，所有要进入发送状态的 channel 都要先加入这个队列
             __xlogd("xmsger_loop create channel to peer\n");
             struct xtask_enter enter;
             if (xpipe_read(msger->pipe, &enter, sizeof(enter)) == sizeof(enter)){
