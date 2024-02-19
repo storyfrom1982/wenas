@@ -66,17 +66,24 @@ typedef struct xmsgpackbuf {
 
 typedef struct xmsg {
     xchannel_ptr channel;
-    size_t size;
-    char data[1];
+    size_t pos, size;
+    void *data;
 }*xmsg_ptr;
 
 
 typedef struct xmsgbuf {
-    xmsg_ptr msg;
+    struct xmsg msg;
     uint16_t pack_range;
     uint8_t range, upos, rpos, wpos;
     struct xmsgpack *buf[1];
 }*xmsgbuf_ptr;
+
+
+typedef struct file_ctx {
+    xchannel_ptr channel;
+    size_t pos, len;
+    __xfile_ptr fp;
+}file_ctx_t;
 
 
 struct xchannel {
@@ -510,29 +517,27 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
 
     index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
-        if (channel->msgbuf->msg == NULL){
+        if (channel->msgbuf->buf[index]->head.pack_size > 0 && channel->msgbuf->msg.size == 0){
             channel->msgbuf->pack_range = channel->msgbuf->buf[index]->head.pack_range;
             assert(channel->msgbuf->pack_range != 0 && channel->msgbuf->pack_range <= XMSG_PACK_RANGE);
-            channel->msgbuf->msg = (xmsg_ptr)malloc(sizeof(struct xmsg) + (channel->msgbuf->pack_range * PACK_BODY_SIZE));
-            channel->msgbuf->msg->size = 0;
-            channel->msgbuf->msg->channel = channel;
+            channel->msgbuf->msg.data = malloc(channel->msgbuf->pack_range * PACK_BODY_SIZE);
+            channel->msgbuf->msg.size = 0;
+            channel->msgbuf->msg.channel = channel;
         }
 
-        mcopy(channel->msgbuf->msg->data + channel->msgbuf->msg->size, 
-            channel->msgbuf->buf[index]->body, 
-            channel->msgbuf->buf[index]->head.pack_size);
-        channel->msgbuf->msg->size += channel->msgbuf->buf[index]->head.pack_size;
-        channel->msgbuf->pack_range--;
-        if (channel->msgbuf->pack_range == 0){
-            if (channel->msgbuf->msg->size > 0){
-                channel->msgbuf->msg->data[channel->msgbuf->msg->size] = '\0';
-                __xlogd("xchannel_recv >>>>------------> %s\n", channel->msgbuf->msg->data);
-                channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msgbuf->msg);
-            }else {
-                free(channel->msgbuf->msg);
+        if (channel->msgbuf->buf[index]->head.pack_size > 0){
+            mcopy(channel->msgbuf->msg.data + channel->msgbuf->msg.size, 
+                channel->msgbuf->buf[index]->body, 
+                channel->msgbuf->buf[index]->head.pack_size);
+            channel->msgbuf->msg.size += channel->msgbuf->buf[index]->head.pack_size;
+            channel->msgbuf->pack_range--;
+            if (channel->msgbuf->pack_range == 0){
+                channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, &channel->msgbuf->msg);
+                channel->msgbuf->msg.size = 0;
+                channel->msgbuf->msg.data = NULL;
             }
-            channel->msgbuf->msg = NULL;
         }
+
         free(channel->msgbuf->buf[index]);
         channel->msgbuf->buf[index] = NULL;
         channel->msgbuf->rpos++;

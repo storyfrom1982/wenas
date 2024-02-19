@@ -154,6 +154,7 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
         } \
     } while (0)
 
+// TODO
 #define __xcheck(condition)     assert((condition))
 
 
