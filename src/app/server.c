@@ -141,7 +141,9 @@ static void process_message(xtask_enter_ptr task_ctx)
 {
     __xlogd("process_message enter\n");
     xmsg_ptr msg = (xmsg_ptr)task_ctx->xline;
-    parse_msg((xline_ptr)msg->data, msg->wpos);
+    // parse_msg((xline_ptr)msg->data, msg->wpos);
+    xchannel_ptr channel = (xchannel_ptr)task_ctx->index;
+    xmsger_send(channel->msger, channel, msg->data, msg->wpos);
     xchannel_free_msg(msg);
     __xlogd("process_message exit\n");
 }

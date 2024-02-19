@@ -94,7 +94,6 @@ struct xchannel {
     uint32_t peer_key;
     xchannel_ptr prev, next;
     int status;
-    __xmutex_ptr mtx;
     // __atom_bool is_connected;
     // __atom_bool bye;
     __atom_bool breaker;
@@ -223,25 +222,12 @@ static inline void xchannel_push(xchannel_ptr channel, xmsgpack_ptr unit)
     unit->channel = channel;
     unit->resending = 0;
     unit->comfirmed = false;
-
-    // if (__is_true(channel->bye)){
-    //     return;
-    // }
-
     // 再将 unit 放入缓冲区 
     unit->head.sn = channel->sendbuf->wpos;
     // 设置校验码
     unit->head.x = XMSG_VAL ^ channel->peer_key;
     channel->sendbuf->buf[__transbuf_wpos(channel->sendbuf)] = unit;
     __atom_add(channel->sendbuf->wpos, 1);
-
-    // // 在主循环中加入 Idle 条件标量，直接检测 Idle 条件。
-    // // 是否统计所有 channel 的待发送包数量？
-    // if (__atom_add(channel->msger->tasklen, 1) == 1){
-    //     ___lock lk = __ex_mutex_lock(channel->msger->mtx);
-    //     __ex_mutex_notify(channel->msger->mtx);
-    //     __ex_mutex_unlock(channel->msger->mtx, lk);
-    // }
 }
 
 static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
@@ -314,9 +300,6 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 channel->sendbuf->buf[index] = NULL;
 
                 __atom_add(channel->sendbuf->rpos, 1);
-                // TODO 通知 channel 可写
-                // channel->msger->listener->onSendable();
-                __xapi->mutex_notify(channel->mtx);
 
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
             } while (channel->sendbuf->rpos != ack->head.ack);
@@ -608,7 +591,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
     channel->delay = 0;
     channel->msger = msger;
     channel->addr = *addr;
-    channel->mtx = __xapi->mutex_create();
     channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->msgbuf->range = PACK_WINDOW_RANGE;
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
@@ -631,7 +613,6 @@ static inline void xchannel_release(xchannel_ptr channel)
 {
     __xlogd("xchannel_release enter\n");
     xmsger_dequeue_channel(channel->msger, channel);
-    __xapi->mutex_free(channel->mtx);
     xheap_free(&channel->timer);
     xpipe_free(&channel->msgqueue);
     free(channel->msgbuf);

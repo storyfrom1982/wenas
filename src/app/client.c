@@ -68,9 +68,72 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
     __xlogi(">>>>---------------> on_disconnection: 0x%x\n", channel);
 }
 
+
+static void parse_msg(xline_ptr msg, uint64_t len)
+{
+    struct xmaker m = xline_parse(msg);
+    xmaker_ptr maker = &m;
+    xline_ptr ptr;
+    while ((ptr = xline_next(maker)) != NULL)
+    {
+        __xlogd("xline ----------------- key: %s\n", maker->key);
+        if (__typeis_int(ptr)){
+
+            __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
+
+        }else if (__typeis_float(ptr)){
+
+            __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
+
+        }else if (__typeis_str(ptr)){
+
+            __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
+
+        }else if (__typeis_tree(ptr)){
+
+            parse_msg(ptr, 0);
+
+        }else if (__typeis_list(ptr)){
+
+            __xlogd("xline list key: %s\n", maker->key);
+            struct xmaker list = xline_parse(ptr);
+
+            while ((ptr = xline_list_next(&list)) != NULL)
+            {
+                if (__typeis_int(ptr)){
+
+                    __xlogd("xline list value: %d\n", __l2i(ptr));
+
+                }else if (__typeis_tree(ptr)){
+                    
+                    parse_msg(ptr, 0);
+                }
+            }
+
+        }else {
+            __xlogd("xline type error\n");
+        }
+    }
+}
+
+static void process_message(xtask_enter_ptr task_ctx)
+{
+    __xlogd("process_message enter\n");
+    xmsg_ptr msg = (xmsg_ptr)task_ctx->xline;
+    parse_msg((xline_ptr)msg->data, msg->wpos);
+    xchannel_free_msg(msg);
+    __xlogd("process_message exit\n");
+}
+
 static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
-
+    client_ptr client = (client_ptr)listener->ctx;
+    struct xtask_enter enter;
+    enter.func = process_message;
+    enter.ctx = client;
+    enter.index = channel;
+    enter.xline = msg;
+    xtask_push(client->task, enter);   
 }
 
 static void send_channel_msg(xtask_enter_ptr task_ctx)
@@ -134,53 +197,6 @@ static void build_msg(xmaker_ptr maker)
     }
     xmaker_submit_list(maker, lpos);
     
-}
-
-static void parse_msg(xline_ptr msg, uint64_t len)
-{
-    struct xmaker m = xline_parse(msg);
-    xmaker_ptr maker = &m;
-    xline_ptr ptr;
-    while ((ptr = xline_next(maker)) != NULL)
-    {
-        __xlogd("xline ----------------- key: %s\n", maker->key);
-        if (__typeis_int(ptr)){
-
-            __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
-
-        }else if (__typeis_float(ptr)){
-
-            __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
-
-        }else if (__typeis_str(ptr)){
-
-            __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
-
-        }else if (__typeis_tree(ptr)){
-
-            parse_msg(ptr, 0);
-
-        }else if (__typeis_list(ptr)){
-
-            __xlogd("xline list key: %s\n", maker->key);
-            struct xmaker list = xline_parse(ptr);
-
-            while ((ptr = xline_list_next(&list)) != NULL)
-            {
-                if (__typeis_int(ptr)){
-
-                    __xlogd("xline list value: %d\n", __l2i(ptr));
-
-                }else if (__typeis_tree(ptr)){
-                    
-                    parse_msg(ptr, 0);
-                }
-            }
-
-        }else {
-            __xlogd("xline type error\n");
-        }
-    }
 }
 
 static void find_msg(xline_ptr msg){
