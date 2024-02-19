@@ -11,6 +11,8 @@ typedef struct client{
     struct xmsglistener listener;
     xmsger_ptr msger;
     xchannel_ptr channel;
+    xtask_ptr task;
+    xtask_ptr listen_task;
 }*client_ptr;
 
 
@@ -20,9 +22,9 @@ static void malloc_debug_cb(const char *debug)
     __xloge("%s\n", debug);
 }
 
-static void listening(struct xmsgsocket *rsock)
+static void listening(xtask_enter_ptr task_ctx)
 {
-    client_ptr client = (client_ptr)rsock->ctx;
+    client_ptr client = (client_ptr)task_ctx->ctx;
     __xapi->udp_listen(client->sock);
     xmsger_wake(client->msger);
 }
@@ -71,14 +73,30 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
 
 }
 
+static void send_channel_msg(xtask_enter_ptr task_ctx)
+{
+    client_ptr client = (client_ptr)task_ctx->ctx;
+    xchannel_ptr channel = (xchannel_ptr)task_ctx->index;
+    xchannel_send_msg(channel, channel->msg);
+}
+
 static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-
+    client_ptr client = (client_ptr)listener->ctx;
+    struct xtask_enter enter;
+    enter.func = send_channel_msg;
+    enter.ctx = client;
+    enter.index = channel;
+    xtask_push(client->task, enter);       
 }
 
 static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-    __xlogi(">>>>---------------> channel timeout: 0x%x\n", channel);
+    client_ptr client = (client_ptr)listener->ctx;
+    struct xtask_enter enter;
+    enter.func = listening;
+    enter.ctx = client;
+    xtask_push(client->listen_task, enter);
 }
 
 
@@ -225,6 +243,11 @@ int main(int argc, char *argv[])
     msgsock->recvfrom = recv_msg;
     
     listener->ctx = client;
+
+
+    client->task = xtask_create();
+    client->listen_task = xtask_create();
+
     __xlogi("start client 2\n");
     client->msger = xmsger_create(msgsock, &client->listener);
     xmsger_run(client->msger);
@@ -245,8 +268,8 @@ int main(int argc, char *argv[])
         xmaker_ptr maker = xmaker_create(2);
         build_msg(maker);
         xline_add_text(maker, "msg", str);
-        parse_msg((xline_ptr)maker->head, maker->wpos);
-        find_msg((xline_ptr)maker->head);
+        // parse_msg((xline_ptr)maker->head, maker->wpos);
+        // find_msg((xline_ptr)maker->head);
         xchannel_push_task(client->channel, maker->wpos);
         xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
         xmaker_free(maker);
