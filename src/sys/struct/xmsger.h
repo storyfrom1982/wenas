@@ -533,7 +533,6 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
                 channel->msg = (xmsg_ptr)malloc(sizeof(struct xmsg) + (channel->msgbuf->pack_range * PACK_BODY_SIZE));
                 channel->msg->channel = channel;
                 channel->msg->pos = 0;
-                channel->msgbuf->pack_range = 0;
             }
             mcopy(channel->msg->data + channel->msg->pos, 
                 channel->msgbuf->buf[index]->body, 
@@ -543,7 +542,7 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
             if (channel->msgbuf->pack_range == 0){
                 channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msg);
                 channel->msg = NULL;
-            }            
+            }
         }
 
         free(channel->msgbuf->buf[index]);
@@ -614,7 +613,7 @@ static inline xmsgpack_ptr make_pack(xchannel_ptr channel, uint8_t type)
     // 设置包类型
     pack->head.type = type;
     // 设置消息封包数量
-    pack->head.pack_range = 1;
+    pack->head.pack_range = 0;
     // 设置对方 cid
     pack->head.cid = channel->peer_cid;
     // 设置校验码
