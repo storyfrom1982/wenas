@@ -66,13 +66,13 @@ typedef struct xmsgpackbuf {
 
 typedef struct xmsg {
     xchannel_ptr channel;
-    size_t pos, size;
-    void *data;
+    size_t pos;
+    uint8_t data[1];
 }*xmsg_ptr;
 
 
 typedef struct xmsgbuf {
-    struct xmsg msg;
+    // struct xmsg msg;
     uint16_t pack_range;
     uint8_t range, upos, rpos, wpos;
     struct xmsgpack *buf[1];
@@ -110,6 +110,8 @@ struct xchannel {
     struct __xipaddr addr;
     xmsgpackbuf_ptr sendbuf;
     xmsger_ptr msger;
+    xpipe_ptr msgqueue;
+    xmsg_ptr msg;
 };
 
 //channellist
@@ -428,6 +430,11 @@ static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
 
 }
 
+static inline void xchannel_free_msg(xmsg_ptr msg)
+{
+    free(msg);
+}
+
 static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
 {
     __xlogd("xchannel_recv >>>>------------> enter\n");
@@ -517,25 +524,26 @@ static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
 
     index = __transbuf_rpos(channel->msgbuf);
     while (channel->msgbuf->buf[index] != NULL){
-        if (channel->msgbuf->buf[index]->head.pack_size > 0 && channel->msgbuf->msg.size == 0){
-            channel->msgbuf->pack_range = channel->msgbuf->buf[index]->head.pack_range;
-            assert(channel->msgbuf->pack_range != 0 && channel->msgbuf->pack_range <= XMSG_PACK_RANGE);
-            channel->msgbuf->msg.data = malloc(channel->msgbuf->pack_range * PACK_BODY_SIZE);
-            channel->msgbuf->msg.size = 0;
-            channel->msgbuf->msg.channel = channel;
-        }
 
-        if (channel->msgbuf->buf[index]->head.pack_size > 0){
-            mcopy(channel->msgbuf->msg.data + channel->msgbuf->msg.size, 
+        if (channel->msgbuf->buf[index]->head.pack_range > 0){
+            if (channel->msg == NULL){
+                // 收到消息的第一个包，创建 msg，记录范围
+                channel->msgbuf->pack_range = channel->msgbuf->buf[index]->head.pack_range;
+                assert(channel->msgbuf->pack_range != 0 && channel->msgbuf->pack_range <= XMSG_PACK_RANGE);
+                channel->msg = (xmsg_ptr)malloc(sizeof(struct xmsg) + (channel->msgbuf->pack_range * PACK_BODY_SIZE));
+                channel->msg->channel = channel;
+                channel->msg->pos = 0;
+                channel->msgbuf->pack_range = 0;
+            }
+            mcopy(channel->msg->data + channel->msg->pos, 
                 channel->msgbuf->buf[index]->body, 
                 channel->msgbuf->buf[index]->head.pack_size);
-            channel->msgbuf->msg.size += channel->msgbuf->buf[index]->head.pack_size;
+            channel->msg->pos += channel->msgbuf->buf[index]->head.pack_size;
             channel->msgbuf->pack_range--;
             if (channel->msgbuf->pack_range == 0){
-                channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, &channel->msgbuf->msg);
-                channel->msgbuf->msg.size = 0;
-                channel->msgbuf->msg.data = NULL;
-            }
+                channel->msger->listener->onReceiveMessage(channel->msger->listener, channel, channel->msg);
+                channel->msg = NULL;
+            }            
         }
 
         free(channel->msgbuf->buf[index]);
@@ -563,6 +571,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
     channel->timer = xheap_create(PACK_WINDOW_RANGE);
+    channel->msgqueue = xpipe_create(8 * sizeof(void*));
     channel->peer_cid = 0;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
@@ -581,6 +590,7 @@ static inline void xchannel_release(xchannel_ptr channel)
     xmsger_dequeue_channel(channel->msger, channel);
     __xapi->mutex_free(channel->mtx);
     xheap_free(&channel->timer);
+    xpipe_free(&channel->msgqueue);
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
