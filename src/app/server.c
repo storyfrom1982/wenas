@@ -68,9 +68,21 @@ static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channe
     __xlogd("on_connection_to_peer exit\n");
 }
 
+static void send_channel_msg(xtask_enter_ptr task_ctx)
+{
+    server_t *server = (server_t*)task_ctx->ctx;
+    xchannel_ptr channel = (xchannel_ptr)task_ctx->index;
+    xchannel_send_msg(channel, channel->msg);
+}
+
 static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
 {
-
+    server_t *server = (server_t*)listener->ctx;
+    struct xtask_enter enter;
+    enter.func = send_channel_msg;
+    enter.ctx = server;
+    enter.index = channel;
+    xtask_push(server->task, enter);   
 }
 
 static void disconnect_task(xtask_enter_ptr task)
