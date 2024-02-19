@@ -59,6 +59,8 @@ static void* __xlog_file_write_loop(void *ctx)
     while (1)
     {
         // printf("xpipe_read enter\n");
+        // TODO xpipe 不支持无锁模式下的多写一读
+        // TODO 是否要频繁写文件？是否可以一次性写入 4K
         if ((res = xpipe_read(g_log_file.pipe, buf, 1)) == 1){
             // printf("xpipe_read 1\n");
             n = xpipe_readable(g_log_file.pipe);

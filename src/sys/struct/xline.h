@@ -230,7 +230,8 @@ static inline uint64_t xline_add_binary(xmaker_ptr maker, const char *key, const
 static inline uint64_t xline_append_number(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
 {
     // key[keylen,key,'\0']
-    // (1 + keylen + 1)    
+    // (1 + keylen + 1)
+    //TODO key 长度不能大于 256 因为只用一个字节存储长度，这里要重写
     maker->rpos = (2 + keylen + XLINE_SIZE);
     if ((int64_t)(maker->len - maker->wpos) < maker->rpos){
         maker->len += (maker->len + maker->rpos);

@@ -255,6 +255,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 //TODO 计算往返延时
                 //TODO 统计丢包率
                 // rpos 对应的 ACK 可能丢失了，现在更新 rpos 并且释放资源
+                // TODO 这里为什么要报错？
                 assert(__transbuf_inuse(channel->sendbuf) > 0);
                 // 释放所有已经确认的 SN
                 index = __transbuf_rpos(channel->sendbuf);
