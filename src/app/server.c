@@ -157,6 +157,8 @@ static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, 
     xtask_push(server->task, enter);    
 }
 
+#include <stdio.h>
+
 int main(int argc, char *argv[])
 {
     __xlog_open("./tmp/server/log", NULL);
@@ -194,9 +196,25 @@ int main(int argc, char *argv[])
     server.msger = xmsger_create(msgsock, &server.listener);
     xmsger_run(server.msger);
 
-    while (true)
+    char str[1024];
+    
+    while (1)
     {
-        xmsger_wait(server.msger);
+        __xlogi("Enter a value :\n");
+        fgets(str, 1000, stdin);
+        size_t len = slength(str);
+        if (len == 2 && str[0] == 'q'){
+            break;
+        }
+        str[len-1] = '\0';
+        // xmaker_ptr maker = xmaker_create(2);
+        // build_msg(maker);
+        // xline_add_text(maker, "msg", str);
+        // // parse_msg((xline_ptr)maker->head, maker->wpos);
+        // // find_msg((xline_ptr)maker->head);
+        // xchannel_push_task(server.channel, maker->wpos);
+        // xmsger_send(server.msger, server.channel, maker->head, maker->wpos);
+        // xmaker_free(maker);
     }
 
     __set_false(server.msger->running);

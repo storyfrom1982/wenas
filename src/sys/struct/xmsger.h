@@ -645,7 +645,6 @@ static inline void xmsger_wake(xmsger_ptr msger)
 {
     __xlogd("xmsger_wake enter %p\n", msger);
     __xapi->mutex_lock(msger->mtx);
-    __set_true(msger->working);
     __set_true(msger->readable);
     __xapi->mutex_notify(msger->mtx);
     __xapi->mutex_unlock(msger->mtx);
@@ -678,7 +677,7 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
     {
 
         if (__is_true(msger->readable)){
-            
+
             if (rpack == NULL){
                 rpack = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
                 __xcheck(rpack);
@@ -1020,13 +1019,6 @@ static inline void xmsger_free(xmsger_ptr *pptr)
         free(msger);
     }
     __xlogd("xmsger_free exit\n");
-}
-
-static inline void xmsger_wait(xmsger_ptr messenger)
-{
-    __xapi->mutex_lock(messenger->mtx);
-    __xapi->mutex_wait(messenger->mtx);
-    __xapi->mutex_unlock(messenger->mtx);
 }
 
 //TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
