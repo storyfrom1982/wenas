@@ -6,7 +6,8 @@ typedef struct server {
     struct __xipaddr xmsgaddr;
     struct xmsglistener listener;
     xtask_ptr task;
-    xmsger_ptr messenger;
+    xtask_ptr listen_task;
+    xmsger_ptr msger;
 }server_t;
 
 
@@ -19,12 +20,8 @@ static void listening(xtask_enter_ptr task_ctx)
 {
     __xlogd("listening enter\n");
     server_t *server = (server_t *)task_ctx->ctx;
-    if (__set_true(server->listening)){
-        __xlogd("listening server = %p\n", server);
-        __xapi->udp_listen(server->rsock);
-        xmsger_wake(server->messenger);
-        __set_false(server->listening);
-    }
+    __xapi->udp_listen(server->rsock);
+    xmsger_wake(server->msger);
     __xlogd("listening exit\n");
 }
 
@@ -56,7 +53,7 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
     struct xtask_enter enter;
     enter.func = listening;
     enter.ctx = server;
-    xtask_push(server->task, enter);
+    xtask_push(server->listen_task, enter);
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
@@ -191,19 +188,20 @@ int main(int argc, char *argv[])
     msgsock->recvfrom = recv_msg;
     
     server.task = xtask_create();
+    server.listen_task = xtask_create();
 
     listener->ctx = &server;
-    server.messenger = xmsger_create(msgsock, &server.listener);
-    xmsger_run(server.messenger);
+    server.msger = xmsger_create(msgsock, &server.listener);
+    xmsger_run(server.msger);
 
     while (true)
     {
-        xmsger_wait(server.messenger);
+        xmsger_wait(server.msger);
     }
 
-    __set_false(server.messenger->running);
+    __set_false(server.msger->running);
     __xlogi("xmsger_disconnect");
-    xmsger_free(&server.messenger);
+    xmsger_free(&server.msger);
     __xlogi("xmsger_free\n");
 
     xtask_free(&server.task);
