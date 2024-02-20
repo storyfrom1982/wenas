@@ -7,7 +7,7 @@
 
 typedef struct client{
     int sock;
-    struct __xipaddr ipaddr;
+    // struct __xipaddr ipaddr;
     struct xmsglistener listener;
     xmsger_ptr msger;
     xchannel_ptr channel;
@@ -232,12 +232,12 @@ int main(int argc, char *argv[])
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 9256;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
-    __xipaddr_ptr raddr = &client->ipaddr;
+    // __xipaddr_ptr raddr = &client->ipaddr;
     xmsglistener_ptr listener = &client->listener;
 
     __xlogi("start client 2\n");
 
-    __xapi->udp_make_ipaddr(host, port, &client->ipaddr);
+    // __xapi->udp_make_ipaddr(host, port, &client->ipaddr);
 
     __xlogi("start client 3\n");
 
@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     __xlogi("free msgsock\n");
     free(msgsock);
 
-    __xapi->udp_clear_ipaddr(client->ipaddr);
+    // __xapi->udp_clear_ipaddr(client->ipaddr);
     __xapi->udp_close(client->sock);
     
     __xlogi("free client\n");

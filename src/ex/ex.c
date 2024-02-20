@@ -320,25 +320,25 @@ static int udp_close(int sock)
 
 static int udp_bind(int sock, __xipaddr_ptr ipaddr)
 {
-    struct sockaddr_in *addr = (struct sockaddr_in *)ipaddr->addr;
-    ipaddr->addrlen = sizeof(struct sockaddr_in);
-    return bind(sock, (const struct sockaddr *)addr, ipaddr->addrlen);
+    // struct sockaddr_in *addr = (struct sockaddr_in *)&ipaddr;
+    // ipaddr->addrlen = sizeof(struct sockaddr_in);
+    return bind(sock, (const struct sockaddr *)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
-    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr->addr, (socklen_t)ipaddr->addrlen);
+    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 
 static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
 {
-    int result = recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr->addr, (socklen_t*)&ipaddr->addrlen);
-    if (result > 0){
-        ipaddr->ip = ((struct sockaddr_in*)ipaddr->addr)->sin_addr.s_addr;
-        ipaddr->port = ((struct sockaddr_in*)ipaddr->addr)->sin_port;
-        ipaddr->keylen = 6;
-    }
-    return result;
+    // int result = recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, (socklen_t*)&ipaddr->addrlen);
+    // if (result > 0){
+    //     ipaddr->ip = ((struct sockaddr_in*)ipaddr->addr)->sin_addr.s_addr;
+    //     ipaddr->port = ((struct sockaddr_in*)ipaddr->addr)->sin_port;
+    //     ipaddr->keylen = 6;
+    // }
+    return recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, (socklen_t*)&ipaddr->addrlen);
 }
 
 static int udp_listen(int sock)
@@ -350,39 +350,18 @@ static int udp_listen(int sock)
     return select(sock + 1, &fds, NULL, NULL, NULL);
 }
 
-bool udp_make_ipaddr(const char *ip, uint16_t port, struct __xipaddr *ipaddr)
+bool udp_make_ipaddr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
 {
-    ipaddr->addrlen = sizeof(struct sockaddr_in);
-    struct sockaddr_in *addr = (struct sockaddr_in *)malloc(ipaddr->addrlen);
-    __xbreak(addr == NULL);
-    addr->sin_family = AF_INET;
-    addr->sin_port = htons(port);
-    if (ip == NULL){
-        addr->sin_addr.s_addr = INADDR_ANY;        
-    }else {
-        __xbreak(inet_aton(ip, &(addr->sin_addr)) != 1);
-    }
     ipaddr->keylen = 6;
-    ipaddr->ip = addr->sin_addr.s_addr;
-    ipaddr->port = addr->sin_port;
-    ipaddr->addr = addr;
-
+    ipaddr->addrlen = sizeof(struct sockaddr_in);
+    ipaddr->family = AF_INET;
+    ipaddr->port = htons(port);
+    if (ip == NULL){
+        ipaddr->ip = INADDR_ANY;
+    }else {
+        return (inet_aton(ip, (struct in_addr*)&(ipaddr->ip)) == 1);
+    }
     return true;
-
-Clean:
-
-    if(addr){
-        free(addr);
-    }
-    return false;
-}
-
-void udp_clear_ipaddr(struct __xipaddr ipaddr)
-{
-    if (ipaddr.addr){
-        free(ipaddr.addr);
-        ipaddr.addr = NULL;
-    }
 }
 
 
@@ -476,7 +455,6 @@ struct __xapi_enter posix_api_enter = {
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
     .udp_make_ipaddr = udp_make_ipaddr,
-    .udp_clear_ipaddr = udp_clear_ipaddr,
 
     .make_path = __ex_make_path,
     .check_path = __ex_check_path,

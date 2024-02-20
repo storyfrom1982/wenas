@@ -26,16 +26,12 @@ typedef void* __xfile_ptr;
 
 
 typedef struct __xipaddr {
-    void *addr;
-    unsigned int addrlen;
-    uint8_t keylen;
-    union {
-        char key[6];
-        struct {
-            uint32_t ip;
-            uint16_t port;
-        };
-    };
+    uint16_t family;
+    uint16_t port;
+    uint32_t ip;
+    uint8_t zero[8];
+    uint32_t keylen;
+    uint32_t addrlen;
 }*__xipaddr_ptr;
 
 
@@ -75,8 +71,7 @@ typedef struct __xapi_enter {
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock);
-    bool (*udp_make_ipaddr)(const char *ip, uint16_t port, struct __xipaddr *ipaddr);
-    void (*udp_clear_ipaddr)(struct __xipaddr ipaddr);
+    bool (*udp_make_ipaddr)(const char *ip, uint16_t port, __xipaddr_ptr addr);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储

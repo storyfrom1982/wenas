@@ -212,7 +212,7 @@ static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
         xtree_take(msger->peers, &channel->cid, 4);
     }else {
         // 此时，还没有使用 cid 作为索引
-        xtree_take(msger->peers, channel->addr.key, channel->addr.keylen);
+        xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen);
     }
     
 }
@@ -656,10 +656,8 @@ static inline void xmsger_loop(xmsger_ptr msger)
     xchannel_ptr channel = NULL;
     xchannel_ptr next = NULL;
 
-    // xmsger_ptr msger = (xmsger_ptr)enter->ctx;
-
     struct __xipaddr addr;
-    __xapi->udp_make_ipaddr(NULL, 1234, &addr);
+    __xbreak(!__xapi->udp_make_ipaddr(NULL, 0, &addr));
 
     __set_false(msger->readable);
     msger->listener->onIdle(msger->listener, channel);
@@ -757,7 +755,7 @@ static inline void xmsger_loop(xmsger_ptr msger)
                             uint32_t peer_cid = *((uint32_t*)(rpack->body));
                             uint64_t timestamp = *((uint64_t*)(rpack->body + 4));
 
-                            channel = (xchannel_ptr)xtree_find(msger->peers, addr.key, addr.keylen);
+                            channel = (xchannel_ptr)xtree_find(msger->peers, &addr.port, addr.keylen);
 
                             // 检查是否为建立同一次连接的重复的 PING
                             if (channel != NULL && channel->timestamp != timestamp){
@@ -776,7 +774,7 @@ static inline void xmsger_loop(xmsger_ptr msger)
                                 channel->timestamp = timestamp;
                                 __xlogd("xmsger_loop new connections channel: 0x%x ip: %u port: %u cid: %u time: %lu\n", channel, addr.ip, addr.port, peer_cid, timestamp);
                                 // 上一次的连接已经被释放，xtree 直接覆盖原来的连接，替换当前的连接
-                                xtree_save(msger->peers, addr.key, addr.keylen, channel);
+                                xtree_save(msger->peers, &addr.port, addr.keylen, channel);
 
                                 xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
                                 // // 第一次回复 PONG，cid 必须设置为 0
@@ -796,7 +794,7 @@ static inline void xmsger_loop(xmsger_ptr msger)
                     }else if (rpack->head.type == XMSG_PACK_PONG){
                         __xlogd("xmsger_loop receive PONG\n");
 
-                        channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
+                        channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         if (channel && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
                             xtree_save(msger->peers, &channel->cid, 4, channel);
                             uint32_t cid = *((uint32_t*)(rpack->body));
@@ -820,7 +818,7 @@ static inline void xmsger_loop(xmsger_ptr msger)
                     }else if (rpack->head.type == XMSG_PACK_ACK){
                         __xlogd("xmsger_loop receive ACK\n");
 
-                        channel = (xchannel_ptr)xtree_take(msger->peers, addr.key, addr.keylen);
+                        channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         if (channel && rpack->head.cid == 0 && rpack->head.x ^ XMSG_KEY == XMSG_VAL){
                             xtree_save(msger->peers, &channel->cid, 4, channel);
                             xchannel_pull(channel, rpack);
@@ -877,26 +875,30 @@ static inline void xmsger_loop(xmsger_ptr msger)
             __xlogd("xmsger_loop create channel to peer\n");
             xmsg_ptr msg;
             if (xpipe_read(msger->spipe, &msg, sizeof(void*)) == sizeof(void*)){
-                __xipaddr_ptr addr = (__xipaddr_ptr)msg->addr;
-                // TODO 对方应答后要设置 peer_cid 和 key；
-                xchannel_ptr channel = xchannel_create(msger, addr);
-                if (channel){
-                    // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
-                    xtree_save(msger->peers, channel->addr.key, channel->addr.keylen, channel);
-                    xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
-                    // 建立连接时，cid 必须是 0
-                    spack->head.cid = 0;
-                    // 这里是协议层验证
-                    // TODO 需要更换一个密钥
-                    spack->head.x = (XMSG_VAL ^ XMSG_KEY);
-                    *((uint32_t*)(spack->body)) = channel->cid;
-                    *((uint64_t*)(spack->body + 4)) = __xapi->clock();
-                    spack->head.pack_size = 12;
-                    xchannel_push(channel, spack);
+                if (msg){
+                    //TODO
+                    __xbreak(msg->type != MSG_TYPE_MESSAGE);
+                    xchannel_ptr channel = xchannel_create(msger, (__xipaddr_ptr)msg->addr);
+                    if (channel){
+                        // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
+                        xtree_save(msger->peers, &channel->addr.port, channel->addr.keylen, channel);
+                        xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PING);
+                        // 建立连接时，cid 必须是 0
+                        spack->head.cid = 0;
+                        // 这里是协议层验证
+                        // TODO 需要更换一个密钥
+                        spack->head.x = (XMSG_VAL ^ XMSG_KEY);
+                        *((uint32_t*)(spack->body)) = channel->cid;
+                        *((uint64_t*)(spack->body + 4)) = __xapi->clock();
+                        spack->head.pack_size = 12;
+                        xchannel_push(channel, spack);
+                    }
+                    if (msg->addr){
+                        free(msg->addr);
+                    }
+                    free(msg);
                 }
             }
-            free(msg);
-            free(msg->addr);
         }
 
         channel = msger->squeue->head.next;
@@ -933,8 +935,6 @@ Clean:
     if (rpack != NULL){
         free(rpack);
     }
-
-    __xapi->udp_clear_ipaddr(addr);
 
     __xlogd("xmsger_loop exit\n");
 }

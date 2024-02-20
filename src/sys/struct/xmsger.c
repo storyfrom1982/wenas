@@ -18,17 +18,16 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
 {
     __xlogd("xmsger_connect enter\n");
 
-    struct __xipaddr *ipaddr = (struct __xipaddr*)malloc(sizeof(struct __xipaddr));
-    __xbreak(ipaddr == NULL);
-
-    __xbreak(!__xapi->udp_make_ipaddr(host, port, ipaddr));
-
-    xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
+        xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
     __xbreak(msg == NULL);
 
+    msg->addr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xbreak(msg->addr == NULL);
+
+    __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->addr));
+    
     msg->type = MSG_TYPE_MESSAGE;
     msg->channel = NULL;
-    msg->addr = ipaddr;
     
     __atom_add(msger->len, 12);
     __xbreak(xpipe_write(msger->spipe, &msg, sizeof(void*)) != sizeof(void*));
@@ -44,13 +43,13 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
 
 Clean:
 
-    if (ipaddr){
-        free(ipaddr);
-    }
     if (msg){
+        if (msg->addr){
+            free(msg->addr);
+        }        
         free(msg);
     }
-    
+
     return false;
 }
 
