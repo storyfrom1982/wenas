@@ -177,7 +177,8 @@ static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_s
 	do{
 		page->start_address = __xapi->mmap(pool->aligned_address, page->size);
 		if (page->start_address == __XAPI_MAP_FAILED){
-			__xcheck(page->start_address != __XAPI_MAP_FAILED);
+			//TODO
+			// __xcheck(page->start_address != __XAPI_MAP_FAILED);
 		}else{
 			if (((size_t)(page->start_address) & __align_mask) != 0){
 				pool->aligned_address = (void *)(((size_t)(page->start_address) + __align_mask) & ~__align_mask);
@@ -382,14 +383,16 @@ void free(void* address)
 
 	if (address){
 		ptr = __address2pointer(address);
-		__xcheck(ptr->size != 0 && ptr->flag != 0);
+		// TODO
+		// __xcheck(ptr->size != 0 && ptr->flag != 0);
 		// if (ptr->size == 0 || ptr->flag == 0){
 		// 	// printf("ptr->size == 0 || ptr->flag == 0");
 		// 	abort();
 		// }
 
 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
-		__xcheck(pool_id == mm->pool[pool_id].id);
+		// TODO
+		// __xcheck(pool_id == mm->pool[pool_id].id);
 		// if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
 		// 	// printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
 		// 	abort();
@@ -397,7 +400,8 @@ void free(void* address)
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
-		__xcheck(page_id == pool->page[page_id].id);
+		// TODO
+		// __xcheck(page_id == pool->page[page_id].id);
 		// if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
 		// 	// printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
 		// 	abort();
@@ -521,14 +525,15 @@ void* malloc(size_t size)
 		}
 	}
 
-	__xcheck(pool->page_number < __max_page_number);
+	// TODO
+	// __xcheck(pool->page_number < __max_page_number);
 	// if (pool->page_number >= __max_page_number){
 	// 	__atom_unlock(page->lock);
 	// 	abort();
 	// }
 
-
-	__xcheck((malloc_page(pool, page, mm->page_size + size) == 0));
+	// TODO
+	// __xcheck((malloc_page(pool, page, mm->page_size + size) == 0));
 	// if (size > mm->page_size){
 	// 	if (malloc_page(pool, page, size) != 0){
 	// 		__atom_unlock(page->lock);

@@ -45,7 +45,7 @@ static void* __xlog_file_write_loop(void *ctx)
     int64_t n;
     uint64_t res, buf_size = __log_pipe_size;
     unsigned char *buf = (unsigned char *)malloc(buf_size);
-    __xcheck(buf != NULL);
+    __xbreak(buf == NULL);
 
     {
         // 只有在 Release 模式下才能获取到指针的信息
@@ -72,16 +72,16 @@ static void* __xlog_file_write_loop(void *ctx)
         if (res > 0){
             n = __xapi->fwrite(g_log_file.fp, buf, res);
             // 日志线程本身不能同时读写日志管道
-            // __xcheck(n == res);
-            __xcheck(n == res);
+            __xbreak(n != res);
 
             if (__xapi->ftell(g_log_file.fp) > __log_file_size){
                 __xapi->fclose(g_log_file.fp);
                 __xapi->move_path(g_log_file.log0, g_log_file.log1);
                 g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
                 // 日志线程本身不能同时读写日志管道
+                // TODO
                 // __xcheck(g_log_file.fp != NULL);
-                __xcheck(g_log_file.fp != NULL);
+                // __xcheck(g_log_file.fp != NULL);
             }
         }else {
             if (__is_false(g_log_file.running)){
@@ -179,13 +179,13 @@ int __xlog_open(const char *path, __xlog_cb cb)
 
     int len = strlen(path) + strlen("/0.log") + 1;
     if (!__xapi->check_path(path)){
-        __xcheck(__xapi->make_path(path));
+        __xbreak(!__xapi->make_path(path));
     }
 
     g_log_file.log0 = calloc(1, len);
-    __xcheck(g_log_file.log0);
+    __xbreak(g_log_file.log0 == NULL);
     g_log_file.log1 = calloc(1, len);
-    __xcheck(g_log_file.log1);
+    __xbreak(g_log_file.log1 == NULL);
 
     snprintf(g_log_file.log0, len, "%s/0.log", path);
     snprintf(g_log_file.log1, len, "%s/1.log", path);
@@ -194,17 +194,17 @@ int __xlog_open(const char *path, __xlog_cb cb)
     g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
     __atom_unlock(g_log_file.lock);
 
-    __xcheck(g_log_file.fp);
+    __xbreak(g_log_file.fp == NULL);
     
     __xlogi(">>>>-------------->\n");
     __xlogi("Log start >>>>--------------> %s\n", g_log_file.log0);
     __xlogi(">>>>-------------->\n");  
 
     g_log_file.pipe = xpipe_create(__log_pipe_size);
-    __xcheck(g_log_file.pipe);
+    __xbreak(g_log_file.pipe == NULL);
 
     g_log_file.pid = __xapi->process_create(__xlog_file_write_loop, &g_log_file);
-    __xcheck(g_log_file.pid != 0);
+    __xbreak(g_log_file.pid == NULL);
 
     __set_true(g_log_file.running);
 

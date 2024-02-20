@@ -63,9 +63,14 @@ typedef struct xmsgpackbuf {
     struct xmsgpack *buf[1];
 }*xmsgpackbuf_ptr;
 
+enum {
+    MSG_TYPE_MESSAGE = 0,
+    MSG_TYPE_STREAM
+};
 
 typedef struct xmsg {
-    xchannel_ptr channel;
+    uint64_t type; //MSG_TYPE_MESSAGE or MSG_TYPE_STREAM
+    xchannel_ptr channel; //如果 channel 是 NULL，这个 msg 是一个创建连接的 PING
     size_t wpos, rpos, len, range;
     void *addr;
     uint8_t data[1];
@@ -103,7 +108,7 @@ struct xchannel {
     uint8_t delay;
     uint64_t timestamp;
     uint64_t update;
-    xheap_ptr timer;
+    xheap_ptr timer; //可以使用队列做定时，因为新入队的 pack 时间戳都比较前面的大，所以队首的时间戳最小
     struct xmsghead ack;
     xmsgbuf_ptr msgbuf;
     // xchannellist_ptr queue;
@@ -161,12 +166,13 @@ struct xmsger {
     __atom_bool readable;
     xmsglistener_ptr listener;
     xmsgsocket_ptr msgsock;
-    xtask_ptr mainloop_task;
-    __atom_size tasklen;
-    __atom_bool connection_buf_lock;
-    xmsgpackbuf_ptr connection_buf;
-    xpipe_ptr pipe;
-    xchannellist_ptr sendqueue;
+    // xtask_ptr mainloop_task;
+    // __atom_size tasklen;
+    // __atom_bool connection_buf_lock;
+    // xmsgpackbuf_ptr connection_buf;
+    xpipe_ptr spipe, rpipe;
+    __xprocess_ptr rpid, spid;
+    xchannellist_ptr squeue;
 };
 
 
@@ -185,18 +191,18 @@ struct xmsger {
 
 static inline void xmsger_enqueue_channel(xmsger_ptr msger, xchannel_ptr channel)
 {
-    channel->next = &msger->sendqueue->end;
-    channel->prev = msger->sendqueue->end.prev;
+    channel->next = &msger->squeue->end;
+    channel->prev = msger->squeue->end.prev;
     channel->next->prev = channel;
     channel->prev->next = channel;
-    __atom_add(msger->sendqueue->len, 1);
+    __atom_add(msger->squeue->len, 1);
 }
 
 static inline void xmsger_dequeue_channel(xmsger_ptr msger, xchannel_ptr channel)
 {
     channel->prev->next = channel->next;
     channel->next->prev = channel->prev;
-    __atom_sub(msger->sendqueue->len, 1);
+    __atom_sub(msger->squeue->len, 1);
 }
 
 static inline void xmsger_clear_channel(xmsger_ptr msger, xchannel_ptr channel)
@@ -635,7 +641,7 @@ static inline void xmsger_wake(xmsger_ptr msger)
     __xlogd("xmsger_wake exit\n");
 }
 
-static inline void xmsger_loop(xtask_enter_ptr enter)
+static inline void xmsger_loop(xmsger_ptr msger)
 {
     __xlogd("xmsger_loop enter\n");
 
@@ -650,9 +656,10 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
     xchannel_ptr channel = NULL;
     xchannel_ptr next = NULL;
 
-    xmsger_ptr msger = (xmsger_ptr)enter->ctx;
+    // xmsger_ptr msger = (xmsger_ptr)enter->ctx;
 
-    struct __xipaddr addr = __xapi->udp_make_ipaddr(NULL, 1234);
+    struct __xipaddr addr;
+    __xapi->udp_make_ipaddr(NULL, 1234, &addr);
 
     __set_false(msger->readable);
     msger->listener->onIdle(msger->listener, channel);
@@ -664,7 +671,7 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
 
             if (rpack == NULL){
                 rpack = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-                __xcheck(rpack);
+                __xbreak(rpack == NULL);
             }
 
             rpack->head.type = 0;
@@ -864,14 +871,13 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
 
 
         // 等待创建连接和发送数据的 channel 会加入到这个 pipe
-        if (xpipe_readable(msger->pipe) > 0){
+        if (xpipe_readable(msger->spipe) > 0){
             // TODO 需要根据不同类型处理，需要定义 connect 和 send 两种类型
             // TODO 将有消息要发送的 channel 加入发送队列，所有要进入发送状态的 channel 都要先加入这个队列
             __xlogd("xmsger_loop create channel to peer\n");
-            struct xtask_enter enter;
-            if (xpipe_read(msger->pipe, &enter, sizeof(enter)) == sizeof(enter)){
-                __atom_sub(msger->len, 1);
-                __xipaddr_ptr addr = (__xipaddr_ptr)enter.ctx;
+            xmsg_ptr msg;
+            if (xpipe_read(msger->spipe, &msg, sizeof(void*)) == sizeof(void*)){
+                __xipaddr_ptr addr = (__xipaddr_ptr)msg->addr;
                 // TODO 对方应答后要设置 peer_cid 和 key；
                 xchannel_ptr channel = xchannel_create(msger, addr);
                 if (channel){
@@ -886,16 +892,16 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
                     *((uint32_t*)(spack->body)) = channel->cid;
                     *((uint64_t*)(spack->body + 4)) = __xapi->clock();
                     spack->head.pack_size = 12;
-
-                    xchannel_push_task(channel, spack->head.pack_size);
                     xchannel_push(channel, spack);
                 }
             }
+            free(msg);
+            free(msg->addr);
         }
 
-        channel = msger->sendqueue->head.next;
+        channel = msger->squeue->head.next;
 
-        while (channel != &msger->sendqueue->end)
+        while (channel != &msger->squeue->end)
         {
             next = channel->next;
 
@@ -921,6 +927,8 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
         }
     }
 
+Clean:    
+
 
     if (rpack != NULL){
         free(rpack);
@@ -931,48 +939,10 @@ static inline void xmsger_loop(xtask_enter_ptr enter)
     __xlogd("xmsger_loop exit\n");
 }
 
-static inline xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr listener)
-{
-    __xlogd("xmsger_create enter\n");
-
-    xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
-
-    __xlogd("xmsger_create 1\n");
-    msger->cid = __xapi->clock() % UINT16_MAX;
-    msger->running = true;
-    msger->readable = true;
-    msger->msgsock = msgsock;
-    msger->listener = listener;
-    msger->tasklen = 0;
-    __xlogd("xmsger_create 2\n");
-    msger->mtx = __xapi->mutex_create();
-    __xlogd("xmsger_create 3\n");
-    msger->peers = xtree_create();
-    
-    msger->sendqueue = (xchannellist_ptr)malloc(sizeof(struct xchannellist));
-    msger->sendqueue->len = 0;
-    msger->sendqueue->lock = false;
-    msger->sendqueue->head.prev = NULL;
-    msger->sendqueue->end.next = NULL;
-    msger->sendqueue->head.next = &msger->sendqueue->end;
-    msger->sendqueue->end.prev = &msger->sendqueue->head;
-
-    msger->pipe = xpipe_create(sizeof(struct xtask_enter) * 256);
-    __xcheck(msger->pipe != NULL);
-
-    __xlogd("xmsger_create exit\n");
-
-    return msger;
-
-Clean:
-
-    return NULL;
-}
-
-static inline void xmsger_run(xmsger_ptr messenger)
-{
-    messenger->mainloop_task = xtask_run(xmsger_loop, messenger);
-}
+// static inline void xmsger_run(xmsger_ptr messenger)
+// {
+//     messenger->mainloop_task = xtask_run(xmsger_loop, messenger);
+// }
 
 static void free_channel(void *val)
 {
@@ -980,53 +950,7 @@ static void free_channel(void *val)
     xchannel_release((xchannel_ptr)val);
 }
 
-static inline void xmsger_free(xmsger_ptr *pptr)
-{
-    __xlogd("xmsger_free enter\n");
-    if (pptr && *pptr){        
-        xmsger_ptr msger = *pptr;
-        *pptr = NULL;
-        __set_false(msger->running);
-        __xapi->mutex_broadcast(msger->mtx);
-        xtask_free(&msger->mainloop_task);
-        __xlogd("xmsger_free 1\n");
-        __xlogd("xmsger_free 2\n");
-        xtree_clear(msger->peers, free_channel);
-        __xlogd("xmsger_free 3\n");
-        xtree_free(&msger->peers);
-        __xlogd("xmsger_free 4\n");
-        __xapi->mutex_free(msger->mtx);
-        __xlogd("xmsger_free 5\n");
-        if (msger->sendqueue){
-            __xlogd("xmsger_free 6\n");
-            free(msger->sendqueue);
-        }
-        __xlogd("xmsger_free 7\n");
-        xpipe_free(&msger->pipe);
-        free(msger);
-    }
-    __xlogd("xmsger_free exit\n");
-}
 
-//TODO 增加一个用户上下文参数，断开连接时，可以直接先释放channel，然后在回调中给出用户上下文，通知用户回收相关资源。
-//TODO 增加一个加密验证数据，messenger 只负责将消息发送到对端，连接能否建立，取决于对端验证结果。
-static inline int xmsger_connect(xmsger_ptr msger, __xipaddr_ptr addr)
-{
-    __xlogd("xmsger_connect enter\n");
-    struct xtask_enter enter;
-    enter.ctx = addr;
-    __atom_add(msger->len, 1);
-    xpipe_write(msger->pipe, &enter, sizeof(enter));
-    __xlogd("xmsger_connect working %u\n", msger->working);
-    if (__is_false(msger->working)){
-        __xlogd("xmsger_connect notify\n");
-        // __xapi->mutex_lock(mtp->mtx);
-        __xapi->mutex_notify(msger->mtx);
-        // __xapi->mutex_unlock(mtp->mtx);
-    }    
-    __xlogd("xmsger_connect exit\n");
-    return 0;
-}
 
 static inline void xmsger_disconnect(xmsger_ptr mtp, xchannel_ptr channel)
 {
@@ -1090,6 +1014,10 @@ static inline bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *dat
     return true;
 }
 
+
+extern bool xmsger_connect(xmsger_ptr msger, const char *addr, uint16_t port);
+extern xmsger_ptr xmsger_create(xmsgsocket_ptr msgsock, xmsglistener_ptr listener);
+extern void xmsger_free(xmsger_ptr *pptr);
 
 // static inline void xmsger_send(xmsger_ptr mtp, xchannel_ptr channel, void *data, size_t size)
 // {

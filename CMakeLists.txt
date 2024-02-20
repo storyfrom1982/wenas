@@ -60,7 +60,7 @@ check_c_source_compiles("
 
 set(kzx_sources
     # src/main.c
-    # src/sys/struct/xline.c
+    src/sys/struct/xmsger.c
     src/ex/ex.c
     src/sys/struct/xmalloc.c
     # src/ex/pipe.c 
@@ -125,7 +125,7 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
 endfunction(build_executable)
 
 # build_executable(kapp src/main.cpp)
-build_executable(server src/app/server.c)
+# build_executable(server src/app/server.c)
 build_executable(client src/app/client.c)
 # build_executable(kapp test/sys/struct/tree_test.c)
 # build_executable(kapp test/sys/struct/heap_test.c)

@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 
     __xlogi("start client 2\n");
 
-    client->ipaddr = __xapi->udp_make_ipaddr(host, port);
+    __xapi->udp_make_ipaddr(host, port, &client->ipaddr);
 
     __xlogi("start client 3\n");
 
@@ -266,9 +266,9 @@ int main(int argc, char *argv[])
 
     __xlogi("start client 2\n");
     client->msger = xmsger_create(msgsock, &client->listener);
-    xmsger_run(client->msger);
+    // xmsger_run(client->msger);
 
-    xmsger_connect(client->msger, raddr);
+    xmsger_connect(client->msger, host, port);
 
     char str[1024];
     

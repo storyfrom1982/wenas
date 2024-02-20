@@ -75,7 +75,7 @@ typedef struct __xapi_enter {
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock);
-    struct __xipaddr (*udp_make_ipaddr)(const char *ipaddr, uint16_t port);
+    bool (*udp_make_ipaddr)(const char *ip, uint16_t port, struct __xipaddr *ipaddr);
     void (*udp_clear_ipaddr)(struct __xipaddr ipaddr);
 
 ///////////////////////////////////////////////////////
@@ -148,14 +148,14 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
 
 #define __xbreak(condition) \
     do { \
-        if (!(condition)) { \
+        if ((condition)) { \
             __xloge("ERROR: %s\n", #condition); \
             goto Clean; \
         } \
     } while (0)
 
 // TODO
-#define __xcheck(condition)     assert((condition))
+// #define __xcheck(condition)     assert((condition))
 
 
 

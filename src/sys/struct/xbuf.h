@@ -169,7 +169,7 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 static inline xpipe_ptr xpipe_create(uint64_t len)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
-    __xbreak(pipe);
+    __xbreak(pipe == NULL);
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -183,10 +183,10 @@ static inline xpipe_ptr xpipe_create(uint64_t len)
     pipe->leftover = pipe->len;
 
     pipe->buf = (uint8_t*)malloc(pipe->len);
-    __xbreak(pipe->buf);
+    __xbreak(pipe->buf == NULL);
 
     pipe->mutex = __xapi->mutex_create();
-    __xbreak(pipe->mutex);
+    __xbreak(pipe->mutex == NULL);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -199,176 +199,6 @@ Clean:
 
     return NULL;
 }
-
-#if 0
-typedef struct xbuf {
-    uint64_t len;
-    __atom_size writer;
-    __atom_size reader;
-    // __atom_size holder;
-    __atom_bool breaking;
-    __xmutex_ptr mutex;
-    xmaker_ptr buf;
-}*xbuf_ptr;
-
-
-static inline uint64_t xbuf_readable(xbuf_ptr buf)
-{
-    return buf->writer - buf->reader;
-}
-
-static inline uint64_t xbuf_writable(xbuf_ptr buf)
-{
-    return buf->len - buf->writer + buf->reader;
-}
-
-static inline void xbuf_clear(xbuf_ptr buf)
-{
-    __atom_sub(buf->reader, buf->reader);
-    __atom_sub(buf->writer, buf->writer);
-}
-
-static inline void xbuf_break(xbuf_ptr buf)
-{
-    __xapi->mutex_lock(buf->mutex);
-    __set_true(buf->breaking);
-    __xapi->mutex_broadcast(buf->mutex);
-    __xapi->mutex_unlock(buf->mutex);
-}
-
-static inline xmaker_ptr xbuf_hold_writer(xbuf_ptr buf)
-{
-    while ((buf->len - buf->writer + buf->reader) == 0){
-        // 只有需要阻塞时才检查 breaking 状态
-        if (__is_true(buf->breaking)){
-            return NULL;
-        }
-        __xapi->mutex_lock(buf->mutex);
-        // 写入线程不能确保被 xbuf_update_writer 唤醒
-        // 因为 xbuf_update_writer 的唤醒没有加锁
-        __xapi->mutex_notify(buf->mutex);
-        __xapi->mutex_wait(buf->mutex);
-        __xapi->mutex_unlock(buf->mutex);
-        if (__is_true(buf->breaking)){
-            return NULL;
-        }        
-    }
-    // 重置 xline maker，用户才能重新写入数据
-    // update reader 时重置一次就可以了，所以这里不需要重置了
-    // xmaker_clear(pipe->buf[(pipe->writer & (pipe->len - 1))]);
-    // 返回给用户一个可写缓冲区，用户持有这个缓冲区，直接写入数据
-    return &buf->buf[(buf->writer & (buf->len - 1))];
-}
-
-static inline void xbuf_update_writer(xbuf_ptr buf)
-{
-    // 用户完成一次写入，增加一个可读区域
-    __atom_add(buf->writer, 1);
-    __xapi->mutex_notify(buf->mutex);
-}
-
-static inline xmaker_ptr xbuf_hold_reader(xbuf_ptr buf)
-{
-    while ((buf->writer - buf->reader) == 0){
-        // 只有需要阻塞时才检查 breaking 状态
-        if (__is_true(buf->breaking)){
-            return NULL;
-        }
-        __xapi->mutex_lock(buf->mutex);
-        // 写入线程不能确保被 xbuf_update_reader 唤醒
-        // 因为 xbuf_update_reader 的唤醒没有加锁
-        __xapi->mutex_notify(buf->mutex);
-        __xapi->mutex_wait(buf->mutex);
-        __xapi->mutex_unlock(buf->mutex);
-        if (__is_true(buf->breaking)){
-            return NULL;
-        }        
-    }
-    // 用户持有一个可读缓冲区，直接读取数据
-    return &buf->buf[(buf->reader & (buf->len - 1))];
-}
-
-static inline void xbuf_update_reader(xbuf_ptr buf)
-{
-    // 重置 xline maker，用户才能重新写入数据
-    xmaker_clear(&buf->buf[(buf->reader & (buf->len - 1))]);
-    // 完成一次读取，增加一个可写区域
-    __atom_add(buf->reader, 1);
-    // 执行一次唤醒
-    __xapi->mutex_notify(buf->mutex);
-}
-
-static inline void xbuf_free(xbuf_ptr *pptr)
-{
-    if (pptr && *pptr){
-        xbuf_ptr pipe = *pptr;
-        *pptr = NULL;
-        if (pipe){
-            xbuf_clear(pipe);
-            if (pipe->mutex){
-                xbuf_break(pipe);
-                __xlogd("xbuf_free ============================== 1\n");
-                __xapi->mutex_free(pipe->mutex);
-            }
-        }
-        if (pipe->buf){
-            __xlogd("xbuf_free ==============================\n");
-            for (int i = 0; i < pipe->len; ++i){
-                // 如果使用二级指针，这里需要释放内存
-                __xlogd("xbuf_free ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
-                xmaker_free(&pipe->buf[i]);
-                // free(pipe->buf[i]);
-            }
-            free(pipe->buf);
-        }
-        free(pipe);
-    }
-}
-
-static inline xbuf_ptr xbuf_create(uint64_t len)
-{
-    xbuf_ptr pipe = (xbuf_ptr)malloc(sizeof(struct xbuf));
-    __xbreak(pipe);
-
-   if ((len & (len - 1)) == 0){
-        pipe->len = len;
-    }else{
-        pipe->len = 1U;
-        do {
-            pipe->len <<= 1;
-        } while(len >>= 1);
-    }
-
-    __xlogi("pipe len %lu\n", pipe->len);
-
-    // 一维指针 (struct xmaker*) 可以像使用 xmaker 类型的数组那样，进行下标操作，每个下标指向的是一个 xmaker 类型的结构体
-    // 二维指针 (struct xmaker**) 也可以像使用数组那样，进行下标操作，但是每个下标指向的是 xmaker 类型的结构体指针 (xmaker*)
-    pipe->buf = (xmaker_ptr)calloc(pipe->len, sizeof(struct xmaker));
-    // pipe->buf = (xline_maker_ptr*)calloc(pipe->len, sizeof(xline_maker_ptr*));
-    __xbreak(pipe->buf);
-
-    for (int i = 0; i < pipe->len; ++i){
-        // 如果使用二级指针，需要给每个指针分配实际的内存地址
-        // pipe->buf[i] = calloc(1, sizeof(struct xmaker));
-        xmaker_create(&pipe->buf[i], NULL, 2);
-        __xlogi("xbuf_create ============================== xmaker.addr: 0x%X\n", pipe->buf[i].addr);
-    }
-
-    pipe->mutex = __xapi->mutex_create();
-    __xbreak(pipe->mutex);
-
-    pipe->reader = pipe->writer = 0;
-    pipe->breaking = false;
-
-    return pipe;
-
-Clean:
-
-    xbuf_free(&pipe);
-
-    return NULL;
-}
-#endif
 
 typedef struct xtask {
     __atom_bool running;
@@ -421,19 +251,31 @@ static inline xtask_ptr xtask_create()
 
     int ret;
     xtask_ptr task = (xtask_ptr)malloc(sizeof(struct xtask));
-    assert(task);
+    __xbreak(task == NULL);
 
     // task->buf = xbuf_create(2);
     task->pipe = xpipe_create(sizeof(struct xtask_enter) * 256);
-    assert(task->pipe);
+    __xbreak(task->pipe == NULL);
 
     task->running = true;
     task->pid = __xapi->process_create(xtask_loop, task);
-    assert(task->pid);
+    __xbreak(task->pid == NULL);
 
     __xlogi("xtask_create exit\n");
 
     return task;
+
+Clean:
+
+    if (task){
+        free(task);
+    }
+
+    if (task->pipe){
+        xpipe_free(&task->pipe);
+    }
+
+    return NULL;
 }
 
 static inline void xtask_free(xtask_ptr *pptr)

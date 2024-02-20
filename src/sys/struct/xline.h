@@ -109,14 +109,14 @@ static inline void xmaker_free(xmaker_ptr maker)
 static inline xmaker_ptr xmaker_create(uint64_t len)
 {
     xmaker_ptr maker = (xmaker_ptr)malloc(sizeof(struct xmaker));
-    __xbreak(maker != NULL);
+    __xbreak(maker == NULL);
     if (len < XLINE_SIZE){
         len = XLINE_SIZE;
     }
     maker->wpos = XLINE_SIZE;
     maker->len = len;
     maker->head = (uint8_t*) malloc(maker->len);
-    __xbreak(maker->head != NULL);
+    __xbreak(maker->head == NULL);
     return maker;
 
 Clean:

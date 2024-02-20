@@ -302,38 +302,36 @@ static int udp_open()
     int sock;
     int flags;
     int enable = 1;
-    __xcheck((sock = socket(PF_INET, SOCK_DGRAM, 0)) > 0);
-    __xcheck(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == 0);
-    __xcheck(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) == 0);
+    __xbreak((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0);
+    __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) != 0);
+    __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable)) != 0);
     flags = fcntl(sock, F_GETFL, 0);
-    __xcheck(fcntl(sock, F_SETFL, flags | O_NONBLOCK) != -1);
+    __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
     return sock;
+
+Clean:
+    return -1;
 }
 
 static int udp_close(int sock)
 {
-    __xcheck(sock > 0);
     return close(sock);
 }
 
 static int udp_bind(int sock, __xipaddr_ptr ipaddr)
 {
-    __xcheck(sock > 0);
     struct sockaddr_in *addr = (struct sockaddr_in *)ipaddr->addr;
     ipaddr->addrlen = sizeof(struct sockaddr_in);
-    __xcheck(bind(sock, (const struct sockaddr *)addr, ipaddr->addrlen) != -1);
-    return 0;
+    return bind(sock, (const struct sockaddr *)addr, ipaddr->addrlen);
 }
 
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
-    __xcheck(sock > 0);
     return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr->addr, (socklen_t)ipaddr->addrlen);
 }
 
 static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
 {
-    __xcheck(sock > 0 && ipaddr != NULL);
     int result = recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr->addr, (socklen_t*)&ipaddr->addrlen);
     if (result > 0){
         ipaddr->ip = ((struct sockaddr_in*)ipaddr->addr)->sin_addr.s_addr;
@@ -345,7 +343,6 @@ static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
 
 static int udp_listen(int sock)
 {
-    __xcheck(sock > 0);
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(sock, &fds);
@@ -353,24 +350,31 @@ static int udp_listen(int sock)
     return select(sock + 1, &fds, NULL, NULL, NULL);
 }
 
-struct __xipaddr udp_make_ipaddr(const char *ip, uint16_t port)
+bool udp_make_ipaddr(const char *ip, uint16_t port, struct __xipaddr *ipaddr)
 {
-    struct __xipaddr ipaddr;
-    ipaddr.addrlen = sizeof(struct sockaddr_in);
-    struct sockaddr_in *addr = (struct sockaddr_in *)malloc(ipaddr.addrlen);
-    __xcheck(addr);
+    ipaddr->addrlen = sizeof(struct sockaddr_in);
+    struct sockaddr_in *addr = (struct sockaddr_in *)malloc(ipaddr->addrlen);
+    __xbreak(addr == NULL);
     addr->sin_family = AF_INET;
     addr->sin_port = htons(port);
     if (ip == NULL){
         addr->sin_addr.s_addr = INADDR_ANY;        
     }else {
-        inet_aton(ip, &(addr->sin_addr));
+        __xbreak(inet_aton(ip, &(addr->sin_addr)) != 1);
     }
-    ipaddr.keylen = 6;
-    ipaddr.ip = addr->sin_addr.s_addr;
-    ipaddr.port = addr->sin_port;
-    ipaddr.addr = addr;
-    return ipaddr;
+    ipaddr->keylen = 6;
+    ipaddr->ip = addr->sin_addr.s_addr;
+    ipaddr->port = addr->sin_port;
+    ipaddr->addr = addr;
+
+    return true;
+
+Clean:
+
+    if(addr){
+        free(addr);
+    }
+    return false;
 }
 
 void udp_clear_ipaddr(struct __xipaddr ipaddr)

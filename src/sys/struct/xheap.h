@@ -27,6 +27,10 @@ typedef struct xheap {
 static inline xheap_ptr xheap_create(uint32_t size)
 {
     xheap_ptr heap = (xheap_ptr) calloc(1, sizeof(struct xheap) + sizeof(xheapnode_ptr) * size);
+    if (heap == NULL){
+        __xloge("calloc failed\n");
+        return NULL;
+    }
     // heap 结构体中已经有了一个 heapnode，所以数组的实际长度是 1 + size，
     // 下标 0 不存储元素，从索引 1 开始存储，范围是 1 到 len，容量是 len
     heap->len = size;
@@ -62,11 +66,10 @@ static inline size_t xheap_push(xheap_ptr h, xheapnode_ptr node)
         // 小于父节点时，找到自己的位置
         h->array[i] = node;
         h->array[i]->pos = i;
-        __xcheck(i > 0);
-        // if (i <= 0){
-        //     __xlogi("heap_push %llu", i);
-        //     exit(0);
-        // }
+        if (i <= 0){
+            __xloge("Index out of bounds: %llu\n", i);
+            return EENDED;
+        }
         return i;
     }
 
@@ -158,11 +161,11 @@ static inline xheapnode_ptr xheap_remove(xheap_ptr h, xheapnode_ptr node)
     }
 
     // 节点的 key 值必然一致
-    __xcheck(h->array[smallest]->key == node->key);
-    // if (h->array[smallest]->key != node->key){
-    //     __xlogi("heap_delete h->array[smallest]->key != node->key");
-    //     exit(0);
-    // }
+    // TODO
+    if (h->array[smallest]->key != node->key){
+        __xloge("heap_delete h->array[smallest]->key != node->key\n");
+        return NULL;
+    }
 
     // 把堆顶端最小的元素先放到数组的 0 下标处
     h->array[0] = h->array[smallest];
