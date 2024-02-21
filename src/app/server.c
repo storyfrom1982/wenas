@@ -160,7 +160,7 @@ static void process_message(xtask_enter_ptr task_ctx)
     __xlogd("process_message exit\n");
 }
 
-static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
+static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
     struct xtask_enter enter;
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
     listener->onConnectionToPeer = on_connection_to_peer;
     listener->onConnectionFromPeer = on_connection_from_peer;
     listener->onDisconnection = on_disconnection;
-    listener->onReceiveMessage = on_receive_message;
+    listener->onMessageFromPeer = on_message_from_peer;
     listener->onSendable = on_sendable;
     listener->onIdle = on_idle;
 

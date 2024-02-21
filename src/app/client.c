@@ -6,49 +6,32 @@
 
 
 typedef struct client{
-    int sock;
-    // struct __xipaddr ipaddr;
     struct xmsglistener listener;
     xmsger_ptr msger;
     xchannel_ptr channel;
-    xtask_ptr task;
-    xtask_ptr listen_task;
 }*client_ptr;
 
 
+// static uint64_t send_number = 0, lost_number = 0;
+// static size_t send_msg(struct xmsgsocket *rsock, __xipaddr_ptr raddr, void *data, size_t size)
+// {
+//     // // send_number++;
+//     // // uint64_t randtime = __ex_clock() / 1000ULL;
+//     // // if ((send_number & 0xdf) == (randtime & 0xdf)){
+//     // //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
+//     // //     return size;
+//     // // }
+//     client_ptr client = (client_ptr)rsock->ctx;
+//     long result = __xapi->udp_sendto(client->sock, raddr, data, size);
+//     return result;
+// }
 
-static void malloc_debug_cb(const char *debug)
-{
-    __xloge("%s\n", debug);
-}
-
-static void listening(xtask_enter_ptr task_ctx)
-{
-    client_ptr client = (client_ptr)task_ctx->ctx;
-    __xapi->udp_listen(client->sock);
-    xmsger_wake(client->msger);
-}
-
-static uint64_t send_number = 0, lost_number = 0;
-static size_t send_msg(struct xmsgsocket *rsock, __xipaddr_ptr raddr, void *data, size_t size)
-{
-    // // send_number++;
-    // // uint64_t randtime = __ex_clock() / 1000ULL;
-    // // if ((send_number & 0xdf) == (randtime & 0xdf)){
-    // //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
-    // //     return size;
-    // // }
-    client_ptr client = (client_ptr)rsock->ctx;
-    long result = __xapi->udp_sendto(client->sock, raddr, data, size);
-    return result;
-}
-
-static size_t recv_msg(struct xmsgsocket *rsock, __xipaddr_ptr addr, void *buf, size_t size)
-{
-    client_ptr client = (client_ptr)rsock->ctx;
-    long result = __xapi->udp_recvfrom(client->sock, addr, buf, size);
-    return result;
-}
+// static size_t recv_msg(struct xmsgsocket *rsock, __xipaddr_ptr addr, void *buf, size_t size)
+// {
+//     client_ptr client = (client_ptr)rsock->ctx;
+//     long result = __xapi->udp_recvfrom(client->sock, addr, buf, size);
+//     return result;
+// }
 
 static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
@@ -116,52 +99,21 @@ static void parse_msg(xline_ptr msg, uint64_t len)
     }
 }
 
-static void process_message(xtask_enter_ptr task_ctx)
+static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, void* msg)
 {
-    __xlogd("process_message enter\n");
-    xmsg_ptr msg = (xmsg_ptr)task_ctx->xline;
+    __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    
+    __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+}
+
+static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
+{
+    __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    client_ptr client = (client_ptr)listener->ctx;
     parse_msg((xline_ptr)msg->data, msg->wpos);
     xchannel_free_msg(msg);
-    __xlogd("process_message exit\n");
+    __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
-
-static void on_receive_message(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
-{
-    client_ptr client = (client_ptr)listener->ctx;
-    struct xtask_enter enter;
-    enter.func = process_message;
-    enter.ctx = client;
-    enter.index = channel;
-    enter.xline = msg;
-    xtask_push(client->task, enter);   
-}
-
-static void send_channel_msg(xtask_enter_ptr task_ctx)
-{
-    client_ptr client = (client_ptr)task_ctx->ctx;
-    xchannel_ptr channel = (xchannel_ptr)task_ctx->index;
-    xchannel_send_msg(channel, channel->msg);
-}
-
-static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
-{
-    client_ptr client = (client_ptr)listener->ctx;
-    struct xtask_enter enter;
-    enter.func = send_channel_msg;
-    enter.ctx = client;
-    enter.index = channel;
-    xtask_push(client->task, enter);       
-}
-
-static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
-{
-    client_ptr client = (client_ptr)listener->ctx;
-    struct xtask_enter enter;
-    enter.func = listening;
-    enter.ctx = client;
-    xtask_push(client->listen_task, enter);
-}
-
 
 static void build_msg(xmaker_ptr maker)
 {
@@ -231,8 +183,6 @@ int main(int argc, char *argv[])
     // const char *host = "18.138.128.58";
     // uint16_t port = atoi(argv[1]);
     uint16_t port = 9256;
-    xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
-    // __xipaddr_ptr raddr = &client->ipaddr;
     xmsglistener_ptr listener = &client->listener;
 
     __xlogi("start client 2\n");
@@ -241,31 +191,14 @@ int main(int argc, char *argv[])
 
     __xlogi("start client 3\n");
 
+    listener->ctx = client;
     listener->onConnectionToPeer = on_connection_to_peer;
     listener->onConnectionFromPeer = on_connection_from_peer;
     listener->onDisconnection = on_disconnection;
-    listener->onReceiveMessage = on_receive_message;
-    listener->onSendable = on_sendable;
-    listener->onIdle = on_idle;
-
-    __xlogi("start client 4\n");
-
-    client->sock = __xapi->udp_open();
-
-    __xlogi("start client 5\n");
-
-    msgsock->ctx = client;
-    msgsock->sendto = send_msg;
-    msgsock->recvfrom = recv_msg;
+    listener->onMessageFromPeer = on_message_from_peer;
+    listener->onMessageToPeer = on_message_to_peer;
     
-    listener->ctx = client;
-
-
-    client->task = xtask_create();
-    client->listen_task = xtask_create();
-
-    __xlogi("start client 2\n");
-    client->msger = xmsger_create(msgsock, &client->listener);
+    client->msger = xmsger_create(&client->listener);
     // xmsger_run(client->msger);
 
     xmsger_connect(client->msger, host, port);
@@ -286,9 +219,8 @@ int main(int argc, char *argv[])
         xline_add_text(maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
         // find_msg((xline_ptr)maker->head);
-        xchannel_push_task(client->channel, maker->wpos);
         xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
-        xmaker_free(maker);
+        // xmaker_free(maker);
     }
 ;
 
@@ -298,12 +230,6 @@ int main(int argc, char *argv[])
     
     __xlogi("xmsger_free\n");
     xmsger_free(&client->msger);
-
-    __xlogi("free msgsock\n");
-    free(msgsock);
-
-    // __xapi->udp_clear_ipaddr(client->ipaddr);
-    __xapi->udp_close(client->sock);
     
     __xlogi("free client\n");
     free(client);
