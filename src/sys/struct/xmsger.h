@@ -51,11 +51,17 @@ typedef struct xmsgpack {
     bool comfirmed;
     uint8_t resending;
     struct xheapnode ts;
-    // uint32_t timestamp; //计算往返耗时
+    uint64_t timestamp; //计算往返耗时
     xchannel_ptr channel;
+    struct xmsgpack *prev, *next;
     struct xmsghead head;
     uint8_t body[PACK_BODY_SIZE];
 }*xmsgpack_ptr;
+
+struct xpacklist {
+    uint8_t len;
+    struct xmsgpack head, end;
+};
 
 typedef struct xmsgpackbuf {
     uint8_t range;
@@ -114,6 +120,7 @@ struct xchannel {
     xmsgpackbuf_ptr sendbuf;
     xmsger_ptr msger;
     xpipe_ptr msgqueue;
+    struct xpacklist timedlist;
     xmsg_ptr msg;
 };
 
@@ -150,15 +157,15 @@ struct xmsger {
     __atom_bool running;
     //socket可读或者有数据待发送时为true
     __atom_bool working;
-    __atom_bool listening;
+    __atom_bool readable;
     xmsglistener_ptr listener;
     // xmsgsocket_ptr msgsock;
     // xtask_ptr mainloop_task;
     // __atom_size tasklen;
     // __atom_bool connection_buf_lock;
     // xmsgpackbuf_ptr connection_buf;
-    xpipe_ptr spipe, rpipe;
-    __xprocess_ptr rpid, spid;
+    xpipe_ptr mpipe, spipe, rpipe;
+    __xprocess_ptr mpid, rpid, spid;
     struct xchannellist squeue, timed_queue;
 };
 
@@ -264,7 +271,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                         if (xpipe_readable(channel->msgqueue) > 0){
                             __xlogd("xchannel_pull >>>>------------> next msg\n");
                             xpipe_read(channel->msgqueue, &channel->msg, sizeof(xmsg_ptr));
-                            xpipe_write(channel->msger->rpipe, &channel->msg, sizeof(void*));
+                            xpipe_write(channel->msger->spipe, &channel->msg, sizeof(void*));
                         }else {
                             __xlogd("xchannel_pull >>>>------------> msg receive finished\n");
                             channel->msg = NULL;
@@ -272,7 +279,7 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                         }
                         // 写线程可以一次性（buflen - 1）个 pack
                     }else if(channel->msg->wpos < channel->msg->len && __transbuf_readable(channel->sendbuf) < (channel->sendbuf->range >> 1)){
-                        xpipe_write(channel->msger->rpipe, &channel->msg, sizeof(void*));
+                        xpipe_write(channel->msger->spipe, &channel->msg, sizeof(void*));
                     }
                 }
                 __xlogd("xchannel_pull >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->len - 0, channel->msger->len - 0);
@@ -344,74 +351,6 @@ static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
     channel->update = __xapi->clock();
 }
 
-static inline int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack)
-{
-    // __xlogd("xchannel_send >>>>------------> enter\n");
-
-    long result;
-    xmsgpack_ptr pack;
-
-    if (__transbuf_usable(channel->sendbuf) > 0){
-        pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
-        if (ack != NULL){
-            __xlogd("xchannel_send >>>>------------> ACK and MSG\n");
-            pack->head.y = 1;
-            pack->head.ack = ack->ack;
-            pack->head.acks = ack->acks;
-        }else {
-            __xlogd("xchannel_send >>>>------------> MSG\n");
-        }
-        
-        result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
-        if (result == PACK_HEAD_SIZE + pack->head.pack_size){
-            channel->sendbuf->upos++;
-            pack->ts.key = __xapi->clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-            pack->ts.value = pack;
-            xheap_push(channel->timer, &pack->ts);
-            __xlogd("xchannel_send >>>>------------------------> channel timer count %lu\n", channel->timer->pos);
-            pack->resending = 0;
-        }else {
-            __xlogd("xchannel_send >>>>------------------------> failed\n");
-        }
-
-    }else if (ack != NULL){
-        __xlogd("xchannel_send >>>>------------> ACK\n");
-        result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)ack, PACK_HEAD_SIZE);
-        if (result == PACK_HEAD_SIZE){
-        }else {
-            __xlogd("xchannel_send >>>>------------------------> failed\n");
-        }
-    }
-
-    while (channel->timer->pos > 0 && (int64_t)(__heap_min(channel->timer)->key - __xapi->clock()) < 0){
-        __xlogd("xchannel_send >>>>------------------------------------> pack time out resend %lu %lu\n", __heap_min(channel->timer)->key, __xapi->clock());
-        pack = (xmsgpack_ptr)__heap_min(channel->timer)->value;
-        result = __xapi->udp_sendto(channel->msger->sock, &pack->channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
-        if (result == PACK_HEAD_SIZE + pack->head.pack_size){
-            xheap_pop(channel->timer);
-            pack->ts.key = __xapi->clock() + TRANSUNIT_TIMEOUT_INTERVAL;
-            pack->ts.value = pack;
-            xheap_push(channel->timer, &pack->ts);
-            __xlogd("xchannel_send >>>>------------------------> channel timer count %lu\n", channel->timer->pos);
-            pack->resending ++;
-        }else {
-            __xlogd("xchannel_send >>>>------------------------> failed\n");
-            break;
-        }
-    }
-
-    if (channel->timer->pos > 0){
-        result = (int64_t)__heap_min(channel->timer)->key - __xapi->clock();
-    }else {
-        result = 0;
-    }
-
-    // __xlogd("xchannel_send >>>>------------> exit\n");
-
-    return result;
-
-}
-
 static inline void xchannel_free_msg(xmsg_ptr msg)
 {
     free(msg);
@@ -456,6 +395,8 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
     }
     __xlogd("xchannel_send_msg data exit -------------------------------------------------------------- len: %lu wpos: %lu range %u\n", msg->len, msg->wpos, msg->range);
 }
+
+extern int64_t xchannel_send(xchannel_ptr channel, xmsghead_ptr ack);
 
 static inline void xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
 {
@@ -601,6 +542,16 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
     }
     channel->cid = msger->cid;
     channel->key = msger->cid % 255;
+
+    // 设置 0 的操作，都由 calloc 做了
+    channel->timedlist.len = 0;
+    channel->timedlist.head.prev = NULL;
+    channel->timedlist.end.next = NULL;
+    channel->timedlist.head.next = &channel->timedlist.end;
+    channel->timedlist.end.prev = &channel->timedlist.head;
+    channel->timedlist.end.timestamp = UINT64_MAX;
+
+    // TODO 是否要在创建连接时就加入发送队列，因为这时连接中还没有消息要发送
     xmsger_enqueue_channel(&msger->squeue, channel);
     return channel;
 }
