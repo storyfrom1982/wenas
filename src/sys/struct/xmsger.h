@@ -119,6 +119,8 @@ struct xchannel {
     xmsger_ptr msger;
     xpipe_ptr msgqueue;
     xmsg_ptr msg;
+
+    // TODO 用2个单向链表管理 message 和 stream
 };
 
 //channellist
@@ -130,6 +132,7 @@ typedef struct xchannellist {
 
 struct xmsglistener {
     void *ctx;
+    // TODO 使用cid替换channel指针
     void (*onConnectionToPeer)(struct xmsglistener*, xchannel_ptr channel);
     void (*onConnectionFromPeer)(struct xmsglistener*, xchannel_ptr channel);
     void (*onDisconnection)(struct xmsglistener*, xchannel_ptr channel);

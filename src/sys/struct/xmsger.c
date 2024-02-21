@@ -148,6 +148,7 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
             while (index != ack->head.sn) {
                 pack = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                 if (!pack->comfirmed){
+                    // TODO 计算已经发送但还没收到ACK的pack的个数，
                     __xlogd("xchannel_pull >>>>------------------------------------> resend pack: %u\n", pack->head.sn);
                     int result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
                     if (result != PACK_HEAD_SIZE + pack->head.pack_size){
@@ -417,6 +418,25 @@ static void* main_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
+        // 判断是否有待发送数据和待接收数据
+        if (msger->len - msger->pos == 0 && __is_false(msger->readable)){
+            // 没有数据可收发
+            __xlogd("xmsger_loop >>>>-------------> noting to do\n");
+
+            __xapi->mutex_lock(msger->mtx);
+            // 主动发送消息时，会通过判断这个值来检测主线程是否在工作
+            __set_false(msger->working);
+            // 休息一段时间
+            __xapi->mutex_timedwait(msger->mtx, duration);
+            // 设置工作状态
+            __set_true(msger->working);
+            // 设置最大睡眠时间，如果有需要定时重传的 pack，这个时间值将会被设置为，最近的重传时间
+            duration = UINT64_MAX;
+            __xapi->mutex_unlock(msger->mtx);
+
+            __xlogd("xmsger_loop >>>>-------------> start working\n");
+        }
+
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         if (__is_true(msger->readable)){
@@ -601,25 +621,6 @@ static void* main_loop(void *ptr)
 
             }
 
-        }
-
-        // 判断是否有待发送数据和待接收数据
-        if (msger->len - msger->pos == 0 && __is_false(msger->readable)){
-            // 没有数据可收发
-            __xlogd("xmsger_loop >>>>-------------> noting to do\n");
-
-            __xapi->mutex_lock(msger->mtx);
-            // 主动发送消息时，会通过判断这个值来检测主线程是否在工作
-            __set_false(msger->working);
-            // 休息一段时间
-            __xapi->mutex_timedwait(msger->mtx, duration);
-            // 设置工作状态
-            __set_true(msger->working);
-            // 设置最大睡眠时间，如果有需要定时重传的 pack，这个时间值将会被设置为，最近的重传时间
-            duration = UINT64_MAX;
-            __xapi->mutex_unlock(msger->mtx);
-
-            __xlogd("xmsger_loop >>>>-------------> start working\n");
         }
 
         if (xpipe_readable(msger->mpipe) > 0){
