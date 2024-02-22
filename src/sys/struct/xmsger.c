@@ -502,6 +502,7 @@ static void* main_loop(void *ptr)
                             msger->listener->onDisconnection(msger->listener, channel);
 
                         }else if (rpack->head.type == XMSG_PACK_PING){
+                            // TODO 这里不需要回复 PONG，只需要回复 ACK，主动创建连接方发 PING，被动方回复 ACK
                             __xlogd("xmsger_loop receive PING\n");
                             // 回复 PONG
                             xmsgpack_ptr spack = make_pack(channel, XMSG_PACK_PONG);
@@ -509,6 +510,8 @@ static void* main_loop(void *ptr)
                             xchannel_recv(channel, rpack);
 
                         }else if (rpack->head.type == XMSG_PACK_PONG){
+                            // 这里要处理收到 PONG 的情况，因为对穿时，需要在这里回复 ACK
+                            // 建立连接以后得 PING，不会收到 PONG，因为收到 PING 的一方，直接回复 ACK
                             __xlogd("xmsger_loop receive PONG\n");
                             rpack->head.cid = channel->peer_cid;
                             rpack->head.x = XMSG_VAL ^ channel->peer_key;
@@ -522,6 +525,7 @@ static void* main_loop(void *ptr)
                     __xlogd("xmsger_loop cannot fond channel\n");
 
                     if (rpack->head.type == XMSG_PACK_PING){
+                        // TODO 收到对穿的 PING，比较时间戳，后发送的一方回复 PONG，先发送的一方直接用 cid 做索引
 
                         __xlogd("xmsger_loop receive PING\n");
 
