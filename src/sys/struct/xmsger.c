@@ -17,7 +17,7 @@ enum {
 
 #define PACK_HEAD_SIZE              16
 // #define PACK_BODY_SIZE              1280 // 1024 + 256
-#define PACK_BODY_SIZE              32
+#define PACK_BODY_SIZE              64
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
 #define PACK_WINDOW_RANGE           16
 
@@ -58,12 +58,15 @@ typedef struct xmsgpackbuf {
 }*xmsgpackbuf_ptr;
 
 
+#define XMSG_CMD_SIZE       64
+
 typedef struct xmsg {
     uint64_t type; //XMSG_DGRAM or XMSG_STREAM
     xchannel_ptr channel; //如果 channel 是 NULL，这个 msg 是一个创建连接的 PING
     size_t wpos, rpos, len, range;
     struct xmsg *next;
     void *data;
+    uint8_t cmd[XMSG_CMD_SIZE];
 }*xmsg_ptr;
 
 
@@ -322,10 +325,6 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                         if (channel->recycle_ptr == NULL){
                             xchannel_keep_alive(channel);
                         }
-                        if (ptr->type != XMSG_PACK_MSG){
-                            // TODO 可以给 msg 增加一块固定区域，用来发送 PING，BEY
-                            free(ptr->data);
-                        }
                         free(ptr);
                     }
                 }
@@ -401,35 +400,46 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
 
 static inline void xchannel_send(xchannel_ptr channel, xmsgpack_ptr pack)
 {
+    __xlogd("xchannel_send >>>>------------------------> enter\n");
+
     int result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
 
     // 判断发送是否成功
     if (result == PACK_HEAD_SIZE + pack->head.pack_size){
         // 缓冲区下标指向下一个待发送 pack
         channel->sendbuf->upos++;
-        // 判断当前 pack 是否为当前连接的消息队列中的最后一个消息
-        // TODO 判断 stream 队列是否为空
-        if (channel->send_ptr->next == NULL && pack->head.pack_range == 1){
+
+        __xlogd("xchannel_send >>>>------------------------> send msg range %lu\n", channel->send_ptr->range);
+        // 判断是否为一个 msg 的最后一个 pack
+        if (channel->send_ptr->range == 0){
+            // TODO 判断 stream 队列是否为空
+            // 指向下一个 msg
+            channel->send_ptr = channel->send_ptr->next;
+        }
+
+        __xlogd("xchannel_send >>>>------------------------> send_ptr %p\n", channel->send_ptr);
+
+        // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
+        if (channel->send_ptr == NULL){
+            __xlogd("xchannel_send >>>>------------------------> enqueue flushing\n");
             // 冲洗一次
             pack->flushing = true;
-            __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
+            // __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
             // 记录当前时间
             pack->timestamp = __xapi->clock();
             // 加入冲洗队列
             pack->next = &channel->msger->flushlist.end;
-            pack->next->prev = pack;
             pack->prev = channel->msger->flushlist.end.prev;
+            pack->next->prev = pack;
             pack->prev->next = pack;
             channel->msger->flushlist.len ++;
-        }
-
-        if (channel->send_ptr->range == 0){
-            channel->send_ptr = channel->send_ptr->next;
         }
 
     }else {
         __xlogd("xchannel_send >>>>------------------------> send failed\n");
     }
+
+    __xlogd("xchannel_send >>>>------------------------> exit\n");
 }
 
 static inline bool xchannel_recv(xchannel_ptr channel, xmsgpack_ptr unit)
@@ -562,44 +572,31 @@ static void* send_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
-        if (__is_false(msger->working)){
-            __xlogd("recv_loop ############################# udp_listen enter\n");
-            __set_true(msger->readable);
-            __xapi->udp_listen(msger->sock);
-            __set_false(msger->readable);
-            __xlogd("recv_loop ############################# udp_listen exit\n");
-            // __xapi->mutex_lock(msger->mtx);
-            __xapi->mutex_notify(msger->mtx);
-            // __xapi->mutex_unlock(msger->mtx);            
-        }
+        __xbreak(xpipe_read(msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+
+        __xlogd("send_loop >>>>-------------> spipe writable: %lu\n", xpipe_readable(msger->rpipe));
+
+        __xlogd("send_loop >>>>-------------> send_ptr->next: %p\n", msg->channel->send_ptr->next);
         
-        if (xpipe_readable(msger->spipe) > 0)
+        while (msg->wpos < msg->len)
         {
-            __xlogd("recv_loop ############################# xpipe_read enter\n");
-            __xbreak(xpipe_read(msger->spipe, &msg, sizeof(void*)) != sizeof(void*));
-            __xlogd("recv_loop ############################# xpipe_read exit\n");
-
-            while (msg->wpos < msg->len)
-            {
-                if (__transbuf_writable(msg->channel->sendbuf) == 0){
-                    break;
-                }
-                pack = malloc_pack(msg->channel, msg->type);
-                if (msg->len - msg->wpos < PACK_BODY_SIZE){
-                    pack->head.pack_size = msg->len - msg->wpos;
-                }else{
-                    pack->head.pack_size = PACK_BODY_SIZE;
-                }
-                pack->head.pack_range = msg->range;
-                mcopy(pack->body, msg->data + msg->wpos, pack->head.pack_size);
-                xchannel_push(msg->channel, pack);
-                msg->wpos += pack->head.pack_size;
-                msg->range --;
-                __xlogd("recv_loop ############################# send range %u\n", msg->range);
+            __xlogd("send_loop >>>>-------------> wpos: %lu len: %lu\n", msg->wpos, msg->len);
+            if (__transbuf_writable(msg->channel->sendbuf) == 0){
+                break;
             }
-
-        }else {
-
+            pack = malloc_pack(msg->channel, msg->type);
+            if (msg->len - msg->wpos < PACK_BODY_SIZE){
+                pack->head.pack_size = msg->len - msg->wpos;
+            }else{
+                pack->head.pack_size = PACK_BODY_SIZE;
+            }
+            pack->head.pack_range = msg->range;
+            mcopy(pack->body, msg->data + msg->wpos, pack->head.pack_size);
+            msg->wpos += pack->head.pack_size;
+            __xlogd("send_loop ############################# send range %lu\n", msg->range);
+            msg->range --;
+            __xlogd("send_loop ############################# -- send range %lu\n", msg->range);
+            xchannel_push(msg->channel, pack);
         }
     }
 
@@ -616,7 +613,7 @@ static void* main_loop(void *ptr)
     int result;
     xmsg_ptr msg;
     int64_t countdown;
-    uint64_t duration = UINT64_MAX;
+    uint64_t duration = UINT32_MAX;
     xmsger_ptr msger = (xmsger_ptr)ptr;
     
     xmsgpack_ptr rpack = NULL;
@@ -632,9 +629,9 @@ static void* main_loop(void *ptr)
     while (__is_true(msger->running))
     {
         // 判断是否有待发送数据和待接收数据
-        if (msger->len - msger->pos == 0 && __is_false(msger->readable)){
+        if (__is_false(msger->readable)){
             // 没有数据可收发
-            __xlogd("xmsger_loop >>>>-------------> noting to do\n");
+            __xlogd("xmsger_loop >>>>-------------> noting to do %lu\n", duration);
 
             __xapi->mutex_lock(msger->mtx);
             // 主动发送消息时，会通过判断这个值来检测主线程是否在工作
@@ -644,7 +641,7 @@ static void* main_loop(void *ptr)
             // 设置工作状态
             __set_true(msger->working);
             // 设置最大睡眠时间，如果有需要定时重传的 pack，这个时间值将会被设置为，最近的重传时间
-            duration = UINT64_MAX;
+            duration = UINT32_MAX;
             __xapi->mutex_unlock(msger->mtx);
 
             __xlogd("xmsger_loop >>>>-------------> start working\n");
@@ -860,12 +857,6 @@ static void* main_loop(void *ptr)
                 *((uint32_t*)(msg->data)) = msg->channel->cid;
                 // 将此刻时钟做为连接的唯一标识
                 *((uint64_t*)(msg->data + 4)) = __xapi->clock();
-
-                // 之前的 len 中包含了 IP 地址的长度，所以这里要重新设置
-                msg->len = 12;
-                msg->range = 1;
-                msg->rpos = 0;
-                msg->wpos = 0;
             }
 
             // 更新连接的发送计数
@@ -876,6 +867,8 @@ static void* main_loop(void *ptr)
                 xchannel_keep_sending(msg->channel);
             }
 
+            __xlogd("xmsger_loop >>>>-------------> send msg to peer\n");
+
             // 判断是否有正在发送的消息
             if (msg->channel->send_ptr == NULL){
                 // 设置为当前正在发送的消息
@@ -883,8 +876,10 @@ static void* main_loop(void *ptr)
                 msg->channel->send_tail_pptr = &(msg->channel->send_ptr);
                 msg->channel->send_ptr->next = NULL;
                 msg->channel->recycle_ptr = msg->channel->send_ptr;
+                __xlogd("xmsger_loop >>>>-------------> send_ptr->next: %p\n", msg->channel->send_ptr->next);
                 // 将消息放入发送管道，交给发送线程进行分片
                 __xbreak(xpipe_write(msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+                
             }else {
                 // 加入待发送队列
                 msg->next = (*(msg->channel->send_tail_pptr))->next;
@@ -897,11 +892,16 @@ static void* main_loop(void *ptr)
         // 判断冲洗列表长度
         if (msger->flushlist.len > 0){
 
+            __xlogd("xmsger_loop >>>>-------------> flushing\n");
+
             // 取出第一个 pack
             sendpack = msger->flushlist.head.next;
+            // __xlogd("xmsger_loop >>>>-------------> %X:%X\n", sendpack, &msger->flushlist.end);
+            // goto Clean;            
 
             // 计算是否需要重传
             if ((countdown = 100000000UL - (__xapi->clock() - sendpack->timestamp)) > 0) {
+                __xlogd("xmsger_loop >>>>-------------> duration %lu countdown %lu\n", duration, countdown);
                 // 未超时
                 if (duration > countdown){
                     // 超时时间更近，更新休息时间
@@ -910,6 +910,8 @@ static void* main_loop(void *ptr)
                 }
 
             }else {
+
+                __xlogd("xmsger_loop >>>>-------------> %X:%X\n", sendpack, &msger->flushlist.end);
 
                 // 需要重传
                 while (sendpack != &msger->flushlist.end)
@@ -928,12 +930,16 @@ static void* main_loop(void *ptr)
                         break;
                     }
 
+                    __xlogd("xmsger_loop >>>>-------------> resend\n");
+
                     // TODO 这里需要处理超时断开连接的逻辑
 
-                    result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(sendpack->head), PACK_HEAD_SIZE + sendpack->head.pack_size);
+                    result = __xapi->udp_sendto(sendpack->channel->msger->sock, &sendpack->channel->addr, (void*)&(sendpack->head), PACK_HEAD_SIZE + sendpack->head.pack_size);
+                    __xlogd("xmsger_loop >>>>-------------> resend 1\n");
 
                     // 判断发送是否成功
                     if (result == PACK_HEAD_SIZE + sendpack->head.pack_size){
+                        __xlogd("xmsger_loop >>>>-------------> resend 2\n");
                         // 暂时移出冲洗列表
                         sendpack->prev->next = sendpack->next;
                         sendpack->next->prev = sendpack->prev;
@@ -944,12 +950,13 @@ static void* main_loop(void *ptr)
 
                         // 加入定时列表
                         sendpack->next = &msger->flushlist.end;
-                        sendpack->next->prev = sendpack;
                         sendpack->prev = msger->flushlist.end.prev;
+                        sendpack->next->prev = sendpack;
                         sendpack->prev->next = sendpack;
 
                     }else {
                         __xlogd("xmsger_loop >>>>------------------------> send failed\n");
+                        goto Clean;
                     }
 
                     sendpack = next;
@@ -960,16 +967,21 @@ static void* main_loop(void *ptr)
         // 判断待发送队列中是否有内容
         if (msger->send_queue.len > 0){
 
+            // __xlogd("xmsger_loop >>>>-------------> send channel enter\n");
+
             // TODO 如能能更平滑的发送
             // 从头开始，每个连接发送一个 pack
             channel = msger->send_queue.head.next;
 
+            // __xlogd("xmsger_loop >>>>-------------> send channel 1\n");
+
             while (channel != &msger->send_queue.end)
             {
+                // __xlogd("xmsger_loop >>>>-------------> send channel 2\n");
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
                 if (__transbuf_usable(channel->sendbuf) > 0){
-
+                    // __xlogd("xmsger_loop >>>>-------------> send channel 3\n");
                     xchannel_send(channel, channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)]);
 
                 }
@@ -978,10 +990,15 @@ static void* main_loop(void *ptr)
                 channel = channel->next;
             }
 
+            // __xlogd("xmsger_loop >>>>-------------> send channel exit\n");
+
         }
 
         // 处理超时
         if (msger->recv_queue.len > 0){
+            
+            __xlogd("xmsger_loop >>>>-------------> check recv list\n");
+
             channel = msger->recv_queue.head.next;
             // 10 秒钟超时
             while (channel != &msger->recv_queue.end){
@@ -1123,8 +1140,8 @@ bool xmsger_ping(xmsger_ptr msger, xchannel_ptr channel)
     msg->rpos = 0;
     msg->wpos = 0;
     msg->range = 1;
-    msg->len = sizeof(uint64_t);
-    msg->data = (uint8_t*)malloc(msg->len);
+    msg->len = XMSG_CMD_SIZE;
+    msg->data = msg->cmd;
     __xbreak(msg->data == NULL);
 
     *(uint64_t*)msg->data = __xapi->clock();
@@ -1174,9 +1191,8 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
     msg->rpos = 0;
     msg->wpos = 0;
     msg->range = 1;
-    msg->len = sizeof(uint64_t);
-    msg->data = (uint8_t*)malloc(msg->len);
-    __xbreak(msg->data == NULL);
+    msg->len = XMSG_CMD_SIZE;
+    msg->data = msg->cmd;
 
     *(uint64_t*)msg->data = __xapi->clock();
 
@@ -1215,16 +1231,16 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
 
     msg->type = XMSG_PACK_PING;
     msg->channel = NULL;
-
-    // 预留出承载 PING 内容（cid 和 时间戳）的位置
-    msg->len = sizeof(struct __xipaddr) + 12;
-    msg->data = (uint8_t*)malloc(msg->len);
-    __xbreak(msg->data == NULL);
+    msg->rpos = 0;
+    msg->wpos = 0;    
+    msg->range = 1;
+    msg->len = XMSG_CMD_SIZE;
+    msg->data = msg->cmd;
 
     __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->data));
     
     // 更新 msger 的发送计数
-    __atom_add(msger->len, 12);
+    __atom_add(msger->len, msg->len);
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
     if (__is_false(msger->working)){
