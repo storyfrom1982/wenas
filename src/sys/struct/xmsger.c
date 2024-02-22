@@ -101,8 +101,10 @@ struct xchannel {
     struct __xipaddr addr;
     xmsgpackbuf_ptr sendbuf;
     xmsger_ptr msger;
-    xpipe_ptr msgqueue;
-    xmsg_ptr msg;
+    // xpipe_ptr msgqueue;
+    // xmsg_ptr msg;
+    xmsg_ptr send_ptr, recycle_ptr;
+    xmsg_ptr *send_tail_pptr;
     struct xmsg rmessage, rstream;
 
     // TODO 用2个单向链表管理 message 和 stream
@@ -201,21 +203,26 @@ static inline void xchannel_update(xchannel_ptr channel)
 // 每一次不连续的发送，都会进行两次次队列切换，保活到发送，发送到保活
 static inline void xchannel_keep_alive(xchannel_ptr channel)
 {
-    channel->sending = false;
-    xchannel_dequeue(&channel->msger->send_queue, channel);
-    xchannel_enqueue(&channel->msger->recv_queue, channel);
+    if (channel->sending){
+        channel->sending = false;
+        xchannel_dequeue(&channel->msger->send_queue, channel);
+        xchannel_enqueue(&channel->msger->recv_queue, channel);
+    }
 }
 
 static inline void xchannel_keep_sending(xchannel_ptr channel)
 {
-    channel->sending = true;
-    xchannel_dequeue(&channel->msger->recv_queue, channel);
-    xchannel_enqueue(&channel->msger->send_queue, channel);
+    if (!channel->sending){
+        channel->sending = true;
+        xchannel_dequeue(&channel->msger->recv_queue, channel);
+        xchannel_enqueue(&channel->msger->send_queue, channel);
+    }
 }
 
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
 {
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
+    channel->send_ptr = NULL;
     channel->connected = false;
     channel->sending = false;
     channel->breaker = false;
@@ -226,8 +233,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
     channel->msgbuf->range = PACK_WINDOW_RANGE;
     channel->sendbuf = (xmsgpackbuf_ptr) calloc(1, sizeof(struct xmsgpackbuf) + sizeof(xmsgpack_ptr) * PACK_WINDOW_RANGE);
     channel->sendbuf->range = PACK_WINDOW_RANGE;
-    channel->msgqueue = xpipe_create(8 * __sizeof_ptr);
-    channel->peer_cid = 0;
     while (xtree_find(msger->peers, &msger->cid, 4) != NULL){
         if (++msger->cid == 0){
             msger->cid = 1;
@@ -235,6 +240,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr)
     }
     channel->cid = msger->cid;
     channel->key = msger->cid % 255;
+    // 未建立连接前，使用默认 cid 和默认 key
+    channel->peer_cid = 0;
+    channel->peer_key = XMSG_KEY;
 
     // 所有新创建的连接，都先进入接收队列，同时出入保活状态，检测到超时就会被释放
     xchannel_enqueue(&msger->recv_queue, channel);
@@ -250,7 +258,7 @@ static inline void xchannel_free(xchannel_ptr channel)
     }else {
         xchannel_dequeue(&channel->msger->recv_queue, channel);
     }
-    xpipe_free(&channel->msgqueue);
+    // TODO 释放 msg queue 中的资源
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
@@ -302,26 +310,23 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 // 数据已送达，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.pack_size);
                 __atom_add(channel->msger->pos, pack->head.pack_size);
-                if (channel->msg != NULL){
-                    __xlogd("xchannel_pull >>>>------------> msg.rpos: %lu msg.len: %lu pack size: %lu\n", channel->msg->rpos, channel->msg->len, pack->head.pack_size);
-                    channel->msg->rpos += pack->head.pack_size;
-                    if (channel->msg->rpos == channel->msg->len){
+                if (channel->recycle_ptr != NULL){
+                    __xlogd("xchannel_pull >>>>------------> msg.rpos: %lu msg.len: %lu pack size: %lu\n", channel->recycle_ptr->rpos, channel->recycle_ptr->len, pack->head.pack_size);
+                    // 更新已经到达对端的数据计数
+                    channel->recycle_ptr->rpos += pack->head.pack_size;
+                    if (channel->recycle_ptr->rpos == channel->recycle_ptr->len){
                         //TODO 通知上层，消息发送完成
-                        channel->msger->listener->onMessageToPeer(channel->msger->listener, channel, channel->msg->data);
-                        free(channel->msg);
-                        if (xpipe_readable(channel->msgqueue) > 0){
-                            __xlogd("xchannel_pull >>>>------------> next msg\n");
-                            __xbreak(xpipe_read(channel->msgqueue, &channel->msg, __sizeof_ptr) != __sizeof_ptr);
-                            __xbreak(xpipe_write(channel->msger->spipe, &channel->msg, __sizeof_ptr) != __sizeof_ptr);
-                        }else {
-                            __xlogd("xchannel_pull >>>>------------> msg receive finished\n");
-                            channel->msg = NULL;
+                        channel->msger->listener->onMessageToPeer(channel->msger->listener, channel, channel->recycle_ptr->data);
+                        xmsg_ptr ptr = channel->recycle_ptr;
+                        channel->recycle_ptr = channel->recycle_ptr->next;
+                        if (channel->recycle_ptr == NULL){
                             xchannel_keep_alive(channel);
                         }
-                        // 写线程可以一次性（buflen - 1）个 pack
-                    }else if(channel->msg->wpos < channel->msg->len && __transbuf_readable(channel->sendbuf) < (channel->sendbuf->range >> 1)){
-                        
-                        __xbreak(xpipe_write(channel->msger->spipe, &channel->msg, __sizeof_ptr) != __sizeof_ptr);
+                        if (ptr->type != XMSG_PACK_MSG){
+                            // TODO 可以给 msg 增加一块固定区域，用来发送 PING，BEY
+                            free(ptr->data);
+                        }
+                        free(ptr);
                     }
                 }
                 __xlogd("xchannel_pull >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->len - 0, channel->msger->len - 0);
@@ -332,12 +337,15 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                     // 这里可以统计收到重复 ACK 的次数
                 }
 
+                // 从定时队列中移除
                 if (pack->flushing){
                     pack->next->prev = pack->prev;
                     pack->prev->next = pack->next;
                 }
+
                 // 释放内存
                 free(pack);
+
                 // 索引位置空
                 channel->sendbuf->buf[index] = NULL;
 
@@ -345,6 +353,11 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
 
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
             } while (channel->sendbuf->rpos != ack->head.ack);
+
+            // 判断是否有消息要发送和发送缓冲是否可写
+            if(channel->send_ptr != NULL && channel->send_ptr->wpos < channel->send_ptr->len && __transbuf_writable(channel->sendbuf) > 0){
+                __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+            }
 
         } else {
 
@@ -395,7 +408,8 @@ static inline void xchannel_send(xchannel_ptr channel, xmsgpack_ptr pack)
         // 缓冲区下标指向下一个待发送 pack
         channel->sendbuf->upos++;
         // 判断当前 pack 是否为当前连接的消息队列中的最后一个消息
-        if (xpipe_readable(channel->msgqueue) == 0 && (channel->msg == NULL || channel->msg->range == 1)){
+        // TODO 判断 stream 队列是否为空
+        if (channel->send_ptr->next == NULL && pack->head.pack_range == 1){
             // 冲洗一次
             pack->flushing = true;
             __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
@@ -407,6 +421,10 @@ static inline void xchannel_send(xchannel_ptr channel, xmsgpack_ptr pack)
             pack->prev = channel->msger->flushlist.end.prev;
             pack->prev->next = pack;
             channel->msger->flushlist.len ++;
+        }
+
+        if (channel->send_ptr->range == 0){
+            channel->send_ptr = channel->send_ptr->next;
         }
 
     }else {
@@ -566,13 +584,12 @@ static void* send_loop(void *ptr)
                 if (__transbuf_writable(msg->channel->sendbuf) == 0){
                     break;
                 }
-                pack = malloc_pack(msg->channel, XMSG_PACK_MSG);
+                pack = malloc_pack(msg->channel, msg->type);
                 if (msg->len - msg->wpos < PACK_BODY_SIZE){
                     pack->head.pack_size = msg->len - msg->wpos;
                 }else{
                     pack->head.pack_size = PACK_BODY_SIZE;
                 }
-                // 消息类型为 XMSG_PACK_MSG 的 pack，pack_range >= 1
                 pack->head.pack_range = msg->range;
                 mcopy(pack->body, msg->data + msg->wpos, pack->head.pack_size);
                 xchannel_push(msg->channel, pack);
@@ -828,60 +845,53 @@ static void* main_loop(void *ptr)
             __xbreak(xpipe_read(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
             // 判断连接是否存在
-            if (msg->channel != NULL){
-                // 连接已经存在，开始发送消息
-                __xlogd("xmsger_loop >>>>-------------> send msg to peer\n");
-
-                // 判断是否有正在发送的消息
-                if (channel->msg == NULL){
-                    // 设置为当前正在发送的消息
-                    channel->msg = msg;
-                }else {
-                    // 加入待发送队列
-                    __xbreak(xpipe_write(channel->msgqueue, &msg, __sizeof_ptr) != __sizeof_ptr);
-                }
-
-                // 将消息放入发送管道，交给发送线程进行分片
-                __xbreak(xpipe_write(msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-
-                // 这里要检查，通道是否在发送队列中
-                if (!msg->channel->sending){
-                    // 重新加入发送队列，并且从待回收队列中移除
-                    xchannel_keep_sending(channel);
-                }                
-
-
-            }else {
+            if (msg->channel == NULL){
 
                 // 连接不存在，创建新连接
                 __xlogd("xmsger_loop >>>>-------------> create channel to peer\n");
 
-                xchannel_ptr channel = xchannel_create(msger, (__xipaddr_ptr)msg->data);
-                __xbreak(channel == NULL);
+                msg->channel = xchannel_create(msger, (__xipaddr_ptr)msg->data);
+                __xbreak(msg->channel == NULL);
 
                 // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
-                xtree_save(msger->peers, &channel->addr.port, channel->addr.keylen, channel);
-                xmsgpack_ptr spack = malloc_pack(channel, XMSG_PACK_PING);
-                // 建立连接时，cid 必须是 0
-                spack->head.cid = 0;
-                // 这里是协议层验证
-                spack->head.x = (XMSG_VAL ^ XMSG_KEY);
-                *((uint32_t*)(spack->body)) = channel->cid;
-                // 将此刻时钟做为连接的唯一标识
-                *((uint64_t*)(spack->body + 4)) = __xapi->clock();
-                spack->head.pack_size = 12;
-                __atom_add(channel->len, spack->head.pack_size);
-                // PING消息不需要分片，所以不需要移交给发送线程
-                xchannel_push(channel, spack);
-                // 因为是线程间传递地址信息，所以用了指针，这里要释放内存
-                if (msg->data){
-                    // 这里指向 xipaddr 分配的内存地址
-                    free(msg->data);
-                }
-                free(msg);
+                xtree_save(msger->peers, &msg->channel->addr.port, msg->channel->addr.keylen, msg->channel);
 
+                // 所有 pack 统一交给发送线程发出，保持有序，在这里先填充好 PING 的内容
+                *((uint32_t*)(msg->data)) = msg->channel->cid;
+                // 将此刻时钟做为连接的唯一标识
+                *((uint64_t*)(msg->data + 4)) = __xapi->clock();
+
+                // 之前的 len 中包含了 IP 地址的长度，所以这里要重新设置
+                msg->len = 12;
+                msg->range = 1;
+                msg->rpos = 0;
+                msg->wpos = 0;
             }
-                        
+
+            // 更新连接的发送计数
+            __atom_add(msg->channel->len, msg->len);
+
+            // 重新加入发送队列，并且从待回收队列中移除
+            if (!msg->channel->sending){
+                xchannel_keep_sending(msg->channel);
+            }
+
+            // 判断是否有正在发送的消息
+            if (msg->channel->send_ptr == NULL){
+                // 设置为当前正在发送的消息
+                msg->channel->send_ptr = msg;
+                msg->channel->send_tail_pptr = &(msg->channel->send_ptr);
+                msg->channel->send_ptr->next = NULL;
+                msg->channel->recycle_ptr = msg->channel->send_ptr;
+                // 将消息放入发送管道，交给发送线程进行分片
+                __xbreak(xpipe_write(msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+            }else {
+                // 加入待发送队列
+                msg->next = (*(msg->channel->send_tail_pptr))->next;
+                (*(msg->channel->send_tail_pptr))->next = msg;
+                msg->channel->send_tail_pptr = &msg;
+            }
+           
         }
 
         // 判断冲洗列表长度
@@ -1021,7 +1031,7 @@ static void* recv_loop(void *ptr)
 
             msg = &pack->channel->rmessage;
             // PING 和 PONG BYE FINAL 的 pack_range 都设置为 0
-            if (pack->head.pack_range > 0){
+            if (pack->head.type == XMSG_PACK_MSG && pack->head.pack_range > 0){
                 if (msg->data == NULL){
                     // 收到消息的第一个包，创建 msg，记录范围
                     msg->range = pack->head.pack_range;
@@ -1057,7 +1067,6 @@ Clean:
 
 
 bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size)
-
 {
     __xlogd("xmsger_send enter\n");
 
@@ -1066,13 +1075,12 @@ bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size
     xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
     __xbreak(msg == NULL);
 
+    msg->type = XMSG_PACK_MSG;
+    msg->channel = channel;
     msg->rpos = 0;
     msg->wpos = 0;
     msg->len = size;
     msg->data = data;
-    msg->channel = channel;
-    channel->msg = msg;
-    __xlogd("xmsger_send 1\n");;
 
     msg->range = (msg->len / PACK_BODY_SIZE);
     if (msg->range * PACK_BODY_SIZE < msg->len){
@@ -1105,33 +1113,119 @@ Clean:
 
 bool xmsger_ping(xmsger_ptr msger, xchannel_ptr channel)
 {
-    __xlogd("xmsger_ping enter");
+    __xlogd("xmsger_ping channel 0x%X enter", channel);
+
+    xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
+    __xbreak(msg == NULL);
+
+    msg->type = XMSG_PACK_PING;
+    msg->channel = channel;
+    msg->rpos = 0;
+    msg->wpos = 0;
+    msg->range = 1;
+    msg->len = sizeof(uint64_t);
+    msg->data = (uint8_t*)malloc(msg->len);
+    __xbreak(msg->data == NULL);
+
+    *(uint64_t*)msg->data = __xapi->clock();
+
+    __atom_add(msger->len, msg->len);
+    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+
+    if (__is_false(msger->working)){
+        __xlogd("xmsger_ping channel 0x%X notify", channel);
+        __xapi->mutex_notify(msger->mtx);
+    }    
+
+    __xlogd("xmsger_ping channel 0x%X exit", channel);
+
+    return true;
+
+Clean:
+
+    if (msg){
+        if (msg->data){
+            free(msg->data);
+        }
+        free(msg);
+    }
+    __xlogd("xmsger_ping channel 0x%X failed", channel);
+
+    return false;
+
     __xlogd("xmsger_ping exit");
 }
 
 bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
 {
-    __xlogd("xmsger_disconnect enter");
-    __xlogd("xmsger_disconnect exit");
+    __xlogd("xmsger_disconnect channel 0x%X enter", channel);
+
+    // 避免重复调用
+    if (!__set_true(channel->breaker)){
+        __xlogd("xmsger_disconnect channel 0x%X repeated calls", channel);
+        return true;
+    }
+
+    xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
+    __xbreak(msg == NULL);
+
+    msg->type = XMSG_PACK_BYE;
+    msg->channel = channel;
+    msg->rpos = 0;
+    msg->wpos = 0;
+    msg->range = 1;
+    msg->len = sizeof(uint64_t);
+    msg->data = (uint8_t*)malloc(msg->len);
+    __xbreak(msg->data == NULL);
+
+    *(uint64_t*)msg->data = __xapi->clock();
+
+    __atom_add(msger->len, msg->len);
+    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+
+    if (__is_false(msger->working)){
+        __xlogd("xmsger_disconnect channel 0x%X notify", channel);
+        __xapi->mutex_notify(msger->mtx);
+    }    
+
+    __xlogd("xmsger_disconnect channel 0x%X exit", channel);
+
+    return true;
+
+Clean:
+
+    if (msg){
+        if (msg->data){
+            free(msg->data);
+        }
+        free(msg);
+    }
+    __xlogd("xmsger_disconnect channel 0x%X failed", channel);
+
+    return false;
+
 }
 
 bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
 {
     __xlogd("xmsger_connect enter\n");
 
-        xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
+    xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
     __xbreak(msg == NULL);
 
-    msg->data = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    msg->type = XMSG_PACK_PING;
+    msg->channel = NULL;
+
+    // 预留出承载 PING 内容（cid 和 时间戳）的位置
+    msg->len = sizeof(struct __xipaddr) + 12;
+    msg->data = (uint8_t*)malloc(msg->len);
     __xbreak(msg->data == NULL);
 
     __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->data));
     
-    msg->type = XMSG_DGRAM;
-    msg->channel = NULL;
-    
+    // 更新 msger 的发送计数
     __atom_add(msger->len, 12);
-    __xbreak(xpipe_write(msger->mpipe, &msg, sizeof(void*)) != sizeof(void*));
+    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
     if (__is_false(msger->working)){
         __xlogd("xmsger_connect notify\n");
@@ -1147,7 +1241,7 @@ Clean:
     if (msg){
         if (msg->data){
             free(msg->data);
-        }        
+        }
         free(msg);
     }
     __xlogd("xmsger_connect failed\n");
