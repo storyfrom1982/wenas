@@ -78,6 +78,7 @@ typedef struct xmsg {
     uint64_t type; //XMSG_DGRAM or XMSG_STREAM
     xchannel_ptr channel; //如果 channel 是 NULL，这个 msg 是一个创建连接的 PING
     size_t wpos, rpos, len, range;
+    struct xmsg *next;
     void *addr;
     uint8_t data[1];
 }*xmsg_ptr;
@@ -168,7 +169,7 @@ struct xmsger {
     __xprocess_ptr mpid, rpid, spid;
     // 定时队列是自然有序的，不需要每次排序，所以使用链表效率最高
     struct xpacklist flushlist;
-    struct xchannellist squeue, timed_queue;
+    struct xchannellist send_queue, recv_queue;
 };
 
 
@@ -185,60 +186,17 @@ struct xmsger {
 #define XMSG_KEY    'x'
 #define XMSG_VAL    'X'
 
-static inline void xmsger_enqueue_channel(xchannellist_ptr queue, xchannel_ptr channel)
-{
-    channel->next = &queue->end;
-    channel->prev = queue->end.prev;
-    channel->next->prev = channel;
-    channel->prev->next = channel;
-    queue->len ++;
-    channel->sending = true;
-}
 
-static inline void xmsger_dequeue_channel(xchannellist_ptr queue, xchannel_ptr channel)
-{
-    channel->prev->next = channel->next;
-    channel->next->prev = channel->prev;
-    queue->len --;
-    channel->sending = false;
-}
-
-static inline void xchannel_pause(xchannel_ptr channel)
-{
-    xmsger_dequeue_channel(&channel->msger->squeue, channel);
-    xmsger_enqueue_channel(&channel->msger->timed_queue, channel);
-}
-
-static inline void xchannel_resume(xchannel_ptr channel)
-{
-    xmsger_dequeue_channel(&channel->msger->timed_queue, channel);
-    xmsger_enqueue_channel(&channel->msger->squeue, channel);
-}
 
 
 //xchannel_update_buf
 // static inline void xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
 
-static inline void xchannel_free_msg(xmsg_ptr msg)
-{
-    free(msg);
-}
+// static inline void xchannel_free_msg(xmsg_ptr msg)
+// {
+//     free(msg);
+// }
 
-static inline xmsgpack_ptr make_pack(xchannel_ptr channel, uint8_t type)
-{
-    xmsgpack_ptr pack = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-    // 设置包类型
-    pack->head.type = type;
-    // 设置消息封包数量
-    pack->head.pack_range = 0;
-    // 设置对方 cid
-    pack->head.cid = channel->peer_cid;
-    // 设置校验码
-    pack->head.x = XMSG_VAL ^ channel->peer_key;
-    // 设置是否附带 ACK 标志
-    pack->head.y = 0;
-    return pack;
-}
 
 // static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
 // {
@@ -318,34 +276,12 @@ static inline xmsgpack_ptr make_pack(xchannel_ptr channel, uint8_t type)
 // }
 
 
-
-static inline void xmsger_disconnect(xmsger_ptr mtp, xchannel_ptr channel)
-{
-    __xlogd("xmsger_disconnect enter");
-    xmsgpack_ptr unit = (xmsgpack_ptr)malloc(sizeof(struct xmsgpack));
-    unit->head.type = XMSG_PACK_BYE;
-    unit->head.pack_size = 0;
-    unit->head.pack_range = 1;
-    //主动发送 BEY，要设置 channel 主动状态。
-    __set_true(channel->breaker);
-    //向对方发送 BEY，对方回应后，再移除 channel。
-    // __set_true(channel->bye);
-    //主动断开的一端，发送第一个 BEY，并且启动超时重传。
-    // xchannel_push(channel, unit);
-    __xlogd("xmsger_disconnect exit");
-}
-
-//ping 需要发送加密验证，如果此时链接已经断开，ping 消息可以进行重连。
-static inline void xmsger_ping(xchannel_ptr channel)
-{
-    __xlogd("xmsger_ping enter");
-    __xlogd("xmsger_ping exit");
-}
-
-extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);
-extern bool xmsger_connect(xmsger_ptr msger, const char *addr, uint16_t port);
 extern xmsger_ptr xmsger_create(xmsglistener_ptr listener);
 extern void xmsger_free(xmsger_ptr *pptr);
+extern bool xmsger_ping(xmsger_ptr msger, xchannel_ptr channel);
+extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);
+extern bool xmsger_connect(xmsger_ptr msger, const char *addr, uint16_t port);
+extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel);
 
 // static inline void xmsger_send(xmsger_ptr mtp, xchannel_ptr channel, void *data, size_t size)
 // {
