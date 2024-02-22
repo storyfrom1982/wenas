@@ -148,7 +148,8 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
             while (index != ack->head.sn) {
                 pack = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                 if (!pack->comfirmed){
-                    // TODO 计算已经发送但还没收到ACK的pack的个数，
+                    // TODO 计算已经发送但还没收到ACK的pack的个数
+                    // TODO 这里需要处理超时断开连接的逻辑
                     __xlogd("xchannel_pull >>>>------------------------------------> resend pack: %u\n", pack->head.sn);
                     int result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.pack_size);
                     if (result != PACK_HEAD_SIZE + pack->head.pack_size){
@@ -718,6 +719,7 @@ static void* main_loop(void *ptr)
                         break;
                     }
 
+                    // TODO 这里需要处理超时断开连接的逻辑
 
                     result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(sendpack->head), PACK_HEAD_SIZE + sendpack->head.pack_size);
 
