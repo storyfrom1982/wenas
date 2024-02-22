@@ -106,11 +106,11 @@ static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, 
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
+static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     client_ptr client = (client_ptr)listener->ctx;
-    parse_msg((xline_ptr)msg->data, msg->wpos);
+    parse_msg((xline_ptr)msg, len);
     // xchannel_free_msg(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -225,8 +225,6 @@ int main(int argc, char *argv[])
 ;
 
     __xlogi("xmsger_disconnect\n");
-
-    __set_false(client->msger->running);
     
     __xlogi("xmsger_free\n");
     xmsger_free(&client->msger);
