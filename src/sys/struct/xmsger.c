@@ -62,8 +62,9 @@ typedef struct xmsgpackbuf {
 #define XMSG_CMD_SIZE       64
 
 typedef struct xmsg {
-    uint64_t type; //XMSG_DGRAM or XMSG_STREAM
-    xchannel_ptr channel; //如果 channel 是 NULL，这个 msg 是一个创建连接的 PING
+    uint32_t type;
+    uint32_t sid;
+    xchannel_ptr channel;
     size_t wpos, rpos, len, range;
     struct xmsg *next;
     void *data;
@@ -77,13 +78,6 @@ typedef struct xmsgbuf {
     uint8_t range, upos, rpos, wpos;
     struct xmsgpack *buf[1];
 }*xmsgbuf_ptr;
-
-
-typedef struct file_ctx {
-    xchannel_ptr channel;
-    size_t pos, len;
-    __xfile_ptr fp;
-}file_ctx_t;
 
 
 struct xchannel {
@@ -108,7 +102,7 @@ struct xchannel {
     // xpipe_ptr msgqueue;
     // xmsg_ptr msg;
     xmsg_ptr send_ptr, recycle_ptr;
-    xmsg_ptr *send_tail_pptr;
+    xmsg_ptr *msglist_pptr, *streamlist_pptr;
     struct xmsg rmessage, rstream;
 
     // TODO 用2个单向链表管理 message 和 stream
@@ -318,14 +312,12 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                     // 更新已经到达对端的数据计数
                     channel->recycle_ptr->rpos += pack->head.pack_size;
                     if (channel->recycle_ptr->rpos == channel->recycle_ptr->len){
-                        //TODO 通知上层，消息发送完成
-                        channel->msger->listener->onMessageToPeer(channel->msger->listener, channel, channel->recycle_ptr->data);
-                        xmsg_ptr ptr = channel->recycle_ptr;
+                        // 把已经传送到对端的 msg 交给发送线程处理
+                        __xbreak(xpipe_write(channel->msger->spipe, &channel->recycle_ptr, __sizeof_ptr) != __sizeof_ptr);
                         channel->recycle_ptr = channel->recycle_ptr->next;
                         if (channel->recycle_ptr == NULL){
                             xchannel_keep_alive(channel);
                         }
-                        free(ptr);
                     }
                 }
                 __xlogd("xchannel_pull >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->len - 0, channel->msger->len - 0);
@@ -353,8 +345,13 @@ static inline bool xchannel_pull(xchannel_ptr channel, xmsgpack_ptr ack)
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
             } while (channel->sendbuf->rpos != ack->head.ack);
 
-            // 判断是否有消息要发送和发送缓冲是否可写
-            if(channel->send_ptr != NULL && channel->send_ptr->wpos < channel->send_ptr->len && __transbuf_writable(channel->sendbuf) > 0){
+            // 判断是否有消息要发送
+            if(channel->send_ptr != NULL 
+                // 消息可以一次性发送完成
+                && (channel->send_ptr->range <= __transbuf_writable(channel->sendbuf) 
+                // 发送缓冲区不少于一半可写空间
+                || __transbuf_writable(channel->sendbuf) >= (channel->sendbuf->range >> 1))){
+                // 通知发送线程进行分片
                 __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
             }
 
@@ -577,6 +574,14 @@ static void* send_loop(void *ptr)
         __xlogd("send_loop >>>>-------------> spipe writable: %lu\n", xpipe_readable(msger->rpipe));
 
         __xlogd("send_loop >>>>-------------> send_ptr->next: %p\n", msg->channel->send_ptr->next);
+        
+        // 判断消息是否全部送达
+        if (msg->rpos == msg->len){
+            // 通知用户，消息已经送达
+            msg->channel->msger->listener->onMessageToPeer(msg->channel->msger->listener, msg->channel, msg->data);
+            free(msg);
+            continue;
+        }
         
         while (msg->wpos < msg->len)
         {
@@ -851,23 +856,87 @@ static void* main_loop(void *ptr)
             __xlogd("xmsger_loop >>>>-------------> send msg to peer\n");
 
             // 判断是否有正在发送的消息
-            if (msg->channel->send_ptr == NULL){
-                // 设置为当前正在发送的消息
+            if (msg->channel->send_ptr == NULL){ // 当前没有消息在发送
+
+                // 设置新消息为当前正在发送的消息
                 msg->channel->send_ptr = msg;
-                msg->channel->send_tail_pptr = &(msg->channel->send_ptr);
+                // 队列尾部成员的 next 必须是 NULL
                 msg->channel->send_ptr->next = NULL;
+                // 将待回收指针指向当前消息
                 msg->channel->recycle_ptr = msg->channel->send_ptr;
-                __xlogd("xmsger_loop >>>>-------------> send_ptr->next: %p\n", msg->channel->send_ptr->next);
+
+                if (msg->sid == 0){ // 新成员是消息
+
+                    // 加入消息队列
+                    msg->channel->msglist_pptr = &(msg->channel->send_ptr);
+
+                }else { // 新成员是流
+
+                    // 加入流队列
+                    msg->channel->streamlist_pptr = &(msg->channel->send_ptr);
+                }
+
                 // 将消息放入发送管道，交给发送线程进行分片
                 __xbreak(xpipe_write(msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
                 
-            }else {
-                // 加入待发送队列
-                msg->next = (*(msg->channel->send_tail_pptr))->next;
-                (*(msg->channel->send_tail_pptr))->next = msg;
-                msg->channel->send_tail_pptr = &msg;
+            }else { // 当前有消息正在发送
+
+                if (msg->sid == 0){ // 新成员是消息
+
+                    if (msg->channel->send_ptr->sid == 0){ // 当前正在发送的是消息队列
+
+                        // 将新成员的 next 指向消息队列尾部成员的 next
+                        msg->next = (*(msg->channel->msglist_pptr))->next;
+                        // 将新成员加入到消息队列尾部
+                        (*(msg->channel->msglist_pptr))->next = msg;
+                        // 将消息队列的尾部指针指向新成员
+                        msg->channel->msglist_pptr = &msg;
+
+                    }else { // 当前正在发送的是流队列
+
+                        // 将新消息成员的 next 指向当前发送队列的队首
+                        msg->next = msg->channel->send_ptr;
+                        // 设置新消息成员为队首
+                        msg->channel->send_ptr = msg;
+                        // 将消息队列的尾部指针指向新成员
+                        msg->channel->msglist_pptr = &msg;
+                    }
+
+                }else { // 新成员是流
+
+                    if (msg->channel->send_ptr->sid == 0){ // 如果当前正在发送的是消息队列
+                        
+                        if ((*(msg->channel->msglist_pptr))->next == NULL){ // 如果消息队列的后面没有连接着流队列
+
+                            // 将新成员的 next 指向发送队列尾部成员的 next
+                            msg->next = (*(msg->channel->msglist_pptr))->next;
+                            // 将流队列的头部与消息队列的尾部相连接
+                            (*(msg->channel->msglist_pptr))->next = msg;
+                            // 将流队列的尾部指针指向新成员
+                            msg->channel->streamlist_pptr = &msg;
+
+                        }else { // 消息队列已经和流队列相衔接，直接将新成员加入到流队列尾部
+
+                            // 先设置新成员的 next 为 NULL
+                            msg->next = (*(msg->channel->streamlist_pptr))->next;
+                            // 将新的成员加入到流队列的尾部
+                            (*(msg->channel->streamlist_pptr))->next = msg;
+                            // 将流队列的尾部指针指向新成员
+                            msg->channel->streamlist_pptr = &msg;
+                        }
+                        
+                    }else { // 当前正在发送的是流队列
+
+                        // 直接将新成员加入到流队列尾部
+                        // 先设置新成员的 next 为 NULL
+                        msg->next = (*(msg->channel->streamlist_pptr))->next;
+                        // 将新的成员加入到流队列的尾部
+                        (*(msg->channel->streamlist_pptr))->next = msg;
+                        // 将流队列的尾部指针指向新成员
+                        msg->channel->streamlist_pptr = &msg;
+                    }
+                }
             }
-           
         }
 
         // 判断冲洗列表长度
