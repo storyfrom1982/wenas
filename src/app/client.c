@@ -46,6 +46,11 @@ static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr chan
     __xlogi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
 }
 
+static void on_channel_timeout(xmsglistener_ptr listener, xchannel_ptr channel)
+{
+    __xlogi(">>>>---------------> on_channel_timeout: 0x%x\n", channel);
+}
+
 static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_disconnection: 0x%x\n", channel);
@@ -195,6 +200,7 @@ int main(int argc, char *argv[])
     listener->onConnectionToPeer = on_connection_to_peer;
     listener->onConnectionFromPeer = on_connection_from_peer;
     listener->onDisconnection = on_disconnection;
+    listener->onChannelTimeout = on_channel_timeout;
     listener->onMessageFromPeer = on_message_from_peer;
     listener->onMessageToPeer = on_message_to_peer;
     

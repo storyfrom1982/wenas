@@ -24,6 +24,7 @@ enum {
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
+#define XCHANNEL_RESEND_LIMIT       2
 
 typedef struct xmsghead {
     uint8_t type;
@@ -628,25 +629,6 @@ static void* main_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
-        // 判断是否有待发送数据和待接收数据
-        if (__is_false(msger->readable)){
-            // 没有数据可收发
-            __xlogd("xmsger_loop >>>>-------------> noting to do %lu\n", duration);
-
-            __xapi->mutex_lock(msger->mtx);
-            // 主动发送消息时，会通过判断这个值来检测主线程是否在工作
-            __set_false(msger->working);
-            // 休息一段时间
-            __xapi->mutex_timedwait(msger->mtx, duration);
-            // 设置工作状态
-            __set_true(msger->working);
-            // 设置最大睡眠时间，如果有需要定时重传的 pack，这个时间值将会被设置为，最近的重传时间
-            duration = UINT32_MAX;
-            __xapi->mutex_unlock(msger->mtx);
-
-            __xlogd("xmsger_loop >>>>-------------> start working\n");
-        }
-
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         if (__is_true(msger->readable)){
@@ -923,32 +905,39 @@ static void* main_loop(void *ptr)
                         // 未超时
                         if (duration > countdown){
                             // 超时时间更近，更新休息时间
-                            // TODO 这个休息时长，要减掉从这时到需要休息时期间耗费的时间
                             duration = countdown;
                         }
-                        // 最近的重传时间还没有到，后没的 pack 也不需要重传
+                        // 最近的重传时间还没有到，后面的 pack 也不需要重传
                         break;
                     }
 
-                    __xlogd("xmsger_loop >>>>-------------> resend\n");
-
-                    // TODO 这里需要处理超时断开连接的逻辑
+                    if (sendpack->head.resend > XCHANNEL_RESEND_LIMIT){
+                        __xlogd("xmsger_loop >>>>-------------> this channel (%u) has timed out\n", sendpack->channel->cid);
+                        sendpack->prev->next = sendpack->next;
+                        sendpack->next->prev = sendpack->prev;
+                        msger->flushlist.len--;
+                        xtree_take(msger->peers, &sendpack->channel->cid, 4);
+                        xchannel_free(sendpack->channel);
+                        msger->listener->onChannelTimeout(msger->listener, sendpack->channel);
+                        sendpack = next;
+                        continue;
+                    }
 
                     result = __xapi->udp_sendto(sendpack->channel->msger->sock, &sendpack->channel->addr, (void*)&(sendpack->head), PACK_HEAD_SIZE + sendpack->head.pack_size);
                     __xlogd("xmsger_loop >>>>-------------> resend 1\n");
 
                     // 判断发送是否成功
                     if (result == PACK_HEAD_SIZE + sendpack->head.pack_size){
-                        __xlogd("xmsger_loop >>>>-------------> resend 2\n");
+                        // 记录重传次数
+                        sendpack->head.resend++;
                         // 暂时移出冲洗列表
                         sendpack->prev->next = sendpack->next;
                         sendpack->next->prev = sendpack->prev;
 
-                        // 只是把 pack 放到列表的最后面，不需要更新时间戳
-                        // 如果更新时间戳，就会像 TCP 一样累计延迟
-                        // sendpack->timestamp = __xapi->clock();
-
-                        // 加入定时列表
+                        // 重传之后，将包再次加入到冲洗列表的队尾
+                        // 因为，所有正常到达对端的包都会很快被移出冲洗列表
+                        // 所以，如果这个包依然未能到达对端，也很快就可以被再次重传
+                        // 只是把包放到列表的最后面，不需要增加延迟，如果增加了延迟，就会像 TCP 一样
                         sendpack->next = &msger->flushlist.end;
                         sendpack->prev = msger->flushlist.end.prev;
                         sendpack->next->prev = sendpack;
@@ -960,6 +949,12 @@ static void* main_loop(void *ptr)
                     }
 
                     sendpack = next;
+                }
+
+                // 判断是否冲洗队列中的所有包都超时
+                if (sendpack == &msger->flushlist.end){
+                    // 延迟一百毫秒后重传
+                    duration = 1000 * MICRO_SECONDS;
                 }
             }            
         }
@@ -1005,15 +1000,51 @@ static void* main_loop(void *ptr)
                 next = channel->next;
 
                 if (__xapi->clock() - channel->update > NANO_SECONDS * 10){
-                    xchannel_dequeue(&msger->recv_queue, channel);
-                    // TODO free channel
+                    xtree_take(msger->peers, &channel->cid, 4);
+                    xchannel_free(channel);
+                    msger->listener->onChannelTimeout(msger->listener, channel);
                 }else {
+                    // 队列的第一个连接没有超时，后面的连接就都没有超时
                     break;
                 }
 
                 channel = next;
             }
         }
+    
+        // 判断是否有待发送数据和待接收数据
+        if (__is_false(msger->readable)){
+            
+            // 判断是否设置了休眠时间，得知是否有定时事件待处理
+            if (duration < UINT32_MAX){
+
+                __xapi->mutex_lock(msger->mtx);
+                // 主动发送消息时，会通过判断这个值来检测主线程是否在工作
+                __set_false(msger->working);
+                // 休息一段时间
+                __xapi->mutex_timedwait(msger->mtx, duration);
+                // 设置工作状态
+                __set_true(msger->working);
+                // 设置最大睡眠时间，如果有需要定时重传的 pack，这个时间值将会被设置为，最近的重传时间
+                duration = UINT32_MAX;
+                __xapi->mutex_unlock(msger->mtx);
+
+            }else if (msger->pos == msger->len){
+                // 没有数据可收发，可以休眠任意时长
+                __xlogd("xmsger_loop >>>>-------------> noting to do\n");
+
+                __xapi->mutex_lock(msger->mtx);
+                __set_false(msger->working);
+                __xapi->mutex_timedwait(msger->mtx, duration);
+                __set_true(msger->working);
+                duration = UINT32_MAX;
+                __xapi->mutex_unlock(msger->mtx);
+
+                __xlogd("xmsger_loop >>>>-------------> start working\n");
+            }
+
+        }    
+    
     }
 
 Clean:    

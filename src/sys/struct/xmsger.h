@@ -20,6 +20,7 @@ struct xmsglistener {
     void (*onConnectionToPeer)(struct xmsglistener*, xchannel_ptr channel);
     void (*onConnectionFromPeer)(struct xmsglistener*, xchannel_ptr channel);
     void (*onDisconnection)(struct xmsglistener*, xchannel_ptr channel);
+    void (*onChannelTimeout)(struct xmsglistener*, xchannel_ptr channel);
     void (*onMessageFromPeer)(struct xmsglistener*, xchannel_ptr channel, void *msg, size_t len);
     void (*onMessageToPeer)(struct xmsglistener*, xchannel_ptr channel, void *msg);
 };
