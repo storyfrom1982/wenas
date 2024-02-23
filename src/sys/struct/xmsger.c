@@ -13,6 +13,11 @@ enum {
     XMSG_PACK_FINAL = 0x10
 };
 
+enum {
+    XMSG_FLAG_NONE = 0x00,
+    XMSG_FLAG_ACK = 0x01,
+};
+
 
 #define PACK_HEAD_SIZE              16
 // #define PACK_BODY_SIZE              1280 // 1024 + 256
@@ -137,7 +142,7 @@ struct xmsger {
 #define __transbuf_usable(b)        ((uint8_t)((b)->wpos - (b)->upos))
 
 #define __transbuf_readable(b)      ((uint8_t)((b)->wpos - (b)->rpos))
-#define __transbuf_writable(b)      ((uint8_t)((b)->range - 1 - (b)->wpos + (b)->rpos))
+#define __transbuf_writable(b)      ((uint8_t)((b)->range - (b)->wpos + (b)->rpos))
 
 #define XMSG_KEY    'x'
 #define XMSG_VAL    'X'
@@ -257,7 +262,7 @@ static inline void xchannel_push(xchannel_ptr channel, xpack_ptr pack)
     pack->channel = channel;
     pack->ack = false;
     pack->flushing = false;
-    // 再将 unit 放入缓冲区 
+    // 再将 pack 放入缓冲区 
     pack->head.sn = channel->sendbuf->wpos;
     // 设置校验码
     pack->head.key = XMSG_VAL ^ channel->peer_key;
@@ -429,33 +434,30 @@ static inline void xchannel_send(xchannel_ptr channel, xpack_ptr pack)
     __xlogd("xchannel_send >>>>------------------------> exit\n");
 }
 
-static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
+static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr pack)
 {
     __xlogd("xchannel_recv >>>>------------> enter\n");
     __xlogd("xchannel_recv >>>>------------> SN: %u rpos: %u wpos: %u\n",
-           unit->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
+           pack->head.sn, channel->msgbuf->wpos, channel->msgbuf->rpos);
 
-    if (unit->head.flag == 1){
+    if (pack->head.flag & XMSG_FLAG_ACK){
         __xlogd("xchannel_recv >>>>------------> MSG and ACK\n");
         // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-        xchannel_pull(channel, unit);
-    }else {
-        // 只有在接收到对端的消息时，才更新超时时间戳
-        channel->update = __xapi->clock();
+        xchannel_pull(channel, pack);
     }
 
-    channel->ack = unit->head;
+    channel->ack = pack->head;
     channel->ack.type = XMSG_PACK_ACK;
     channel->ack.len = 0;
-    uint16_t index = unit->head.sn & (PACK_WINDOW_RANGE - 1);
+    uint16_t index = pack->head.sn & (PACK_WINDOW_RANGE - 1);
 
     // 如果收到连续的 PACK
-    if (unit->head.sn == channel->msgbuf->wpos){
+    if (pack->head.sn == channel->msgbuf->wpos){
 
         __xlogd("xchannel_recv >>>>------------> serial\n");
 
         // 保存 PACK
-        channel->msgbuf->buf[index] = unit;
+        channel->msgbuf->buf[index] = pack;
         // 更新最大连续 SN
         channel->msgbuf->wpos++;
 
@@ -465,9 +467,8 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
         channel->ack.ack = channel->ack.acks;
 
         // 如果之前有为按顺序到达的 PACK 需要更新
-        while (channel->msgbuf->buf[__transbuf_wpos(channel->msgbuf)] != NULL){
-            //TODO
-            assert(__transbuf_writable(channel->msgbuf) > 0);
+        while (channel->msgbuf->buf[__transbuf_wpos(channel->msgbuf)] != NULL)
+        {
             channel->msgbuf->wpos++;
             // 这里需要更新将要回复的最大连续 ACK
             channel->ack.acks = channel->msgbuf->wpos;
@@ -478,14 +479,14 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
     }else {
 
         // SN 不在 rpos 与 wpos 之间
-        if ((uint8_t)(channel->msgbuf->wpos - unit->head.sn) > (uint8_t)(unit->head.sn - channel->msgbuf->wpos)){
+        if ((uint8_t)(channel->msgbuf->wpos - pack->head.sn) > (uint8_t)(pack->head.sn - channel->msgbuf->wpos)){
 
             __xlogd("xchannel_recv >>>>------------------------> early\n");
 
             // SN 在 wpos 方向越界，是提前到达的 PACK
 
             // 设置将要回复的单个 ACK
-            channel->ack.ack = unit->head.sn;
+            channel->ack.ack = pack->head.sn;
             // 设置将要回复的最大连续 ACK，这时 ack 一定会大于 acks
             channel->ack.acks = channel->msgbuf->wpos;
 
@@ -494,10 +495,10 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
             
             if (channel->msgbuf->buf[index] == NULL){
                 // 这个 PACK 首次到达，保存 PACK
-                channel->msgbuf->buf[index] = unit;
+                channel->msgbuf->buf[index] = pack;
             }else {
                 // 这个 PACK 重复到达，释放 PACK
-                free(unit);
+                free(pack);
             }
             
         }else {
@@ -505,10 +506,11 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
             __xlogd("xchannel_recv >>>>------------------------> again\n");
             
             // SN 在 rpos 方向越界，是滞后到达的 PACK，发生了重传
-            channel->ack.ack = channel->msgbuf->wpos - 1;
-            channel->ack.acks = channel->ack.ack;
+            // 回复 ACK 等于 ACKS，通知对端包已经收到
+            channel->ack.acks = channel->msgbuf->wpos;
+            channel->ack.ack = channel->ack.acks;
             // 释放 PACK
-            free(unit);
+            free(pack);
         }
     }
 
@@ -516,9 +518,9 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
     if (__transbuf_usable(channel->sendbuf) > 0){
 
         // 取出当前要发送的 pack
-        xpack_ptr pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
+        pack = channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)];
         __xlogd("xchannel_recv >>>>------------> ACK and MSG\n");
-        pack->head.flag = 1;
+        pack->head.flag |= XMSG_FLAG_ACK;
         pack->head.ack = channel->ack.ack;
         pack->head.acks = channel->ack.acks;
         xchannel_send(channel, pack);
@@ -533,7 +535,8 @@ static inline bool xchannel_recv(xchannel_ptr channel, xpack_ptr unit)
 
 
     index = __transbuf_rpos(channel->msgbuf);
-    while (channel->msgbuf->buf[index] != NULL){
+    while (channel->msgbuf->buf[index] != NULL)
+    {
         // 交给接收线程来处理 pack
         __xbreak(xpipe_write(channel->msger->rpipe, channel->msgbuf->buf[index], __sizeof_ptr) != __sizeof_ptr);
         channel->msgbuf->buf[index] = NULL;
