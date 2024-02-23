@@ -126,8 +126,7 @@ struct xmsger {
     // 每次创建新的channel时加一
     uint32_t cid;
     xtree peers;
-    //所有待重传的 pack 的定时器，不区分链接
-    xtree timers;
+    struct __xipaddr addr;
     __xmutex_ptr mtx;
     __atom_bool running;
     //socket可读或者有数据待发送时为true
@@ -916,7 +915,11 @@ static void* main_loop(void *ptr)
                         sendpack->prev->next = sendpack->next;
                         sendpack->next->prev = sendpack->prev;
                         msger->flushlist.len--;
-                        xtree_take(msger->peers, &sendpack->channel->cid, 4);
+                        if (channel->peer_cid == 0){
+                            xtree_take(msger->peers, &sendpack->channel->addr.port, sendpack->channel->addr.keylen);
+                        }else {
+                            xtree_take(msger->peers, &sendpack->channel->peer_cid, 4);
+                        }
                         xchannel_free(sendpack->channel);
                         msger->listener->onChannelTimeout(msger->listener, sendpack->channel);
                         sendpack = next;
@@ -1000,7 +1003,7 @@ static void* main_loop(void *ptr)
                 next = channel->next;
 
                 if (__xapi->clock() - channel->update > NANO_SECONDS * 10){
-                    xtree_take(msger->peers, &channel->cid, 4);
+                    xtree_take(msger->peers, &channel->peer_cid, 4);
                     xchannel_free(channel);
                     msger->listener->onChannelTimeout(msger->listener, channel);
                 }else {
@@ -1306,6 +1309,9 @@ xmsger_ptr xmsger_create(xmsglistener_ptr listener)
 
     msger->sock = __xapi->udp_open();
     __xbreak(msger->sock < 0);
+    __xbreak(!__xapi->udp_make_ipaddr(NULL, 9256, &msger->addr));
+    __xbreak(__xapi->udp_bind(msger->sock, &msger->addr) == -1);
+    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &msger->addr));
 
     msger->send_queue.len = 0;
     msger->send_queue.head.prev = NULL;
@@ -1380,10 +1386,6 @@ void xmsger_free(xmsger_ptr *pptr)
 
         __set_false(msger->running);
 
-        if (msger->sock > 0){
-            __xapi->udp_close(msger->sock);
-        }
-
         if (msger->mtx){
             __xapi->mutex_broadcast(msger->mtx);
         }
@@ -1401,6 +1403,12 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->rpipe){
             __xlogd("xmsger_free break rpipe\n");
             xpipe_break(msger->rpipe);
+        }
+
+        if (msger->sock > 0){
+            int sock = __xapi->udp_open();
+            __xapi->udp_sendto(sock, &msger->addr, &sock, sizeof(int));
+            __xapi->udp_close(sock);
         }        
 
         if (msger->spid){
@@ -1438,6 +1446,10 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->mtx){
             __xlogd("xmsger_free mutex\n");
             __xapi->mutex_free(msger->mtx);
+        }
+
+        if (msger->sock > 0){
+            __xapi->udp_close(msger->sock);
         }
 
         free(msger);
