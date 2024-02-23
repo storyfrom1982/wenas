@@ -1,6 +1,7 @@
 #include "ex/ex.h"
 
 #include <sys/struct/xmsger.h>
+#include <sys/struct/xbuf.h>
 
 #include <stdio.h>
 
@@ -197,9 +198,9 @@ int main(int argc, char *argv[])
     __xlogi("start client 3\n");
 
     listener->ctx = client;
-    listener->onConnectionToPeer = on_connection_to_peer;
-    listener->onConnectionFromPeer = on_connection_from_peer;
-    listener->onDisconnection = on_disconnection;
+    listener->onChannelToPeer = on_connection_to_peer;
+    listener->onChannelFromPeer = on_connection_from_peer;
+    listener->onChannelBreak = on_disconnection;
     listener->onChannelTimeout = on_channel_timeout;
     listener->onMessageFromPeer = on_message_from_peer;
     listener->onMessageToPeer = on_message_to_peer;
@@ -225,7 +226,7 @@ int main(int argc, char *argv[])
         xline_add_text(maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
         // find_msg((xline_ptr)maker->head);
-        xmsger_send(client->msger, client->channel, maker->head, maker->wpos);
+        xmsger_send_message(client->msger, client->channel, maker->head, maker->wpos);
         // xmaker_free(maker);
     }
 ;

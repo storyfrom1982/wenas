@@ -188,9 +188,9 @@ int main(int argc, char *argv[])
 
     server.xmsgaddr = __xapi->udp_make_ipaddr(NULL, port);
 
-    listener->onConnectionToPeer = on_connection_to_peer;
-    listener->onConnectionFromPeer = on_connection_from_peer;
-    listener->onDisconnection = on_disconnection;
+    listener->onChannelToPeer = on_connection_to_peer;
+    listener->onChannelFromPeer = on_connection_from_peer;
+    listener->onChannelBreak = on_disconnection;
     listener->onMessageFromPeer = on_message_from_peer;
     listener->onSendable = on_sendable;
     listener->onIdle = on_idle;
