@@ -816,7 +816,7 @@ static void* main_loop(void *ptr)
                         }else if (rpack->head.type == XMSG_PACK_ACK) {
                             __xlogd("xmsger_loop receive ACK\n");
                             xchannel_serial_acks(channel, rpack);
-                            
+
                         }else if (rpack->head.type == XMSG_PACK_PING){
                             __xlogd("xmsger_loop receive PING\n");
                             rpack->head.cid = channel->peer_cid;
@@ -1147,6 +1147,8 @@ static void* main_loop(void *ptr)
             while (channel != &msger->recv_queue.end){
                 next = channel->next;
 
+                // TODO 发起端需要发送 PING 保活
+                // 对穿连接，时间戳晚的一端负责发 PING 保活
                 if (__xapi->clock() - channel->update > NANO_SECONDS * 10){
                     xtree_take(msger->peers, &channel->peer_cid, 4);
                     xchannel_free(channel);
@@ -1310,6 +1312,7 @@ bool xmsger_send_stream2(xmsger_ptr msger, xchannel_ptr channel, void *data, siz
     return xmsger_send(msger, channel, data, size, 2);
 }
 
+// 不再需要外部发 PING
 bool xmsger_ping(xmsger_ptr msger, xchannel_ptr channel)
 {
     __xlogd("xmsger_ping channel 0x%X enter", channel);
