@@ -46,7 +46,7 @@ static inline void xtree_free(xtree *pptr)
 }
 
 
-static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mapping)
+static inline void** xtree_save(xtree root, void *key, uint8_t keylen, void *mapping)
 {
     uint8_t i;
     xtree parent, tree = root;
@@ -64,6 +64,9 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
         i = ((*p) >> 4);
         if (tree[i] == NULL){
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(void*));
+            if (tree[i] == NULL){
+                return NULL;
+            }
             __tree2node(tree)->branch ++;
         }
         tree = (xtree)tree[i];
@@ -77,6 +80,9 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
         i = (*p & 0x0F);
         if (tree[i] == NULL){
             tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(void*));
+            if (tree[i] == NULL){
+                return NULL;
+            }
             __tree2node(tree)->branch ++;
         }
         tree = (xtree)tree[i];
@@ -92,7 +98,8 @@ static inline void xtree_save(xtree root, void *key, uint8_t keylen, void *mappi
     
     node->mapping = mapping;
     __tree2node(parent)->leaves ++;
-    // return &node->mapping;
+    
+    return &node->mapping;
 }
 
 

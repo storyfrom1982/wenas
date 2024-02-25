@@ -236,44 +236,42 @@ static inline xmessage_ptr xmessage_new(xchannel_ptr channel, uint8_t type, void
 
 static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr msg)
 {
+    // TODO 在这里给 msg 设置默认值
     // 更新连接的发送计数
     __atom_add(msg->channel->len, msg->len);
 
     // 判断是否有正在发送的消息
     if (channel->send_ptr == NULL){ // 当前没有消息在发送
-
+        // 第一个消息的 next 将成为队尾标志，所以 next 必须设置成 NULL
+        msg->next = NULL;
         // 设置新消息为当前正在发送的消息
         channel->send_ptr = msg;
-        // 队列尾部成员的 next 必须是 NULL
-        channel->send_ptr->next = NULL;
         // 将待回收指针指向当前消息
+        // TODO 回收队列应该是一个单独的队列，已经发送的 msg 要从发送队列转移到回收队列
         channel->recycle_ptr = channel->send_ptr;
 
         if (msg->sid == 0){ // 新成员是消息
-
             // 加入消息队列
             channel->msglist_pptr = &(channel->send_ptr);
 
         }else { // 新成员是流
-
             // 加入流队列
             channel->streamlist_pptr = &(channel->send_ptr);
         }
 
         // 重新加入发送队列，并且从待回收队列中移除
+        // TODO 用宏替换，判断加入队
         if (!msg->channel->sending){
             xchannel_start_sending(msg->channel);
         }
 
         if (msg->type == XMSG_PACK_BYE){
-            xtree_take(channel->msger->peers, &channel->cid, 4);
-            xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel);            
+            __xbreak(xtree_take(channel->msger->peers, &channel->cid, 4) == NULL);
+            __xbreak(xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel) == NULL);
         }
 
         // 将消息放入发送管道，交给发送线程进行分片
-        if(xpipe_write(channel->msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr){
-            return false;
-        }
+        __xbreak(xpipe_write(channel->msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
         
     }else { // 当前有消息正在发送
 
@@ -335,6 +333,10 @@ static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr m
     }
 
     return true;
+
+Clean:
+
+    return false;
 }
 
 // 每次接收到一个完整的消息，都要更新保活
@@ -560,7 +562,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
         __xlogd("xchannel_send_pack >>>>------------------------> send msg range %lu\n", channel->send_ptr->range);
         // 判断是否为一个 msg 的最后一个 pack
         if (channel->send_ptr->range == 0){
-            // TODO 判断 stream 队列是否为空
+            // TODO 将发送过的 msg 加入回收队列
             // 指向下一个 msg
             channel->send_ptr = channel->send_ptr->next;
         }
