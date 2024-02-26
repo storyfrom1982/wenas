@@ -229,7 +229,6 @@ int main(int argc, char *argv[])
         xmsger_send_message(client->msger, client->channel, maker->head, maker->wpos);
         // xmaker_free(maker);
     }
-;
 
     __xlogi("xmsger_disconnect\n");
     
