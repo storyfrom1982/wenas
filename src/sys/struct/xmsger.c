@@ -38,10 +38,23 @@ typedef struct xhead {
     uint32_t cid; // 连接通道 ID
 }*xhead_ptr;
 
+#define XMSG_CMD_SIZE       64
+
+typedef struct xmessage {
+    uint32_t type;
+    uint32_t sid;
+    size_t wpos, rpos, len, range;
+    void *data;
+    xchannel_ptr channel;
+    struct xmessage *next;
+    uint8_t cmd[XMSG_CMD_SIZE];
+}*xmessage_ptr;
+
 typedef struct xpack {
     bool is_confirm;
     bool is_flushing;
     uint64_t timestamp; //计算往返耗时
+    xmessage_ptr msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
     struct xhead head;
@@ -58,19 +71,6 @@ typedef struct xpackbuf {
     __atom_size upos, rpos, wpos;
     struct xpack *buf[1];
 }*xpackbuf_ptr;
-
-#define XMSG_CMD_SIZE       64
-
-typedef struct xmessage {
-    uint32_t type;
-    uint32_t sid;
-    size_t wpos, rpos, len, range;
-    void *data;
-    xchannel_ptr channel;
-    struct xmessage *next;
-    uint8_t cmd[XMSG_CMD_SIZE];
-}*xmessage_ptr;
-
 
 typedef struct xmsgbuf {
     // struct xmessage msg;
@@ -97,8 +97,8 @@ struct xchannel {
     xmsgbuf_ptr msgbuf;
     xpackbuf_ptr sendbuf;
     xmsger_ptr msger;
-    xmessage_ptr send_ptr, recycle_ptr;
-    xmessage_ptr *msglist_tail, *streamlist_tail, *recyclelist_tail;
+    xmessage_ptr send_ptr;
+    xmessage_ptr *msglist_tail, *streamlist_tail;
     struct xmessage streams[3];
     xchannel_ptr prev, next;
 };
@@ -287,6 +287,8 @@ static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr m
         }
     }
 
+    __xlogd("xchannel_enqueue_message >>>>-------------> send_ptr: %p\n", channel->send_ptr);
+
     return true;
 
 Clean:
@@ -397,28 +399,14 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
                 // 数据已送达，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
-                if (channel->recycle_ptr != NULL){
-                    __xlogd("xchannel_confirm_pack >>>>------------> msg.rpos: %lu msg.len: %lu pack size: %lu\n", channel->recycle_ptr->rpos, channel->recycle_ptr->len, pack->head.len);
-                    // 更新已经到达对端的数据计数
-                    channel->recycle_ptr->rpos += pack->head.len;
-                    if (channel->recycle_ptr->rpos == channel->recycle_ptr->len){
-                        // 把已经传送到对端的 msg 交给发送线程处理
-                        xmessage_ptr msg = channel->recycle_ptr;
-                        channel->recycle_ptr = channel->recycle_ptr->next;
-                        __xbreak(xpipe_write(channel->msger->spipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-                        __xlogd("xchannel_confirm_pack >>>>------------------------------------> 0.01\n");
-                        if (channel->recycle_ptr != NULL){
-                            if (channel->recycle_ptr->type == XMSG_PACK_BYE){
-                                // BYE 之前的所有包都已经处理完毕，现在发送 BYE
-                                xtree_take(channel->msger->peers, &channel->cid, 4);
-                                xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel);
-                                __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
-                            }
-                        }else {
-                            __xchannel_stop_sending(channel);
-                        }
-                    }
+
+                // 更新已经到达对端的数据计数
+                pack->msg->rpos += pack->head.len;
+                if (pack->msg->rpos == pack->msg->len){
+                    // 把已经传送到对端的 msg 交给发送线程处理
+                    __xbreak(xpipe_write(channel->msger->spipe, &pack->msg, __sizeof_ptr) != __sizeof_ptr);
                 }
+
                 __xlogd("xchannel_confirm_pack >>>>------------------------------------> channel len: %lu msger len %lu\n", channel->len - 0, channel->msger->len - 0);
 
                 if (!pack->is_confirm){
@@ -444,8 +432,6 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
                 // 索引位置空
                 channel->sendbuf->buf[index] = NULL;
 
-                
-
                 __atom_add(channel->sendbuf->rpos, 1);
 
                 __xlogd("xchannel_confirm_pack >>>>------------------------------------> rpos: %u  ack: %u\n", channel->sendbuf->rpos, rpack->head.ack);
@@ -456,28 +442,37 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
             __xlogd("xchannel_confirm_pack >>>>------------------------------------> 1\n");
 
             // 判断是否有消息要发送
-            if(channel->send_ptr != NULL 
-                && channel->send_ptr->type != XMSG_PACK_BYE
-                // 消息可以一次性发送完成
-                && (channel->send_ptr->range <= __transbuf_writable(channel->sendbuf) 
-                // 发送缓冲区不少于一半可写空间
-                || __transbuf_writable(channel->sendbuf) >= (channel->sendbuf->range >> 1))){
-                    __xlogd("xchannel_confirm_pack >>>>------------------------------------> 2\n");
-                // 通知发送线程进行分片
-                __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+            if(channel->send_ptr != NULL){
+                
+                if (channel->send_ptr->range == 0){
+                    channel->send_ptr = channel->send_ptr->next;
+                }
+
+                // 判断是否有消息要发送
+                if(channel->send_ptr != NULL 
+                    && channel->send_ptr->type != XMSG_PACK_BYE
+                    // 消息可以一次性发送完成
+                    && (channel->send_ptr->range <= __transbuf_writable(channel->sendbuf) 
+                    // 发送缓冲区不少于一半可写空间
+                    || __transbuf_writable(channel->sendbuf) >= (channel->sendbuf->range >> 1))){
+                        __xlogd("xchannel_confirm_pack >>>>------------------------------------> 2\n");
+                    // 通知发送线程进行分片
+                    __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+                }
             }
-            __xlogd("xchannel_confirm_pack >>>>------------------------------------> 3\n");
 
         } else {
 
+            __xlogd("xchannel_confirm_pack >>>>------------------------------------> 3\n");
+
             // __logi("xchannel_confirm_pack recv interval ack: %u acks: %u", ack->head.ack, ack->head.acks);
-            index = pack->head.ack & (PACK_WINDOW_RANGE - 1);
+            index = rpack->head.ack & (PACK_WINDOW_RANGE - 1);
             pack = channel->sendbuf->buf[index];
             pack->is_confirm = true;
 
             // 重传 rpos 到 SN 之间的所有尚未确认的 SN
             index = channel->sendbuf->rpos;
-            while (index != pack->head.sn) {
+            while (index != rpack->head.sn) {
                 pack = channel->sendbuf->buf[index & (channel->sendbuf->range - 1)];
                 if (!pack->is_confirm){
                     // TODO 计算已经发送但还没收到ACK的pack的个数
@@ -512,33 +507,17 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
 
     int result = __xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len);
 
+    __xlogd("xchannel_send_pack >>>>------------------------> check ptr: %p\n", channel->send_ptr);
+
     // 判断发送是否成功
     if (result == PACK_HEAD_SIZE + pack->head.len){
         // 缓冲区下标指向下一个待发送 pack
         channel->sendbuf->upos++;
 
-        __xlogd("xchannel_send_pack >>>>------------------------> send msg range %lu\n", channel->send_ptr->range);
-        // 判断是否为一个 msg 的最后一个 pack
-        if (channel->send_ptr->range == 0){
-            if (channel->recycle_ptr == NULL){
-                channel->recycle_ptr = channel->send_ptr;
-                // 指向下一个消息
-                channel->send_ptr = channel->send_ptr->next;
-                channel->recycle_ptr->next = NULL;
-                channel->recyclelist_tail = &(channel->recycle_ptr->next);
-            }else {
-                *(channel->recyclelist_tail) = channel->send_ptr;
-                // 指向下一个消息
-                channel->send_ptr = channel->send_ptr->next;
-                (*(channel->recyclelist_tail))->next = NULL;
-                channel->recyclelist_tail = &((*(channel->recyclelist_tail))->next);
-            }
-        }
-
         __xlogd("xchannel_send_pack >>>>------------------------> send_ptr %p\n", channel->send_ptr);
 
         // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
-        if (channel->send_ptr == NULL){
+        if (pack->head.range == 1 && __transbuf_usable(channel->sendbuf) == 0){
             __xlogd("xchannel_send_pack >>>>------------------------> enqueue flushing\n");
             // 冲洗一次
             pack->is_flushing = true;
@@ -723,6 +702,7 @@ static void* send_loop(void *ptr)
             pack = (xpack_ptr)malloc(sizeof(struct xpack));
             __xbreak(pack == NULL);
 
+            pack->msg = msg;
             if (msg->len - msg->wpos < PACK_BODY_SIZE){
                 pack->head.len = msg->len - msg->wpos;
             }else{
@@ -866,6 +846,9 @@ static void* main_loop(void *ptr)
                                 
                                 xtree_save(msger->peers, &addr.port, addr.keylen, channel);
 
+                                channel->msgbuf->wpos++;
+                                channel->msgbuf->rpos++;
+
                                 // 新创建的 channel 一定要给对端发送一个 HELLO，才能完成连接的创建
                                 xmessage_ptr msg = (xmessage_ptr)malloc(sizeof(struct xmessage));
                                 __xbreak(msg == NULL);
@@ -924,7 +907,7 @@ static void* main_loop(void *ptr)
                                 xtree_save(msger->peers, &channel->cid, 4, channel);
                                 channel->connected = true;
                                 //这里是被动建立连接 onChannelFromPeer
-                                channel->msger->listener->onChannelFromPeer(channel->msger->listener, channel);
+                                channel->msger->listener->onChannelToPeer(channel->msger->listener, channel);
                                 
                                 uint32_t peer_cid = *((uint32_t*)(rpack->body));
                                 uint64_t timestamp = *((uint64_t*)(rpack->body + 4));
@@ -1142,7 +1125,7 @@ static void* main_loop(void *ptr)
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
                 if (__transbuf_usable(channel->sendbuf) > 0){
-                    // __xlogd("xmsger_loop >>>>-------------> send channel 3\n");
+                    __xlogd("xmsger_loop >>>>-------------> send channel send_ptr: %p  usable: %u\n", channel->send_ptr, __transbuf_usable(channel->sendbuf));
                     xchannel_send_pack(channel, channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)]);
 
                 }
@@ -1205,6 +1188,7 @@ static void* main_loop(void *ptr)
 
                     // 这是内部生成的消息，所有要自己更新 xmsger 的计数
                     __atom_add(msger->len, XMSG_CMD_SIZE);
+                    __xlogd("xmsger_loop >>>>-------------> send ping\n");
                     __xbreak(!xchannel_enqueue_message(channel, msg));
                     
                     if (msger->ping_list.len > 1){
