@@ -97,6 +97,7 @@ struct xchannel {
     xmsgbuf_ptr msgbuf;
     xpackbuf_ptr sendbuf;
     xmsger_ptr msger;
+    __atom_size msglist_len;
     xmessage_ptr send_ptr;
     xmessage_ptr *msglist_tail, *streamlist_tail;
     struct xmessage streams[3];
@@ -286,6 +287,9 @@ static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr m
             }
         }
     }
+
+    
+    __atom_add(channel->msglist_len, 1);
 
     __xlogd("xchannel_enqueue_message >>>>-------------> send_ptr: %p\n", channel->send_ptr);
 
@@ -517,7 +521,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
         __xlogd("xchannel_send_pack >>>>------------------------> send_ptr %p\n", channel->send_ptr);
 
         // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
-        if (pack->head.range == 1 && __transbuf_usable(channel->sendbuf) == 0){
+        if (pack->head.range == 1 && __transbuf_usable(channel->sendbuf) == 0 && channel->msglist_len == 0){
             __xlogd("xchannel_send_pack >>>>------------------------> enqueue flushing\n");
             // 冲洗一次
             pack->is_flushing = true;
@@ -696,27 +700,34 @@ static void* send_loop(void *ptr)
             continue;
         }
         
-        while (__transbuf_writable(msg->channel->sendbuf) > 0 && msg->wpos < msg->len)
+        while (__transbuf_writable(msg->channel->sendbuf) > 0)
         {
-            // pack = xpack_new(msg->channel, msg->type);
-            pack = (xpack_ptr)malloc(sizeof(struct xpack));
-            __xbreak(pack == NULL);
+            if (msg->wpos < msg->len){
+                // pack = xpack_new(msg->channel, msg->type);
+                pack = (xpack_ptr)malloc(sizeof(struct xpack));
+                __xbreak(pack == NULL);
 
-            pack->msg = msg;
-            if (msg->len - msg->wpos < PACK_BODY_SIZE){
-                pack->head.len = msg->len - msg->wpos;
-            }else{
-                pack->head.len = PACK_BODY_SIZE;
+                pack->msg = msg;
+                if (msg->len - msg->wpos < PACK_BODY_SIZE){
+                    pack->head.len = msg->len - msg->wpos;
+                }else{
+                    pack->head.len = PACK_BODY_SIZE;
+                }
+
+                pack->head.type = msg->type;
+                pack->head.sid = msg->sid;
+                pack->head.range = msg->range;
+                mcopy(pack->body, msg->data + msg->wpos, pack->head.len);
+                msg->wpos += pack->head.len;
+                msg->range --;
+
+                __xchannel_serial_send(msg->channel, pack);
+
+            }else {
+
+                __atom_sub(msg->channel->msglist_len, 1);
+                break;
             }
-
-            pack->head.type = msg->type;
-            pack->head.sid = msg->sid;
-            pack->head.range = msg->range;
-            mcopy(pack->body, msg->data + msg->wpos, pack->head.len);
-            msg->wpos += pack->head.len;
-            msg->range --;
-
-            __xchannel_serial_send(msg->channel, pack);
         }
     }
 
