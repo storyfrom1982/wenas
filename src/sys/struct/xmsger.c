@@ -438,10 +438,10 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
 
                 __atom_add(channel->sendbuf->rpos, 1);
 
-                __xlogd("xchannel_confirm_pack >>>>------------------------------------> rpos: %u  ack: %u\n", channel->sendbuf->rpos, rpack->head.ack);
+                __xlogd("xchannel_confirm_pack >>>>------------------------------------> rpos: %u  ack: %u\n", __transbuf_rpos(channel->sendbuf), (rpack->head.ack & (channel->sendbuf->range - 1)));
 
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
-            } while (channel->sendbuf->rpos != rpack->head.ack);
+            } while (__transbuf_rpos(channel->sendbuf) != (rpack->head.ack & (channel->sendbuf->range - 1)));
 
             __xlogd("xchannel_confirm_pack >>>>------------------------------------> 1\n");
 
