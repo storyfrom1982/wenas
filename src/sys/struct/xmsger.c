@@ -796,6 +796,7 @@ static void* main_loop(void *ptr)
                         }else if (rpack->head.type == XMSG_PACK_ACK) {
                             __xlogd("xmsger_loop receive ACK\n");
                             xchannel_confirm_pack(channel, rpack);
+                            free(rpack);
 
                         }else if (rpack->head.type == XMSG_PACK_PING){
                             __xlogd("xmsger_loop receive PING\n");
