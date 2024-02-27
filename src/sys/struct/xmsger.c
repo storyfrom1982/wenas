@@ -462,6 +462,9 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
                         __xlogd("xchannel_confirm_pack >>>>------------------------------------> 2\n");
                     // 通知发送线程进行分片
                     __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+
+                }else {
+                    __xchannel_stop_sending(channel);
                 }
             }
 
@@ -775,7 +778,7 @@ static void* main_loop(void *ptr)
             rpack->head.type = 0;
             rpack->head.len = 0;
             result = __xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE);
-            __xlogd("xmsger_loop udp_recvfrom %ld\n", result);
+            
             if (result == (rpack->head.len + PACK_HEAD_SIZE)){
 
                 __xlogd("xmsger_loop recv ip: %u port: %u cid: %u msg: %d\n", addr.ip, addr.port, rpack->head.cid, rpack->head.type);
@@ -928,7 +931,6 @@ static void* main_loop(void *ptr)
                                 // 设置 peer cid 和校验码
                                 channel->peer_cid = peer_cid;
                                 channel->peer_key = peer_cid % 255;
-                                channel->timestamp = timestamp;
 
                                 // 开始用对端的校验码，虽然已经设置了对端的 cid，但是对端无法通过 cid 索引到 channel，因为这时还是 addr 作为索引
                                 rpack->head.cid = channel->peer_cid;
@@ -1177,8 +1179,6 @@ static void* main_loop(void *ptr)
             }
         }
 
-        __xlogd("xmsger_loop >>>>-------------> check ping list %lu\n", msger->ping_list.len);
-
         // 连接保活
         if (msger->ping_list.len > 0){
 
@@ -1202,7 +1202,7 @@ static void* main_loop(void *ptr)
 
                     // 这是内部生成的消息，所有要自己更新 xmsger 的计数
                     __atom_add(msger->len, XMSG_CMD_SIZE);
-                    __xlogd("xmsger_loop >>>>-------------> send ping\n");
+                    __xlogd("xmsger_loop >>>>----------------------------------------------------------------------------------------> send ping\n");
                     __xbreak(!xchannel_enqueue_message(channel, msg));
                     
                     if (msger->ping_list.len > 1){
