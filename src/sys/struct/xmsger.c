@@ -88,7 +88,6 @@ struct xchannel {
     uint64_t timestamp;
     uint64_t update;
     bool ping;
-    bool sending;
     bool breaker;
     bool connected; // 用peer_cid来标志是否连接
     __atom_size pos, len;
@@ -97,6 +96,7 @@ struct xchannel {
     xmsgbuf_ptr msgbuf;
     xpackbuf_ptr sendbuf;
     xmsger_ptr msger;
+    struct xchannellist *worklist;
     __atom_size msglist_len;
     xmessage_ptr send_ptr;
     xmessage_ptr *msglist_tail, *streamlist_tail;
@@ -151,32 +151,21 @@ struct xmsger {
     (ch)->prev = (que)->end.prev; \
     (ch)->next->prev = (ch); \
     (ch)->prev->next = (ch); \
+    (ch)->worklist = (que); \
     (que)->len++
 
-#define __xchannel_dequeue(que, ch) \
+#define __xchannel_dequeue(ch) \
     (ch)->prev->next = (ch)->next; \
     (ch)->next->prev = (ch)->prev; \
-    (que)->len--
+    (ch)->worklist->len--
 
-#define __xchannel_keep_alive(que, ch) \
+#define __xchannel_keep_alive(ch) \
     (ch)->prev->next = (ch)->next; \
     (ch)->next->prev = (ch)->prev; \
-    (ch)->next = &(que)->end; \
-    (ch)->prev = (que)->end.prev; \
+    (ch)->next = &((ch)->worklist->end); \
+    (ch)->prev = (ch)->worklist->end.prev; \
     (ch)->next->prev = (ch); \
     (ch)->prev->next = (ch)
-
-#define __xchannel_stop_sending(ch) \
-    (ch)->sending = false; \
-    __xchannel_dequeue(&(ch)->msger->send_list, (ch)); \
-    if ((ch)->ping) {__xchannel_enqueue(&(ch)->msger->ping_list, (ch));}\
-    else {__xchannel_enqueue(&(ch)->msger->recv_list, (ch));} \
-
-#define __xchannel_start_sending(ch) \
-    (ch)->sending = true; \
-    if ((ch)->ping) {__xchannel_dequeue(&(ch)->msger->ping_list, (ch));}\
-    else {__xchannel_dequeue(&(ch)->msger->recv_list, (ch));} \
-    __xchannel_enqueue(&(ch)->msger->send_list, (ch))
 
 #define __xchannel_serial_send(ch, pak) \
     (pak)->channel = (ch); \
@@ -213,12 +202,6 @@ static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr m
         }else { // 新成员是流
             // 加入流队列
             channel->streamlist_tail = &(msg->next);
-        }
-
-        // 重新加入发送队列，并且从待回收队列中移除
-        // TODO 用宏替换，判断加入队
-        if (!msg->channel->sending){
-            __xchannel_start_sending(msg->channel);
         }
 
         if (msg->type == XMSG_PACK_BYE){
@@ -288,6 +271,11 @@ static inline bool xchannel_enqueue_message(xchannel_ptr channel, xmessage_ptr m
         }
     }
 
+    // 重新加入发送队列，并且从待回收队列中移除
+    if(channel->worklist != &channel->msger->send_list) {
+        __xchannel_dequeue(channel);
+        __xchannel_enqueue(&channel->msger->send_list, channel);
+    }
     
     __atom_add(channel->msglist_len, 1);
 
@@ -306,7 +294,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
     __xbreak(channel == NULL);
     channel->send_ptr = NULL;
     channel->connected = false;
-    channel->sending = false;
     channel->breaker = false;
     channel->ping = ping;
     channel->update = __xapi->clock();
@@ -358,11 +345,7 @@ static inline void xchannel_free(xchannel_ptr channel)
 {
     __xlogd("xchannel_free enter\n");
     __atom_sub(channel->msger->len, channel->len - channel->pos);
-    if (channel->sending){
-        __xchannel_dequeue(&channel->msger->send_list, channel);
-    }else {
-        __xchannel_dequeue(&channel->msger->recv_list, channel);
-    }
+    __xchannel_dequeue(channel);
     // TODO 释放 msg queue 中的资源
     free(channel->msgbuf);
     free(channel->sendbuf);
@@ -464,7 +447,12 @@ static inline bool xchannel_confirm_pack(xchannel_ptr channel, xpack_ptr rpack)
                     __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
 
                 }else {
-                    __xchannel_stop_sending(channel);
+                    __xchannel_dequeue(channel);
+                    if(channel->ping){
+                        __xchannel_enqueue(&channel->msger->ping_list, channel);
+                    }else {
+                        __xchannel_enqueue(&channel->msger->recv_list, channel);
+                    }
                 }
             }
 
@@ -658,10 +646,10 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr pack)
         // 交给接收线程来处理 pack
         __xbreak(xpipe_write(channel->msger->rpipe, &channel->msgbuf->buf[index], __sizeof_ptr) != __sizeof_ptr);
         // 收到一个完整的消息，需要判断是否需要更新保活
-        if (channel->msgbuf->buf[index]->head.range == 1 && !channel->sending){
+        if (channel->msgbuf->buf[index]->head.range == 1 && channel->worklist == &channel->msger->recv_list){
             // 判断队列是否有多个成员
-            if (channel->msger->recv_list.len > 1){
-                __xchannel_keep_alive(&channel->msger->recv_list, channel);
+            if (channel->worklist->len > 1){
+                __xchannel_keep_alive(channel);
             }
             // 更新时间戳
             channel->update = __xapi->clock();
@@ -900,7 +888,7 @@ static void* main_loop(void *ptr)
                                 if (channel->timestamp > timestamp){
                                     if (channel->ping){
                                         channel->ping = false;
-                                        __xchannel_dequeue(&channel->msger->ping_list, channel);
+                                        __xchannel_dequeue(channel);
                                         __xchannel_enqueue(&channel->msger->recv_list, channel);
                                     }
                                 }
@@ -1200,16 +1188,13 @@ static void* main_loop(void *ptr)
                     msg->len = XMSG_CMD_SIZE;
                     msg->data = msg->cmd;
 
+                    // 更新时间戳
+                    channel->update = __xapi->clock();
+
                     // 这是内部生成的消息，所有要自己更新 xmsger 的计数
                     __atom_add(msger->len, XMSG_CMD_SIZE);
                     __xlogd("xmsger_loop >>>>----------------------------------------------------------------------------------------> send ping\n");
                     __xbreak(!xchannel_enqueue_message(channel, msg));
-                    
-                    if (msger->ping_list.len > 1){
-                        __xchannel_keep_alive(&msger->ping_list, channel);
-                    }
-                    // 更新时间戳
-                    channel->update = __xapi->clock();
 
                 }else {
                     // 队列的第一个连接没有超时，后面的连接就都没有超时
