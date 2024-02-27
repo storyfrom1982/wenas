@@ -98,33 +98,21 @@ typedef struct xmaker {
 
 static inline void xmaker_free(xmaker_ptr maker)
 {
-    if (maker){
-        if (maker->head){
-            free(maker->head);
-        }
-        free(maker);
+    if (maker && maker->head){
+        free(maker->head);
     }
 }
 
-static inline xmaker_ptr xmaker_create(uint64_t len)
+static inline struct xmaker xmaker_create(uint64_t len)
 {
-    xmaker_ptr maker = (xmaker_ptr)malloc(sizeof(struct xmaker));
-    __xbreak(maker == NULL);
+    struct xmaker maker;
     if (len < XLINE_SIZE){
         len = XLINE_SIZE;
     }
-    maker->wpos = XLINE_SIZE;
-    maker->len = len;
-    maker->head = (uint8_t*) malloc(maker->len);
-    __xbreak(maker->head == NULL);
+    maker.wpos = XLINE_SIZE;
+    maker.len = len;
+    maker.head = (uint8_t*) malloc(maker.len);
     return maker;
-
-Clean:
-
-    if (maker){
-        free(maker);
-    }
-    return NULL;
 }
 
 static inline void xmaker_clear(xmaker_ptr maker)

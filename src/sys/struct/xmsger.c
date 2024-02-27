@@ -693,7 +693,9 @@ static void* send_loop(void *ptr)
         // 判断消息是否全部送达
         if (msg->rpos == msg->len){
             // 通知用户，消息已经送达
-            msg->channel->msger->listener->onMessageToPeer(msg->channel->msger->listener, msg->channel, msg->data);
+            if (msg->type == XMSG_PACK_MSG){
+                msg->channel->msger->listener->onMessageToPeer(msg->channel->msger->listener, msg->channel, msg->data);
+            }
             __xlogd("send_loop 1\n");
             free(msg);
             __xlogd("send_loop 2\n");

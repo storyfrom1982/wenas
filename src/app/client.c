@@ -108,7 +108,7 @@ static void parse_msg(xline_ptr msg, uint64_t len)
 static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, void* msg)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    
+    free(msg);
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -221,13 +221,15 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        xmaker_ptr maker = xmaker_create(2);
-        build_msg(maker);
-        xline_add_text(maker, "msg", str);
+        struct xmaker maker = xmaker_create(2);
+        if (maker.head == NULL){
+            break;
+        }
+        build_msg(&maker);
+        xline_add_text(&maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
         // find_msg((xline_ptr)maker->head);
-        xmsger_send_message(client->msger, client->channel, maker->head, maker->wpos);
-        // xmaker_free(maker);
+        xmsger_send_message(client->msger, client->channel, maker.head, maker.wpos);
     }
 
     __xlogi("xmsger_disconnect\n");
