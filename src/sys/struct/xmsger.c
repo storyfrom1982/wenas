@@ -1305,9 +1305,8 @@ static void* recv_loop(void *ptr)
                 msg->wpos += pack->head.len;
                 msg->range--;
                 if (msg->range == 0){
-                    pack->channel->msger->listener->onMessageFromPeer
-                        (pack->channel->msger->listener, 
-                        pack->channel, msg->data, msg->wpos);
+                    pack->channel->msger->listener->onMessageFromPeer(pack->channel->msger->listener, pack->channel, msg->data, msg->wpos);
+                    msg->data = NULL;
                 }
             }
 
