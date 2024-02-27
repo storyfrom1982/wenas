@@ -1308,8 +1308,6 @@ static void* recv_loop(void *ptr)
                     pack->channel->msger->listener->onMessageFromPeer
                         (pack->channel->msger->listener, 
                         pack->channel, msg->data, msg->wpos);
-                    free(msg);
-                    // msg->data = NULL;
                 }
             }
 
