@@ -1035,6 +1035,7 @@ static void* main_loop(void *ptr)
 
             while (channel != &msger->send_list.end)
             {
+                next_channel = channel->next;
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
                 if (__transbuf_usable(channel->sendbuf) > 0){
@@ -1105,13 +1106,12 @@ static void* main_loop(void *ptr)
                         __xlogd("xmsger_loop >>>>-----------------------------------> send ping\n");
                         __xbreak(!xchannel_send_message(channel, msg));
                         // 更新时间戳
-                        channel->update = __xapi->clock();                    
+                        channel->update = __xapi->clock();
 
                     }
                 }
 
-                //TODO 确认发送过程中，连接不会被移出队列
-                channel = channel->next;
+                channel = next_channel;
             }
         }
 
@@ -1142,7 +1142,7 @@ static void* main_loop(void *ptr)
 
         // 判断是否有数据待发送
         if (msger->pos != msger->len){
-
+            __xlogd("xmsger_loop >>>>-----> pos: %lu len: %lu\n", msger->pos, msger->len);
             // 判断网络接口是否可写
             // 判断是否有新消息待发送
             if (!msger->sendable && xpipe_readable(msger->mpipe) == 0){
