@@ -117,7 +117,7 @@ static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     client_ptr client = (client_ptr)listener->ctx;
     parse_msg((xline_ptr)msg, len);
-    // xchannel_free_msg(msg);
+    free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
