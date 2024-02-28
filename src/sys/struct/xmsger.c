@@ -128,9 +128,7 @@ struct xmsger {
     xmsglistener_ptr listener;
     xpipe_ptr mpipe, spipe, rpipe;
     __xprocess_ptr mpid, rpid, spid;
-    // 定时队列是自然有序的，不需要每次排序，所以使用链表效率最高
-    struct xpacklist flushlist;
-    struct xchannellist send_list, recv_list, ping_list;
+    struct xchannellist send_list, recv_list;
 };
 
 #define __transbuf_wpos(b)          ((b)->wpos & ((b)->range - 1))
@@ -379,12 +377,8 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
     channel->ack.key = (XMSG_VAL ^ XMSG_KEY);
 
 
-    if (channel->ping){
-        __xchannel_enqueue(&msger->ping_list, channel);
-    }else {
-        // 所有新创建的连接，都先进入接收队列，同时出入保活状态，检测到超时就会被释放
-        __xchannel_enqueue(&msger->recv_list, channel);
-    }
+    // 所有新创建的连接，都先进入接收队列，同时出入保活状态，检测到超时就会被释放
+    __xchannel_enqueue(&msger->recv_list, channel);
 
     return channel;
 
@@ -408,10 +402,6 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free enter\n");
     __atom_sub(channel->msger->len, channel->len - channel->pos);
     __xchannel_dequeue(channel);
-    if(channel->flushpack){
-        channel->flushpack->prev->next = channel->flushpack->next;
-        channel->flushpack->next->prev = channel->flushpack->prev;
-    }
     xmessage_ptr next;
     while (channel->send_ptr != NULL)
     {
@@ -478,9 +468,6 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 从定时队列中移除
                 if (pack->is_flushing){
                     __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------> remove flushing: %u\n", pack->head.sn);
-                    pack->next->prev = pack->prev;
-                    pack->prev->next = pack->next;
-                    channel->msger->flushlist.len --;
                     channel->flushpack = NULL;
                 }
 
@@ -645,7 +632,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
         __xlogd("xchannel_send_pack >>>>-------------------------------> FLAG: %u SN: %u\n", pack->head.flag, pack->head.sn);
         // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
         if (pack->head.range == 1 && __transbuf_usable(channel->sendbuf) == 0 && channel->msglist_len == 0){
-            __xlogd("xchannel_send_pack >>>>-------------------------------> enqueue flushing\n");
+            __xlogd("xchannel_send_pack >>>>-------------------------------> SET FLUSH PACK: %u\n", pack->head.sn);
             // 冲洗一次
             pack->is_flushing = true;
             pack->max_resend = __transbuf_usable(channel->sendbuf);
@@ -654,12 +641,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
             }
             // 记录当前时间
             pack->timestamp = __xapi->clock() + pack->max_resend * 100000000UL;
-            // 加入冲洗队列
-            pack->next = &channel->msger->flushlist.end;
-            pack->prev = channel->msger->flushlist.end.prev;
-            pack->next->prev = pack;
-            pack->prev->next = pack;
-            channel->msger->flushlist.len ++;
             channel->flushpack = pack;
         }
 
@@ -1058,86 +1039,79 @@ static void* main_loop(void *ptr)
                 // 判断缓冲区中是否有可发送 pack
                 if (__transbuf_usable(channel->sendbuf) > 0){
                     xchannel_send_pack(channel, channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)]);
+                }
+                
+                if (channel->flushpack != NULL){
 
+                    spack = channel->flushpack;
+
+                    if ((countdown = 100000000L - (__xapi->clock() - spack->timestamp)) > 0) {
+                        // 未超时
+                        if (duration > countdown){
+                            // 超时时间更近，更新休息时间
+                            duration = countdown;
+                            __xlogd("xmsger_loop >>>>----------------------------------------------------------> set flushing timer %lu\n", duration);
+                        }
+
+                    }else {
+
+                        __xlogd("xmsger_loop >>>>----------------------------------------------------------> countdown %ld  duration %lu\n", countdown, duration);
+
+                        if (spack->head.resend > spack->max_resend){
+                            
+                            __xlogd("xmsger_loop >>>>----------------------------------------------------------> this channel (%u) has timed out\n", spack->channel->cid);
+                            if (xtree_take(msger->peers, &spack->channel->cid, 4) == NULL){
+                                __xbreak(xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen) == NULL);
+                            }
+                            spack->channel->flushpack = NULL;
+                            xchannel_free(spack->channel);
+                            msger->listener->onChannelTimeout(msger->listener, spack->channel);
+
+                        }else {
+
+                            // 判断发送是否成功
+                            if (__xapi->udp_sendto(spack->channel->msger->sock, &spack->channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
+
+                                msger->sendable = true;
+                                // 记录重传次数
+                                spack->head.resend++;
+
+                            }else {
+
+                                __xlogd("xmsger_loop >>>>------------------------> send failed\n");
+                                msger->sendable = false;
+                            }
+
+                            duration = 100000000UL;
+                        }
+                    }
+
+                }else if (channel->ping && channel->connected){
+
+                    if ((countdown = (NANO_SECONDS * 5) - (__xapi->clock() - channel->update)) > 0) {
+                        // 未超时
+                        if (duration > countdown){
+                            // 超时时间更近，更新休息时间
+                            duration = countdown;
+                            __xlogd("xmsger_loop >>>>----------------------------------------------------------> set ping timer %lu\n", duration);
+                        }
+
+                    }else {
+
+                        // 新创建的 channel 一定要给对端发送一个 HELLO，才能完成连接的创建
+                        xmessage_ptr msg = new_message(channel, XMSG_PACK_PING, 0, NULL, 0);
+                        __xbreak(msg == NULL);
+                        // 这是内部生成的消息，所有要自己更新 xmsger 的计数
+                        __xlogd("xmsger_loop >>>>-----------------------------------> send ping\n");
+                        __xbreak(!xchannel_send_message(channel, msg));
+                        // 更新时间戳
+                        channel->update = __xapi->clock();                    
+
+                    }
                 }
 
                 //TODO 确认发送过程中，连接不会被移出队列
                 channel = channel->next;
-            }
-        }
-
-        // 判断冲洗列表长度
-        if (msger->flushlist.len > 0){
-
-            // 取出第一个 pack
-            spack = msger->flushlist.head.next;
-
-            while (spack != &msger->flushlist.end)
-            {
-                // 当前 pack 的 next 指针有可能会改变，所以要先记录下来
-                next_pack = spack->next;
-                if ((countdown = 100000000L - (__xapi->clock() - spack->timestamp)) > 0) {
-                    // 未超时
-                    if (duration > countdown){
-                        // 超时时间更近，更新休息时间
-                        duration = countdown;
-                        __xlogd("xmsger_loop >>>>----------------------------------------------------------> set flushing timer %lu\n", duration);
-                    }
-                    // 最近的重传时间还没有到，后面的 pack 也不需要重传
-                    break;
-                }
-
-                __xlogd("xmsger_loop >>>>----------------------------------------------------------> countdown %ld  duration %lu\n", countdown, duration);
-
-                if (spack->head.resend > spack->max_resend){
-                    
-                    __xlogd("xmsger_loop >>>>----------------------------------------------------------> this channel (%u) has timed out\n", spack->channel->cid);
-                    spack->prev->next = spack->next;
-                    spack->next->prev = spack->prev;
-                    msger->flushlist.len--;
-                    __xlogd("xmsger_loop receive ACK >>>>--------> channel 0x%X cid: %u\n", spack->channel, spack->channel->peer_cid);
-                    if (xtree_take(msger->peers, &spack->channel->cid, 4) == NULL){
-                        __xbreak(xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen) == NULL);
-                    }
-                    spack->channel->flushpack = NULL;
-                    xchannel_free(spack->channel);
-                    msger->listener->onChannelTimeout(msger->listener, spack->channel);
-
-                }else {
-
-                    // 判断发送是否成功
-                    if (__xapi->udp_sendto(spack->channel->msger->sock, &spack->channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
-
-                        msger->sendable = true;
-                        // 记录重传次数
-                        spack->head.resend++;
-                        // 暂时移出冲洗列表
-                        spack->prev->next = spack->next;
-                        spack->next->prev = spack->prev;
-
-                        // 重传之后，将包再次加入到冲洗列表的队尾
-                        // 因为，所有正常到达对端的包都会很快被移出冲洗列表
-                        // 所以，如果这个包依然未能到达对端，也很快就可以被再次重传
-                        // 只是把包放到列表的最后面，不需要增加延迟，如果增加了延迟，就会像 TCP 一样
-                        spack->next = &msger->flushlist.end;
-                        spack->prev = msger->flushlist.end.prev;
-                        spack->next->prev = spack;
-                        spack->prev->next = spack;
-
-                    }else {
-                        __xlogd("xmsger_loop >>>>------------------------> send failed\n");
-                        msger->sendable = false;
-                    }
-
-                }
-
-                spack = next_pack;
-            }
-
-            // 判断是否冲洗队列中的所有包都超时
-            if (spack == &msger->flushlist.end){
-                // 延迟一百毫秒后重传
-                duration = 1000 * MICRO_SECONDS;
             }
         }
 
@@ -1166,34 +1140,6 @@ static void* main_loop(void *ptr)
             }
         }
 
-        // 连接保活
-        if (msger->ping_list.len > 0){
-
-            channel = msger->ping_list.head.next;
-            // 10 秒钟超时
-            while (channel != &msger->ping_list.end){
-                next_channel = channel->next;
-
-                if (__xapi->clock() - channel->update > NANO_SECONDS * 5){
-
-                    // 新创建的 channel 一定要给对端发送一个 HELLO，才能完成连接的创建
-                    xmessage_ptr msg = new_message(channel, XMSG_PACK_PING, 0, NULL, 0);
-                    __xbreak(msg == NULL);
-                    // 这是内部生成的消息，所有要自己更新 xmsger 的计数
-                    __xlogd("xmsger_loop >>>>-----------------------------------> send ping\n");
-                    __xbreak(!xchannel_send_message(channel, msg));
-                    // 更新时间戳
-                    channel->update = __xapi->clock();                    
-
-                }else {
-                    // 队列的第一个连接没有超时，后面的连接就都没有超时
-                    break;
-                }
-
-                channel = next_channel;
-            }
-        }        
-    
         // 判断是否有数据待发送
         if (msger->pos != msger->len){
 
@@ -1445,20 +1391,6 @@ xmsger_ptr xmsger_create(xmsglistener_ptr listener)
     msger->recv_list.end.next = NULL;
     msger->recv_list.head.next = &msger->recv_list.end;
     msger->recv_list.end.prev = &msger->recv_list.head;
-
-    msger->ping_list.len = 0;
-    msger->ping_list.head.prev = NULL;
-    msger->ping_list.end.next = NULL;
-    msger->ping_list.head.next = &msger->ping_list.end;
-    msger->ping_list.end.prev = &msger->ping_list.head;
-
-    // TODO 这些链表里的数据都要释放
-    msger->flushlist.len = 0;
-    msger->flushlist.head.prev = NULL;
-    msger->flushlist.end.next = NULL;
-    msger->flushlist.head.next = &msger->flushlist.end;
-    msger->flushlist.end.prev = &msger->flushlist.head;
-    msger->flushlist.end.timestamp = UINT64_MAX;
 
     msger->cid = __xapi->clock() % UINT16_MAX;
 
