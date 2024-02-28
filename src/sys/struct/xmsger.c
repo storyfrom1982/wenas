@@ -942,6 +942,7 @@ static void* main_loop(void *ptr)
                             channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                             // HELLO 的 ACK 都是生成的校验码
                             if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
+                                __xlogd("xmsger_loop receive ACK >>>>--------> channel 0x%X cid: %u\n", channel, channel->peer_cid);
                                 // 开始使用 cid 作为索引
                                 xtree_save(msger->peers, &channel->cid, 4, channel);
                                 // 停止发送 HELLO
@@ -1006,9 +1007,11 @@ static void* main_loop(void *ptr)
 
                 }else {
 
-                    channel = msg->channel;
-                    __xbreak(xtree_take(channel->msger->peers, &channel->cid, 4) == NULL);
-                    __xbreak(xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel) == NULL);
+                    if (msg->channel != NULL){
+                        channel = msg->channel;
+                        __xbreak(xtree_take(channel->msger->peers, &channel->cid, 4) == NULL);
+                        __xbreak(xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel) == NULL);
+                    }
                 }
             }
 
@@ -1065,10 +1068,9 @@ static void* main_loop(void *ptr)
                     spack->prev->next = spack->next;
                     spack->next->prev = spack->prev;
                     msger->flushlist.len--;
-                    if (channel->peer_cid == 0){
-                        xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen);
-                    }else {
-                        xtree_take(msger->peers, &spack->channel->peer_cid, 4);
+                    __xlogd("xmsger_loop receive ACK >>>>--------> channel 0x%X cid: %u\n", spack->channel, spack->channel->peer_cid);
+                    if (xtree_take(msger->peers, &spack->channel->cid, 4) == NULL){
+                        __xbreak(xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen) == NULL);
                     }
                     xchannel_free(spack->channel);
                     msger->listener->onChannelTimeout(msger->listener, spack->channel);
@@ -1122,7 +1124,9 @@ static void* main_loop(void *ptr)
                 // TODO 发起端需要发送 PING 保活
                 // 对穿连接，时间戳晚的一端负责发 PING 保活
                 if (__xapi->clock() - channel->update > NANO_SECONDS * 10){
-                    xtree_take(msger->peers, &channel->peer_cid, 4);
+                    if (xtree_take(msger->peers, &channel->cid, 4) == NULL){
+                        __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
+                    }
                     xchannel_free(channel);
                     msger->listener->onChannelTimeout(msger->listener, channel);
                 }else {
