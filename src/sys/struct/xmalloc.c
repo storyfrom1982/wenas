@@ -502,7 +502,8 @@ void* malloc(size_t size)
 
 #ifdef XMALLOC_BACKTRACE
 		// ptr->trace 的开始位置用来存储获取跟踪堆栈的深度
-		*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 1);
+		*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
+		*(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
 #endif
 
 		// printf("malloc >>>>>>>--------------------------------------------------->>>> exit\n");
@@ -560,7 +561,8 @@ void* malloc(size_t size)
 	__atom_unlock(page->lock);
 
 #ifdef XMALLOC_BACKTRACE
-	*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 1);
+	*((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
+	*(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
 #endif
 
 	return __pointer2address(ptr);
@@ -825,7 +827,7 @@ void xmalloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void xmalloc_leak_trace(void (*cb)(const char *leak_location))
+void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid))
 {
 	__xptr *ptr = NULL;
 	xmalloc_pool_t *pool = NULL;
@@ -846,7 +848,7 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location))
 			if (pool->page[page_id].start_address
 				&& pool->page[page_id].ptr->size
 				!= pool->page[page_id].size - __free_ptr_size * 2){
-				cb("[!!! Found a memory leak !!!]");
+				cb("[!!! Found a memory leak !!!]", 0);
 				ptr = (__next_pointer(pool->page[page_id].head));
 				while(ptr != pool->page[page_id].end){
 #ifdef XMALLOC_BACKTRACE
@@ -862,7 +864,7 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location))
 							n += result;
 						}
 						buf[n] = '\0';
-						cb(buf);
+						cb(buf, *(((int64_t*)ptr->trace) + count));
 					}
 #endif
 					ptr = __next_pointer(ptr);
