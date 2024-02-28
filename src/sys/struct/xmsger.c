@@ -94,6 +94,7 @@ struct xchannel {
     __atom_size pos, len;
     struct __xipaddr addr;
     struct xhead ack;
+    xpack_ptr flushpack;
     xmsgbuf_ptr msgbuf;
     xpackbuf_ptr sendbuf;
     xmsger_ptr msger;
@@ -349,6 +350,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
 {
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
     __xbreak(channel == NULL);
+    channel->flushpack = NULL;
     channel->send_ptr = NULL;
     channel->connected = false;
     channel->breaker = false;
@@ -406,7 +408,30 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free enter\n");
     __atom_sub(channel->msger->len, channel->len - channel->pos);
     __xchannel_dequeue(channel);
-    // TODO 释放 msg queue 中的资源
+    if(channel->flushpack){
+        channel->flushpack->prev->next = channel->flushpack->next;
+        channel->flushpack->next->prev = channel->flushpack->prev;
+    }
+    xmessage_ptr next;
+    while (channel->send_ptr != NULL)
+    {
+        next = channel->send_ptr->next;
+        if (channel->send_ptr->type == XMSG_PACK_MSG){
+            free(channel->send_ptr->data);
+        }
+        free(channel->send_ptr);
+        channel->send_ptr = next;
+    }
+    while(__transbuf_readable(channel->sendbuf) > 0)
+    {
+        free(channel->sendbuf->buf[__transbuf_rpos(channel->sendbuf)]);
+        channel->sendbuf->rpos++;
+    }
+    while(__transbuf_readable(channel->msgbuf) > 0)
+    {
+        free(channel->msgbuf->buf[__transbuf_rpos(channel->msgbuf)]);
+        channel->msgbuf->rpos++;
+    }
     free(channel->msgbuf);
     free(channel->sendbuf);
     free(channel);
@@ -456,6 +481,7 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                     pack->next->prev = pack->prev;
                     pack->prev->next = pack->next;
                     channel->msger->flushlist.len --;
+                    channel->flushpack = NULL;
                 }
 
                 // 释放内存
@@ -634,6 +660,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
             pack->next->prev = pack;
             pack->prev->next = pack;
             channel->msger->flushlist.len ++;
+            channel->flushpack = pack;
         }
 
     }else {
@@ -1072,6 +1099,7 @@ static void* main_loop(void *ptr)
                     if (xtree_take(msger->peers, &spack->channel->cid, 4) == NULL){
                         __xbreak(xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen) == NULL);
                     }
+                    spack->channel->flushpack = NULL;
                     xchannel_free(spack->channel);
                     msger->listener->onChannelTimeout(msger->listener, spack->channel);
 
@@ -1527,14 +1555,19 @@ void xmsger_free(xmsger_ptr *pptr)
         }        
 
         if (msger->mpipe){
-            __xlogd("xmsger_free send pipe\n");
+            __xlogd("xmsger_free msg pipe\n");
             xpipe_free(&msger->mpipe);
         }
 
         if (msger->spipe){
-            __xlogd("xmsger_free recv pipe\n");
+            __xlogd("xmsger_free send pipe\n");
             xpipe_free(&msger->spipe);
-        }        
+        }
+
+        if (msger->rpipe){
+            __xlogd("xmsger_free recv pipe\n");
+            xpipe_free(&msger->rpipe);
+        }
 
         if (msger->peers){
             __xlogd("xmsger_free clear peers\n");
