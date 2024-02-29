@@ -11,13 +11,13 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include "sys/struct/xbuf.h"
+#include "sys/struct/xmalloc.h"
 
-#define __log_text_size			4096
+#define __log_text_size			1024
 #define __log_text_end			( __log_text_size - 2 )
 #define __log_file_size         1024 * 1024 * 8
-#define __log_pipe_size			1 << 14
-// #define __log_pipe_size			1 << 1
+#define __log_pipe_size			8192
+#define __log_file_path_size    256
 
 #define __path_clear(path) \
         ( strrchr( path, '/' ) ? strrchr( path, '/' ) + 1 : path )
@@ -25,82 +25,131 @@
 static const char *s_log_level_strings[__XLOG_LEVEL_ERROR + 1] = {"D", "I", "E"};
 
 
-typedef struct xlog_file {
+struct xlogrecorder {
     __atom_bool lock;
     __atom_bool running;
-    __atom_bool writing;
-    char *log0, *log1;
+    __atom_bool recording;
     __xfile_ptr fp;
-    xpipe_ptr pipe;
     __xprocess_ptr pid;
     __xlog_cb print_cb;
-}__xlog_file;
+    char log0[__log_file_path_size], log1[__log_file_path_size];
+};
 
-static __xlog_file g_log_file = {0};
+static struct xlogrecorder global_logrecorder = {0}, *srecorder = &global_logrecorder;
 
-static void* __xlog_file_write_loop(void *ctx)
+
+struct xlogbuf {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    uint64_t len;
+    uint16_t leftover;
+    __atom_size writer;
+    __atom_size reader;
+    char buf[__log_pipe_size];
+}slogbuf = {
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .cond  = PTHREAD_COND_INITIALIZER,
+    .len = __log_pipe_size,
+    .leftover = 0,
+    .writer = 0,
+    .reader = 0
+};
+
+typedef struct xlogbuf* xlogbuf_ptr;
+static xlogbuf_ptr spipe = &slogbuf;
+
+#define __spipe_readable(sp)    (sp->writer - sp->reader)
+#define __spipe_writable(sp)    (sp->len - sp->writer + sp->reader)
+
+static inline uint64_t __spipe_read(void *buf, uint64_t len)
 {
-    __xlogd("__xlog_file_write_loop enter\n");
+    uint64_t readable = spipe->writer - spipe->reader;
 
-    int64_t n;
-    uint64_t res, buf_size = __log_pipe_size;
-    unsigned char *buf = (unsigned char *)malloc(buf_size);
-    __xbreak(buf == NULL);
-
-    {
-        // 只有在 Release 模式下才能获取到指针的信息
-        uint64_t *a = (uint64_t*)(buf - 16);
-        uint64_t *b = (uint64_t*)(buf - 8);
-        __xlogd("buf addr: %llu.%llu\n", *a, *b);
+    if (readable > len){
+        readable = len;
     }
 
-    __set_true(g_log_file.writing);
+    if (readable > 0){
+
+        spipe->leftover = spipe->len - ( spipe->reader & ( spipe->len - 1 ) );
+        if (spipe->leftover >= readable){
+            mcopy(((uint8_t*)buf), spipe->buf + (spipe->reader & (spipe->len - 1)), readable);
+        }else {
+            mcopy(((uint8_t*)buf), spipe->buf + (spipe->reader & (spipe->len - 1)), spipe->leftover);
+            mcopy(((uint8_t*)buf) + spipe->leftover, spipe->buf, readable - spipe->leftover);
+        }
+        __atom_add(spipe->reader, readable);
+        pthread_cond_broadcast(&spipe->cond);
+    }
+
+    return readable;
+}
+
+static inline uint64_t __spipe_write(void *data, uint64_t len)
+{
+    uint64_t  writable = spipe->len - spipe->writer + spipe->reader;
+
+    if (writable > len){
+        writable = len;
+    }
+
+    if (writable > 0){
+
+        spipe->leftover = spipe->len - ( spipe->writer & ( spipe->len - 1 ) );
+        if (spipe->leftover >= writable){
+            mcopy(spipe->buf + (spipe->writer & (spipe->len - 1)), ((uint8_t*)data), writable);
+        }else {
+            mcopy(spipe->buf + (spipe->writer & (spipe->len - 1)), ((uint8_t*)data), spipe->leftover);
+            mcopy(spipe->buf, ((uint8_t*)data) + spipe->leftover, writable - spipe->leftover);
+        }
+        __atom_add(spipe->writer, writable);
+        pthread_cond_broadcast(&spipe->cond);
+    }
+
+    return writable;
+}
+
+
+static void* __xlog_recorder_loop(void *ctx)
+{
+    __xlogd("__xlog_recorder_loop enter\n");
+
+    int64_t n;
+    uint64_t readlen;
+    char buf[__log_pipe_size];
+
+    __set_true(srecorder->recording);
     
-    while (1)
+    while (__is_true(srecorder->running))
     {
-        // printf("xpipe_read enter\n");
-        // TODO xpipe 不支持无锁模式下的多写一读
-        // TODO 是否要频繁写文件？是否可以一次性写入 4K
-        if ((res = xpipe_read(g_log_file.pipe, buf, 1)) == 1){
-            // printf("xpipe_read 1\n");
-            n = xpipe_readable(g_log_file.pipe);
-            // printf("xpipe_readable %lu\n", n);
-            res += xpipe_read(g_log_file.pipe, buf + 1, n < buf_size ? n : buf_size - 1);
-            // printf("xpipe_read exit\n");
+        while ((readlen = __spipe_readable(spipe)) == 0 && __is_true(srecorder->running)){
+            pthread_mutex_lock(&spipe->mutex);
+            pthread_cond_wait(&spipe->cond, &spipe->mutex);
+            pthread_mutex_unlock(&spipe->mutex);
         }
 
-        if (res > 0){
-            n = __xapi->fwrite(g_log_file.fp, buf, res);
-            // 日志线程本身不能同时读写日志管道
-            __xbreak(n != res);
+        if (readlen == 0){
+            break;
+        }
 
-            if (__xapi->ftell(g_log_file.fp) > __log_file_size){
-                __xapi->fclose(g_log_file.fp);
-                __xapi->move_path(g_log_file.log0, g_log_file.log1);
-                g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
-                // 日志线程本身不能同时读写日志管道
-                // TODO
-                // __xcheck(g_log_file.fp != NULL);
-                // __xcheck(g_log_file.fp != NULL);
-            }
-        }else {
-            if (__is_false(g_log_file.running)){
+        __spipe_read(buf, readlen);
+
+        n = __xapi->fwrite(srecorder->fp, buf, readlen);
+        if (n != readlen){
+            break;
+        }
+
+        if (__xapi->ftell(srecorder->fp) > __log_file_size){
+            __xapi->fclose(srecorder->fp);
+            __xapi->move_path(srecorder->log0, srecorder->log1);
+            srecorder->fp = __xapi->fopen(srecorder->log0, "a+t");
+            if (srecorder->fp == NULL){
                 break;
             }
         }
     }
 
-Clean:
-
-    if (buf){
-        uint64_t *a = (uint64_t*)(buf - 16);
-        uint64_t *b = (uint64_t*)(buf - 8);
-        __xlogd("buf addr: %llu.%llu\n", *a, *b);
-        free(buf);
-        __xlogd("buf addr: %llu.%llu\n", *a, *b);
-    }
-
-    __xlogd("__xlog_file_write_loop exit\n");
+    __xlogd("__xlog_recorder_loop exit\n");
 
     return NULL;
 }
@@ -135,27 +184,31 @@ static void memory_leak_cb(const char *leak_location, uint64_t pid)
     __xloge("[0x%X] %s\n", pid, leak_location);
 }
 
-void __xlog_close()
+void xlog_recorder_close()
 {
     //先设置关闭状态    
-    if (__set_false(g_log_file.running)){
-        __set_false(g_log_file.writing);
+    if (__set_false(srecorder->running)){
+        __set_false(srecorder->recording);
+
         //再清空管道，确保写入线程退出管道，并且不会再去写日志
-        xpipe_break(g_log_file.pipe);
-        __xapi->process_free(g_log_file.pid);
-        xpipe_free(&g_log_file.pipe);
-        free(g_log_file.log0);
-        free(g_log_file.log1);
+        pthread_mutex_lock(&spipe->mutex);
+        pthread_cond_broadcast(&spipe->cond);
+        pthread_mutex_unlock(&spipe->mutex);
+        pthread_mutex_lock(&spipe->mutex);
+        pthread_cond_broadcast(&spipe->cond);
+        pthread_mutex_unlock(&spipe->mutex);
+
+        __xapi->process_free(srecorder->pid);
 
         __xlogi(">>>>-------------->\n");
         __xlogi("Log stop >>>>-------------->\n");
         __xlogi(">>>>-------------->\n");
 
-        __atom_lock(g_log_file.lock);
-        __xapi->fclose(g_log_file.fp);
-        __atom_unlock(g_log_file.lock);
+        __atom_lock(srecorder->lock);
+        __xapi->fclose(srecorder->fp);
+        __atom_unlock(srecorder->lock);
 
-        mclear(&g_log_file, sizeof(g_log_file));
+        mclear(srecorder, sizeof(global_logrecorder));
     }
 
 #if defined(XMALLOC_BACKTRACE)
@@ -165,7 +218,7 @@ void __xlog_close()
 
 extern void env_backtrace_setup();
 
-int __xlog_open(const char *path, __xlog_cb cb)
+int xlog_recorder_open(const char *path, __xlog_cb cb)
 {
     env_backtrace_setup();
     // test();
@@ -173,68 +226,49 @@ int __xlog_open(const char *path, __xlog_cb cb)
     static char buf[BUFSIZ];
     setvbuf(stdout, buf, _IONBF, BUFSIZ);
 
-    __xlog_close();
+    xlog_recorder_close();
 
-    g_log_file.print_cb = cb;
+    srecorder->print_cb = cb;
 
-    int len = strlen(path) + strlen("/0.log") + 1;
     if (!__xapi->check_path(path)){
         __xbreak(!__xapi->make_path(path));
     }
 
-    g_log_file.log0 = calloc(1, len);
-    __xbreak(g_log_file.log0 == NULL);
-    g_log_file.log1 = calloc(1, len);
-    __xbreak(g_log_file.log1 == NULL);
+    int n = snprintf(srecorder->log0, __log_file_path_size - 1, "%s/0.log", path);
+    srecorder->log0[n] = '\0';
+    n = snprintf(srecorder->log1, __log_file_path_size - 1, "%s/1.log", path);
+    srecorder->log0[n] = '\0';
 
-    snprintf(g_log_file.log0, len, "%s/0.log", path);
-    snprintf(g_log_file.log1, len, "%s/1.log", path);
+    __atom_lock(srecorder->lock);
+    srecorder->fp = __xapi->fopen(srecorder->log0, "a+t");
+    __atom_unlock(srecorder->lock);
 
-    __atom_lock(g_log_file.lock);
-    g_log_file.fp = __xapi->fopen(g_log_file.log0, "a+t");
-    __atom_unlock(g_log_file.lock);
-
-    __xbreak(g_log_file.fp == NULL);
+    __xbreak(srecorder->fp == NULL);
     
     __xlogi(">>>>-------------->\n");
-    __xlogi("Log start >>>>--------------> %s\n", g_log_file.log0);
-    __xlogi(">>>>-------------->\n");  
+    __xlogi("Log start >>>>--------------> %s\n", srecorder->log0);
+    __xlogi(">>>>-------------->\n");
 
-    g_log_file.pipe = xpipe_create(__log_pipe_size);
-    __xbreak(g_log_file.pipe == NULL);
+    srecorder->pid = __xapi->process_create(__xlog_recorder_loop, &global_logrecorder);
+    __xbreak(srecorder->pid == NULL);
 
-    g_log_file.pid = __xapi->process_create(__xlog_file_write_loop, &g_log_file);
-    __xbreak(g_log_file.pid == NULL);
-
-    __set_true(g_log_file.running);
+    __set_true(srecorder->running);
 
     return 0;
 
 Clean:
 
-    if (g_log_file.log0){
-        free(g_log_file.log0);
-        g_log_file.log0 = NULL;
+    if (srecorder->pid != 0){
+        __xapi->process_free(srecorder->pid);
+        srecorder->pid = 0;
     }
-    if (g_log_file.log1){
-        free(g_log_file.log1);
-        g_log_file.log1 = NULL;
+    if (srecorder->fp){
+        __xapi->fclose(srecorder->fp);
+        srecorder->fp = NULL;
     }
-    if (g_log_file.pipe){
-        xpipe_free(&g_log_file.pipe);
-        g_log_file.pipe = NULL;
-    }
-    if (g_log_file.pid != 0){
-        __xapi->process_free(g_log_file.pid);
-        g_log_file.pid = 0;
-    }
-    if (g_log_file.fp){
-        __xapi->fclose(g_log_file.fp);
-        g_log_file.fp = NULL;
-    }
-    __set_false(g_log_file.running);
-    __set_false(g_log_file.writing);
-    __set_false(g_log_file.lock);
+    __set_false(srecorder->running);
+    __set_false(srecorder->recording);
+    __set_false(srecorder->lock);
 
     return -1;
 }
@@ -246,32 +280,41 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
 
     uint64_t millisecond = __xapi->time() / MICRO_SECONDS;
     // memory leak
-    // n = ___sys_strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
-
-    n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
-                    __xapi->process_self(), (millisecond / 1000), (unsigned int)(millisecond % 1000), 
+    n = __xapi->strftime(text, __log_text_end, millisecond / MILLI_SECONDS);
+    n += snprintf(text + n, __log_text_end - n, ".%03u [0x%08X] %4d %-21s [%s] ", 
+                    (unsigned int)(millisecond % 1000), __xapi->process_self(), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
+
+    // n += snprintf(text + n, __log_text_end - n, "[0x%08X] [%lu.%03u] %4d %-21s [%s] ", 
+    //                 __xapi->process_self(), (millisecond / 1000), (unsigned int)(millisecond % 1000), 
+    //                 line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
     va_list args;
     va_start (args, fmt);
     n += vsnprintf(text + n, __log_text_end - n, fmt, args);
     va_end (args);
 
-    __atom_lock(g_log_file.lock);
+    __atom_lock(srecorder->lock);
 
     // 这里只向文件写入实际的输入的内容
     // 最大输入内容 0-4094=4095
-    if (__is_true(g_log_file.writing)){
+    if (__is_true(srecorder->recording)){
         // 写入管道
-        xpipe_write(g_log_file.pipe, text, n);
-    }else {
-        // 直接写文件
-        if (g_log_file.fp){
-            __xapi->fwrite(g_log_file.fp, text, n);
+        uint64_t pos = 0;
+        while (pos < n){
+            pthread_mutex_lock(&spipe->mutex);
+            if (__spipe_writable(spipe) == 0){
+                pthread_cond_wait(&spipe->cond, &spipe->mutex);
+            }
+            pos += __spipe_write(text + pos, n - pos);                
+            pthread_mutex_unlock(&spipe->mutex);
         }
+    }else if (srecorder->fp){
+        // 直接写文件
+        __xapi->fwrite(srecorder->fp, text, n);
     }
 
-    __atom_unlock(g_log_file.lock);
+    __atom_unlock(srecorder->lock);
 
     // 长度 n 不会越界，因为 snprintf 限制了写入长度
     if (text[n] != '\0'){
@@ -279,8 +322,8 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
         text[n+1] = '\0';
     }
 
-    if (g_log_file.print_cb != NULL){
-        g_log_file.print_cb(level, text);
+    if (srecorder->print_cb != NULL){
+        srecorder->print_cb(level, text);
     }else {
         fprintf(stdout, "%s", text);
         fflush(stdout);

@@ -36,9 +36,9 @@ static uint64_t __unix_clock(void)
 }
 
 
-static uint64_t __unix_strftime(char *buf, uint64_t size, uint64_t seconds)
+static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
 {
-	time_t sec = (time_t)seconds;
+	time_t sec = (time_t)timepoint;
     struct tm t;
     localtime_r(&sec, &t);
     return strftime(buf, size, "%Y/%m/%d-%H:%M:%S", &t);
@@ -434,6 +434,7 @@ struct __xapi_enter posix_api_enter = {
 
     .time = __unix_time,
     .clock = __unix_clock,
+    .strftime = __unix_strftime,
 
     .process_create = __posix_thread_create,
     .process_free = __posix_thread_free,

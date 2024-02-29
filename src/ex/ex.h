@@ -43,6 +43,7 @@ typedef struct __xapi_enter {
 
     uint64_t (*time)(void);
     uint64_t (*clock)(void);
+    uint64_t (*strftime)(char *buf, size_t size, uint64_t point);
 
 ///////////////////////////////////////////////////////
 ///// 并发任务
@@ -123,8 +124,8 @@ enum __xlog_level
 };
 
 typedef void (*__xlog_cb) (int32_t level, const char *log);
-extern int __xlog_open(const char *path, __xlog_cb cb);
-extern void __xlog_close();
+extern int xlog_recorder_open(const char *path, __xlog_cb cb);
+extern void xlog_recorder_close();
 extern void __xlog_printf(enum __xlog_level level, const char *file, int line, const char *fmt, ...);
 
 #define __xlogi(__FORMAT__, ...) \

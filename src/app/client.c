@@ -177,7 +177,7 @@ static void find_msg(xline_ptr msg){
 
 int main(int argc, char *argv[])
 {
-    __xlog_open("./tmp/client/log", NULL);
+    xlog_recorder_open("./tmp/client/log", NULL);
     __xlogi("start client\n");
 
     client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
     free(client);
 
     __xlogi("env_logger_stop\n");
-    __xlog_close();
+    xlog_recorder_close();
 
     __xlogi("exit\n");
     return 0;

@@ -175,7 +175,7 @@ static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel
 
 int main(int argc, char *argv[])
 {
-    __xlog_open("./tmp/server/log", NULL);
+    xlog_recorder_open("./tmp/server/log", NULL);
     __xlogi("start server\n");
 
     const char *host = "127.0.0.1";
@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     __xapi->udp_close(server.rsock);
     __xapi->udp_clear_ipaddr(server.xmsgaddr);
 
-    __xlog_close();
+    xlog_recorder_close();
 
     __xlogi("exit\n");
 

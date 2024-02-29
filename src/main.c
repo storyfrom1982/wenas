@@ -44,7 +44,7 @@ extern void test();
 int main(int argc, char *argv[])
 {
     env_backtrace_setup();
-    __xlog_open("./tmp/log", NULL);
+    xlog_recorder_open("./tmp/log", NULL);
     
 #if 1
     char text[1024] = {0};
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     memcmp("123", "456", 3);
     
 #endif
-    __xlog_close();
+    xlog_recorder_close();
     __xlogi("exit\n");
 
 	return 0;
