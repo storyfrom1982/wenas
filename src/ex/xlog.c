@@ -2,7 +2,7 @@
 // Created by liyong kang on 2022/12/2.
 //
 
-#include "ex/ex.h"
+#include "ex.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -42,7 +42,6 @@ struct xlogbuf {
     pthread_mutex_t mutex;
     pthread_cond_t cond;
     uint64_t len;
-    uint16_t leftover;
     __atom_size writer;
     __atom_size reader;
     char buf[__log_pipe_size];
@@ -50,7 +49,6 @@ struct xlogbuf {
     .mutex = PTHREAD_MUTEX_INITIALIZER,
     .cond  = PTHREAD_COND_INITIALIZER,
     .len = __log_pipe_size,
-    .leftover = 0,
     .writer = 0,
     .reader = 0
 };
@@ -71,12 +69,12 @@ static inline uint64_t __spipe_read(void *buf, uint64_t len)
 
     if (readable > 0){
 
-        spipe->leftover = spipe->len - ( spipe->reader & ( spipe->len - 1 ) );
-        if (spipe->leftover >= readable){
+        uint64_t leftover = spipe->len - ( spipe->reader & ( spipe->len - 1 ) );
+        if (leftover >= readable){
             mcopy(((uint8_t*)buf), spipe->buf + (spipe->reader & (spipe->len - 1)), readable);
         }else {
-            mcopy(((uint8_t*)buf), spipe->buf + (spipe->reader & (spipe->len - 1)), spipe->leftover);
-            mcopy(((uint8_t*)buf) + spipe->leftover, spipe->buf, readable - spipe->leftover);
+            mcopy(((uint8_t*)buf), spipe->buf + (spipe->reader & (spipe->len - 1)), leftover);
+            mcopy(((uint8_t*)buf) + leftover, spipe->buf, readable - leftover);
         }
         __atom_add(spipe->reader, readable);
         pthread_cond_broadcast(&spipe->cond);
@@ -95,12 +93,12 @@ static inline uint64_t __spipe_write(void *data, uint64_t len)
 
     if (writable > 0){
 
-        spipe->leftover = spipe->len - ( spipe->writer & ( spipe->len - 1 ) );
-        if (spipe->leftover >= writable){
+        uint64_t leftover = spipe->len - ( spipe->writer & ( spipe->len - 1 ) );
+        if (leftover >= writable){
             mcopy(spipe->buf + (spipe->writer & (spipe->len - 1)), ((uint8_t*)data), writable);
         }else {
-            mcopy(spipe->buf + (spipe->writer & (spipe->len - 1)), ((uint8_t*)data), spipe->leftover);
-            mcopy(spipe->buf, ((uint8_t*)data) + spipe->leftover, writable - spipe->leftover);
+            mcopy(spipe->buf + (spipe->writer & (spipe->len - 1)), ((uint8_t*)data), leftover);
+            mcopy(spipe->buf, ((uint8_t*)data) + leftover, writable - leftover);
         }
         __atom_add(spipe->writer, writable);
         pthread_cond_broadcast(&spipe->cond);
@@ -124,6 +122,7 @@ static void* __xlog_recorder_loop(void *ctx)
     {
         while ((readlen = __spipe_readable(spipe)) == 0 && __is_true(srecorder->running)){
             pthread_mutex_lock(&spipe->mutex);
+            pthread_cond_broadcast(&spipe->cond);
             pthread_cond_wait(&spipe->cond, &spipe->mutex);
             pthread_mutex_unlock(&spipe->mutex);
         }

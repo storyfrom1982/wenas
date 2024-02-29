@@ -7,7 +7,6 @@
 
 typedef struct xpipe {
     uint64_t len;
-    uint64_t leftover;
     __atom_size writer;
     __atom_size reader;
     __atom_bool breaking;
@@ -18,7 +17,7 @@ typedef struct xpipe {
 
 static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 {
-    uint64_t  writable = pipe->len - pipe->writer + pipe->reader;
+    uint64_t writable = pipe->len - pipe->writer + pipe->reader;
 
     if (writable > len){
         writable = len;
@@ -26,12 +25,12 @@ static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
     if (writable > 0){
 
-        pipe->leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
-        if (pipe->leftover >= writable){
+        uint64_t leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
+        if (leftover >= writable){
             mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), writable);
         }else {
-            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), pipe->leftover);
-            mcopy(pipe->buf, ((uint8_t*)data) + pipe->leftover, writable - pipe->leftover);
+            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), leftover);
+            mcopy(pipe->buf, ((uint8_t*)data) + leftover, writable - leftover);
         }
         __atom_add(pipe->writer, writable);
         __xapi->mutex_notify(pipe->mutex);
@@ -56,9 +55,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             // __pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
             __xapi->mutex_notify(pipe->mutex);
-            // printf("xpipe_write waiting --------------- enter     len: %lu pos: %lu\n", len, pos);
             __xapi->mutex_wait(pipe->mutex);
-            // printf("xpipe_write waiting --------------- exit\n");
             __xapi->mutex_unlock(pipe->mutex);
         }
     }
@@ -76,12 +73,12 @@ static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
     if (readable > 0){
 
-        pipe->leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
-        if (pipe->leftover >= readable){
+        uint64_t leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
+        if (leftover >= readable){
             mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
         }else {
-            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), pipe->leftover);
-            mcopy(((uint8_t*)buf) + pipe->leftover, pipe->buf, readable - pipe->leftover);
+            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), leftover);
+            mcopy(((uint8_t*)buf) + leftover, pipe->buf, readable - leftover);
         }
         __atom_add(pipe->reader, readable);
         __xapi->mutex_notify(pipe->mutex);
@@ -110,9 +107,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
             // 所以在阻塞之前，唤醒一次写线程
             __xapi->mutex_notify(pipe->mutex);
             if (__is_false(pipe->breaking)){
-                // printf("xpipe_read waiting +++++++++++++++++++++++++++++++ enter     len: %lu pos: %lu\n", len, pos);
                 __xapi->mutex_wait(pipe->mutex);
-                // printf("xpipe_read waiting +++++++++++++++++++++++++++++++ exit\n");
             }
             __xapi->mutex_unlock(pipe->mutex);
             if (__is_true(pipe->breaking)){
@@ -179,8 +174,6 @@ static inline xpipe_ptr xpipe_create(uint64_t len)
             pipe->len <<= 1;
         } while(len >>= 1);
     }
-
-    pipe->leftover = pipe->len;
 
     pipe->buf = (uint8_t*)malloc(pipe->len);
     __xbreak(pipe->buf == NULL);
