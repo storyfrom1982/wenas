@@ -1022,11 +1022,10 @@ static void* main_loop(void *ptr)
             rpack->head.len = 0;
         }
 
-        __set_false(msger->readable);
-        __xlogd("main_loop >>>>-----> notify listen enter\n");
-        // 通知接受线程开始监听 socket
-        __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
-        __xlogd("main_loop >>>>-----> notify listen exit\n");
+        if (__set_false(msger->readable)){
+            // 通知接受线程开始监听 socket
+            __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
+        }
 
         if (xpipe_readable(msger->mpipe) > 0){
             // 连接的发起和开始发送消息，都必须经过这个管道
