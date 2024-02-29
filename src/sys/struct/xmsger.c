@@ -805,6 +805,7 @@ static void* main_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
+        __xlogd("main_loop >>>>-----> recvfrom\n");
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
@@ -1022,8 +1023,10 @@ static void* main_loop(void *ptr)
         }
 
         __set_false(msger->readable);
+        __xlogd("main_loop >>>>-----> notify listen enter\n");
         // 通知接受线程开始监听 socket
         __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
+        __xlogd("main_loop >>>>-----> notify listen exit\n");
 
         if (xpipe_readable(msger->mpipe) > 0){
             // 连接的发起和开始发送消息，都必须经过这个管道
@@ -1084,7 +1087,7 @@ static void* main_loop(void *ptr)
 
                     spack = channel->flushpack;
 
-                    if ((countdown = (__xapi->clock() - spack->flushtimer)) > 0) {
+                    if ((countdown = (spack->flushtimer - __xapi->clock())) > 0) {
                         // 未超时
                         if (duration > countdown){
                             // 超时时间更近，更新休息时间
