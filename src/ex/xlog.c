@@ -137,6 +137,8 @@ static void* __xlog_recorder_loop(void *ctx)
         if (n != readlen){
             break;
         }
+        
+        fflush(srecorder->fp);
 
         if (__xapi->ftell(srecorder->fp) > __log_file_size){
             __xapi->fclose(srecorder->fp);
