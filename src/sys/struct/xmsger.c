@@ -53,7 +53,6 @@ typedef struct xmessage {
 }*xmessage_ptr;
 
 typedef struct xpack {
-    bool is_confirm;
     bool is_flushing;
     uint64_t flushtimer;
     uint64_t timestamp; //计算往返耗时
@@ -177,7 +176,6 @@ struct xmsger {
 
 #define __xchannel_serial_send(ch, pak) \
     (pak)->channel = (ch); \
-    (pak)->is_confirm = false; \
     (pak)->is_flushing = false; \
     (pak)->head.resend = 0; \
     (pak)->head.flag = 0; \
@@ -479,12 +477,6 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                     __xbreak(xpipe_write(channel->msger->spipe, &pack->msg, __sizeof_ptr) != __sizeof_ptr);
                 }
 
-                if (!pack->is_confirm){
-                    pack->is_confirm = true;
-                }else {
-                    // 这里可以统计收到重复 ACK 的次数
-                }
-
                 // 从定时队列中移除
                 if (pack->is_flushing){
                     __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------> remove flushing: %u\n", pack->head.sn);
@@ -507,31 +499,31 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
             }
 
-            // 判断是否有消息要发送
-            if(channel->send_ptr != NULL){
+            if (channel->pos != channel->len){
+                // 判断当前消息是否已经发送完成
                 if (channel->send_ptr->range == 0){
+                    // 更新当前消息
                     channel->send_ptr = channel->send_ptr->next;
                 }
-
                 // 判断是否有消息要发送
-                if(channel->send_ptr != NULL && channel->send_ptr->type != XMSG_PACK_BYE){
-                    // 通知发送线程进行分片
-                    __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
-
+                if(channel->send_ptr != NULL){
+                    if (__transbuf_writable(channel->sendbuf) > 0){
+                        // 通知发送线程进行分片
+                        __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+                    }
                 }else {
-                    // __xchannel_dequeue(channel);
-                    // if(channel->ping){
-                    //     __xchannel_enqueue(&channel->msger->ping_list, channel);
-                    // }else {
-                    //     __xchannel_enqueue(&channel->msger->recv_list, channel);
-                    // }
+                    // 判断是否需要保活
+                    if (!channel->ping){
+                        // 不需要保活，加入等待超时队列
+                        __xchannel_dequeue(channel);
+                        __xchannel_enqueue(&channel->msger->recv_list, channel);
+                    }
                 }
             }
 
         } else {
 
             pack = channel->sendbuf->buf[rpack->head.ack & (channel->sendbuf->range - 1)];
-            pack->is_confirm = true;
 
             if (pack->timestamp != 0){
                 // 累计新的一次往返时长
@@ -554,7 +546,7 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
             uint8_t index = (channel->sendbuf->rpos & (channel->sendbuf->range - 1));
             while (index != (rpack->head.ack & (channel->sendbuf->range - 1))) {
                 pack = channel->sendbuf->buf[index];
-                if (!pack->is_confirm){
+                if (pack->timestamp != 0){
                     // TODO 计算已经发送但还没收到ACK的pack的个数
                     // TODO 这里需要处理超时断开连接的逻辑
                     __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------> resend pack: %u\n", pack->head.sn);
@@ -1082,11 +1074,29 @@ static void* main_loop(void *ptr)
                 if (__transbuf_usable(channel->sendbuf) > 0){
                     xchannel_send_pack(channel, channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)]);
                     if (channel->pos != channel->len){
-                        // TODO 以后这里不能直接使用 send_ptr，因为发送线程同时在使用，会造成读写错误
-                        __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+                        // 判断当前消息是否已经发送完成
+                        if (channel->send_ptr->range == 0){
+                            // 更新当前消息
+                            channel->send_ptr = channel->send_ptr->next;
+                        }
+                        // 判断是否有消息要发送
+                        if(channel->send_ptr != NULL){
+                            if (__transbuf_writable(channel->sendbuf) > 0){
+                                // 通知发送线程进行分片
+                                __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
+                            }
+                        }else {
+                            // 判断是否需要保活
+                            if (!channel->ping){
+                                // 不需要保活，加入等待超时队列
+                                __xchannel_dequeue(channel);
+                                __xchannel_enqueue(&channel->msger->recv_list, channel);
+                            }
+                        }
                     }
                 }
                 
+
                 if (channel->flushpack != NULL){
 
                     spack = channel->flushpack;
@@ -1184,24 +1194,35 @@ static void* main_loop(void *ptr)
         }
 
         __xlogd("main_loop >>>>-----> sendable: %lu readable: %u listening: %u\n", msger->sendable, msger->readable, msger->listening);
+
         // 判断休眠条件
         // 没有待发送的包
+        // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (msger->sendable == 0 && __is_false(msger->readable) && __is_true(msger->listening)){
+        if (msger->sendable == 0 
+            && xpipe_readable(msger->mpipe) == 0 
+            && __is_false(msger->readable) 
+            && __is_true(msger->listening)){
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
-            __xlogd("main_loop >>>>-----> nothig to do\n");
             // TODO 使用 trylock 替换 lock
             __xapi->mutex_lock(msger->mtx);
-            __xapi->mutex_timedwait(msger->mtx, duration);
-            duration = 10000000000UL; // 10 秒
-            __xapi->mutex_unlock(msger->mtx);
+            __xlogd("main_loop >>>>-----> nothig to do\n");
+            if (msger->sendable == 0 
+                && xpipe_readable(msger->mpipe) == 0 
+                && __is_false(msger->readable) 
+                && __is_true(msger->listening)){
+                __xapi->mutex_timedwait(msger->mtx, duration);
+                duration = 10000000000UL; // 10 秒
+            }
             __xlogd("main_loop >>>>-----> start working\n");
+            __xapi->mutex_unlock(msger->mtx);
         }
     }
 
-Clean:    
+
+    Clean:
 
 
     if (rpack != NULL){
@@ -1209,6 +1230,7 @@ Clean:
     }
 
     __xlogd("xmsger_loop exit\n");
+
     return NULL;
 }
 
@@ -1294,6 +1316,7 @@ static inline bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, void *dat
     __xbreak(channel == NULL);
 
     xmessage_ptr msg = new_message(channel, XMSG_PACK_MSG, sid, data, len);
+
     __xbreak(msg == NULL);
 
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
@@ -1341,13 +1364,18 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
     }
 
     xmessage_ptr msg = new_message(channel, XMSG_PACK_BYE, 0, NULL, 0);
+
     __xbreak(msg == NULL);
 
     *(uint64_t*)msg->data = __xapi->clock();
 
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
-    __xapi->mutex_notify(msger->mtx); 
+    // 确保主线程一定会被唤醒
+    __xapi->mutex_lock(msger->mtx);
+    __set_true(msger->readable);
+    __xapi->mutex_notify(msger->mtx);
+    __xapi->mutex_unlock(msger->mtx);
 
     __xlogd("xmsger_disconnect channel 0x%X exit", channel);
 
@@ -1370,13 +1398,18 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
     __xlogd("xmsger_connect enter\n");
 
     xmessage_ptr msg = new_message(NULL, XMSG_PACK_HELLO, 0, NULL, 0);
+
     __xbreak(msg == NULL);
 
     __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->data));
     
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
+    // 确保主线程一定会被唤醒
+    __xapi->mutex_lock(msger->mtx);
+    __set_true(msger->readable);
     __xapi->mutex_notify(msger->mtx);
+    __xapi->mutex_unlock(msger->mtx);
 
     __xlogd("xmsger_connect exit\n");
 
