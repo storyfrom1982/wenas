@@ -281,11 +281,9 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
         if (msg->sid == 0){ // 新成员是消息
             // 加入消息队列
             channel->msglist_tail = &(msg->next);
-            __xloge("start message >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
         }else { // 新成员是流
             // 加入流队列
             channel->streamlist_tail = &(msg->next);
-            __xloge("start stream >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
         }
         
     }else { // 当前有消息正在发送
@@ -293,22 +291,16 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
         if (msg->sid == 0){ // 新成员是消息
 
             if (channel->send_ptr->sid == 0){ // 当前正在发送的是消息队列
-                __xloge("next message to tail >>>>-----> msg next: 0x%X\n", msg->next);
-                __xloge("next message to tail >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
                 // 将新成员的 next 指向消息队列尾部
                 msg->next = (*(channel->msglist_tail));
-                __xloge("next message to tail 11 >>>>-----> msg next: 0x%X\n", msg->next);
                 // 将新成员加入到消息队列尾部
                 *(channel->msglist_tail) = msg;
                 // 将消息队列的尾部指针指向新成员
                 channel->msglist_tail = &(msg->next);
 
             }else { // 当前正在发送的是流队列
-                __xloge("next message to head >>>>-----> msg->next 0x%X\n", msg->next);
-                __xloge("next message to head >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
                 // 将新消息成员的 next 指向当前发送队列的队首
                 msg->next = channel->send_ptr;
-                __xloge("next message to head 22 >>>>-----> msg->next 0x%X\n", msg->next);
                 // 设置新消息成员为队首
                 channel->send_ptr = msg;
                 // 将消息队列的尾部指针指向新成员
@@ -328,8 +320,6 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
                     // 将流队列的尾部指针指向新成员
                     channel->streamlist_tail = &(msg->next);
 
-                    __xloge("next stream to tail 1 >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
-
                 }else { // 消息队列已经和流队列相衔接，直接将新成员加入到流队列尾部
 
                     // 先设置新成员的 next 为 NULL
@@ -338,8 +328,6 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
                     *(channel->streamlist_tail) = msg;
                     // 将流队列的尾部指针指向新成员
                     channel->streamlist_tail = &(msg->next);
-
-                    __xloge("next stream to tail 2 >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
                 }
                 
             }else { // 当前正在发送的是流队列
@@ -351,8 +339,6 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
                 *(channel->streamlist_tail) = msg;
                 // 将流队列的尾部指针指向新成员
                 channel->streamlist_tail = &(msg->next);
-
-                __xloge("next stream to tail 3 >>>>-----> *(channel->msglist_tail): 0x%X\n", *(channel->msglist_tail));
             }
         }
     }
@@ -754,6 +740,80 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
             channel->msger->writable = false;
         }
     }
+}
+
+
+static void* recv_loop(void *ptr)
+{
+    __xlogd("recv_loop enter\n");
+
+    xmessage_ptr msg;
+    xpack_ptr pack;
+    xmsger_ptr msger = (xmsger_ptr)ptr;
+
+    while (__is_true(msger->running))
+    {
+        __xlogd("recv_loop >>>>-----> listen enter\n");
+        __set_true(msger->listening);
+        __xapi->udp_listen(msger->sock);
+        __set_false(msger->listening);
+        __set_true(msger->readable);
+        __xapi->mutex_notify(msger->mtx);
+        __xlogd("recv_loop >>>>-----> listen exit\n");
+        
+        while(xpipe_read(msger->rpipe, &pack, __sizeof_ptr) == __sizeof_ptr)
+        {
+            if (pack == NULL){
+                break;
+            }
+
+            msg = &(pack->channel->streams[pack->head.sid]);
+
+            if (pack->head.type == XMSG_PACK_MSG){
+                if (msg->data == NULL){
+                    __xlogd("recv_loop mssage range: %u\n", pack->head.range);
+                    // 收到消息的第一个包，创建 msg，记录范围
+                    msg->range = pack->head.range;
+                    msg->data = malloc(msg->range * PACK_BODY_SIZE);
+                    msg->wpos = 0;
+                }
+                mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
+                msg->wpos += pack->head.len;
+                msg->range--;
+                if (msg->range == 0){
+                    msger->listener->onMessageFromPeer(msger->listener, pack->channel, msg->data, msg->wpos);
+                    msg->data = NULL;
+                }
+
+            }else if (pack->head.type == XMSG_PACK_HELLO){
+                if (pack->head.flag == XMSG_PACK_HELLO){
+                    // 主动发起的
+                    msger->listener->onChannelToPeer(msger->listener, pack->channel);                    
+                }else {
+                    // 对方发起的
+                    msger->listener->onChannelFromPeer(msger->listener, pack->channel);
+                }
+
+            }else if (pack->head.type == XMSG_PACK_BYE){
+                if (pack->head.flag == XMSG_PACK_BYE){
+                    // 主动发起的
+                    msger->listener->onChannelBreak(msger->listener, pack->channel);
+                }else {
+                    // 对方发起的
+                    msger->listener->onChannelBreak(msger->listener, pack->channel);
+                }
+            }
+
+            // 这里释放的是接收到的 PACK
+            free(pack);
+        }
+    }
+
+    __xlogd("recv_loop exit\n");
+
+Clean:
+
+    return NULL;
 }
 
 
@@ -1170,7 +1230,7 @@ static void* main_loop(void *ptr)
             }
         }
 
-        __xlogd("main_loop >>>>-----> pos:%lu=%lu readable: %u listening: %u\n", msger->pos, msger->len, msger->readable, msger->listening);
+        // __xlogd("main_loop >>>>-----> pos:%lu=%lu readable: %u listening: %u\n", msger->pos, msger->len, msger->readable, msger->listening);
 
         // 判断休眠条件
         // 没有待发送的包
@@ -1207,80 +1267,6 @@ static void* main_loop(void *ptr)
     }
 
     __xlogd("xmsger_loop exit\n");
-
-    return NULL;
-}
-
-
-static void* recv_loop(void *ptr)
-{
-    __xlogd("recv_loop enter\n");
-
-    xmessage_ptr msg;
-    xpack_ptr pack;
-    xmsger_ptr msger = (xmsger_ptr)ptr;
-
-    while (__is_true(msger->running))
-    {
-        __xlogd("recv_loop >>>>-----> listen enter\n");
-        __set_true(msger->listening);
-        __xapi->udp_listen(msger->sock);
-        __set_false(msger->listening);
-        __set_true(msger->readable);
-        __xapi->mutex_notify(msger->mtx);
-        __xlogd("recv_loop >>>>-----> listen exit\n");
-        
-        while(xpipe_read(msger->rpipe, &pack, __sizeof_ptr) == __sizeof_ptr)
-        {
-            if (pack == NULL){
-                break;
-            }
-
-            msg = &(pack->channel->streams[pack->head.sid]);
-
-            if (pack->head.type == XMSG_PACK_MSG){
-                if (msg->data == NULL){
-                    __xlogd("recv_loop mssage range: %u\n", pack->head.range);
-                    // 收到消息的第一个包，创建 msg，记录范围
-                    msg->range = pack->head.range;
-                    msg->data = malloc(msg->range * PACK_BODY_SIZE);
-                    msg->wpos = 0;
-                }
-                mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
-                msg->wpos += pack->head.len;
-                msg->range--;
-                if (msg->range == 0){
-                    msger->listener->onMessageFromPeer(msger->listener, pack->channel, msg->data, msg->wpos);
-                    msg->data = NULL;
-                }
-
-            }else if (pack->head.type == XMSG_PACK_HELLO){
-                if (pack->head.flag == XMSG_PACK_HELLO){
-                    // 主动发起的
-                    msger->listener->onChannelToPeer(msger->listener, pack->channel);                    
-                }else {
-                    // 对方发起的
-                    msger->listener->onChannelFromPeer(msger->listener, pack->channel);
-                }
-
-            }else if (pack->head.type == XMSG_PACK_BYE){
-                if (pack->head.flag == XMSG_PACK_BYE){
-                    // 主动发起的
-                    msger->listener->onChannelBreak(msger->listener, pack->channel);
-                }else {
-                    // 对方发起的
-                    msger->listener->onChannelBreak(msger->listener, pack->channel);
-                }
-            }
-
-            // 这里释放的是接收到的 PACK
-            free(pack);
-        }
-    }
-
-    __xlogd("recv_loop exit\n");
-
-Clean:
 
     return NULL;
 }
@@ -1438,10 +1424,10 @@ xmsger_ptr xmsger_create(xmsglistener_ptr listener)
     msger->mtx = __xapi->mutex_create();
     __xbreak(msger->mtx == NULL);
 
-    msger->mpipe = xpipe_create(sizeof(void*) * 1024);
+    msger->mpipe = xpipe_create(sizeof(void*) * 1024, "SEND PIPE");
     __xbreak(msger->mpipe == NULL);
 
-    msger->rpipe = xpipe_create(sizeof(void*) * 1024);
+    msger->rpipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xbreak(msger->rpipe == NULL);
 
     msger->rpid = __xapi->process_create(recv_loop, msger);

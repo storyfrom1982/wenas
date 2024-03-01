@@ -11,6 +11,7 @@ typedef struct xpipe {
     __atom_size reader;
     __atom_bool breaking;
     __xmutex_ptr mutex;
+    char name[16];
     uint8_t *buf;
 }*xpipe_ptr;
 
@@ -47,6 +48,8 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
         return pos;
     }
 
+    __xlogd("%s xpipe_write >>>>>--------------> enter\n", pipe->name);
+
     while (__is_false(pipe->breaking) && pos < len) {
 
         pos += __pipe_write(pipe, data + pos, len - pos);
@@ -59,6 +62,8 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             __xapi->mutex_unlock(pipe->mutex);
         }
     }
+
+    __xlogd("%s xpipe_write >>>>>--------------> exit\n", pipe->name);
 
     return pos;
 }
@@ -96,6 +101,8 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
         return pos;
     }
 
+    __xlogd("%s xpipe_read >>>>>--------------> enter\n", pipe->name);
+
     // 长度大于 0 才能进入读循环
     while (pos < len) {
 
@@ -115,6 +122,8 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
             }
         }
     }
+
+    __xlogd("%s xpipe_read >>>>>--------------> exit\n", pipe->name);
 
     return pos;
 }
@@ -161,10 +170,18 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 }
 
 
-static inline xpipe_ptr xpipe_create(uint64_t len)
+static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
     __xbreak(pipe == NULL);
+
+    if (slength(name) > 15){
+        mcopy(pipe->name, name, 15);
+        pipe->name[15] = '\0';
+    }else {
+        mcopy(pipe->name, name, slength(name));
+        pipe->name[slength(name)] = '\0';
+    }
 
    if ((len & (len - 1)) == 0){
         pipe->len = len;
@@ -247,7 +264,7 @@ static inline xtask_ptr xtask_create()
     __xbreak(task == NULL);
 
     // task->buf = xbuf_create(2);
-    task->pipe = xpipe_create(sizeof(struct xtask_enter) * 256);
+    task->pipe = xpipe_create(sizeof(struct xtask_enter) * 256, "TASK");
     __xbreak(task->pipe == NULL);
 
     task->running = true;
