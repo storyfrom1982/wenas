@@ -15,7 +15,7 @@
 
 #define __log_text_size			1024
 #define __log_text_end			( __log_text_size - 2 )
-#define __log_file_size         1024 * 1024 * 8
+#define __log_file_size         1024 * 1024 * 64
 #define __log_pipe_size			8192
 #define __log_file_path_size    256
 
