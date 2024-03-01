@@ -87,12 +87,14 @@ struct xchannel {
     uint8_t key;
     uint32_t peer_cid;
     uint8_t peer_key;
+    uint64_t peer_tid;
+    uint64_t timestamp;
 
     uint8_t feedback_times;
     uint64_t feedback_delay;
     uint64_t feedback_range;
     uint64_t flush_timpoint;
-    uint64_t timestamp;
+    
     bool ping;
     bool breaker;
     bool connected; // 用peer_cid来标志是否连接
@@ -709,6 +711,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
 
         // 记录当前时间
         pack->timestamp = __xapi->clock();
+        channel->timestamp = pack->timestamp;
 
         __xlogd("xchannel_send_pack >>>>-------------------------------> TYPE: %u SN: %u\n", pack->head.type, pack->head.sn);
         // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
@@ -855,7 +858,7 @@ static void* main_loop(void *ptr)
 
                         // 这里收到的是对方发起的 HELLO
                         uint32_t peer_cid = *((uint32_t*)(rpack->body));
-                        uint64_t timestamp = *((uint64_t*)(rpack->body + 4));
+                        uint64_t peer_tid = *((uint64_t*)(rpack->body + 4));
 
                         channel = (xchannel_ptr)xtree_find(msger->peers, &addr.port, addr.keylen);
 
@@ -870,6 +873,7 @@ static void* main_loop(void *ptr)
 
                             // 设置 peer cid
                             // 虽然已经设置了对端的 cid，但是对端无法通过 cid 索引到 channel，因为这时还是 addr 作为索引
+                            channel->peer_tid = peer_tid;
                             channel->peer_cid = peer_cid;
                             channel->peer_key = peer_cid % 255;
                             channel->ack.cid = channel->peer_cid;
@@ -893,13 +897,14 @@ static void* main_loop(void *ptr)
                             // 对端会一直发重复送这个 HELLO，直到收到一个 ACK 为止
 
                             // 设置 peer cid 和校验码
+                            channel->peer_tid = peer_tid;
                             channel->peer_cid = peer_cid;
                             channel->peer_key = peer_cid % 255;
                             channel->ack.cid = channel->peer_cid;
                             channel->ack.key = (XMSG_VAL ^ channel->peer_key);
 
                             // 后发起的一方负责 PING
-                            if (channel->timestamp > timestamp){
+                            if (channel->timestamp > peer_tid){
                                 if (channel->ping){
                                     channel->ping = false;
                                     __xchannel_dequeue(channel);
@@ -927,8 +932,9 @@ static void* main_loop(void *ptr)
                             channel->msger->listener->onChannelToPeer(channel->msger->listener, channel);
                             // 读取连接ID和校验码
                             uint32_t peer_cid = *((uint32_t*)(rpack->body));
-                            uint64_t timestamp = *((uint64_t*)(rpack->body + 4));
+                            uint64_t peer_tid = *((uint64_t*)(rpack->body + 4));
                             // 设置连接校验码
+                            channel->peer_tid = peer_tid;
                             channel->peer_cid = peer_cid;
                             channel->peer_key = peer_cid % 255;
                             // 设置ACK的校验码
