@@ -120,8 +120,8 @@ typedef struct xchannellist {
 
 struct xmsger {
     int sock;
-    bool sendable;
-    __atom_size pos, len;
+    bool writable;
+    __atom_size sendable;
     // 每次创建新的channel时加一
     uint32_t cid;
     xtree peers;
@@ -131,6 +131,7 @@ struct xmsger {
     //socket可读或者有数据待发送时为true
     __atom_bool working;
     __atom_bool readable;
+    __atom_bool listening;
     xmsglistener_ptr listener;
     xpipe_ptr mpipe, spipe, rpipe;
     __xprocess_ptr mpid, rpid, spid;
@@ -221,7 +222,6 @@ static inline bool xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
 {    
     // 更新待发送计数
     __atom_add(msg->channel->len, msg->len);
-    __atom_add(channel->msger->len, msg->len);
 
     // 判断是否有正在发送的消息
     if (channel->send_ptr == NULL){ // 当前没有消息在发送
@@ -407,7 +407,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
 static inline void xchannel_free(xchannel_ptr channel)
 {
     __xlogd("xchannel_free enter\n");
-    __atom_sub(channel->msger->len, channel->len - channel->pos);
+    // 从待发送计数中，减掉没有被发送的包
+    __xlogd("xchannel_free sendable: %lu readable: %u\n", channel->msger->sendable, __transbuf_usable(channel->sendbuf));
+    __atom_sub(channel->msger->sendable, __transbuf_usable(channel->sendbuf));
     __xchannel_dequeue(channel);
     xmessage_ptr next;
     while (channel->send_ptr != NULL)
@@ -558,10 +560,10 @@ static inline bool xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                     __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------> resend pack: %u\n", pack->head.sn);
                     
                     if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
-                        channel->msger->sendable = true;
+                        channel->msger->writable = true;
                     }else {
                         __xlogd("xchannel_serial_ack >>>>------------------------> send failed\n");
-                        channel->msger->sendable = false;
+                        channel->msger->writable = false;
                         break;
                     }
                 }
@@ -661,11 +663,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
     // 判断发送是否成功
     if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
 
-        channel->msger->sendable = true;
+        channel->msger->writable = true;
 
         // 数据已发送，从待发送数据中减掉这部分长度
+        __atom_sub(channel->msger->sendable, 1);
         __atom_add(channel->pos, pack->head.len);
-        __atom_add(channel->msger->pos, pack->head.len);
 
         // 缓冲区下标指向下一个待发送 pack
         __atom_add(channel->sendbuf->upos, 1);
@@ -691,7 +693,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
     }else {
         
         __xlogd("xchannel_send_pack >>>>------------------------> send failed\n");
-        channel->msger->sendable = false;
+        channel->msger->writable = false;
     }
 }
 
@@ -710,10 +712,10 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
     }else {
         __xlogd("xchannel_send_ack >>>>-------------------------------> ACK: %u ACKS: %u\n", head->ack, head->acks);
         if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
-            channel->msger->sendable = true;
+            channel->msger->writable = true;
         }else {
             __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
-            channel->msger->sendable = false;
+            channel->msger->writable = false;
         }
     }
 }
@@ -765,6 +767,8 @@ static void* send_loop(void *ptr)
 
                     __xchannel_serial_send(msg->channel, pack);
 
+                    __atom_add(msger->sendable, 1);
+
                 }else {
                     break;
                 }
@@ -805,7 +809,7 @@ static void* main_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
-        __xlogd("main_loop >>>>-----> recvfrom\n");
+        // __xlogd("main_loop >>>>-----> recvfrom\n");
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
@@ -1077,7 +1081,8 @@ static void* main_loop(void *ptr)
                 // 判断缓冲区中是否有可发送 pack
                 if (__transbuf_usable(channel->sendbuf) > 0){
                     xchannel_send_pack(channel, channel->sendbuf->buf[__transbuf_upos(channel->sendbuf)]);
-                    if (channel->send_ptr != NULL && __transbuf_writable(channel->sendbuf) > 0){
+                    if (channel->pos != channel->len){
+                        // TODO 以后这里不能直接使用 send_ptr，因为发送线程同时在使用，会造成读写错误
                         __xbreak(xpipe_write(channel->msger->spipe, &channel->send_ptr, __sizeof_ptr) != __sizeof_ptr);
                     }
                 }
@@ -1110,7 +1115,7 @@ static void* main_loop(void *ptr)
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(spack->channel->msger->sock, &spack->channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
 
-                                msger->sendable = true;
+                                msger->writable = true;
                                 // 记录重传次数
                                 spack->head.resend++;
                                 spack->flushtimer += spack->channel->feedback_delay;
@@ -1119,7 +1124,7 @@ static void* main_loop(void *ptr)
                             }else {
 
                                 __xlogd("xmsger_loop >>>>------------------------> send failed\n");
-                                msger->sendable = false;
+                                msger->writable = false;
                             }
 
                             duration = spack->channel->feedback_delay;
@@ -1178,38 +1183,21 @@ static void* main_loop(void *ptr)
             }
         }
 
-        // 判断是否有数据待发送
-        if (msger->pos != msger->len){
-            __xlogd("xmsger_loop >>>>-----> pos: %lu len: %lu\n", msger->pos, msger->len);
-            // 判断网络接口是否可写
-            // 判断是否有新消息待发送
-            if (!msger->sendable && xpipe_readable(msger->mpipe) == 0){
-                
-                // 网络接口暂时不写，休息 10 毫秒
-                __xapi->mutex_lock(msger->mtx);
-                if (xpipe_readable(msger->mpipe) == 0){
-                    __xapi->mutex_timedwait(msger->mtx, 10000000UL); // 10 毫秒
-                }
-                __xapi->mutex_unlock(msger->mtx);
-            }
-
-        }else {
-
-            if (xpipe_readable(msger->mpipe) == 0){
-                // 数据都已经发送
-                // 待重传的数据会设置定时
-                // 如果需要发送 PING，也会设置定时
-                if (__is_false(msger->readable)){
-                    __xlogd("main_loop >>>>-----> nothig to do\n");
-                    __xapi->mutex_lock(msger->mtx);
-                    if (xpipe_readable(msger->mpipe) == 0){
-                        __xapi->mutex_timedwait(msger->mtx, duration);
-                    }
-                    __xlogd("main_loop >>>>-----> start working\n");
-                    duration = 10000000000UL; // 10 秒
-                    __xapi->mutex_unlock(msger->mtx);
-                }
-            }
+        __xlogd("main_loop >>>>-----> sendable: %lu readable: %u listening: %u\n", msger->sendable, msger->readable, msger->listening);
+        // 判断休眠条件
+        // 没有待发送的包
+        // 网络接口不可读
+        // 接收线程已经在监听
+        if (msger->sendable == 0 && __is_false(msger->readable) && __is_true(msger->listening)){
+            // 如果有待重传的包，会设置冲洗定时
+            // 如果需要发送 PING，会设置 PING 定时
+            __xlogd("main_loop >>>>-----> nothig to do\n");
+            // TODO 使用 trylock 替换 lock
+            __xapi->mutex_lock(msger->mtx);
+            __xapi->mutex_timedwait(msger->mtx, duration);
+            duration = 10000000000UL; // 10 秒
+            __xapi->mutex_unlock(msger->mtx);
+            __xlogd("main_loop >>>>-----> start working\n");
         }
     }
 
@@ -1235,11 +1223,13 @@ static void* recv_loop(void *ptr)
 
     while (__is_true(msger->running))
     {
-        __xlogd("recv_loop listen enter\n");
+        __xlogd("recv_loop >>>>-----> listen enter\n");
+        __set_true(msger->listening);
         __xapi->udp_listen(msger->sock);
+        __set_false(msger->listening);
         __set_true(msger->readable);
         __xapi->mutex_notify(msger->mtx);
-        __xlogd("recv_loop listen exit\n");
+        __xlogd("recv_loop >>>>-----> listen exit\n");
         
         while(xpipe_read(msger->rpipe, &pack, __sizeof_ptr) == __sizeof_ptr)
         {
@@ -1409,7 +1399,7 @@ xmsger_ptr xmsger_create(xmsglistener_ptr listener)
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
     
     msger->running = true;
-    msger->sendable = true;
+    msger->writable = true;
     msger->listener = listener;
 
     msger->sock = __xapi->udp_open();
