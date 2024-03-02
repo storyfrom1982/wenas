@@ -7,6 +7,7 @@
 
 typedef struct xpipe {
     uint64_t len;
+    // uint64_t leftover; 曾经为了避免使用一个临时变量处理折行，在这里添加了一个长周期的变量，却忽略了读写线程共用这个变量，导致 mcopy 越界的 BUG
     __atom_size writer;
     __atom_size reader;
     __atom_bool breaking;
