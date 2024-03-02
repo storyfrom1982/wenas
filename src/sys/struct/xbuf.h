@@ -49,7 +49,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
         return pos;
     }
 
-    __xlogd("%s xpipe_write >>>>>--------------> enter\n", pipe->name);
+    // __xlogd("%s xpipe_write >>>>>--------------> enter\n", pipe->name);
 
     while (__is_false(pipe->breaking) && pos < len) {
 
@@ -64,7 +64,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
         }
     }
 
-    __xlogd("%s xpipe_write >>>>>--------------> exit\n", pipe->name);
+    // __xlogd("%s xpipe_write >>>>>--------------> exit\n", pipe->name);
 
     return pos;
 }
@@ -102,7 +102,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
         return pos;
     }
 
-    __xlogd("%s xpipe_read >>>>>--------------> enter\n", pipe->name);
+    // __xlogd("%s xpipe_read >>>>>--------------> enter\n", pipe->name);
 
     // 长度大于 0 才能进入读循环
     while (pos < len) {
@@ -124,7 +124,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
         }
     }
 
-    __xlogd("%s xpipe_read >>>>>--------------> exit\n", pipe->name);
+    // __xlogd("%s xpipe_read >>>>>--------------> exit\n", pipe->name);
 
     return pos;
 }

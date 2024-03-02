@@ -300,7 +300,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     // 这里只向文件写入实际的输入的内容
     // 最大输入内容 0-4094=4095
     if (__is_true(srecorder->recording)){
-        printf("XLOG: __xlog_printf >>>>>---------------------> enter\n");
+        // printf("XLOG: __xlog_printf >>>>>---------------------> enter\n");
         // 写入管道
         uint64_t pos = 0;
         while (pos < n){
@@ -311,7 +311,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
             pos += __spipe_write(text + pos, n - pos);                
             pthread_mutex_unlock(&spipe->mutex);
         }
-        printf("XLOG: __xlog_printf >>>>>---------------------> exit\n");
+        // printf("XLOG: __xlog_printf >>>>>---------------------> exit\n");
     }else if (srecorder->fp){
         // 直接写文件
         __xapi->fwrite(srecorder->fp, text, n);
