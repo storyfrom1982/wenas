@@ -851,7 +851,7 @@ static void* main_loop(void *ptr)
 
             if (channel){
 
-                __xlogd("xmsger_loop fond channel >>>>----> TYPE: %u  SN: %u\n", rpack->head.type, rpack->head.sn);
+                __xlogd("xmsger_loop fond channel %u >>>>----> TYPE: %u  SN: %u\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
 
                 // 协议层验证
                 if ((rpack->head.key ^ channel->key) == XMSG_VAL){
@@ -910,7 +910,7 @@ static void* main_loop(void *ptr)
 
             } else {
 
-                __xlogd("xmsger_loop cannot fond channel TYPE: %u SN: %u  ACK: %u ACKS: %u\n", rpack->head.type, rpack->head.sn, rpack->head.ack, rpack->head.acks);
+                __xlogd("xmsger_loop cannot fond channel >>>>--------> TYPE: %u SN: %u  ACK: %u ACKS: %u\n", rpack->head.type, rpack->head.sn, rpack->head.ack, rpack->head.acks);
 
                 if (rpack->head.type == XMSG_PACK_HELLO){
 
@@ -1039,7 +1039,7 @@ static void* main_loop(void *ptr)
                         channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         // HELLO 的 ACK 都是生成的校验码
                         if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
-                            __xlogd("xmsger_loop receive ACK >>>>--------> channel 0x%X cid: %u\n", channel, channel->peer_cid);
+                            __xlogd("xmsger_loop receive ACK >>>>--------> channel: %u\n", channel->peer_cid);
                             // 开始使用 cid 作为索引
                             xtree_save(msger->peers, &channel->cid, 4, channel);
                             // 停止发送 HELLO
@@ -1129,7 +1129,6 @@ static void* main_loop(void *ptr)
                 // 判断缓冲区中是否有可发送 pack
                 if (__serialbuf_sendable(channel->sendbuf) > 0){
                     xchannel_send_pack(channel, channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)]);
-                    __xlogd("xmsger_loop >>>>------------------------> channel pos: %lu len:%lu\n", channel->pos, channel->len);
                 }
 
                 if (channel->pos != channel->len){
@@ -1151,13 +1150,13 @@ static void* main_loop(void *ptr)
 
                         if (spack->head.resend > 3){
                             
-                            __xlogd("xmsger_loop >>>>----------------------------------------------------------> this channel (%u) has timed out\n", spack->channel->cid);
-                            if (xtree_take(msger->peers, &spack->channel->cid, 4) == NULL){
-                                __xbreak(xtree_take(msger->peers, &spack->channel->addr.port, spack->channel->addr.keylen) == NULL);
+                            __xlogd("xmsger_loop %u >>>>----------------------------------------------------------> this channel (%u) has SEND timed out\n", channel->cid, spack->channel->cid);
+                            if (xtree_take(msger->peers, &channel->cid, 4) == NULL){
+                                __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
                             }
-                            spack->channel->flushpack = NULL;
-                            xchannel_free(spack->channel);
-                            msger->listener->onChannelTimeout(msger->listener, spack->channel);
+                            channel->flushpack = NULL;
+                            xchannel_free(channel);
+                            msger->listener->onChannelTimeout(msger->listener, channel);
 
                         }else {
 
@@ -1168,7 +1167,6 @@ static void* main_loop(void *ptr)
                                 // 记录重传次数
                                 spack->head.resend++;
                                 spack->timer += spack->channel->feedback_delay;
-                                __xlogd("xmsger_loop >>>>------------------------> resend COUNT: %u SN: %u\n", spack->head.resend, spack->head.sn & (spack->channel->sendbuf->range - 1));
 
                             }else {
 
@@ -1211,13 +1209,12 @@ static void* main_loop(void *ptr)
         if (msger->recv_list.len > 0){
             
             channel = msger->recv_list.head.next;
-            // 10 秒钟超时
+
             while (channel != &msger->recv_list.end){
                 next_channel = channel->next;
-
-                // TODO 发起端需要发送 PING 保活
-                // 对穿连接，时间戳晚的一端负责发 PING 保活
+                // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
+                    __xlogd("xmsger_loop %u >>>>----------------------------------------------------------> this channel (%u) has RECV timed out\n", channel->cid, channel->cid);
                     if (xtree_take(msger->peers, &channel->cid, 4) == NULL){
                         __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
                     }
