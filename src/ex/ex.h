@@ -56,6 +56,7 @@ typedef struct __xapi_enter {
     __xmutex_ptr (*mutex_create)();
     void (*mutex_free)(__xmutex_ptr mutex);
     void (*mutex_lock)(__xmutex_ptr mutex);
+    bool (*mutex_trylock)(__xmutex_ptr mutex);
     void (*mutex_unlock)(__xmutex_ptr mutex);
     void (*mutex_wait)(__xmutex_ptr mutex);
     int (*mutex_timedwait)(__xmutex_ptr mutex, uint64_t delay);

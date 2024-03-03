@@ -116,6 +116,12 @@ static void __posix_mutex_lock(__xmutex_ptr ptr)
     pthread_mutex_lock(((__posix_mutex_ptr)ptr)->mutex);
 }
 
+bool __posix_mutex_trylock(__xmutex_ptr ptr)
+{
+    assert(ptr);
+    return pthread_mutex_trylock(((__posix_mutex_ptr)ptr)->mutex) == 0;
+}
+
 static void __posix_mutex_notify(__xmutex_ptr ptr)
 {
     assert(ptr);
@@ -449,6 +455,7 @@ struct __xapi_enter posix_api_enter = {
     .mutex_create = __posix_mutex_create,
     .mutex_free = __posix_mutex_free,
     .mutex_lock = __posix_mutex_lock,
+    .mutex_trylock = __posix_mutex_trylock,
     .mutex_unlock = __posix_mutex_unlock,
     .mutex_wait = __posix_mutex_wait,
     .mutex_timedwait = __posix_mutex_timedwait,

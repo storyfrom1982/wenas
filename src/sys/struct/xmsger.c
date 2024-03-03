@@ -1243,18 +1243,18 @@ static void* main_loop(void *ptr)
             && __is_true(msger->listening)){
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
-            // TODO 使用 trylock 替换 lock
-            __xapi->mutex_lock(msger->mtx);
-            __xlogd("main_loop >>>>-----> nothig to do\n");
-            if (msger->pos == msger->len 
-                && xpipe_readable(msger->mpipe) == 0 
-                && __is_false(msger->readable) 
-                && __is_true(msger->listening)){
-                __xapi->mutex_timedwait(msger->mtx, timer);
-                timer = 10000000000UL; // 10 秒
+            if (__xapi->mutex_trylock(msger->mtx)){
+                __xlogd("main_loop >>>>-----> nothig to do\n");
+                if (msger->pos == msger->len 
+                    && xpipe_readable(msger->mpipe) == 0 
+                    && __is_false(msger->readable) 
+                    && __is_true(msger->listening)){
+                    __xapi->mutex_timedwait(msger->mtx, timer);
+                    timer = 10000000000UL; // 10 秒
+                }
+                __xlogd("main_loop >>>>-----> start working\n");
+                __xapi->mutex_unlock(msger->mtx);
             }
-            __xlogd("main_loop >>>>-----> start working\n");
-            __xapi->mutex_unlock(msger->mtx);
         }
     }
 
