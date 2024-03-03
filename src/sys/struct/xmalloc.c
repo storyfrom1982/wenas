@@ -145,7 +145,7 @@ typedef struct xmalloc_page{
 
 typedef struct xmalloc_pool{
     __atom_bool lock;
-    size_t page_number;
+    __atom_size page_number;
     size_t id;
 	void *aligned_address;
 	xmalloc_page_t page[__max_page_number + 1];
@@ -156,7 +156,7 @@ typedef struct xmalloc{
 
     __atom_bool lock;
     __atom_bool init;
-    size_t pool_index;
+    __atom_size pool_index;
 	size_t page_size;
 	size_t pool_number;
 	size_t preloading_page;
@@ -169,7 +169,7 @@ typedef struct xmalloc{
 static xmalloc_t memory_manager = {0}, *mm = &memory_manager;
 
 
-static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_size)
+static inline int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_size)
 {
 	page->size = (page_size + (__free_ptr_size * 4) + mm->page_aligned_mask) & (~mm->page_aligned_mask);
 	pool->aligned_address = NULL;
@@ -177,8 +177,7 @@ static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_s
 	do{
 		page->start_address = __xapi->mmap(pool->aligned_address, page->size);
 		if (page->start_address == __XAPI_MAP_FAILED){
-			//TODO
-			// __xcheck(page->start_address != __XAPI_MAP_FAILED);
+			return -1;
 		}else{
 			if (((size_t)(page->start_address) & __align_mask) != 0){
 				pool->aligned_address = (void *)(((size_t)(page->start_address) + __align_mask) & ~__align_mask);
@@ -213,7 +212,7 @@ static int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t page_s
 }
 
 
-static int malloc_pool()
+static inline int malloc_pool()
 {
     __atom_lock(mm->lock);
 
@@ -231,7 +230,7 @@ static int malloc_pool()
         mm->pool[mm->pool_number].id = mm->pool_number;
         for (size_t page_id = 0; page_id < mm->preloading_page; ++page_id){
             mm->pool[mm->pool_number].page[page_id].id = page_id;
-            mm->pool[mm->pool_number].page_number ++;
+			__atom_add(mm->pool[mm->pool_number].page_number, 1);
             if (malloc_page(&(mm->pool[mm->pool_number]),
                             &(mm->pool[mm->pool_number].page[page_id]), mm->page_size) != 0){
                 __atom_unlock(mm->lock);
@@ -255,10 +254,12 @@ static void free_page(xmalloc_page_t *page, xmalloc_pool_t *pool)
 }
 
 
-inline static void free_pointer(__xptr *ptr, xmalloc_page_t *page, xmalloc_pool_t *pool)
+static inline void free_pointer(__xptr *ptr, xmalloc_page_t *page, xmalloc_pool_t *pool)
 {
 
 	if (__next_pointer(ptr) == page->ptr){
+
+		// __xlog_debug("[>>>>--------> !!! MERGE LEFT POINTER !!! <--------<<<<]\n");
 
 		//合并左边指针
 		if (__mergeable(ptr)){
@@ -277,6 +278,8 @@ inline static void free_pointer(__xptr *ptr, xmalloc_page_t *page, xmalloc_pool_
 		page->ptr = ptr;
 
 	}else if (__next_pointer(page->ptr) == ptr){
+
+		// __xlog_debug("[>>>>--------> !!! MERGE RIGHT POINTER !!! <--------<<<<]\n");
 
 		//合并右边指针
 		if (__mergeable(__next_pointer(__next_pointer(ptr)))){
@@ -327,7 +330,7 @@ inline static void free_pointer(__xptr *ptr, xmalloc_page_t *page, xmalloc_pool_
 }
 
 
-static void flush_page(xmalloc_page_t *page, xmalloc_pool_t *pool)
+static inline void flush_page(xmalloc_page_t *page, xmalloc_pool_t *pool)
 {
 	__xptr *ptr = NULL;
 	for (size_t i = 0; i < __max_recycle_pool; ++i){
@@ -340,7 +343,7 @@ static void flush_page(xmalloc_page_t *page, xmalloc_pool_t *pool)
 }
 
 
-static void flush_cache()
+static inline void flush_cache()
 {
 	for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
 		for (size_t page_id = 0; page_id < mm->pool[pool_id].page_number; ++page_id){
@@ -373,6 +376,32 @@ static void flush_cache()
 // 	}
 // }
 
+static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_t ptr_pid)
+{
+	int result;
+	size_t n = 0;
+	char buf[10240];
+	void *stack[16] = {0};
+	int64_t depth = __xapi->backtrace(stack, 16);
+	for (size_t i = 0; i < ptr_depth; ++i) {
+		result = __xapi->dladdr((const void*)(ptr_stack[i]), buf + n, 10240 - n);
+		if (result == -1){
+			break;
+		}
+		n += result;
+	}
+	buf[n] = '\n';
+	n++;
+	for (size_t i = 1; i < depth; ++i) {
+		result = __xapi->dladdr((const void*)(stack[i]), buf + n, 10240 - n);
+		if (result == -1){
+			break;
+		}
+		n += result;
+	}
+	__xlog_debug("[!!! Segmentation fault !!!] 0x%X->0x%X\n%s\n", ptr_pid, (uint64_t)__xapi->process_self(), buf);
+}
+
 void free(void* address)
 {
 	size_t page_id = 0;
@@ -383,29 +412,20 @@ void free(void* address)
 
 	if (address){
 		ptr = __address2pointer(address);
-		// TODO
-		// __xcheck(ptr->size != 0 && ptr->flag != 0);
-		// if (ptr->size == 0 || ptr->flag == 0){
-		// 	// printf("ptr->size == 0 || ptr->flag == 0");
-		// 	abort();
-		// }
+		if (ptr->size == 0 || ptr->flag == 0){
+			memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
+		}
 
 		pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
-		// TODO
-		// __xcheck(pool_id == mm->pool[pool_id].id);
-		// if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-		// 	// printf("pool_number %lu pool_id %lu pool[pool_id].id %lu\n", mm->pool_number, pool_id, mm->pool[pool_id].id);
-		// 	abort();
-		// }
+		if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
+			memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
+		}
 
 		pool = &(mm->pool[pool_id]);
 		page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
-		// TODO
-		// __xcheck(page_id == pool->page[page_id].id);
-		// if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-		// 	// printf("page_number %lu page_id %lu page[page_id].id %lu\n", pool->page_number, page_id, pool->page[page_id].id);
-		// 	abort();
-		// }
+		if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
+			memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
+		}
 
 		page = &(pool->page[page_id]);
 		if (__atom_try_lock(page->lock)){
@@ -440,7 +460,6 @@ void free(void* address)
 
 void* malloc(size_t size)
 {
-	// printf("malloc >>>>>>>--------------------------------------------------->>>> enter\n");
 	__xptr *ptr = NULL;
 	size_t reserved_size = 0;
 
@@ -468,6 +487,7 @@ void* malloc(size_t size)
 
 			if (pool->page[i].head->next->size > reserved_size){
 
+				__xlog_debug("[>>>>--------> !!! NEW POINTER !!! <--------<<<<]\n");
 				//把当前指针加入到释放队列尾
 				pool->page[i].ptr->next = pool->page[i].end;
 				pool->page[i].ptr->prev = pool->page[i].end->prev;
@@ -506,16 +526,18 @@ void* malloc(size_t size)
 		*(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
 #endif
 
-		// printf("malloc >>>>>>>--------------------------------------------------->>>> exit\n");
 		return __pointer2address(ptr);
 	}
 
+	__xlog_debug("[>>>>--------> !!! NEW PAGE !!! <--------<<<<]\n");
 
 	//创建一个分页
 	xmalloc_page_t *page = NULL;
 
 	while(pool->page_number < __max_page_number){
 		size_t page_id = pool->page_number;
+		// 加大内存池的最大分页数
+		__atom_add(pool->page_number, 1);
 		if (__atom_try_lock(pool->page[page_id].lock)){
 			if (pool->page[page_id].id == 0){
 				pool->page[page_id].id = page_id;
@@ -526,26 +548,17 @@ void* malloc(size_t size)
 		}
 	}
 
-	// TODO
-	// __xcheck(pool->page_number < __max_page_number);
-	// if (pool->page_number >= __max_page_number){
-	// 	__atom_unlock(page->lock);
-	// 	abort();
-	// }
+	if (pool->page_number >= __max_page_number){
+		__atom_unlock(page->lock);
+		__xlog_debug("[!!! Out of Memory !!!]\n");
+		return NULL;
+	}
 
-	// TODO
-	// __xcheck((malloc_page(pool, page, mm->page_size + size) == 0));
-	// if (size > mm->page_size){
-	// 	if (malloc_page(pool, page, size) != 0){
-	// 		__atom_unlock(page->lock);
-	// 		abort();
-	// 	}
-	// }else{
-	// 	if (malloc_page(pool, page, mm->page_size) != 0){
-	// 		__atom_unlock(page->lock);
-	// 		abort();
-	// 	}
-	// }
+	if (malloc_page(pool, page, mm->page_size + size) != 0){
+		__atom_unlock(page->lock);
+		__xlog_debug("[!!! Out of Memory !!!]\n");
+		return NULL;
+	}
 
 	//分配一个新的指针
 	ptr = __assign_pointer(page->ptr, size);
@@ -557,7 +570,6 @@ void* malloc(size_t size)
 	ptr = page->ptr->prev;
 	ptr->size = size;
 
-	__atom_add(pool->page_number, 1);
 	__atom_unlock(page->lock);
 
 #ifdef XMALLOC_BACKTRACE
@@ -848,7 +860,7 @@ void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid))
 			if (pool->page[page_id].start_address
 				&& pool->page[page_id].ptr->size
 				!= pool->page[page_id].size - __free_ptr_size * 2){
-				cb("[!!! Found a memory leak !!!]", 0);
+				cb("[!!! Found a memory leak !!!]", 0xFFFFFFFF);
 				ptr = (__next_pointer(pool->page[page_id].head));
 				while(ptr != pool->page[page_id].end){
 #ifdef XMALLOC_BACKTRACE

@@ -126,6 +126,7 @@ enum __xlog_level
 typedef void (*__xlog_cb) (int32_t level, const char *log);
 extern int xlog_recorder_open(const char *path, __xlog_cb cb);
 extern void xlog_recorder_close();
+extern void __xlog_debug(const char *fmt, ...);
 extern void __xlog_printf(enum __xlog_level level, const char *file, int line, const char *fmt, ...);
 
 #define __xlogi(__FORMAT__, ...) \

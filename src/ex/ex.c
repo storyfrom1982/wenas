@@ -328,11 +328,11 @@ static int udp_bind(int sock, __xipaddr_ptr ipaddr)
 static uint64_t send_number = 0, lost_number = 0;
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
-    // send_number++;
-    // uint64_t randtime = __unix_clock() / 1000000ULL;
-    // if ((send_number & 0x0f) == (randtime & 0x0f)){
-    //     return size;
-    // }
+    send_number++;
+    uint64_t randtime = __unix_clock() / 1000000ULL;
+    if ((send_number & 0x0f) == (randtime & 0x0f)){
+        return size;
+    }
     return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 
