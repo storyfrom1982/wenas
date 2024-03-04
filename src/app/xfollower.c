@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
         build_msg(&maker);
         xline_add_word(&maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
-        find_msg((xline_ptr)maker.head);
+        // find_msg((xline_ptr)maker.head);
         task_ptr task = (task_ptr)tree_min(follow->channels);
         xmsger_send_message(follow->msger, task->channel, maker.head, maker.wpos);
     }

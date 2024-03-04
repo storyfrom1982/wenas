@@ -291,7 +291,7 @@ static inline xline_ptr xline_next(xmaker_ptr maker)
 
 static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 {
-    maker->wpos = maker->rpos;
+    uint64_t wpos = maker->rpos;
 
     while (maker->rpos < maker->len) {
         maker->key = maker->head + maker->rpos;
@@ -307,7 +307,7 @@ static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 
     maker->rpos = 0;
 
-    while (maker->rpos < maker->wpos) {
+    while (maker->rpos < wpos) {
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
         maker->val = (xline_ptr)(maker->head + maker->rpos);
