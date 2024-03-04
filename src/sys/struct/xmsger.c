@@ -37,6 +37,9 @@ typedef struct xhead {
     uint8_t sid; // 多路复用的流 ID
     uint16_t range; // 一个消息的分包数量，从 1 到 range
     uint16_t len; // 当前分包装载的数据长度
+    // TODO 多个 peer cid 会发生冲突，使用 本地 cid 与 peer cid 拼接出一个唯一 cid
+    // uint32_t rcid;
+    // uint32_t lcid;
     uint32_t cid; // 连接通道 ID
 }*xhead_ptr;
 
@@ -146,9 +149,6 @@ struct xmsger {
 
 #define XMSG_KEY    'x'
 #define XMSG_VAL    'X'
-
-#define __sizeof_ptr    sizeof(void*)
-
 
 #define __xchannel_enqueue(que, ch) \
     (ch)->next = &((que)->end); \

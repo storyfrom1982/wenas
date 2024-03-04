@@ -6,6 +6,8 @@
 #define EENDED  0xFFFFFFFFFFFFFFFF
 // #define NULL  ((void*)0)
 
+#define __sizeof_ptr    sizeof(void*)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

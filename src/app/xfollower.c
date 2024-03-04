@@ -1,60 +1,68 @@
 #include "ex/ex.h"
 
+#include <sys/struct/xtree.h>
 #include <sys/struct/xmsger.h>
 #include <sys/struct/xbuf.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 
+typedef struct resource {
+    uint64_t len;
+    void *data;
+}resource_ptr;
 
-typedef struct client{
-    struct xmsglistener listener;
-    xmsger_ptr msger;
+typedef struct task {
+    uint64_t pos, len;
     xchannel_ptr channel;
-}*client_ptr;
+    resource_ptr resource;
+    struct task *prev, *next;
+}*task_ptr;
 
-
-// static uint64_t send_number = 0, lost_number = 0;
-// static size_t send_msg(struct xmsgsocket *rsock, __xipaddr_ptr raddr, void *data, size_t size)
-// {
-//     // // send_number++;
-//     // // uint64_t randtime = __ex_clock() / 1000ULL;
-//     // // if ((send_number & 0xdf) == (randtime & 0xdf)){
-//     // //     // __logi("send_msg clock: %x number: %x lost number: %llu", randtime, send_number, ++lost_number);
-//     // //     return size;
-//     // // }
-//     client_ptr client = (client_ptr)rsock->ctx;
-//     long result = __xapi->udp_sendto(client->sock, raddr, data, size);
-//     return result;
-// }
-
-// static size_t recv_msg(struct xmsgsocket *rsock, __xipaddr_ptr addr, void *buf, size_t size)
-// {
-//     client_ptr client = (client_ptr)rsock->ctx;
-//     long result = __xapi->udp_recvfrom(client->sock, addr, buf, size);
-//     return result;
-// }
+typedef struct xfollower{
+    xmsger_ptr msger;
+    __xprocess_ptr pid;
+    xpipe_ptr taskpipe;
+    xtree channels, resources;
+    struct xmsglistener listener;
+}*xfollower_ptr;
 
 static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_connection_to_peer: 0x%x\n", channel);
-    client_ptr client = (client_ptr)listener->ctx;
-    client->channel = channel;
-
+    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    task_ptr task = (task_ptr)malloc(sizeof(struct task));
+    task->prev = task;
+    task->next = task;
+    task->channel = channel;    
+    xtree_save(follow->channels, channel, __sizeof_ptr, task);
 }
 
 static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
+    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    task_ptr task = (task_ptr)malloc(sizeof(struct task));
+    task->prev = task;
+    task->next = task;
+    task->channel = channel;
+    xtree_save(follow->channels, channel, __sizeof_ptr, task);    
 }
 
 static void on_channel_timeout(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_channel_timeout: 0x%x\n", channel);
+    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    task_ptr task = xtree_take(follow->channels, channel, __sizeof_ptr);
+    free(task);
 }
 
 static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_disconnection: 0x%x\n", channel);
+    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    task_ptr task = xtree_take(follow->channels, channel, __sizeof_ptr);
+    free(task);    
 }
 
 
@@ -115,7 +123,7 @@ static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, 
 static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    client_ptr client = (client_ptr)listener->ctx;
+    xfollower_ptr client = (xfollower_ptr)listener->ctx;
     parse_msg((xline_ptr)msg, len);
     free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -177,27 +185,32 @@ static void find_msg(xline_ptr msg){
 
 int main(int argc, char *argv[])
 {
+    char *host = NULL;
+    uint16_t port = 0;
+
     xlog_recorder_open("./tmp/client/log", NULL);
-    __xlogi("start client\n");
 
-    client_ptr client = (client_ptr)calloc(1, sizeof(struct client));
+    xfollower_ptr follow = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
 
-    __xlogi("start client 1\n");
+    follow->channels = xtree_create();
+    __xbreak(follow->channels == NULL);
+    follow->resources = xtree_create();
+    __xbreak(follow->resources == NULL);
+
+    if (argc == 3){
+        host = strdup(argv[1]);
+        port = atoi(argv[2]);
+    }
 
     // const char *host = "127.0.0.1";
-    const char *host = "47.99.146.226";
+    // const char *host = "47.99.146.226";
     // const char *host = "18.138.128.58";
     // uint16_t port = atoi(argv[1]);
-    uint16_t port = 9256;
-    xmsglistener_ptr listener = &client->listener;
+    // uint16_t port = 9256;
 
-    __xlogi("start client 2\n");
+    xmsglistener_ptr listener = &follow->listener;
 
-    // __xapi->udp_make_ipaddr(host, port, &client->ipaddr);
-
-    __xlogi("start client 3\n");
-
-    listener->ctx = client;
+    listener->ctx = follow;
     listener->onChannelToPeer = on_connection_to_peer;
     listener->onChannelFromPeer = on_connection_from_peer;
     listener->onChannelBreak = on_disconnection;
@@ -205,10 +218,11 @@ int main(int argc, char *argv[])
     listener->onMessageFromPeer = on_message_from_peer;
     listener->onMessageToPeer = on_message_to_peer;
     
-    client->msger = xmsger_create(&client->listener);
-    // xmsger_run(client->msger);
+    follow->msger = xmsger_create(&follow->listener);
 
-    xmsger_connect(client->msger, host, port);
+    if (host && port){
+        xmsger_connect(follow->msger, host, port);
+    }
 
     char str[1024];
     
@@ -229,20 +243,27 @@ int main(int argc, char *argv[])
         xline_add_text(&maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
         // find_msg((xline_ptr)maker->head);
-        xmsger_send_message(client->msger, client->channel, maker.head, maker.wpos);
+        task_ptr task = (task_ptr)tree_min(follow->channels);
+        xmsger_send_message(follow->msger, task->channel, maker.head, maker.wpos);
     }
 
-    __xlogi("xmsger_disconnect\n");
-    
-    __xlogi("xmsger_free\n");
-    xmsger_free(&client->msger);
-    
-    __xlogi("free client\n");
-    free(client);
+    xtree_free(&follow->channels);
 
-    __xlogi("env_logger_stop\n");
+    xtree_free(&follow->resources);
+    
+    xmsger_free(&follow->msger);
+    
+    free(follow);
+
+    if (host){
+        free(host);
+    }
+
     xlog_recorder_close();
 
+Clean:
+
     __xlogi("exit\n");
+
     return 0;
 }
