@@ -65,54 +65,6 @@ static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
     free(task);    
 }
 
-
-static void parse_msg(xline_ptr msg, uint64_t len)
-{
-    struct xmaker m = xline_parse(msg);
-    xmaker_ptr maker = &m;
-    xline_ptr ptr;
-    while ((ptr = xline_next(maker)) != NULL)
-    {
-        // __xlogd("xline ----------------- key: %s\n", maker->key);
-        if (__typeis_int(ptr)){
-
-            __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
-
-        }else if (__typeis_float(ptr)){
-
-            __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
-
-        }else if (__typeis_word(ptr)){
-
-            __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
-
-        }else if (__typeis_tree(ptr)){
-
-            parse_msg(ptr, 0);
-
-        }else if (__typeis_list(ptr)){
-
-            __xlogd("xline list key: %s\n", maker->key);
-            struct xmaker list = xline_parse(ptr);
-
-            while ((ptr = xline_list_next(&list)) != NULL)
-            {
-                if (__typeis_int(ptr)){
-
-                    __xlogd("xline list value: %d\n", __l2i(ptr));
-
-                }else if (__typeis_tree(ptr)){
-                    
-                    parse_msg(ptr, 0);
-                }
-            }
-
-        }else {
-            __xlogd("xline type error\n");
-        }
-    }
-}
-
 static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, void* msg)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
@@ -138,7 +90,7 @@ static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel
             xmsger_send_message(follow->msger, channel, builder.head, builder.wpos);
         }
     }else if(mcompare(cmd, "RES", 3) == 0){
-        parse_msg((xline_ptr)msg, len);
+        xline_printf(msg);
     }
     free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");

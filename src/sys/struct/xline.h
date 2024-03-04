@@ -98,18 +98,11 @@ typedef struct xmaker {
 typedef xmaker_t* xmaker_ptr;
 
 
-static inline void xmaker_free(xmaker_ptr maker)
-{
-    if (maker && maker->head){
-        free(maker->head);
-    }
-}
-
 static inline struct xmaker xmaker_build(uint64_t size)
 {
     struct xmaker maker;
-    if (size < XLINE_SIZE){
-        size = XLINE_SIZE;
+    if (size < 1024){
+        size = 1024;
     }
     maker.wpos = XLINE_SIZE;
     maker.range = size;
@@ -119,9 +112,9 @@ static inline struct xmaker xmaker_build(uint64_t size)
 
 static inline void xmaker_clear(xmaker_ptr maker)
 {
-    maker->wpos = maker->rpos = 0;
-    maker->key = NULL;
-    maker->val = NULL;
+    if (maker && maker->head){
+        free(maker->head);
+    }
 }
 
 static inline uint64_t xmaker_hold_tree(xmaker_ptr maker, const char *key)
@@ -418,6 +411,82 @@ static inline xline_ptr xline_list_next(xmaker_ptr maker)
         return ptr;
     }
     return NULL;
+}
+
+static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
+{
+    xmaker_t parser = xline_parse(xptr);
+
+    int len = slength(key);
+
+    if (depth == 1){
+        __xlogd("%*s: {\n", (depth) * 4, key);
+    }else {
+        if (len == 0){
+            __xlogd("%*s{\n", (depth) * 4, "");
+        }else {
+            __xlogd("%*s: {\n", (depth) * 4, key);
+        }
+    }
+
+    while ((xptr = xline_next(&parser)) != NULL)
+    {
+        if (__typeis_int(xptr)){
+
+            __xlogd("%*s: %ld,\n", (depth + 1) * 4, parser.key, __l2i(xptr));
+
+        }else if (__typeis_float(xptr)){
+
+            __xlogd("%*s: %lf,\n", (depth + 1) * 4, parser.key, __l2f(xptr));
+
+        }else if (__typeis_word(xptr)){
+
+            __xlogd("%*s: %s,\n", (depth + 1) * 4, parser.key, __l2data(xptr));
+
+        }else if (__typeis_tree(xptr)){
+
+            __xline_printf(xptr, parser.key, depth + 1);
+
+        }else if (__typeis_list(xptr)){
+
+            __xlogd("%*s: {\n", (depth + 1) * 4, parser.key);
+
+            struct xmaker list = xline_parse(xptr);
+
+            while ((xptr = xline_list_next(&list)) != NULL)
+            {
+                if (__typeis_int(xptr)){
+
+                    __xlogd("    %*d,\n", depth * 4, __l2i(xptr));
+
+                }else if (__typeis_tree(xptr)){
+                    
+                    __xline_printf(xptr, "", depth + 1);
+                }
+            }
+
+            __xlogd("  %*s},\n", depth * 4, "");
+
+        }else {
+            __xloge("__xline_printf >>>>--------> type error\n");
+        }
+    }
+
+    if (depth == 1){
+        __xlogd("%*s}\n", (depth - 1) * 4, "");
+    }else {
+        if (len == 0){
+            __xlogd("%*s},\n", (depth) * 4, "");
+        }else {
+            __xlogd("%*s},\n", (depth) * 4, "");
+        }   
+    }
+}
+
+
+static inline void xline_printf(void *xptr)
+{
+    __xline_printf((xline_ptr)xptr, "root", 1);
 }
 
 #endif //__XLINE_H__
