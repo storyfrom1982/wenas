@@ -118,7 +118,7 @@ static void parse_msg(xline_ptr msg, uint64_t len)
 
             __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
 
-        }else if (__typeis_str(ptr)){
+        }else if (__typeis_word(ptr)){
 
             __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
 
@@ -221,9 +221,9 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        // xmaker_ptr maker = xmaker_create(2);
+        // xmaker_ptr maker = xmaker_build(2);
         // build_msg(maker);
-        // xline_add_text(maker, "msg", str);
+        // xline_add_word(maker, "msg", str);
         // // parse_msg((xline_ptr)maker->head, maker->wpos);
         // // find_msg((xline_ptr)maker->head);
         // xchannel_push_task(server.channel, maker->wpos);

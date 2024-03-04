@@ -73,7 +73,7 @@ static void parse_msg(xline_ptr msg, uint64_t len)
     xline_ptr ptr;
     while ((ptr = xline_next(maker)) != NULL)
     {
-        __xlogd("xline ----------------- key: %s\n", maker->key);
+        // __xlogd("xline ----------------- key: %s\n", maker->key);
         if (__typeis_int(ptr)){
 
             __xlogd("xline key: %s value: %ld\n", maker->key, __l2i(ptr));
@@ -82,7 +82,7 @@ static void parse_msg(xline_ptr msg, uint64_t len)
 
             __xlogd("xline key: %s value: %lf\n", maker->key, __l2f(ptr));
 
-        }else if (__typeis_str(ptr)){
+        }else if (__typeis_word(ptr)){
 
             __xlogd("xline text key: %s value: %s\n", maker->key, __l2data(ptr));
 
@@ -123,16 +123,31 @@ static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, 
 static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr client = (xfollower_ptr)listener->ctx;
-    parse_msg((xline_ptr)msg, len);
+    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    xmaker_t maker = xline_parse((xline_ptr)msg);
+    const char *cmd = xline_find_word(&maker, "cmd");
+    if (mcompare(cmd, "REQ", 3) == 0){
+        cmd = xline_find_word(&maker, "api");
+        if (mcompare(cmd, "PUT", 3) == 0){
+            xmaker_t builder = xmaker_build(1024);
+            xline_add_word(&builder, "cmd", "RES");
+            xline_add_int(&builder, "code", 0);
+            // uint64_t ipos = xmaker_hold_tree(&builder, "REQ");
+            xline_add_map(&builder, "REQ", &maker);
+            // xmaker_save_tree(&builder, ipos);
+            xmsger_send_message(follow->msger, channel, builder.head, builder.wpos);
+        }
+    }else if(mcompare(cmd, "RES", 3) == 0){
+        parse_msg((xline_ptr)msg, len);
+    }
     free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void build_msg(xmaker_ptr maker)
 {
-    xline_add_text(maker, "type", "udp");
-    xline_add_text(maker, "api", "pull");
+    xline_add_word(maker, "cmd", "REQ");
+    xline_add_word(maker, "api", "PUT");
     uint64_t ipos = xmaker_hold_tree(maker, "int");
     xline_add_int(maker, "int8", 8);
     xline_add_int(maker, "int16", 16);
@@ -141,8 +156,8 @@ static void build_msg(xmaker_ptr maker)
     uint64_t fpos = xmaker_hold_tree(maker, "float");
     xline_add_float(maker, "real32", 32.3232);
     xline_add_float(maker, "real64", 64.6464);
-    xmaker_submit_tree(maker, fpos);
-    xmaker_submit_tree(maker, ipos);
+    xmaker_save_tree(maker, fpos);
+    xmaker_save_tree(maker, ipos);
     xline_add_uint(maker, "uint64", 64);
     xline_add_float(maker, "real64", 64.6464);
 
@@ -151,17 +166,17 @@ static void build_msg(xmaker_ptr maker)
         struct xline line = __n2l(i);
         xline_list_append(maker, &line);
     }
-    xmaker_submit_list(maker, lpos);
+    xmaker_save_list(maker, lpos);
 
     lpos = xmaker_hold_list(maker, "list-tree");
     for (int i = 0; i < 10; ++i){
         ipos = xmaker_list_hold_tree(maker);
-        xline_add_text(maker, "key", "tree");
+        xline_add_word(maker, "key", "tree");
         xline_add_int(maker, "real32", i);
         xline_add_float(maker, "real64", 64.6464 * i);
-        xmaker_list_submit_tree(maker, ipos);
+        xmaker_list_save_tree(maker, ipos);
     }
-    xmaker_submit_list(maker, lpos);
+    xmaker_save_list(maker, lpos);
     
 }
 
@@ -177,10 +192,10 @@ static void find_msg(xline_ptr msg){
     double f64 = xline_find_float(maker, "real64");
     __xlogd("xline find real64 = %lf\n", f64);
 
-    ptr = xline_find(maker, "type");
-    __xlogd("xline find type = %s\n", __l2data(ptr));
-    ptr = xline_find(maker, "api");
-    __xlogd("xline find api = %s\n", __l2data(ptr));
+    const char *text = xline_find_word(maker, "cmd");
+    __xlogd("xline find type = %s\n", text);
+    text = xline_find_word(maker, "api");
+    __xlogd("xline find api = %s\n", text);
 }
 
 int main(int argc, char *argv[])
@@ -188,7 +203,7 @@ int main(int argc, char *argv[])
     char *host = NULL;
     uint16_t port = 0;
 
-    xlog_recorder_open("./tmp/client/log", NULL);
+    xlog_recorder_open("./tmp/follow/log", NULL);
 
     xfollower_ptr follow = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
 
@@ -235,14 +250,14 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        struct xmaker maker = xmaker_create(2);
+        struct xmaker maker = xmaker_build(2);
         if (maker.head == NULL){
             break;
         }
         build_msg(&maker);
-        xline_add_text(&maker, "msg", str);
+        xline_add_word(&maker, "msg", str);
         // parse_msg((xline_ptr)maker->head, maker->wpos);
-        // find_msg((xline_ptr)maker->head);
+        find_msg((xline_ptr)maker.head);
         task_ptr task = (task_ptr)tree_min(follow->channels);
         xmsger_send_message(follow->msger, task->channel, maker.head, maker.wpos);
     }

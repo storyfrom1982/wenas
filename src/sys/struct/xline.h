@@ -78,7 +78,7 @@ static inline double __xline2float(xline_ptr l)
 
 #define __typeis_int(l)         ((l)->b[0] == XLINE_TYPE_INT)
 #define __typeis_float(l)       ((l)->b[0] == XLINE_TYPE_FLOAT)
-#define __typeis_str(l)         ((l)->b[0] == XLINE_TYPE_STR)
+#define __typeis_word(l)        ((l)->b[0] == XLINE_TYPE_STR)
 #define __typeis_bin(l)         ((l)->b[0] == XLINE_TYPE_BIN)
 #define __typeis_list(l)        ((l)->b[0] == XLINE_TYPE_LIST)
 #define __typeis_tree(l)        ((l)->b[0] == XLINE_TYPE_TREE)
@@ -93,7 +93,9 @@ typedef struct xmaker {
     uint8_t *key;
     xline_ptr val;
     uint8_t *head;
-}*xmaker_ptr;
+}xmaker_t;
+
+typedef xmaker_t* xmaker_ptr;
 
 
 static inline void xmaker_free(xmaker_ptr maker)
@@ -103,7 +105,7 @@ static inline void xmaker_free(xmaker_ptr maker)
     }
 }
 
-static inline struct xmaker xmaker_create(uint64_t len)
+static inline struct xmaker xmaker_build(uint64_t len)
 {
     struct xmaker maker;
     if (len < XLINE_SIZE){
@@ -133,7 +135,7 @@ static inline uint64_t xmaker_hold_tree(xmaker_ptr maker, const char *key)
     return pos;
 }
 
-static inline void xmaker_submit_tree(xmaker_ptr maker, uint64_t pos)
+static inline void xmaker_save_tree(xmaker_ptr maker, uint64_t pos)
 {
     uint64_t len = maker->wpos - pos - XLINE_SIZE;
     *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_TREE);
@@ -144,7 +146,7 @@ static inline uint64_t xmaker_hold_list(xmaker_ptr maker, const char *key)
     return xmaker_hold_tree(maker, key);
 }
 
-static inline void xmaker_submit_list(xmaker_ptr maker, uint64_t pos)
+static inline void xmaker_save_list(xmaker_ptr maker, uint64_t pos)
 {
     uint64_t len = maker->wpos - pos - XLINE_SIZE;
     *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_LIST);
@@ -157,9 +159,9 @@ static inline uint64_t xmaker_list_hold_tree(xmaker_ptr maker)
     return maker->rpos;
 }
 
-static inline void xmaker_list_submit_tree(xmaker_ptr maker, uint64_t pos)
+static inline void xmaker_list_save_tree(xmaker_ptr maker, uint64_t pos)
 {
-    return xmaker_submit_tree(maker, pos);
+    return xmaker_save_tree(maker, pos);
 }
 
 static inline uint64_t xline_append_object(xmaker_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
@@ -190,7 +192,7 @@ static inline uint64_t xline_append_object(xmaker_ptr maker, const char *key, si
     return maker->wpos;
 }
 
-static inline uint64_t xline_add_text(xmaker_ptr maker, const char *key, const char *word)
+static inline uint64_t xline_add_word(xmaker_ptr maker, const char *key, const char *word)
 {
     return xline_append_object(maker, key, slength(key), word, slength(word) + 1, XLINE_TYPE_STR);
 }
@@ -346,6 +348,15 @@ static inline double xline_find_float(xmaker_ptr maker, const char *key)
         return __l2f(val);
     }
     return EENDED;
+}
+
+static inline const char* xline_find_word(xmaker_ptr maker, const char *key)
+{
+    xline_ptr val = xline_find(maker, key);
+    if (val){
+        return (const char*)__l2data(val);
+    }
+    return NULL;
 }
 
 static inline void* xline_find_ptr(xmaker_ptr maker, const char *key)
