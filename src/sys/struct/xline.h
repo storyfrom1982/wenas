@@ -182,6 +182,7 @@ static inline uint64_t xline_add_object(xmaker_ptr maker, const char *key, size_
         free(maker->head);
         maker->head = maker->key;
     }
+    maker->key = maker->head + maker->wpos;
     // 这里加上了一个字节的长度，因为我们要在最后补上一个‘\0’作为字符串的尾部
     maker->key[0] = keylen + 1;
     // 这里从 key[1] 开始复制
@@ -333,6 +334,7 @@ static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
         maker->rpos += __sizeof_line(maker->val);
         if (slength(key) + 1 == maker->key[0]
             && mcompare(key, maker->key + 1, maker->key[0]) == 0){
+            maker->key++;
             return maker->val;
         }
     }
