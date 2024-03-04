@@ -271,14 +271,15 @@ static inline struct xmaker xline_parse(xline_ptr xmap)
     // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
     struct xmaker maker = {0};
     maker.rpos = 0;
-    maker.len = __sizeof_data(xmap);
+    maker.wpos = __sizeof_data(xmap);
+    maker.len = maker.wpos;
     maker.head = xmap->b + XLINE_SIZE;
     return maker;
 }
 
 static inline xline_ptr xline_next(xmaker_ptr maker)
 {
-    if (maker->rpos < maker->len){
+    if (maker->rpos < maker->wpos){
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
         maker->key++;
@@ -291,9 +292,9 @@ static inline xline_ptr xline_next(xmaker_ptr maker)
 
 static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 {
-    uint64_t wpos = maker->rpos;
+    uint64_t rpos = maker->rpos;
 
-    while (maker->rpos < maker->len) {
+    while (maker->rpos < maker->wpos) {
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
         maker->val = (xline_ptr)(maker->head + maker->rpos);
@@ -307,7 +308,7 @@ static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
 
     maker->rpos = 0;
 
-    while (maker->rpos < wpos) {
+    while (maker->rpos < rpos) {
         maker->key = maker->head + maker->rpos;
         maker->rpos += 1 + maker->key[0];
         maker->val = (xline_ptr)(maker->head + maker->rpos);
@@ -391,7 +392,7 @@ static inline uint64_t xline_list_append(xmaker_ptr maker, xline_ptr ptr)
 
 static inline xline_ptr xline_list_next(xmaker_ptr maker)
 {
-    if (maker->rpos < maker->len){
+    if (maker->rpos < maker->wpos){
         xline_ptr ptr = (xline_ptr)(maker->head + maker->rpos);
         maker->rpos += __sizeof_line(ptr);
         return ptr;
