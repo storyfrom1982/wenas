@@ -4,7 +4,7 @@ typedef struct server {
     int rsock;
     __atom_bool listening;
     struct __xipaddr xmsgaddr;
-    struct xmsglistener listener;
+    struct xmsgercb listener;
     xtask_ptr task;
     xtask_ptr listen_task;
     xmsger_ptr msger;
@@ -47,7 +47,7 @@ static size_t recv_msg(struct xmsgsocket *rsock, __xipaddr_ptr addr, void *buf, 
     return result;
 }
 
-static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_idle(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
     struct xtask_enter enter;
@@ -56,13 +56,13 @@ static void on_idle(xmsglistener_ptr listener, xchannel_ptr channel)
     xtask_push(server->listen_task, enter);
 }
 
-static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer enter\n");
     __xlogd("on_connection_from_peer exit\n");
 }
 
-static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer enter\n");
     __xlogd("on_connection_to_peer exit\n");
@@ -75,7 +75,7 @@ static void send_channel_msg(xtask_enter_ptr task_ctx)
     xchannel_send_msg(channel, channel->msg);
 }
 
-static void on_sendable(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_sendable(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     server_t *server = (server_t*)listener->ctx;
     struct xtask_enter enter;
@@ -90,7 +90,7 @@ static void disconnect_task(xtask_enter_ptr task)
     xchannel_ptr channel = task->ctx;
 }
 
-static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_disconnection(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_disconnection enter\n");
     server_t *server = (server_t*)listener->ctx;
@@ -160,7 +160,7 @@ static void process_message(xtask_enter_ptr task_ctx)
     __xlogd("process_message exit\n");
 }
 
-static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
+static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     server_t *server = (server_t*)listener->ctx;
     struct xtask_enter enter;
@@ -184,14 +184,14 @@ int main(int argc, char *argv[])
     server_t server;
     xmsgsocket_ptr msgsock = (xmsgsocket_ptr)malloc(sizeof(struct xmsgsocket));
     __xipaddr_ptr addr = &server.xmsgaddr;
-    xmsglistener_ptr listener = &server.listener;
+    xmsgercb_ptr listener = &server.listener;
 
     server.xmsgaddr = __xapi->udp_make_ipaddr(NULL, port);
 
-    listener->onChannelToPeer = on_connection_to_peer;
-    listener->onChannelFromPeer = on_connection_from_peer;
-    listener->onChannelBreak = on_disconnection;
-    listener->onMessageFromPeer = on_message_from_peer;
+    listener->on_channel_to_peer = on_connection_to_peer;
+    listener->on_channel_from_peer = on_connection_from_peer;
+    listener->on_channel_breaking = on_disconnection;
+    listener->on_msg_from_peer = on_message_from_peer;
     listener->onSendable = on_sendable;
     listener->onIdle = on_idle;
 

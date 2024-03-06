@@ -92,12 +92,13 @@ struct xchannel {
     uint8_t back_times;
     uint64_t back_delay;
     uint64_t back_range;
-    
+
     bool ping;
     bool breaker;
     bool connected; // 用peer_cid来标志是否连接
     __atom_size pos, len;
     struct __xipaddr addr;
+    void *usercontext;
     xmsger_ptr msger;
     struct xhead ack;
     serialbuf_ptr recvbuf;
@@ -131,7 +132,7 @@ struct xmsger {
     __atom_bool working;
     __atom_bool readable;
     __atom_bool listening;
-    xmsglistener_ptr listener;
+    xmsgercb_ptr callback;
     xpipe_ptr mpipe, rpipe;
     __xprocess_ptr mpid, rpid;
     struct xchannellist send_list, recv_list;
@@ -171,6 +172,14 @@ struct xmsger {
     (ch)->next->prev = (ch); \
     (ch)->prev->next = (ch)
 
+
+void* xchannel_context(xchannel_ptr channel)
+{
+    if (channel){
+        return channel->usercontext;
+    }
+    return NULL;
+}
 
 static inline xmessage_ptr new_message(xchannel_ptr channel, uint8_t type, uint8_t sid, void *data, uint64_t len)
 {
@@ -456,7 +465,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                 if (pack->msg->rpos == pack->msg->len){
                     // 把已经传送到对端的 msg 交给发送线程处理
                     if (pack->head.type == XMSG_PACK_MSG){
-                        channel->msger->listener->onMessageToPeer(channel->msger->listener, channel, pack->msg->data);
+                        channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg->data, pack->msg->len);
                     }
                     free(pack->msg);
                 }
@@ -770,26 +779,8 @@ static void* recv_loop(void *ptr)
                 msg->wpos += pack->head.len;
                 msg->range--;
                 if (msg->range == 0){
-                    msger->listener->onMessageFromPeer(msger->listener, pack->channel, msg->data, msg->wpos);
+                    msger->callback->on_msg_from_peer(msger->callback, pack->channel, msg->data, msg->wpos);
                     msg->data = NULL;
-                }
-
-            }else if (pack->head.type == XMSG_PACK_HELLO){
-                if (pack->head.flag == XMSG_PACK_HELLO){
-                    // 主动发起的
-                    msger->listener->onChannelToPeer(msger->listener, pack->channel);                    
-                }else {
-                    // 对方发起的
-                    msger->listener->onChannelFromPeer(msger->listener, pack->channel);
-                }
-
-            }else if (pack->head.type == XMSG_PACK_BYE){
-                if (pack->head.flag == XMSG_PACK_BYE){
-                    // 主动发起的
-                    msger->listener->onChannelBreak(msger->listener, pack->channel);
-                }else {
-                    // 对方发起的
-                    msger->listener->onChannelBreak(msger->listener, pack->channel);
                 }
             }
 
@@ -959,9 +950,12 @@ static void* main_loop(void *ptr)
                                 if (channel->ping){
                                     channel->ping = false;
                                     __xchannel_dequeue(channel);
-                                    __xchannel_enqueue(&channel->msger->recv_list, channel);
+                                    __xchannel_enqueue(&msger->recv_list, channel);
                                 }
                             }
+
+                            channel->connected = true;
+                            msger->callback->on_channel_to_peer(msger->callback, channel);                            
 
                             // 各自回复 ACK，通知对端连接建立完成
                             rpack = xchannel_recv_pack(channel, rpack);
@@ -978,9 +972,6 @@ static void* main_loop(void *ptr)
                         if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
                             // 开始使用 cid 作为索引
                             xtree_save(msger->peers, &channel->cid, 4, channel);
-                            channel->connected = true;
-                            //这里是被动建立连接 onChannelFromPeer
-                            channel->msger->listener->onChannelToPeer(channel->msger->listener, channel);
                             // 读取连接ID和校验码
                             uint32_t peer_cid = *((uint32_t*)(rpack->body));
                             uint64_t peer_tid = *((uint64_t*)(rpack->body + 4));
@@ -995,6 +986,10 @@ static void* main_loop(void *ptr)
                             rpack->head.flag = XMSG_PACK_HELLO;
                             rpack->head.acks = 1;
                             rpack->head.ack = rpack->head.acks;
+
+                            channel->connected = true;
+                            msger->callback->on_channel_to_peer(msger->callback, channel);
+
                             // 排序 ACK，更新发送缓冲区的读索引
                             xchannel_serial_read(channel, rpack);
                             // 排序接收缓冲区，更新写索引
@@ -1037,6 +1032,9 @@ static void* main_loop(void *ptr)
                             // 读取接收缓冲区，更新读索引
                             // 收到对应 HELLO 的 ACK 之后，才把消息交给接受线程，通知用户有连接建立
                             __xbreak(!xchannel_recv_message(channel));
+
+                            channel->connected = true;
+                            msger->callback->on_channel_from_peer(msger->callback, channel);
                         }
 
                     }else if (rpack->head.flag == XMSG_PACK_BYE){
@@ -1080,6 +1078,9 @@ static void* main_loop(void *ptr)
 
                     channel = xchannel_create(msger, (__xipaddr_ptr)msg->data, true);
                     __xbreak(channel == NULL);
+
+                    channel->usercontext = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
+                    __xlogi("usercontext: 0x%X\n", channel->usercontext);
 
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, channel->addr.keylen, channel);
@@ -1149,7 +1150,7 @@ static void* main_loop(void *ptr)
                                     __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
                                 }
                                 xchannel_free(channel);
-                                msger->listener->onChannelTimeout(msger->listener, channel);
+                                msger->callback->on_channel_break(msger->callback, channel);
 
                             }else {
 
@@ -1220,7 +1221,7 @@ static void* main_loop(void *ptr)
                         __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
                     }
                     xchannel_free(channel);
-                    msger->listener->onChannelTimeout(msger->listener, channel);
+                    msger->callback->on_channel_break(msger->callback, channel);
                 }else {
                     // 队列的第一个连接没有超时，后面的连接就都没有超时
                     break;
@@ -1356,7 +1357,7 @@ Clean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
+bool xmsger_connect(xmsger_ptr msger, void *context, const char *host, uint16_t port)
 {
     __xlogd("xmsger_connect enter\n");
 
@@ -1365,6 +1366,8 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
     __xbreak(msg == NULL);
 
     __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->data));
+
+    *(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))) = (uint64_t)context;
     
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
@@ -1388,15 +1391,17 @@ Clean:
     return false;
 }
 
-xmsger_ptr xmsger_create(xmsglistener_ptr listener)
+xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 {
     __xlogd("xmsger_create enter\n");
+
+    __xbreak(callback == NULL);
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
     
     msger->running = true;
     msger->writable = true;
-    msger->listener = listener;
+    msger->callback = callback;
 
     msger->sock = __xapi->udp_open();
     __xbreak(msger->sock < 0);

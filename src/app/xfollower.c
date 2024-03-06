@@ -24,12 +24,12 @@ typedef struct xfollower{
     __xprocess_ptr pid;
     xpipe_ptr taskpipe;
     xtree channels, resources;
-    struct xmsglistener listener;
+    struct xmsgercb listener;
 }*xfollower_ptr;
 
-static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogi(">>>>---------------> on_connection_to_peer: 0x%x\n", channel);
+    __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> get context: 0x%X\n", xchannel_context(channel));
     xfollower_ptr follow = (xfollower_ptr)listener->ctx;
     task_ptr task = (task_ptr)malloc(sizeof(struct task));
     task->prev = task;
@@ -38,7 +38,7 @@ static void on_connection_to_peer(xmsglistener_ptr listener, xchannel_ptr channe
     xtree_save(follow->channels, channel, __sizeof_ptr, task);
 }
 
-static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
     xfollower_ptr follow = (xfollower_ptr)listener->ctx;
@@ -49,30 +49,22 @@ static void on_connection_from_peer(xmsglistener_ptr listener, xchannel_ptr chan
     xtree_save(follow->channels, channel, __sizeof_ptr, task);    
 }
 
-static void on_channel_timeout(xmsglistener_ptr listener, xchannel_ptr channel)
+static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogi(">>>>---------------> on_channel_timeout: 0x%x\n", channel);
+    __xlogi(">>>>---------------> on_channel_break: 0x%x\n", channel);
     xfollower_ptr follow = (xfollower_ptr)listener->ctx;
     task_ptr task = xtree_take(follow->channels, channel, __sizeof_ptr);
     free(task);
 }
 
-static void on_disconnection(xmsglistener_ptr listener, xchannel_ptr channel)
-{
-    __xlogi(">>>>---------------> on_disconnection: 0x%x\n", channel);
-    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
-    task_ptr task = xtree_take(follow->channels, channel, __sizeof_ptr);
-    free(task);    
-}
-
-static void on_message_to_peer(xmsglistener_ptr listener, xchannel_ptr channel, void* msg)
+static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void* msg, size_t len)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     free(msg);
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_message_from_peer(xmsglistener_ptr listener, xchannel_ptr channel, void *msg, size_t len)
+static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xfollower_ptr follow = (xfollower_ptr)listener->ctx;
@@ -157,12 +149,13 @@ int main(int argc, char *argv[])
 
     xlog_recorder_open("./tmp/follow/log", NULL);
 
-    xfollower_ptr follow = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
+    xfollower_ptr server = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
+    __xlogi("server: 0x%X\n", server);
 
-    follow->channels = xtree_create();
-    __xbreak(follow->channels == NULL);
-    follow->resources = xtree_create();
-    __xbreak(follow->resources == NULL);
+    server->channels = xtree_create();
+    __xbreak(server->channels == NULL);
+    server->resources = xtree_create();
+    __xbreak(server->resources == NULL);
 
     if (argc == 3){
         host = strdup(argv[1]);
@@ -175,20 +168,19 @@ int main(int argc, char *argv[])
     // uint16_t port = atoi(argv[1]);
     // uint16_t port = 9256;
 
-    xmsglistener_ptr listener = &follow->listener;
+    xmsgercb_ptr listener = &server->listener;
 
-    listener->ctx = follow;
-    listener->onChannelToPeer = on_connection_to_peer;
-    listener->onChannelFromPeer = on_connection_from_peer;
-    listener->onChannelBreak = on_disconnection;
-    listener->onChannelTimeout = on_channel_timeout;
-    listener->onMessageFromPeer = on_message_from_peer;
-    listener->onMessageToPeer = on_message_to_peer;
+    listener->ctx = server;
+    listener->on_channel_to_peer = on_connection_to_peer;
+    listener->on_channel_from_peer = on_connection_from_peer;
+    listener->on_channel_break = on_channel_break;
+    listener->on_msg_from_peer = on_message_from_peer;
+    listener->on_msg_to_peer = on_message_to_peer;
     
-    follow->msger = xmsger_create(&follow->listener);
+    server->msger = xmsger_create(&server->listener);
 
     if (host && port){
-        xmsger_connect(follow->msger, host, port);
+        xmsger_connect(server->msger, server, host, port);
     }
 
     char str[1024];
@@ -210,17 +202,17 @@ int main(int argc, char *argv[])
         xline_add_word(&maker, "msg", str);
         // parse_msg((xline_ptr)maker.head, maker.wpos);
         // find_msg((xline_ptr)maker.head);
-        task_ptr task = (task_ptr)tree_min(follow->channels);
-        xmsger_send_message(follow->msger, task->channel, maker.head, maker.wpos);
+        task_ptr task = (task_ptr)tree_min(server->channels);
+        xmsger_send_message(server->msger, task->channel, maker.head, maker.wpos);
     }
 
-    xtree_free(&follow->channels);
+    xtree_free(&server->channels);
 
-    xtree_free(&follow->resources);
+    xtree_free(&server->resources);
     
-    xmsger_free(&follow->msger);
+    xmsger_free(&server->msger);
     
-    free(follow);
+    free(server);
 
     if (host){
         free(host);
