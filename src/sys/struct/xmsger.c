@@ -392,12 +392,23 @@ static inline void xchannel_clear(xchannel_ptr channel)
     while (channel->send_ptr != NULL)
     {
         next = channel->send_ptr->next;
+        channel->len -= channel->send_ptr->len;
         channel->msger->len -= channel->send_ptr->len;
         if (channel->send_ptr->type == XMSG_PACK_MSG){
             free(channel->send_ptr->data);
         }
         free(channel->send_ptr);
         channel->send_ptr = next;
+    }
+    while(__serialbuf_sendable(channel->sendbuf) > 0)
+    {
+        channel->len -=  channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
+        channel->msger->len -= channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
+        channel->sendbuf->spos++;
+    }
+    while(__serialbuf_recvable(channel->sendbuf) > 0)
+    {
+        channel->sendbuf->rpos++;
     }
     while(__serialbuf_readable(channel->recvbuf) > 0)
     {
