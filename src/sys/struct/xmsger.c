@@ -1145,11 +1145,6 @@ static void* main_loop(void *ptr)
                             if (spack->head.resend > channel->sendbuf->range){
 
                                 __xlogd("xmsger_loop >>>>----------------------------------------------------------> (%u) SEND TIMEDOUT\n", channel->peer_cid);
-
-                                if (xtree_take(msger->peers, &channel->cid, 4) == NULL){
-                                    __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
-                                }
-                                xchannel_free(channel);
                                 msger->callback->on_channel_break(msger->callback, channel);
 
                             }else {
@@ -1217,10 +1212,6 @@ static void* main_loop(void *ptr)
                 // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                     __xlogd("xmsger_loop >>>>----------------------------------------------------------> (%u) RECV TIEMD OUT\n", channel->peer_cid);
-                    if (xtree_take(msger->peers, &channel->cid, 4) == NULL){
-                        __xbreak(xtree_take(msger->peers, &channel->addr.port, channel->addr.keylen) == NULL);
-                    }
-                    xchannel_free(channel);
                     msger->callback->on_channel_break(msger->callback, channel);
                 }else {
                     // 队列的第一个连接没有超时，后面的连接就都没有超时
