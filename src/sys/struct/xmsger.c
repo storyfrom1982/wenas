@@ -693,7 +693,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
         pack->timestamp = __xapi->clock();
         channel->timestamp = pack->timestamp;
 
-        __xlogd("xchannel_send_pack >>>>-------------------------------> (%u) TYPE: %u SN: %u\n", channel->peer_cid, pack->head.type, pack->head.sn);
+        __xlogd("xchannel_send_pack >>>>-------------------------------> (%u) FLAG: %u TYPE: %u SN: %u\n", channel->peer_cid, pack->head.flag, pack->head.type, pack->head.sn);
         // 判断当前 msg 是否为当前连接的消息队列中的最后一个消息
         if (pack->head.range == 1 && __serialbuf_sendable(channel->sendbuf) == 0){
             __xlogd("xchannel_send_pack >>>>-------------------------------> (%u) SET FLUSH PACK: %u\n", channel->peer_cid, pack->head.sn);
@@ -720,7 +720,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
     if (__serialbuf_sendable(channel->sendbuf) > 0){
         // 取出当前要发送的 pack
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
-        pack->head.flag = head->type;
+        pack->head.flag = head->flag;
         pack->head.ack = head->ack;
         pack->head.acks = head->acks;
         __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) MSG: %u ACK: %u ACKS: %u\n", channel->peer_cid, pack->head.sn, pack->head.ack, pack->head.acks);
@@ -991,39 +991,47 @@ static void* main_loop(void *ptr)
                             channel->peer_key = peer_cid % 255;
                             channel->ack.cid = channel->peer_cid;
                             channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-
+                            // 切换到联通模式，使用 cid 作为索引
                             xtree_save(msger->peers, &addr.port, addr.keylen, channel);
+                            // 先缓冲将要回复的 HEELO
                             xchannel_serial_cmd(channel, XMSG_PACK_HELLO);
+                            // 回复 ACK 时，会检测是否有待发送的包，正好将 HELLO 一起发送
                             __xbreak(!xchannel_recv_pack(channel, &rpack));
 
-                        }else { // 这里是对穿的 HELLO
+                        }else {
 
-                            __xlogd("xmsger_loop receive HELLO PUCHING\n");
+                            __xlogd("xmsger_loop receive HELLO cid: %u peer cid: %u\n", channel->peer_cid, peer_cid);
 
                             // 对端会一直发重复送这个 HELLO，直到收到一个 ACK 为止
 
-                            // 设置 peer cid 和校验码
-                            channel->window = window;
-                            channel->peer_cid = peer_cid;
-                            channel->peer_key = peer_cid % 255;
-                            channel->ack.cid = channel->peer_cid;
-                            channel->ack.key = (XMSG_VAL ^ channel->peer_key);
+                            if (channel->peer_cid == peer_cid){
+                                // 重传的 HELLO，直接回复 ACK
+                                __xbreak(!xchannel_recv_pack(channel, &rpack));
 
-                            // 后发起的一方负责 PING
-                            if (channel->cid > peer_cid){
-                                if (channel->ping){
-                                    channel->ping = false;
-                                    __xchannel_dequeue(channel);
-                                    __xchannel_enqueue(&msger->recv_list, channel);
+                            }else { // 这里是对穿的 HELLO
+
+                                // 设置 peer cid 和校验码
+                                channel->window = window;
+                                channel->peer_cid = peer_cid;
+                                channel->peer_key = peer_cid % 255;
+                                channel->ack.cid = channel->peer_cid;
+                                channel->ack.key = (XMSG_VAL ^ channel->peer_key);
+
+                                // 后发起的一方负责 PING
+                                if (channel->cid > peer_cid){
+                                    if (channel->ping){
+                                        channel->ping = false;
+                                        __xchannel_dequeue(channel);
+                                        __xchannel_enqueue(&msger->recv_list, channel);
+                                    }
                                 }
+
+                                channel->connected = true;
+                                msger->callback->on_channel_to_peer(msger->callback, channel);                            
+
+                                // 各自回复 ACK，通知对端连接建立完成
+                                __xbreak(!xchannel_recv_pack(channel, &rpack));
                             }
-
-                            channel->connected = true;
-                            msger->callback->on_channel_to_peer(msger->callback, channel);                            
-
-                            // 各自回复 ACK，通知对端连接建立完成
-                            __xbreak(!xchannel_recv_pack(channel, &rpack));
-                            // 这里不上报消息，因为我们之前发出了 HEELO，所以要等到这个 HELLO 的 ACK 到来时，再上报这个消息，通知连接已建立
                         }
 
                     } else {
@@ -1047,16 +1055,10 @@ static void* main_loop(void *ptr)
                             // 设置ACK的校验码
                             channel->ack.cid = channel->peer_cid;
                             channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-                            // // 收到了对端回复的 HELLO，需要更新发送缓冲区，所以这里要伪造一个 ACK
-                            // rpack->head.flag = XMSG_PACK_HELLO;
-                            // rpack->head.acks = 1;
-                            // rpack->head.ack = rpack->head.acks;
 
                             channel->connected = true;
                             msger->callback->on_channel_to_peer(msger->callback, channel);
-
-                            // // 排序 ACK，更新发送缓冲区的读索引
-                            // xchannel_serial_read(channel, rpack);
+                            
                             // 排序接收缓冲区，更新写索引
                             __xbreak(!xchannel_recv_pack(channel, &rpack));
                         }
