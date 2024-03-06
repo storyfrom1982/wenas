@@ -136,6 +136,8 @@ struct xmsger {
     xpipe_ptr mpipe, rpipe;
     __xprocess_ptr mpid, rpid;
     struct xchannellist send_list, recv_list;
+
+    __atom_size rpack_malloc_count;
 };
 
 #define __serialbuf_wpos(b)         ((b)->wpos & ((b)->range - 1))
@@ -433,6 +435,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
         // 释放接受缓冲区的数据
         free(channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)]);
         channel->recvbuf->rpos++;
+        __atom_sub(channel->msger->rpack_malloc_count, 1);
     }
     __xlogd("xchannel_clear chnnel len: %lu pos: %lu\n", channel->len, channel->pos);
     __xlogd("xchannel_clear exit\n");
@@ -714,19 +717,17 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
 
 static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
 {
-    __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->peer_cid, head->ack, head->acks);
-    
     if (__serialbuf_sendable(channel->sendbuf) > 0){
-
         // 取出当前要发送的 pack
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
         pack->head.flag = head->type;
         pack->head.ack = head->ack;
         pack->head.acks = head->acks;
+        __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) MSG: %u ACK: %u ACKS: %u\n", channel->peer_cid, pack->head.sn, pack->head.ack, pack->head.acks);
         xchannel_send_pack(channel, pack);
 
     }else {
-        
+        __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->peer_cid, head->ack, head->acks);
         if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
             channel->msger->writable = true;
         }else {
@@ -736,8 +737,10 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
     }
 }
 
-static inline xpack_ptr xchannel_recv_pack(xchannel_ptr channel, xpack_ptr pack)
+static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 {
+    xpack_ptr pack = *rpack;
+
     if (pack->head.flag != XMSG_PACK_ACK){
         // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
         xchannel_serial_read(channel, pack);
@@ -756,6 +759,7 @@ static inline xpack_ptr xchannel_recv_pack(xchannel_ptr channel, xpack_ptr pack)
         pack->channel = channel;
         // 保存 PACK
         channel->recvbuf->buf[index] = pack;
+        *rpack = NULL;
         // 更新最大连续 SN
         channel->recvbuf->wpos++;
 
@@ -797,9 +801,9 @@ static inline xpack_ptr xchannel_recv_pack(xchannel_ptr channel, xpack_ptr pack)
                 pack->channel = channel;
                 // 这个 PACK 首次到达，保存 PACK
                 channel->recvbuf->buf[index] = pack;
+                *rpack = NULL;
             }else {
                 // 重复到达的 PACK
-                return pack;
             }
             
         }else {
@@ -811,13 +815,12 @@ static inline xpack_ptr xchannel_recv_pack(xchannel_ptr channel, xpack_ptr pack)
             channel->ack.acks = channel->recvbuf->wpos;
             channel->ack.ack = channel->ack.acks;
             // 重复到达的 PACK
-            return pack;
         }
     }
 
     xchannel_send_ack(channel, &channel->ack);
 
-    return NULL;
+    return xchannel_recv_message(channel);
 }
 
 
@@ -866,6 +869,8 @@ static void* recv_loop(void *ptr)
 
             // 这里释放的是接收到的 PACK
             free(pack);
+            
+            __atom_sub(msger->rpack_malloc_count, 1);
         }
     }
 
@@ -904,7 +909,8 @@ static void* main_loop(void *ptr)
 
     xmessage_ptr msg;
     xpack_ptr spack = NULL;
-    xpack_ptr rpack = first_pack();;
+    xpack_ptr rpack = first_pack();
+    __atom_add(msger->rpack_malloc_count, 1);
     // xpack_ptr rpack = (xpack_ptr)malloc(sizeof(struct xpack));
     __xbreak(rpack == NULL);
     rpack->head.len = 0;
@@ -933,31 +939,19 @@ static void* main_loop(void *ptr)
                     
                     }else if (rpack->head.type == XMSG_PACK_MSG) {
                         __xlogd("xmsger_loop >>>>--------------> RECV MSG: %u SN: %u\n", rpack->head.flag, rpack->head.sn);
-                        rpack = xchannel_recv_pack(channel, rpack);
-                        if (rpack == NULL){
-                            __xbreak(!xchannel_recv_message(channel));
-                        }
+                        __xbreak(!xchannel_recv_pack(channel, &rpack));
 
                     }else if (rpack->head.type == XMSG_PACK_PING){
                         __xlogd("xmsger_loop receive PING\n");
-                        rpack = xchannel_recv_pack(channel, rpack);
-                        if (rpack == NULL){
-                            __xbreak(!xchannel_recv_message(channel));
-                        }
+                        __xbreak(!xchannel_recv_pack(channel, &rpack));
                         
                     }else if (rpack->head.type == XMSG_PACK_HELLO){
                         __xlogd("xmsger_loop receive HELLO\n");
-                        rpack = xchannel_recv_pack(channel, rpack);
-                        if (rpack == NULL){
-                            __xbreak(!xchannel_recv_message(channel));
-                        }
+                        __xbreak(!xchannel_recv_pack(channel, &rpack));
                         
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("xmsger_loop receive BYE\n");
-                        rpack = xchannel_recv_pack(channel, rpack);
-                        if (rpack == NULL){
-                            __xbreak(!xchannel_recv_message(channel));
-                        }
+                        __xbreak(!xchannel_recv_pack(channel, &rpack));
                         xtree_take(msger->peers, &channel->cid, 4);
                         xchannel_free(channel);
                     }
@@ -1000,10 +994,7 @@ static void* main_loop(void *ptr)
 
                             xtree_save(msger->peers, &addr.port, addr.keylen, channel);
                             xchannel_serial_cmd(channel, XMSG_PACK_HELLO);
-                            rpack = xchannel_recv_pack(channel, rpack);
-                            if (rpack == NULL){
-                                __xbreak(!xchannel_recv_message(channel));
-                            }
+                            __xbreak(!xchannel_recv_pack(channel, &rpack));
 
                         }else { // 这里是对穿的 HELLO
 
@@ -1031,10 +1022,7 @@ static void* main_loop(void *ptr)
                             msger->callback->on_channel_to_peer(msger->callback, channel);                            
 
                             // 各自回复 ACK，通知对端连接建立完成
-                            rpack = xchannel_recv_pack(channel, rpack);
-                            if (rpack == NULL){
-                                __xbreak(!xchannel_recv_message(channel));
-                            }
+                            __xbreak(!xchannel_recv_pack(channel, &rpack));
                             // 这里不上报消息，因为我们之前发出了 HEELO，所以要等到这个 HELLO 的 ACK 到来时，再上报这个消息，通知连接已建立
                         }
 
@@ -1059,21 +1047,18 @@ static void* main_loop(void *ptr)
                             // 设置ACK的校验码
                             channel->ack.cid = channel->peer_cid;
                             channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-                            // 收到了对端回复的 HELLO，需要更新发送缓冲区，所以这里要伪造一个 ACK
-                            rpack->head.flag = XMSG_PACK_HELLO;
-                            rpack->head.acks = 1;
-                            rpack->head.ack = rpack->head.acks;
+                            // // 收到了对端回复的 HELLO，需要更新发送缓冲区，所以这里要伪造一个 ACK
+                            // rpack->head.flag = XMSG_PACK_HELLO;
+                            // rpack->head.acks = 1;
+                            // rpack->head.ack = rpack->head.acks;
 
                             channel->connected = true;
                             msger->callback->on_channel_to_peer(msger->callback, channel);
 
-                            // 排序 ACK，更新发送缓冲区的读索引
-                            xchannel_serial_read(channel, rpack);
+                            // // 排序 ACK，更新发送缓冲区的读索引
+                            // xchannel_serial_read(channel, rpack);
                             // 排序接收缓冲区，更新写索引
-                            rpack = xchannel_recv_pack(channel, rpack);
-                            if (rpack == NULL){
-                                __xbreak(!xchannel_recv_message(channel));
-                            }
+                            __xbreak(!xchannel_recv_pack(channel, &rpack));
                         }
                     }
 
@@ -1129,6 +1114,7 @@ static void* main_loop(void *ptr)
             if (rpack == NULL){
                 // rpack = (xpack_ptr)malloc(sizeof(struct xpack));
                 rpack = next_pack();
+                __atom_add(msger->rpack_malloc_count, 1);
                 __xbreak(rpack == NULL);
             }
 
@@ -1164,12 +1150,14 @@ static void* main_loop(void *ptr)
                 }else {
 
                     if (msg->channel != NULL){
-                        xchannel_clear(msg->channel);
                         __xbreak(xtree_take(msg->channel->msger->peers, &msg->channel->cid, 4) == NULL);
                         __xbreak(xtree_save(msg->channel->msger->peers, &msg->channel->addr.port, msg->channel->addr.keylen, msg->channel) == NULL);
+                        xchannel_clear(msg->channel);
                         xchannel_serial_cmd(msg->channel, XMSG_PACK_BYE);
                     }
                 }
+
+                free(msg);
             }
         }
 
@@ -1577,12 +1565,15 @@ void xmsger_free(xmsger_ptr *pptr)
                 xpack_ptr pack;
                 xpipe_read(msger->rpipe, &pack, __sizeof_ptr);
                 if (pack){
+                    __atom_sub(msger->rpack_malloc_count, 1);
                     free(pack);
                 }
             }
             __xlogd("xmsger_free recv pipe exit %lu\n", xpipe_readable(msger->rpipe));
             xpipe_free(&msger->rpipe);
         }
+
+        __xlogd("xmsger_free clear >>>>>>>--------------------------> %lu\n", msger->rpack_malloc_count);
 
         if (msger->peers){
             __xlogd("xmsger_free clear peers\n");
