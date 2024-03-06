@@ -876,15 +876,10 @@ static void* main_loop(void *ptr)
                         
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("xmsger_loop receive BYE\n");
-                        if (rpack->head.flag != XMSG_PACK_ACK){
-                            xchannel_serial_read(channel, rpack);
-                        }
-                        rpack = xchannel_recv_pack(channel, rpack);
                         xchannel_send_ack(channel, &channel->ack);
-                        if (rpack == NULL){
-                            __xbreak(!xchannel_recv_message(channel));
-                        }
-                        // TODO 释放连接
+                        xtree_take(msger->peers, &channel->cid, 4);
+                        xchannel_free(channel);
+                        // rpack 继续使用
                     }
                 }
 
@@ -1005,6 +1000,7 @@ static void* main_loop(void *ptr)
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
 
+                    __xlogd("xmsger_loop receive BYE\n");
                     // 连接已经释放了，现在用默认的校验码
                     rpack->head.cid = 0;
                     rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
@@ -1039,15 +1035,12 @@ static void* main_loop(void *ptr)
 
                     }else if (rpack->head.flag == XMSG_PACK_BYE){
 
+                        __xlogd("xmsger_loop receive ACK BEY\n");
                         channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         // BYE 的 ACK 有可能是默认校验码
                         if (channel && ((rpack->head.key ^ channel->key) == XMSG_VAL || (rpack->head.key ^ XMSG_KEY) == XMSG_VAL)){
-                            rpack->head.flag = rpack->head.type;
-                            // 交给接收线程来处理
-                            __xbreak(xpipe_write(channel->msger->rpipe, &rpack, __sizeof_ptr) != __sizeof_ptr);
-                            // PACK 在接收线程里释放
-                            rpack = NULL;
-                            // TODO 释放连接
+                            xchannel_free(channel);
+                            // rpack 接着用
                         }
                     }
                 }
@@ -1319,11 +1312,11 @@ bool xmsger_send_file(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t
 
 bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
 {
-    __xlogd("xmsger_disconnect channel 0x%X enter", channel);
+    __xlogd("xmsger_disconnect channel 0x%X enter\n", channel);
 
     // 避免重复调用
     if (!__set_true(channel->breaker)){
-        __xlogd("xmsger_disconnect channel 0x%X repeated calls", channel);
+        __xlogd("xmsger_disconnect channel 0x%X repeated calls\n", channel);
         return true;
     }
 
@@ -1341,7 +1334,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
     __xapi->mutex_notify(msger->mtx);
     __xapi->mutex_unlock(msger->mtx);
 
-    __xlogd("xmsger_disconnect channel 0x%X exit", channel);
+    __xlogd("xmsger_disconnect channel 0x%X exit\n", channel);
 
     return true;
 
