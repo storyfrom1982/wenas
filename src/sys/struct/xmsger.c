@@ -1548,7 +1548,7 @@ void xmsger_free(xmsger_ptr *pptr)
                 __xapi->udp_sendto(sock, &msger->addr, &i, sizeof(int));
             }
             __xapi->udp_close(sock);
-        }        
+        }
 
         if (msger->rpid){
             __xlogd("xmsger_free recv process\n");
@@ -1558,7 +1558,15 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->mpid){
             __xlogd("xmsger_free main process\n");
             __xapi->process_free(msger->mpid);
-        }        
+        }
+
+        // channel free 会用到 rpipe，所以将 tree clear 提前
+        if (msger->peers){
+            __xlogd("xmsger_free clear peers\n");
+            xtree_clear(msger->peers, free_channel);
+            __xlogd("xmsger_free peers\n");
+            xtree_free(&msger->peers);
+        }
 
         if (msger->mpipe){
             __xlogd("xmsger_free msg pipe\n");
@@ -1590,13 +1598,6 @@ void xmsger_free(xmsger_ptr *pptr)
         }
 
         __xlogd("xmsger_free clear >>>>>>>--------------------------> %lu\n", msger->rpack_malloc_count);
-
-        if (msger->peers){
-            __xlogd("xmsger_free clear peers\n");
-            xtree_clear(msger->peers, free_channel);
-            __xlogd("xmsger_free peers\n");
-            xtree_free(&msger->peers);
-        }
 
         if (msger->mtx){
             __xlogd("xmsger_free mutex\n");
