@@ -443,6 +443,11 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xchannel_dequeue(channel);
     free(channel->recvbuf);
     free(channel->sendbuf);
+    for (int i = 0; i < 3; ++i){
+        if (channel->streams[i].data != NULL){
+            free(channel->streams[i].data);
+        }
+    }
     free(channel);
     __xlogd("xchannel_free exit\n");
 }
@@ -1049,7 +1054,7 @@ static void* main_loop(void *ptr)
                     rpack->head.type = XMSG_PACK_ACK;
                     rpack->head.acks = rpack->head.sn + 1;
                     rpack->head.ack = rpack->head.acks;
-                    if ((__xapi->udp_sendto(msger->sock, &channel->addr, (void*)&rpack->head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+                    if ((__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
                         msger->writable = true;
                     }else {
                         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
@@ -1515,7 +1520,9 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->sock > 0){
             int sock = __xapi->udp_open();
-            __xapi->udp_sendto(sock, &msger->addr, &sock, sizeof(int));
+            for (int i = 0; i < 10; ++i){
+                __xapi->udp_sendto(sock, &msger->addr, &i, sizeof(int));
+            }
             __xapi->udp_close(sock);
         }        
 
@@ -1531,11 +1538,24 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->mpipe){
             __xlogd("xmsger_free msg pipe\n");
+            while (xpipe_readable(msger->mpipe) > 0){
+                xmessage_ptr msg;
+                xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
+                if (msg->type == XMSG_PACK_MSG){
+                    free(msg->data);
+                }
+                free(msg);
+            }
             xpipe_free(&msger->mpipe);
         }
 
         if (msger->rpipe){
             __xlogd("xmsger_free recv pipe\n");
+            while (xpipe_readable(msger->rpipe) > 0){
+                xpack_ptr pack;
+                xpipe_read(msger->rpipe, &pack, __sizeof_ptr);
+                free(pack);
+            }
             xpipe_free(&msger->rpipe);
         }
 
