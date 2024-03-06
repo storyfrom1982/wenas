@@ -7,54 +7,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct resource {
-    uint64_t len;
-    void *data;
-}resource_ptr;
-
-typedef struct task {
+typedef struct xtasklist {
     uint64_t pos, len;
     xchannel_ptr channel;
-    resource_ptr resource;
-    struct task *prev, *next;
-}*task_ptr;
+    struct xtasklist *prev, *next;
+}*xtasklist_ptr;
 
 typedef struct xfollower{
     xmsger_ptr msger;
+    xtasklist_ptr tasks;
     __xprocess_ptr pid;
     xpipe_ptr taskpipe;
-    xtree channels, resources;
     struct xmsgercb listener;
 }*xfollower_ptr;
 
 static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> get context: 0x%X\n", xchannel_context(channel));
-    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
-    task_ptr task = (task_ptr)malloc(sizeof(struct task));
-    task->prev = task;
-    task->next = task;
-    task->channel = channel;    
-    xtree_save(follow->channels, channel, __sizeof_ptr, task);
+    __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    server->tasks = xchannel_context(channel);
+    server->tasks->channel = channel;
+    __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogi(">>>>---------------> on_connection_from_peer: 0x%x\n", channel);
-    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
-    task_ptr task = (task_ptr)malloc(sizeof(struct task));
+    __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xtasklist_ptr task = xchannel_context(channel);
     task->prev = task;
     task->next = task;
     task->channel = channel;
-    xtree_save(follow->channels, channel, __sizeof_ptr, task);    
+    __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogi(">>>>---------------> on_channel_break: 0x%x\n", channel);
-    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
-    task_ptr task = xtree_take(follow->channels, channel, __sizeof_ptr);
-    free(task);
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xtasklist_ptr task = xchannel_context(channel);
+    task->prev = task;
+    task->next = task;
+    task->channel = channel;
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void* msg, size_t len)
@@ -67,7 +62,7 @@ static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void
 static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr follow = (xfollower_ptr)listener->ctx;
+    xfollower_ptr server = (xfollower_ptr)listener->ctx;
     xmaker_t maker = xline_parse((xline_ptr)msg);
     const char *cmd = xline_find_word(&maker, "cmd");
     if (mcompare(cmd, "REQ", 3) == 0){
@@ -79,7 +74,7 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
             // uint64_t ipos = xmaker_hold_tree(&builder, "REQ");
             xline_add_map(&builder, "REQ", &maker);
             // xmaker_save_tree(&builder, ipos);
-            xmsger_send_message(follow->msger, channel, builder.head, builder.wpos);
+            xmsger_send_message(server->msger, channel, builder.head, builder.wpos);
         }
     }else if(mcompare(cmd, "RES", 3) == 0){
         xline_printf(msg);
@@ -142,6 +137,31 @@ static void find_msg(xline_ptr msg){
     __xlogd("xline find api = %s\n", text);
 }
 
+static void make_tasklist()
+{
+
+}
+
+static void make_connect_task(xfollower_ptr server, const char *ip, uint16_t port)
+{
+    xmsger_connect(server->msger, server->tasks, ip, port);
+}
+
+static void make_disconnect_task(xfollower_ptr server)
+{
+    xmsger_disconnect(server->msger, server->tasks->channel);
+}
+
+static void make_message_task(xfollower_ptr server)
+{
+    if (server->tasks->channel){
+        struct xmaker maker = xmaker_build(1024);
+        build_msg(&maker);
+        xline_add_word(&maker, "msg", "UPDATE");
+        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     char *host = NULL;
@@ -152,10 +172,7 @@ int main(int argc, char *argv[])
     xfollower_ptr server = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
     __xlogi("server: 0x%X\n", server);
 
-    server->channels = xtree_create();
-    __xbreak(server->channels == NULL);
-    server->resources = xtree_create();
-    __xbreak(server->resources == NULL);
+    server->tasks = (xtasklist_ptr)malloc(sizeof(struct xtasklist));
 
     if (argc == 3){
         host = strdup(argv[1]);
@@ -179,10 +196,6 @@ int main(int argc, char *argv[])
     
     server->msger = xmsger_create(&server->listener);
 
-    if (host && port){
-        xmsger_connect(server->msger, server, host, port);
-    }
-
     char str[1024];
     
     while (1)
@@ -190,25 +203,20 @@ int main(int argc, char *argv[])
         __xlogi("Enter a value :\n");
         fgets(str, 1000, stdin);
         size_t len = slength(str);
-        if (len == 2 && str[0] == 'q'){
-            break;
+        if (len == 2){
+            if (str[0] == 'c'){
+                make_connect_task(server, host, port);
+            }else if (str[0] == 'd'){
+                make_disconnect_task(server);
+            }else if (str[0] == 's'){
+                make_message_task(server);   
+            }else if (str[0] == 'q'){
+                break;
+            }
+        }else {
+            make_message_task(server);
         }
-        str[len-1] = '\0';
-        struct xmaker maker = xmaker_build(2);
-        if (maker.head == NULL){
-            break;
-        }
-        build_msg(&maker);
-        xline_add_word(&maker, "msg", str);
-        // parse_msg((xline_ptr)maker.head, maker.wpos);
-        // find_msg((xline_ptr)maker.head);
-        task_ptr task = (task_ptr)tree_min(server->channels);
-        xmsger_send_message(server->msger, task->channel, maker.head, maker.wpos);
     }
-
-    xtree_free(&server->channels);
-
-    xtree_free(&server->resources);
     
     xmsger_free(&server->msger);
     
