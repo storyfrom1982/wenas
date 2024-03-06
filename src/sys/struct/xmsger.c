@@ -1043,7 +1043,12 @@ static void* main_loop(void *ptr)
                     rpack->head.type = XMSG_PACK_ACK;
                     rpack->head.acks = rpack->head.sn + 1;
                     rpack->head.ack = rpack->head.acks;
-                    xchannel_send_ack(channel, &rpack->head);
+                    if ((__xapi->udp_sendto(msger->sock, &channel->addr, (void*)&rpack->head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+                        msger->writable = true;
+                    }else {
+                        __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
+                        msger->writable = false;
+                    }
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
                     
