@@ -385,16 +385,14 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
     return NULL;
 }
 
-static inline void xchannel_free(xchannel_ptr channel)
+static inline void xchannel_clear(xchannel_ptr channel)
 {
-    __xlogd("xchannel_free enter\n");
-    // 从待发送计数中，减掉没有被发送的包
-    __atom_sub(channel->msger->len, (uint64_t)(channel->len - channel->pos));
-    __xchannel_dequeue(channel);
+    __xlogd("xchannel_clear enter\n");
     xmessage_ptr next;
     while (channel->send_ptr != NULL)
     {
         next = channel->send_ptr->next;
+        channel->msger->len -= channel->send_ptr->len;
         if (channel->send_ptr->type == XMSG_PACK_MSG){
             free(channel->send_ptr->data);
         }
@@ -406,6 +404,15 @@ static inline void xchannel_free(xchannel_ptr channel)
         free(channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)]);
         channel->recvbuf->rpos++;
     }
+    channel->flushinglist.len = 0;
+    __xlogd("xchannel_clear exit\n");
+}
+
+static inline void xchannel_free(xchannel_ptr channel)
+{
+    __xlogd("xchannel_free enter\n");
+    xchannel_clear(channel);
+    __xchannel_dequeue(channel);
     free(channel->recvbuf);
     free(channel->sendbuf);
     free(channel);
@@ -1088,9 +1095,9 @@ static void* main_loop(void *ptr)
                 }else {
 
                     if (msg->channel != NULL){
-                        channel = msg->channel;
-                        __xbreak(xtree_take(channel->msger->peers, &channel->cid, 4) == NULL);
-                        __xbreak(xtree_save(channel->msger->peers, &channel->addr.port, channel->addr.keylen, channel) == NULL);
+                        xchannel_clear(msg->channel);
+                        __xbreak(xtree_take(msg->channel->msger->peers, &msg->channel->cid, 4) == NULL);
+                        __xbreak(xtree_save(msg->channel->msger->peers, &msg->channel->addr.port, msg->channel->addr.keylen, msg->channel) == NULL);
                     }
                 }
             }
