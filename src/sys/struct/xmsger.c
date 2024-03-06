@@ -876,10 +876,10 @@ static void* main_loop(void *ptr)
                         
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("xmsger_loop receive BYE\n");
+                        rpack = xchannel_recv_pack(channel, rpack);
                         xchannel_send_ack(channel, &channel->ack);
                         xtree_take(msger->peers, &channel->cid, 4);
                         xchannel_free(channel);
-                        // rpack 继续使用
                     }
                 }
 
