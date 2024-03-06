@@ -94,6 +94,7 @@ struct xchannel {
     bool breaker;
     bool connected; // 用peer_cid来标志是否连接
     __atom_size pos, len;
+    __atom_size pack_in_pipe;
     struct __xipaddr addr;
     void *usercontext;
     xmsger_ptr msger;
@@ -132,9 +133,7 @@ struct xmsger {
     xmsgercb_ptr callback;
     xpipe_ptr mpipe, rpipe;
     __xprocess_ptr mpid, rpid;
-    struct xchannellist send_list, recv_list;
-
-    __atom_size rpack_malloc_count;
+    struct xchannellist send_list, recv_list, recycle_list;
 };
 
 #define __serialbuf_wpos(b)         ((b)->wpos & ((b)->range - 1))
@@ -306,6 +305,8 @@ static inline bool xchannel_recv_message(xchannel_ptr channel)
             if (xpipe_write(channel->msger->rpipe, &channel->recvbuf->buf[index], __sizeof_ptr) != __sizeof_ptr) {
                 return false;
             }
+            // 记录进入 pipe 中还没有被取出的 pack 数量
+            __atom_add(channel->pack_in_pipe, 1);
             // 收到一个完整的消息，需要判断是否需要更新保活
             if (channel->recvbuf->buf[index]->head.range == 1 && channel->worklist == &channel->msger->recv_list){
                 // 判断队列是否有多个成员
@@ -404,6 +405,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
     channel->flushinglist.len = 0;
     channel->flushinglist.head.next = &channel->flushinglist.end;
     channel->flushinglist.end.prev = &channel->flushinglist.head;
+    // 刷新发送队列
     while(__serialbuf_sendable(channel->sendbuf) > 0)
     {
         // 减掉发送缓冲区的数据
@@ -411,9 +413,9 @@ static inline void xchannel_clear(xchannel_ptr channel)
         channel->msger->len -= channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
         channel->sendbuf->spos++;
     }
+    // 释放待确认的消息
     while(__serialbuf_recvable(channel->sendbuf) > 0)
     {
-        // 释放待接收的消息
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
         if (pack->msg != NULL){
             pack->msg->rpos += pack->head.len;
@@ -428,18 +430,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
         channel->sendbuf->rpos++;
     }
 
-    __xlogd("xchannel_clear recvbuf readable: %u\n", __serialbuf_readable(channel->recvbuf));
-    __xlogd("xchannel_clear recv pipe readable %lu\n", xpipe_readable(channel->msger->rpipe));
-    __xlogd("xchannel_clear rpack >>>>>>>--------------------------> %lu\n", channel->msger->rpack_malloc_count);
-
-    while(__serialbuf_readable(channel->recvbuf) > 0)
-    {
-        __xlogd("xchannel_clear recvbuf free\n");
-        // 释放接受缓冲区的数据
-        free(channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)]);
-        channel->recvbuf->rpos++;
-        __atom_sub(channel->msger->rpack_malloc_count, 1);
-    }
     __xlogd("xchannel_clear chnnel len: %lu pos: %lu\n", channel->len, channel->pos);
     __xlogd("xchannel_clear exit\n");
 }
@@ -449,8 +439,14 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free enter\n");
     xchannel_clear(channel);
     __xchannel_dequeue(channel);
-    // 这里收到的包有可能不是连续的，所以不能顺序的清理，如果使用 rpos 就会出现内存泄漏的 BUG
-    for (int i = 0; i < PACK_WINDOW_RANGE; ++i){
+    for (int i = 0; i < 3; ++i){
+        if (channel->streams[i].data != NULL){
+            // TODO 会导致 on_msg_from_peer 中释放内存崩溃
+            free(channel->streams[i].data);
+        }
+    }
+    // 缓冲区里的包有可能不是连续的，所以不能顺序的清理，如果使用 rpos 就会出现内存泄漏的 BUG
+    for (int i = 0; i < channel->recvbuf->range; ++i){
         if (channel->recvbuf->buf[i] != NULL){
             free(channel->recvbuf->buf[i]);
             // 这里要置空，否则重复调用这个函数，会导致崩溃
@@ -459,12 +455,6 @@ static inline void xchannel_free(xchannel_ptr channel)
     }
     free(channel->recvbuf);
     free(channel->sendbuf);
-    for (int i = 0; i < 3; ++i){
-        if (channel->streams[i].data != NULL){
-            // TODO 会导致 on_msg_from_peer 中释放内存崩溃
-            free(channel->streams[i].data);
-        }
-    }
     free(channel);
     __xlogd("xchannel_free exit\n");
 }
@@ -878,13 +868,10 @@ static void* recv_loop(void *ptr)
                     msg->data = NULL;
                 }
             }
-
+            // 从 pipe 中取出一个 pack，计数减一
+            __atom_sub(pack->channel->pack_in_pipe, 1);
             // 这里释放的是接收到的 PACK
             free(pack);
-            
-            __atom_sub(msger->rpack_malloc_count, 1);
-            __xlogd("recv_loop recv pipe readable %lu\n", xpipe_readable(msger->rpipe));
-            __xlogd("recv_loop rpack >>>>>>>--------------------------> %lu\n", msger->rpack_malloc_count);
         }
     }
 
@@ -924,7 +911,6 @@ static void* main_loop(void *ptr)
     xmessage_ptr msg;
     xpack_ptr spack = NULL;
     xpack_ptr rpack = first_pack();
-    __atom_add(msger->rpack_malloc_count, 1);
     // xpack_ptr rpack = (xpack_ptr)malloc(sizeof(struct xpack));
     __xbreak(rpack == NULL);
     rpack->head.len = 0;
@@ -967,7 +953,12 @@ static void* main_loop(void *ptr)
                         __xlogd("xmsger_loop receive BYE\n");
                         __xbreak(!xchannel_recv_pack(channel, &rpack));
                         xtree_take(msger->peers, &channel->cid, 4);
-                        xchannel_free(channel);
+                        if (channel->pack_in_pipe == 0){
+                            xchannel_free(channel);
+                        }else {
+                            __xchannel_dequeue(channel);
+                            __xchannel_enqueue(&msger->recycle_list, channel);
+                        }
                     }
                 }
 
@@ -1120,7 +1111,12 @@ static void* main_loop(void *ptr)
                         channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         // BYE 的 ACK 有可能是默认校验码
                         if (channel && ((rpack->head.key ^ channel->key) == XMSG_VAL || (rpack->head.key ^ XMSG_KEY) == XMSG_VAL)){
-                            xchannel_free(channel);
+                            if (channel->pack_in_pipe == 0){
+                                xchannel_free(channel);
+                            }else {
+                                __xchannel_dequeue(channel);
+                                __xchannel_enqueue(&msger->recycle_list, channel);
+                            }
                             // rpack 接着用
                         }
                     }
@@ -1130,7 +1126,6 @@ static void* main_loop(void *ptr)
             if (rpack == NULL){
                 // rpack = (xpack_ptr)malloc(sizeof(struct xpack));
                 rpack = next_pack();
-                __atom_add(msger->rpack_malloc_count, 1);
                 __xbreak(rpack == NULL);
             }
 
@@ -1285,6 +1280,19 @@ static void* main_loop(void *ptr)
                     break;
                 }
 
+                channel = next_channel;
+            }
+        }
+
+        // 延迟释放连接
+        if (msger->recycle_list.len > 0){
+            channel = msger->recycle_list.head.next;
+            while (channel != &msger->recycle_list.end){
+                next_channel = channel->next;
+                if (channel->pack_in_pipe == 0){
+                    __xchannel_dequeue(channel);
+                    xchannel_free(channel);
+                }
                 channel = next_channel;
             }
         }
@@ -1479,6 +1487,12 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     msger->recv_list.head.next = &msger->recv_list.end;
     msger->recv_list.end.prev = &msger->recv_list.head;
 
+    msger->recycle_list.len = 0;
+    msger->recycle_list.head.prev = NULL;
+    msger->recycle_list.end.next = NULL;
+    msger->recycle_list.head.next = &msger->recycle_list.end;
+    msger->recycle_list.end.prev = &msger->recycle_list.head;
+
     msger->cid = __xapi->clock() % UINT16_MAX;
 
     msger->peers = xtree_create();
@@ -1538,7 +1552,6 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->rpipe){
             __xlogd("xmsger_free break rpipe\n");
-            __xlogd("xmsger_free break pipe enter %lu\n", xpipe_readable(msger->rpipe));
             xpipe_break(msger->rpipe);
         }
 
@@ -1569,7 +1582,7 @@ void xmsger_free(xmsger_ptr *pptr)
         }
 
         if (msger->mpipe){
-            __xlogd("xmsger_free msg pipe\n");
+            __xlogd("xmsger_free msg pipe: %lu\n", xpipe_readable(msger->mpipe));
             while (xpipe_readable(msger->mpipe) > 0){
                 xmessage_ptr msg;
                 xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
@@ -1584,20 +1597,16 @@ void xmsger_free(xmsger_ptr *pptr)
         }
 
         if (msger->rpipe){
-            __xlogd("xmsger_free recv pipe enter %lu\n", xpipe_readable(msger->rpipe));
+            __xlogd("xmsger_free recv pipe: %lu\n", xpipe_readable(msger->rpipe));
             while (xpipe_readable(msger->rpipe) > 0){
                 xpack_ptr pack;
                 xpipe_read(msger->rpipe, &pack, __sizeof_ptr);
                 if (pack){
-                    __atom_sub(msger->rpack_malloc_count, 1);
                     free(pack);
                 }
             }
-            __xlogd("xmsger_free recv pipe exit %lu\n", xpipe_readable(msger->rpipe));
             xpipe_free(&msger->rpipe);
         }
-
-        __xlogd("xmsger_free clear >>>>>>>--------------------------> %lu\n", msger->rpack_malloc_count);
 
         if (msger->mtx){
             __xlogd("xmsger_free mutex\n");
