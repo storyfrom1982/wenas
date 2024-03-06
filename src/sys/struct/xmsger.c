@@ -928,6 +928,8 @@ static void* main_loop(void *ptr)
 
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
 
+                        __xlogd("xmsger_loop receive HELLO NEW\n");
+
                         // 这里收到的是对方发起的 HELLO
                         uint32_t peer_cid = *((uint32_t*)(rpack->body));
                         uint64_t peer_tid = *((uint64_t*)(rpack->body + 4));
@@ -966,6 +968,8 @@ static void* main_loop(void *ptr)
 
                         }else { // 这里是对穿的 HELLO
 
+                            __xlogd("xmsger_loop receive HELLO PUCHING\n");
+
                             // 对端会一直发重复送这个 HELLO，直到收到一个 ACK 为止
 
                             // 设置 peer cid 和校验码
@@ -994,6 +998,8 @@ static void* main_loop(void *ptr)
                         }
 
                     } else {
+
+                        __xlogd("xmsger_loop receive HELLO RESULT\n");
 
                         // 这里收到的是对方回复的 HELLO
 
