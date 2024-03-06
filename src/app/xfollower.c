@@ -35,9 +35,6 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xfollower_ptr server = (xfollower_ptr)listener->ctx;
     xtasklist_ptr task = xchannel_context(channel);
-    task->prev = task;
-    task->next = task;
-    task->channel = channel;
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
