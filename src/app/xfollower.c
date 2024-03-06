@@ -43,9 +43,9 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xfollower_ptr server = (xfollower_ptr)listener->ctx;
     xtasklist_ptr task = xchannel_context(channel);
-    task->prev = task;
-    task->next = task;
-    task->channel = channel;
+    if (task){
+
+    }
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
