@@ -37,9 +37,6 @@ typedef struct xhead {
     uint8_t sid; // 多路复用的流 ID
     uint16_t range; // 一个消息的分包数量，从 1 到 range
     uint16_t len; // 当前分包装载的数据长度
-    // TODO 多个 peer cid 会发生冲突，使用 本地 cid 与 peer cid 拼接出一个唯一 cid
-    // uint32_t rcid;
-    // uint32_t lcid;
     uint32_t cid; // 连接通道 ID
 }*xhead_ptr;
 
@@ -303,7 +300,7 @@ static inline bool xchannel_recv_message(xchannel_ptr channel)
 {
     if (__serialbuf_readable(channel->recvbuf) > 0){
         uint8_t index = __serialbuf_rpos(channel->recvbuf);
-        while (channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)] != NULL)
+        while (channel->recvbuf->buf[index] != NULL)
         {
             // 交给接收线程来处理 pack
             if (xpipe_write(channel->msger->rpipe, &channel->recvbuf->buf[index], __sizeof_ptr) != __sizeof_ptr) {
@@ -430,8 +427,14 @@ static inline void xchannel_clear(xchannel_ptr channel)
         // 更新读下标，否则会不可写入
         channel->sendbuf->rpos++;
     }
+
+    __xlogd("xchannel_clear recvbuf readable: %u\n", __serialbuf_readable(channel->recvbuf));
+    __xlogd("xchannel_clear recv pipe readable %lu\n", xpipe_readable(channel->msger->rpipe));
+    __xlogd("xchannel_clear rpack >>>>>>>--------------------------> %lu\n", channel->msger->rpack_malloc_count);
+
     while(__serialbuf_readable(channel->recvbuf) > 0)
     {
+        __xlogd("xchannel_clear recvbuf free\n");
         // 释放接受缓冲区的数据
         free(channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)]);
         channel->recvbuf->rpos++;
@@ -446,10 +449,19 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free enter\n");
     xchannel_clear(channel);
     __xchannel_dequeue(channel);
+    // 这里收到的包有可能不是连续的，所以不能顺序的清理，如果使用 rpos 就会出现内存泄漏的 BUG
+    for (int i = 0; i < PACK_WINDOW_RANGE; ++i){
+        if (channel->recvbuf->buf[i] != NULL){
+            free(channel->recvbuf->buf[i]);
+            // 这里要置空，否则重复调用这个函数，会导致崩溃
+            channel->recvbuf->buf[i] = NULL;
+        }
+    }
     free(channel->recvbuf);
     free(channel->sendbuf);
     for (int i = 0; i < 3; ++i){
         if (channel->streams[i].data != NULL){
+            // TODO 会导致 on_msg_from_peer 中释放内存崩溃
             free(channel->streams[i].data);
         }
     }
@@ -871,6 +883,8 @@ static void* recv_loop(void *ptr)
             free(pack);
             
             __atom_sub(msger->rpack_malloc_count, 1);
+            __xlogd("recv_loop recv pipe readable %lu\n", xpipe_readable(msger->rpipe));
+            __xlogd("recv_loop rpack >>>>>>>--------------------------> %lu\n", msger->rpack_malloc_count);
         }
     }
 
@@ -1058,7 +1072,7 @@ static void* main_loop(void *ptr)
 
                             channel->connected = true;
                             msger->callback->on_channel_to_peer(msger->callback, channel);
-                            
+
                             // 排序接收缓冲区，更新写索引
                             __xbreak(!xchannel_recv_pack(channel, &rpack));
                         }
