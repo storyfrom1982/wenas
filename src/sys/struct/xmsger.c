@@ -392,30 +392,47 @@ static inline void xchannel_clear(xchannel_ptr channel)
     while (channel->send_ptr != NULL)
     {
         next = channel->send_ptr->next;
-        channel->len -= channel->send_ptr->len;
-        channel->msger->len -= channel->send_ptr->len;
+        // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 wpos
+        channel->len -= channel->send_ptr->len - channel->send_ptr->wpos;
+        channel->msger->len -= channel->send_ptr->len - channel->send_ptr->wpos;
         if (channel->send_ptr->type == XMSG_PACK_MSG){
             free(channel->send_ptr->data);
         }
         free(channel->send_ptr);
         channel->send_ptr = next;
     }
+    // 清空冲洗队列
+    channel->flushinglist.len = 0;
+    channel->flushinglist.head.next = &channel->flushinglist.end;
+    channel->flushinglist.end.prev = &channel->flushinglist.head;
     while(__serialbuf_sendable(channel->sendbuf) > 0)
     {
+        // 减掉发送缓冲区的数据
         channel->len -=  channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
         channel->msger->len -= channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
         channel->sendbuf->spos++;
     }
     while(__serialbuf_recvable(channel->sendbuf) > 0)
     {
+        // 释放待接收的消息
+        xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
+        pack->msg->rpos = pack->head.len;
+        if (pack->msg->rpos == pack->msg->len){
+            if (pack->msg->type == XMSG_PACK_MSG){
+                free(pack->msg->data);
+            }
+            free(pack->msg);
+        }
+        // 更新读下标，否则会不可写入
         channel->sendbuf->rpos++;
     }
     while(__serialbuf_readable(channel->recvbuf) > 0)
     {
+        // 释放接受缓冲区的数据
         free(channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)]);
         channel->recvbuf->rpos++;
     }
-    channel->flushinglist.len = 0;
+    __xlogd("xchannel_clear chnnel len: %lu pos: %lu\n", channel->len, channel->pos);
     __xlogd("xchannel_clear exit\n");
 }
 

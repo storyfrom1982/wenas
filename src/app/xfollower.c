@@ -216,6 +216,8 @@ int main(int argc, char *argv[])
     }
     
     xmsger_free(&server->msger);
+
+    free(server->tasks);
     
     free(server);
 
