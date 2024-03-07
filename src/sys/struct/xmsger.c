@@ -976,10 +976,10 @@ static void* main_loop(void *ptr)
                         __xbreak(!xchannel_recv_pack(channel, &rpack));
                         xtree_take(msger->peers, &channel->cid, 4);
                         if (channel->pack_in_pipe == 0){
-                            __xlogd("xmsger_loop CONNECTED ACK BEY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
+                            __xlogd("xmsger_loop CONNECTED RECV BEY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                             xchannel_free(channel);
                         }else {
-                            __xlogd("xmsger_loop CONNECTED ACK BEY DELAY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
+                            __xlogd("xmsger_loop CONNECTED RECV BEY DELAY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                             __xchannel_dequeue(channel);
                             __xchannel_enqueue(&msger->recycle_list, channel);
                         }
@@ -1108,7 +1108,8 @@ static void* main_loop(void *ptr)
                         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
                     }
 
-                }else if (rpack->head.type == XMSG_PACK_ACK){
+                }else if (rpack->head.type == XMSG_PACK_ACK // 单独的 ACK
+                            || rpack->head.flag != XMSG_PACK_ACK){ // 消息携带的 ACK
                     
                     __xlogd("xmsger_loop CONNECTING ACK\n");
 
