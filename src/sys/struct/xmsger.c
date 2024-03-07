@@ -615,15 +615,16 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                         pack->head.resend = 1;
                         // 同一个包入队两次会造成死循环的 BUG
                         if (!pack->is_flushing){
-                            // 将待重传的包设置为冲洗状态
-                            pack->is_flushing = true;
-                            pack->next = &channel->flushinglist.end;
-                            pack->prev = channel->flushinglist.end.prev;
-                            pack->next->prev = pack;
-                            pack->prev->next = pack;
-                            channel->flushinglist.len ++;
                             // 设置重传时间点
                             pack->timer = __xapi->clock() + ((uint8_t)(channel->sendbuf->spos - index)) * channel->back_delay;
+
+                            // 将待重传的包设置为冲洗状态
+                            pack->is_flushing = true;
+                            pack->prev = &channel->flushinglist.head;
+                            pack->next = channel->flushinglist.head.next;
+                            pack->prev->next = pack;
+                            pack->next->prev = pack;
+                            channel->flushinglist.len ++;
                         }
                         
                         __xlogd("xchannel_serial_read >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, pack->head.sn);
