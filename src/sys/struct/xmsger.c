@@ -1316,6 +1316,7 @@ static void* main_loop(void *ptr)
             channel = msger->recycle_list.head.next;
             while (channel != &msger->recycle_list.end){
                 next_channel = channel->next;
+                __xlogd("main_loop >>>>-----> recycle list len: %lu\n", msger->recycle_list.len);
                 if (channel->pack_in_pipe == 0){
                     __xchannel_dequeue(channel);
                     xchannel_free(channel);
@@ -1642,6 +1643,20 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->sock > 0){
             __xapi->udp_close(msger->sock);
+        }
+
+        // 延迟释放连接
+        __xlogd("main_loop >>>>-----> recycle list len: %lu\n", msger->recycle_list.len);
+        if (msger->recycle_list.len > 0){
+            xchannel_ptr channel = msger->recycle_list.head.next;
+            while (channel != &msger->recycle_list.end){
+                xchannel_ptr next_channel = channel->next;
+                if (channel->pack_in_pipe == 0){
+                    __xchannel_dequeue(channel);
+                    xchannel_free(channel);
+                }
+                channel = next_channel;
+            }
         }
 
         free(msger);
