@@ -570,11 +570,16 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                 // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
             }
 
-            // 判断是否需要保活
-            if (channel->send_ptr == NULL && channel->flushinglist.len == 0 && !channel->ping){
-                // 不需要保活，加入等待超时队列
-                __xchannel_dequeue(channel);
-                __xchannel_enqueue(&channel->msger->recv_list, channel);
+            // 判断是否有未发送的消息
+            if (channel->send_ptr == NULL){
+                // 判断是否有待重传的包，再判断是否需要保活
+                if (channel->flushinglist.len == 0 && !channel->ping){
+                    // 不需要保活，加入等待超时队列
+                    __xchannel_dequeue(channel);
+                    __xchannel_enqueue(&channel->msger->recv_list, channel);
+                }
+            }else {
+                xchannel_serial_write(channel);
             }
 
         } else {
@@ -1207,12 +1212,11 @@ static void* main_loop(void *ptr)
             {
                 next_channel = channel->next;
 
-                if (channel->pos != channel->len && __serialbuf_sendable(channel->sendbuf) == 0){
-                    xchannel_serial_write(channel);
-                }
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
-                xchannel_send_pack(channel, &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)]);
+                if (__serialbuf_sendable(channel->sendbuf) > 0){
+                    xchannel_send_pack(channel, &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)]);
+                }
 
                 if (channel->flushinglist.len > 0){
 
