@@ -580,7 +580,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
 
         // 这里曾经使用 do while 方式，造成了收到重复的 ACK，导致 rpos 越界的 BUG
         // 连续的 acks 必须至少比 rpos 大 1
-        while (channel->sendbuf->rpos != rpack->head.ack) {
+        while (channel->sendbuf->rpos != rpack->head.acks) {
 
             pack = &channel->sendbuf->buf[index];
 
@@ -739,7 +739,8 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    if (channel->pos != channel->len){
+    // 判断是否有待发送数据和发送缓冲区是否可以写入
+    if (channel->pos != channel->len && __serialbuf_writable(channel->sendbuf) > 0){
         // 与要发送的包一起发送
         xchannel_send_pack(channel);
 
