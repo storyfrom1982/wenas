@@ -1103,7 +1103,7 @@ static void* main_loop(void *ptr)
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
 
-                    __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV BYE: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
+                    __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV BYE: SN(%u)\n", rpack->head.cid, 0, rpack->head.sn);
                     // 接收方使用（对端 ip + 对端 cid）作为索引，所以不用设置 cid，因为对方发送的使用就设置成了对端 cid
                     rpack->head.type = XMSG_PACK_ACK;
                     rpack->head.flag = rpack->head.type;
