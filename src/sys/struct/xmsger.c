@@ -1225,8 +1225,6 @@ static void* main_loop(void *ptr)
                                 timer = delay;
                             }
 
-                            __xlogd("xmsger_loop >>>>------------------------> flusing timer: %lu\n", timer);
-
                         }else {
 
                             if (spack->head.resend > channel->sendbuf->range){

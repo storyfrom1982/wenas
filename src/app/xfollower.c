@@ -74,7 +74,9 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
             xmsger_send_message(server->msger, channel, builder.head, builder.wpos);
         }
     }else if(mcompare(cmd, "RES", 3) == 0){
+        server->tasks->pos++;
         xline_printf(msg);
+        __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
     }
     free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -155,6 +157,7 @@ static void make_message_task(xfollower_ptr server)
         struct xmaker maker = xmaker_build(1024);
         build_msg(&maker);
         xline_add_word(&maker, "msg", "UPDATE");
+        server->tasks->len ++;
         xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
     }
 }
