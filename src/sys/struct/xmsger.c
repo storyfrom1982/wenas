@@ -394,7 +394,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
             msger->cid = 1;
         }
     }
+
     channel->cid = msger->cid;
+    msger->cid++;
     channel->key = msger->cid % 255;
     // 未建立连接前，使用默认 cid 和默认 key
     channel->peer_cid = 0;
@@ -1069,6 +1071,7 @@ static void* main_loop(void *ptr)
                             // 读取连接ID和校验码
                             uint32_t peer_cid = *((uint32_t*)(rpack->body));
                             uint32_t window = *((uint32_t*)(rpack->body + 4));
+                            __xlogd("xmsger_loop CONNECTING HELLO RESULT channel(%u) from(%u)\n", channel->cid, peer_cid);
                             // 设置连接校验码
                             channel->window = window;
                             channel->peer_cid = peer_cid;
@@ -1174,7 +1177,7 @@ static void* main_loop(void *ptr)
                 }else {
 
                     if (msg->channel != NULL){
-                        __xlogd("xmsger_loop >>>>-------------> free channel(%u)\n", channel->cid);
+                        __xlogd("xmsger_loop >>>>-------------> free channel(%u)\n", msg->channel->cid);
                         __xbreak(xtree_take(msg->channel->msger->peers, &msg->channel->cid, 4) == NULL);
                         __xbreak(xtree_save(msg->channel->msger->peers, &msg->channel->addr.port, msg->channel->addr.keylen, msg->channel) == NULL);
                         xchannel_clear(msg->channel);
