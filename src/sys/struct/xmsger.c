@@ -395,9 +395,12 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
         }
     }
 
+    // 设置连接 cid
     channel->cid = msger->cid;
+    // 设置本地的校验码
+    channel->key = channel->cid % 255;
+    // 更新全局 cid
     msger->cid++;
-    channel->key = msger->cid % 255;
     // 未建立连接前，使用默认 cid 和默认 key
     channel->peer_cid = 0;
     channel->peer_key = XMSG_KEY;
