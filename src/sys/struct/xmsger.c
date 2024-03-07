@@ -703,8 +703,6 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
         // __xlogd("xchannel_serial_read >>>>-----------> (%u) OUT OF RANGE: %u\n", channel->peer_cid, rpack->head.sn);
 
     }
-
-    xchannel_send_pack(channel);
 }
 
 static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type)
@@ -945,8 +943,6 @@ static void* main_loop(void *ptr)
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
-
-            __xlogd("RECV (%u) >>>>--------> (0) RECV TYPE(%u) SN(%u)\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
 
             channel = (xchannel_ptr)xtree_find(msger->peers, &rpack->head.cid, 4);
 
