@@ -210,6 +210,46 @@ static inline xmessage_ptr new_message(xchannel_ptr channel, uint8_t type, uint8
     return msg;
 }
 
+static inline void xchannel_serial_write(xchannel_ptr channel)
+{
+    xmessage_ptr msg = channel->send_ptr;
+
+    // 每次只缓冲一个包，尽量使发送速度均匀
+    if (msg != NULL && __serialbuf_writable(channel->sendbuf) > 0){
+
+        xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
+        pack->msg = msg;
+        if (msg->len - msg->wpos < PACK_BODY_SIZE){
+            pack->head.len = msg->len - msg->wpos;
+        }else{
+            pack->head.len = PACK_BODY_SIZE;
+        }
+
+        pack->head.type = msg->type;
+        pack->head.sid = msg->sid;
+        pack->head.range = msg->range;
+        mcopy(pack->body, msg->data + msg->wpos, pack->head.len);
+        msg->wpos += pack->head.len;
+        msg->range --;
+
+        pack->channel = channel;
+        pack->is_flushing = false;
+        pack->head.resend = 0;
+        pack->head.flag = 0;
+        pack->head.cid = channel->peer_cid;
+        pack->head.key = (XMSG_VAL ^ channel->peer_key);
+        pack->head.sn = channel->sendbuf->wpos;
+        __atom_add(channel->sendbuf->wpos, 1);
+
+        // 判断消息是否全部写入缓冲区
+        if (msg->wpos == msg->len){
+            // 更新当前消息
+            channel->send_ptr = channel->send_ptr->next;
+            msg = channel->send_ptr;
+        }
+    }
+}
+
 static inline void xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
 {    
     // 更新待发送计数
@@ -293,6 +333,8 @@ static inline void xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
         __xchannel_dequeue(channel);
         __xchannel_enqueue(&channel->msger->send_list, channel);
     }
+
+    xchannel_serial_write(channel);
 }
 
 static inline bool xchannel_recv_message(xchannel_ptr channel)
@@ -637,46 +679,6 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type)
     }
 }
 
-static inline void xchannel_serial_write(xchannel_ptr channel)
-{
-    xmessage_ptr msg = channel->send_ptr;
-
-    // 每次只缓冲一个包，尽量使发送速度均匀
-    if (msg != NULL && __serialbuf_writable(channel->sendbuf) > 0){
-
-        xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
-        pack->msg = msg;
-        if (msg->len - msg->wpos < PACK_BODY_SIZE){
-            pack->head.len = msg->len - msg->wpos;
-        }else{
-            pack->head.len = PACK_BODY_SIZE;
-        }
-
-        pack->head.type = msg->type;
-        pack->head.sid = msg->sid;
-        pack->head.range = msg->range;
-        mcopy(pack->body, msg->data + msg->wpos, pack->head.len);
-        msg->wpos += pack->head.len;
-        msg->range --;
-
-        pack->channel = channel;
-        pack->is_flushing = false;
-        pack->head.resend = 0;
-        pack->head.flag = 0;
-        pack->head.cid = channel->peer_cid;
-        pack->head.key = (XMSG_VAL ^ channel->peer_key);
-        pack->head.sn = channel->sendbuf->wpos;
-        __atom_add(channel->sendbuf->wpos, 1);
-
-        // 判断消息是否全部写入缓冲区
-        if (msg->wpos == msg->len){
-            // 更新当前消息
-            channel->send_ptr = channel->send_ptr->next;
-            msg = channel->send_ptr;
-        }
-    }
-}
-
 static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
 {
     // 判断发送是否成功
@@ -709,6 +711,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel, xpack_ptr pack)
             pack->prev->next = pack;
             channel->flushinglist.len ++;
         }
+
+        xchannel_serial_write(channel);
 
     }else {
         
@@ -1198,9 +1202,9 @@ static void* main_loop(void *ptr)
             {
                 next_channel = channel->next;
 
-                if (channel->pos != channel->len){
-                    xchannel_serial_write(channel);
-                }
+                // if (channel->pos != channel->len){
+                //     xchannel_serial_write(channel);
+                // }
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
                 if (__serialbuf_sendable(channel->sendbuf) > 0){
