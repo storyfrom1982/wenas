@@ -568,7 +568,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
             }
 
             // 判断是否需要保活
-            if (channel->send_ptr == NULL && !channel->ping){
+            if (channel->send_ptr == NULL && channel->flushinglist.len == 0 && !channel->ping){
                 // 不需要保活，加入等待超时队列
                 __xchannel_dequeue(channel);
                 __xchannel_enqueue(&channel->msger->recv_list, channel);
@@ -1214,8 +1214,6 @@ static void* main_loop(void *ptr)
 
                 if (channel->flushinglist.len > 0){
 
-                    // __xlogd("xmsger_loop >>>>------------------------> flusing enter\n");
-
                     spack = channel->flushinglist.head.next;
 
                     while (spack != &channel->flushinglist.end)
@@ -1226,6 +1224,8 @@ static void* main_loop(void *ptr)
                                 // 超时时间更近，更新休息时间
                                 timer = delay;
                             }
+
+                            __xlogd("xmsger_loop >>>>------------------------> flusing timer: %lu\n", timer);
 
                         }else {
 
