@@ -157,7 +157,8 @@ static void make_message_task(xfollower_ptr server)
         struct xmaker maker = xmaker_build(1024);
         build_msg(&maker);
         xline_add_word(&maker, "msg", "UPDATE");
-        server->tasks->len ++;
+        server->tasks->len++;
+        xline_add_uint(&maker, "count", server->tasks->len);
         xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
     }
 }
