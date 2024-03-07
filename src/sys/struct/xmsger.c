@@ -735,7 +735,12 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
         pack->head.ack = head->ack;
         pack->head.acks = head->acks;
         __xlogd("xchannel_send_ack flushing >>>>-------------------------------> (%u) MSG: %u ACK: %u ACKS: %u\n", channel->peer_cid, pack->head.sn, pack->head.ack, pack->head.acks);
-        xchannel_send_pack(channel, pack);
+        if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&pack->head, pack->head.len + PACK_HEAD_SIZE)) == pack->head.len + PACK_HEAD_SIZE){
+            channel->msger->writable = true;
+        }else {
+            __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
+            channel->msger->writable = false;
+        }
 
     }else {
         // 单独发送 ACK
