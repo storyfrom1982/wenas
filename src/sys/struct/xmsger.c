@@ -728,7 +728,17 @@ static inline void xchannel_send_ack(xchannel_ptr channel, xhead_ptr head)
         __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) MSG: %u ACK: %u ACKS: %u\n", channel->peer_cid, pack->head.sn, pack->head.ack, pack->head.acks);
         xchannel_send_pack(channel, pack);
 
+    }else if(channel->flushinglist.len > 0){
+        // 取出当前的冲洗 pack
+        xpack_ptr pack = channel->flushinglist.head.next;
+        pack->head.flag = head->flag;
+        pack->head.ack = head->ack;
+        pack->head.acks = head->acks;
+        __xlogd("xchannel_send_ack flushing >>>>-------------------------------> (%u) MSG: %u ACK: %u ACKS: %u\n", channel->peer_cid, pack->head.sn, pack->head.ack, pack->head.acks);
+        xchannel_send_pack(channel, pack);
+
     }else {
+        // 单独发送 ACK
         __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->peer_cid, head->ack, head->acks);
         if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)head, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
             channel->msger->writable = true;
