@@ -985,11 +985,9 @@ static void* main_loop(void *ptr)
 
                 if (rpack->head.type == XMSG_PACK_HELLO){
 
-                    __xlogd("xmsger_loop receive HELLO\n");
+                    __xlogd("xmsger_loop CONNECTING HELLO\n");
 
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
-
-                        __xlogd("xmsger_loop receive HELLO NEW\n");
 
                         // 这里收到的是对方发起的 HELLO
                         uint32_t peer_cid = *((uint32_t*)(rpack->body));
@@ -1005,6 +1003,7 @@ static void* main_loop(void *ptr)
                             // 创建连接
                             channel = xchannel_create(msger, &addr, false);
                             __xbreak(channel == NULL);
+                            __xlogd("xmsger_loop CONNECTING HELLO new channel(%u) from(%u)\n",  channel->cid, peer_cid);
 
                             // 设置 peer cid
                             // 虽然已经设置了对端的 cid，但是对端无法通过 cid 索引到 channel，因为这时还是 addr 作为索引
@@ -1022,7 +1021,7 @@ static void* main_loop(void *ptr)
 
                         }else {
 
-                            __xlogd("xmsger_loop receive HELLO cid: %u peer cid: %u\n", channel->peer_cid, peer_cid);
+                            __xlogd("xmsger_loop CONNECTING HELLO old channel(%u:%u) from(%u)\n", channel->cid, channel->peer_cid, peer_cid);
 
                             // 对端会一直发重复送这个 HELLO，直到收到一个 ACK 为止
 
@@ -1058,7 +1057,7 @@ static void* main_loop(void *ptr)
 
                     } else {
 
-                        __xlogd("xmsger_loop receive HELLO RESULT\n");
+                        __xlogd("xmsger_loop CONNECTING HELLO RESULT\n");
 
                         // 这里收到的是对方回复的 HELLO
 
@@ -1089,7 +1088,7 @@ static void* main_loop(void *ptr)
 
                 }else if (rpack->head.type == XMSG_PACK_BYE){
 
-                    __xlogd("xmsger_loop receive BYE\n");
+                    __xlogd("xmsger_loop CONNECTING BYE\n");
                     // 连接已经释放了，现在用默认的校验码
                     rpack->head.cid = 0;
                     rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
@@ -1103,7 +1102,7 @@ static void* main_loop(void *ptr)
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
                     
-                    __xlogd("xmsger_loop receive ACK\n");
+                    __xlogd("xmsger_loop CONNECTING ACK\n");
 
                     if (rpack->head.flag == XMSG_PACK_HELLO){
 
@@ -1121,7 +1120,7 @@ static void* main_loop(void *ptr)
 
                     }else if (rpack->head.flag == XMSG_PACK_BYE){
 
-                        __xlogd("xmsger_loop receive ACK BEY\n");
+                        __xlogd("xmsger_loop CONNECTING ACK BEY\n");
                         channel = (xchannel_ptr)xtree_take(msger->peers, &addr.port, addr.keylen);
                         // BYE 的 ACK 有可能是默认校验码
                         if (channel && ((rpack->head.key ^ channel->key) == XMSG_VAL || (rpack->head.key ^ XMSG_KEY) == XMSG_VAL)){
@@ -1164,9 +1163,9 @@ static void* main_loop(void *ptr)
 
                 if (msg->type == XMSG_PACK_HELLO){
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel to peer\n");
                     channel = xchannel_create(msger, (__xipaddr_ptr)msg->data, true);
                     __xbreak(channel == NULL);
+                    __xlogd("xmsger_loop >>>>-------------> create channel(%u) to peer\n", channel->cid);
                     channel->usercontext = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
                     // 建立连接时，先用 IP 作为本地索引，在收到 PONG 时，换成 cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, channel->addr.keylen, channel);
@@ -1175,6 +1174,7 @@ static void* main_loop(void *ptr)
                 }else {
 
                     if (msg->channel != NULL){
+                        __xlogd("xmsger_loop >>>>-------------> free channel(%u)\n", channel->cid);
                         __xbreak(xtree_take(msg->channel->msger->peers, &msg->channel->cid, 4) == NULL);
                         __xbreak(xtree_save(msg->channel->msger->peers, &msg->channel->addr.port, msg->channel->addr.keylen, msg->channel) == NULL);
                         xchannel_clear(msg->channel);
