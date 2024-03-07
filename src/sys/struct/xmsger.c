@@ -207,6 +207,8 @@ static inline xmessage_ptr new_message(xchannel_ptr channel, uint8_t type, uint8
         msg->range ++;
     }
 
+    __xlogd("new_message >>>>-------------------> range: %u\n", msg->range);
+
     return msg;
 }
 
@@ -343,6 +345,7 @@ static inline bool xchannel_recv_message(xchannel_ptr channel)
         uint8_t index = __serialbuf_rpos(channel->recvbuf);
         while (channel->recvbuf->buf[index] != NULL)
         {
+            __xlogd("xchannel_recv_message range: %u\n", channel->recvbuf->buf[index]->head.range);
             // 交给接收线程来处理 pack
             if (xpipe_write(channel->msger->rpipe, &channel->recvbuf->buf[index], __sizeof_ptr) != __sizeof_ptr) {
                 return false;
@@ -793,7 +796,7 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         // 如果提前到达的 PACK 需要更新
         while (channel->recvbuf->buf[__serialbuf_wpos(channel->recvbuf)] != NULL 
                 // 判断缓冲区是否正好填满，避免首位相连造成死循环的 BUG
-                && channel->recvbuf->buf[__serialbuf_wpos(channel->recvbuf)] != pack)
+                && __serialbuf_writable(channel->recvbuf) > 0)
         {
             channel->recvbuf->wpos++;
             // 这里需要更新将要回复的最大连续 ACK
@@ -883,6 +886,7 @@ static void* recv_loop(void *ptr)
                 mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
                 msg->wpos += pack->head.len;
                 msg->range--;
+                __xlogd("recv_loop mssage range: %u\n", msg->range);
                 if (msg->range == 0){
                     msger->callback->on_msg_from_peer(msger->callback, pack->channel, msg->data, msg->wpos);
                     msg->data = NULL;
@@ -1203,14 +1207,12 @@ static void* main_loop(void *ptr)
             {
                 next_channel = channel->next;
 
-                // if (channel->pos != channel->len){
-                //     xchannel_serial_write(channel);
-                // }
+                if (channel->pos != channel->len && __serialbuf_sendable(channel->sendbuf) == 0){
+                    xchannel_serial_write(channel);
+                }
                 // TODO 如能能更平滑的发送，这里是否要循环发送，知道清空缓冲区？
                 // 判断缓冲区中是否有可发送 pack
-                if (__serialbuf_sendable(channel->sendbuf) > 0){
-                    xchannel_send_pack(channel, &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)]);
-                }
+                xchannel_send_pack(channel, &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)]);
 
                 if (channel->flushinglist.len > 0){
 
