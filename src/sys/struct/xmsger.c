@@ -976,8 +976,10 @@ static void* main_loop(void *ptr)
                         __xbreak(!xchannel_recv_pack(channel, &rpack));
                         xtree_take(msger->peers, &channel->cid, 4);
                         if (channel->pack_in_pipe == 0){
+                            __xlogd("xmsger_loop CONNECTED ACK BEY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                             xchannel_free(channel);
                         }else {
+                            __xlogd("xmsger_loop CONNECTED ACK BEY DELAY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                             __xchannel_dequeue(channel);
                             __xchannel_enqueue(&msger->recycle_list, channel);
                         }
@@ -1131,8 +1133,10 @@ static void* main_loop(void *ptr)
                         // BYE 的 ACK 有可能是默认校验码
                         if (channel && ((rpack->head.key ^ channel->key) == XMSG_VAL || (rpack->head.key ^ XMSG_KEY) == XMSG_VAL)){
                             if (channel->pack_in_pipe == 0){
+                                __xlogd("xmsger_loop CONNECTING ACK BEY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                                 xchannel_free(channel);
                             }else {
+                                __xlogd("xmsger_loop CONNECTING ACK BEY DELAY FREE channel(%u) from(%u)\n", channel->cid, channel->peer_cid);
                                 __xchannel_dequeue(channel);
                                 __xchannel_enqueue(&msger->recycle_list, channel);
                             }
