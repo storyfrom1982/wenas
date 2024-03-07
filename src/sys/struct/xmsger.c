@@ -982,6 +982,9 @@ static void* main_loop(void *ptr)
                         rpack->head.ack = rpack->head.acks;
                         // 使用默认的校验码
                         rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
+                        // 要设置包长度，对方要校验长度
+                        rpack->head.len = 0;
+                        rpack->head.range = 1;
                         if (__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
                             __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
                         }
@@ -1114,6 +1117,9 @@ static void* main_loop(void *ptr)
                     rpack->head.ack = rpack->head.acks;
                     // 连接已经释放了，现在用默认的校验码
                     rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
+                    // 要设置包长度，对方要校验长度
+                    rpack->head.len = 0;
+                    rpack->head.range = 1;
                     if (__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
                         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
                     }
@@ -1151,11 +1157,11 @@ static void* main_loop(void *ptr)
                         }
 
                     }else {
-                        __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV UNKNOWN: FLAG(%u)\n", channel->peer_cid, channel->cid, rpack->head.flag);
+                        __xlogd("CONNECTING (%u) >>>>--------> (0) RECV UNKNOWN: FLAG(%u)\n", rpack->head.cid, rpack->head.flag);
                     }
 
                 }else {
-                    __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV UNKNOWN: TYPE(%u)\n", channel->peer_cid, channel->cid, rpack->head.type);
+                    __xlogd("CONNECTING (%u) >>>>--------> (0) RECV UNKNOWN: TYPE(%u)\n", rpack->head.cid, rpack->head.type);
                 }
             }
 
