@@ -946,6 +946,8 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
+            __xlogd("RECV (%u) >>>>--------> (0) RECV TYPE(%u) SN(%u)\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
+
             channel = (xchannel_ptr)xtree_find(msger->peers, &rpack->head.cid, 4);
 
             if (channel){
@@ -980,7 +982,7 @@ static void* main_loop(void *ptr)
                         rpack->head.ack = rpack->head.acks;
                         // 使用默认的校验码
                         rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
-                        if ((__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE)) != PACK_HEAD_SIZE){
+                        if (__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
                             __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
                         }
                         xtree_take(msger->peers, &channel->cid, 4);
@@ -1112,7 +1114,7 @@ static void* main_loop(void *ptr)
                     rpack->head.ack = rpack->head.acks;
                     // 连接已经释放了，现在用默认的校验码
                     rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
-                    if ((__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE)) != PACK_HEAD_SIZE){
+                    if (__xapi->udp_sendto(msger->sock, &addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
                         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
                     }
 
