@@ -1174,11 +1174,6 @@ static void* main_loop(void *ptr)
             rpack->head.len = 0;
         }
 
-        if (__set_false(msger->readable)){
-            // 通知接受线程开始监听 socket
-            __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
-        }
-
         if (xpipe_readable(msger->mpipe) > 0){
             // 连接的发起和开始发送消息，都必须经过这个管道
             __xbreak(xpipe_read(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
@@ -1326,14 +1321,16 @@ static void* main_loop(void *ptr)
                 next_channel = channel->next;
                 __xlogd("main_loop >>>>-----> recycle list len: %lu\n", msger->recycle_list.len);
                 if (channel->pack_in_pipe == 0){
-                    __xchannel_dequeue(channel);
                     xchannel_free(channel);
                 }
                 channel = next_channel;
             }
         }
 
-        // __xlogd("main_loop >>>>-----> pos:%lu=%lu readable: %u listening: %u\n", msger->pos, msger->len, msger->readable, msger->listening);
+        if (__set_false(msger->readable)){
+            // 通知接受线程开始监听 socket
+            __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
+        }
 
         // 判断休眠条件
         // 没有待发送的包
