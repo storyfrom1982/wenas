@@ -687,7 +687,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                             pack->next->prev = pack;
                             channel->flushinglist.len ++;
                         }
-                        
+
                         pack->head.flag = 0;
                         __xlogd("xchannel_serial_read >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) != PACK_HEAD_SIZE + pack->head.len){
@@ -745,25 +745,14 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
         // 与要发送的包一起发送
         xchannel_send_pack(channel);
 
-    }else if(channel->flushinglist.len > 0){
-        // 取出当前的冲洗 pack
-        xpack_ptr pack = channel->flushinglist.head.next;
-        pack->head.flag = channel->ack.flag;
-        pack->head.ack = channel->ack.ack;
-        pack->head.acks = channel->ack.acks;
-        __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) ACK: %u ACKS: %u FLUSH SN: %u\n", channel->peer_cid, pack->head.ack, pack->head.acks, pack->head.sn);
-        if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&pack->head, pack->head.len + PACK_HEAD_SIZE)) != pack->head.len + PACK_HEAD_SIZE){
-            __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
-        }
-        channel->ack.flag = 0;
-
     }else {
         // 单独发送 ACK
         __xlogd("xchannel_send_ack >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->peer_cid, channel->ack.ack, channel->ack.acks);
-        if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) != PACK_HEAD_SIZE){
+        if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+            channel->ack.flag = 0;
+        }else {
             __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
         }
-        channel->ack.flag = 0;
     }
 }
 
