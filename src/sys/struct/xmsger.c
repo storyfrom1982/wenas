@@ -1034,12 +1034,7 @@ static void* main_loop(void *ptr)
 
                             // 对端会一直发重复送这个 HELLO，直到收到一个 ACK 为止
 
-                            if (channel->peer_cid == peer_cid){
-                                __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV HELLO AGAIN: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
-                                // 重传的 HELLO，直接回复 ACK
-                                __xbreak(!xchannel_recv_pack(channel, &rpack));
-
-                            }else { // 这里是对穿的 HELLO
+                            if (channel->peer_cid != peer_cid){ // 这里是对穿的 HELLO
 
                                 // 设置 peer cid 和校验码
                                 channel->window = window;
@@ -1063,6 +1058,10 @@ static void* main_loop(void *ptr)
 
                                 // 各自回复 ACK，通知对端连接建立完成
                                 __xbreak(!xchannel_recv_pack(channel, &rpack));
+
+                            }else {
+                                // 收到了重复建立连接的 HELLO，这里我们什么也不做，因为我们已经回复过了 HELLO，回复的 HELLO 会被重传，直到对方收到
+                                __xlogd("CONNECTING (%u) >>>>--------> (%u) RECV HELLO AGAIN: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
                             }
                         }
 
@@ -1243,7 +1242,11 @@ static void* main_loop(void *ptr)
 
                                 __xlogd("xmsger_loop >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, spack->head.sn);
 
-                                spack->head.flag = 0;
+                                // 判断重传的包是否带有 ACK
+                                if (spack->head.flag != 0){
+                                    // 更新 ACKS
+                                    spack->head.acks = __serialbuf_writable(channel->sendbuf);
+                                }
 
                                 // 判断发送是否成功
                                 if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
