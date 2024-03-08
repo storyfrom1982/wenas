@@ -148,6 +148,7 @@ struct xmsger {
 #define XMSG_KEY    'x'
 #define XMSG_VAL    'X'
 
+// TODO 要判断 next 和 prev 是否为空
 #define __xchannel_enqueue(que, ch) \
     (ch)->next = &((que)->end); \
     (ch)->prev = (que)->end.prev; \
@@ -156,6 +157,7 @@ struct xmsger {
     (ch)->worklist = (que); \
     (que)->len++
 
+// TODO 出队之后，next 和 prev 要置空
 #define __xchannel_dequeue(ch) \
     (ch)->prev->next = (ch)->next; \
     (ch)->next->prev = (ch)->prev; \
