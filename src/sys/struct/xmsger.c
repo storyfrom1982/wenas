@@ -765,11 +765,6 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 {
     xpack_ptr pack = *rpack;
 
-    if (pack->head.flag != XMSG_PACK_ACK){
-        // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-        xchannel_serial_read(channel, pack);
-    }
-
     channel->ack.type = XMSG_PACK_ACK;
     channel->ack.flag = pack->head.type;
 
@@ -779,6 +774,11 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
     if (pack->head.sn == channel->recvbuf->wpos){
 
         // __xlogd("xchannel_recv_pack >>>>-----------> (%u) SERIAL: %u\n", channel->peer_cid, pack->head.sn);
+
+        if (pack->head.flag != 0){
+            // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+            xchannel_serial_read(channel, pack);
+        }
 
         pack->channel = channel;
         // 保存 PACK
@@ -822,6 +822,10 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             // channel->ack.acks = channel->recvbuf->wpos - 1;
             
             if (channel->recvbuf->buf[index] == NULL){
+                if (pack->head.flag != 0){
+                    // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+                    xchannel_serial_read(channel, pack);
+                }
                 pack->channel = channel;
                 // 这个 PACK 首次到达，保存 PACK
                 channel->recvbuf->buf[index] = pack;
