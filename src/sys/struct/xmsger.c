@@ -688,6 +688,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                             channel->flushinglist.len ++;
                         }
                         
+                        pack->head.flag = 0;
                         __xlogd("xchannel_serial_read >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) != PACK_HEAD_SIZE + pack->head.len){
                             __xlogd("xchannel_serial_read >>>>------------------------> SEND FAILED\n");
@@ -1252,6 +1253,8 @@ static void* main_loop(void *ptr)
                             {
 
                                 __xlogd("xmsger_loop >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, spack->head.sn);
+
+                                spack->head.flag = 0;
 
                                 // 判断发送是否成功
                                 if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){

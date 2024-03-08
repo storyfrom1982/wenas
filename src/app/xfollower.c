@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     xfollower_ptr server = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
     __xlogi("server: 0x%X\n", server);
 
-    server->tasks = (xtasklist_ptr)malloc(sizeof(struct xtasklist));
+    server->tasks = (xtasklist_ptr)calloc(1, sizeof(struct xtasklist));
 
     if (argc == 3){
         host = strdup(argv[1]);
