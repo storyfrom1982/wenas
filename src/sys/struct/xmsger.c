@@ -1110,8 +1110,8 @@ static void* main_loop(void *ptr)
 
                     __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV BYE: SN(%u)\n", rpack->head.cid, 0, rpack->head.sn);
                     // 接收方使用（对端 ip + 对端 cid）作为索引，所以不用设置 cid，因为对方发送的使用就设置成了对端 cid
-                    rpack->head.type = XMSG_PACK_ACK;
                     rpack->head.flag = rpack->head.type;
+                    rpack->head.type = XMSG_PACK_ACK;
                     // 设置 acks，通知发送端已经接收了所有包
                     rpack->head.acks = rpack->head.sn + 1;
                     rpack->head.ack = rpack->head.acks;
@@ -1243,13 +1243,12 @@ static void* main_loop(void *ptr)
 
                         }else {
 
-                            // if (spack->head.resend > channel->sendbuf->range){
+                            if (spack->head.resend > channel->sendbuf->range){
 
-                            //     __xlogd("xmsger_loop >>>>----------------------------------------------------------> (%u) SEND TIMEDOUT\n", channel->peer_cid);
-                            //     msger->callback->on_channel_break(msger->callback, channel);
+                                __xlogd("xmsger_loop >>>>----------------------------------------------------------> (%u) SEND TIMEDOUT\n", channel->peer_cid);
+                                msger->callback->on_channel_break(msger->callback, channel);
 
-                            // }else 
-                            {
+                            }else {
 
                                 __xlogd("xmsger_loop >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, spack->head.sn);
 
