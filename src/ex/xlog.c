@@ -283,7 +283,7 @@ void __xlog_debug(const char *fmt, ...)
     n += vsnprintf(text + n, __log_text_end - n, fmt, args);
     va_end (args);
 
-    fprintf(stderr, "%s\n", text);
+    fprintf(stderr, "%s", text);
 }
 
 void __xlog_printf(enum __xlog_level level, const char *file, int line, const char *fmt, ...)
