@@ -688,7 +688,11 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                             channel->flushinglist.len ++;
                         }
 
-                        pack->head.flag = 0;
+                        // 判断重传的包是否带有 ACK
+                        if (pack->head.flag != 0){
+                            // 更新 ACKS
+                            pack->head.acks = __serialbuf_writable(channel->sendbuf);
+                        }
                         __xlogd("xchannel_serial_read >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) != PACK_HEAD_SIZE + pack->head.len){
                             __xlogd("xchannel_serial_read >>>>------------------------> SEND FAILED\n");
