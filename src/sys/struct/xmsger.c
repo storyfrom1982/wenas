@@ -692,8 +692,8 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                         // 判断重传的包是否带有 ACK
                         if (pack->head.flag != 0){
                             // 更新 ACKS
-                            // 是 sendbuf->wpos 而不是 __serialbuf_wpos(channel->sendbuf) 否则会造成接收端缓冲区溢出的 BUG
-                            pack->head.acks = channel->sendbuf->wpos;
+                            // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+                            pack->head.acks = channel->recvbuf->wpos;
                         }
                         __xlogd("xchannel_serial_read >>>>---------------------------------------------------------> (%u) RESEND SN: %u\n", channel->peer_cid, pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) != PACK_HEAD_SIZE + pack->head.len){
@@ -1256,8 +1256,8 @@ static void* main_loop(void *ptr)
                                 // 判断重传的包是否带有 ACK
                                 if (spack->head.flag != 0){
                                     // 更新 ACKS
-                                    // 是 sendbuf->wpos 而不是 __serialbuf_wpos(channel->sendbuf) 否则会造成接收端缓冲区溢出的 BUG
-                                    spack->head.acks = channel->sendbuf->wpos;
+                                    // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+                                    spack->head.acks = channel->recvbuf->wpos;
                                 }
 
                                 // 判断发送是否成功
