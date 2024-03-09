@@ -439,10 +439,28 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
 static inline void xchannel_clear(xchannel_ptr channel)
 {
     __xlogd("xchannel_clear enter\n");
-    xmessage_ptr next;
+    // 先释放待确认的消息，避免发了一半的消息，要是先被释放，更新 rpos 就会导致崩溃的 BUG
+    while(__serialbuf_recvable(channel->sendbuf) > 0)
+    {
+        xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
+        __xlogd("xchannel_clear pack type %u\n", pack->head.type);
+        if (pack->msg != NULL){
+            pack->msg->rpos += pack->head.len;
+            if (pack->msg->rpos == pack->msg->len){
+                if (pack->msg->type == XMSG_PACK_MSG){
+                    free(pack->msg->data);
+                }
+                free(pack->msg);
+            }
+        }
+        // 更新读下标，否则会不可写入
+        channel->sendbuf->rpos++;
+    }
+    
+    // 后释放 send ptr，以免更新 rpos 时崩溃
     while (channel->send_ptr != NULL)
     {
-        next = channel->send_ptr->next;
+        xmessage_ptr next = channel->send_ptr->next;
         // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 wpos
         channel->len -= channel->send_ptr->len - channel->send_ptr->wpos;
         channel->msger->len -= channel->send_ptr->len - channel->send_ptr->wpos;
@@ -463,22 +481,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
         channel->len -=  channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
         channel->msger->len -= channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)].head.len;
         channel->sendbuf->spos++;
-    }
-    // 释放待确认的消息
-    while(__serialbuf_recvable(channel->sendbuf) > 0)
-    {
-        xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-        if (pack->msg != NULL){
-            pack->msg->rpos += pack->head.len;
-            if (pack->msg->rpos == pack->msg->len){
-                if (pack->msg->type == XMSG_PACK_MSG){
-                    free(pack->msg->data);
-                }
-                free(pack->msg);
-            }
-        }
-        // 更新读下标，否则会不可写入
-        channel->sendbuf->rpos++;
     }
 
     __xlogd("xchannel_clear chnnel len: %lu pos: %lu\n", channel->len, channel->pos);
@@ -1030,6 +1032,8 @@ static void* main_loop(void *ptr)
                 remote_id.port = addr.port;
                 remote_id.cid = rpack->head.cid;
 
+                __xlogd("CONNECTION cid(%u) >>>>--------> TYPE(%u) RECV HELLO NEW: SN(%u)\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
+
                 if (rpack->head.type == XMSG_PACK_HELLO){
 
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
@@ -1064,6 +1068,30 @@ static void* main_loop(void *ptr)
                             // 回复 ACK 时，会检测是否有待发送的包，正好将 HELLO 一起发送
                             __xbreak(!xchannel_recv_pack(channel, &rpack));
 
+                        }else {
+                            // 生成的校验码与默认的校验码冲突了
+                            channel = (xchannel_ptr)xtree_take(msger->peers, &remote_id, remote_id_size);
+                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO RESULT: SN(%u) KEY: %u\n", channel->peer_cid, channel->cid, rpack->head.sn, channel->key);
+                            if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
+                                // 连接建立成功，切换到传输模式
+                                xtree_save(msger->peers, &channel->cid, 4, channel);
+                                // 读取连接ID和校验码
+                                uint32_t peer_cid = *((uint32_t*)(rpack->body));
+                                uint32_t window = *((uint32_t*)(rpack->body + 4));
+                                // 设置连接校验码
+                                channel->window = window;
+                                channel->peer_cid = peer_cid;
+                                channel->peer_key = peer_cid % 255;
+                                __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO RESULT: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
+                                // 设置ACK的校验码
+                                channel->ack.key = (XMSG_VAL ^ channel->peer_key);
+                                // 设置对端 cid
+                                channel->ack.cid = channel->peer_cid;
+                                // 对端此刻正在使用本端的 cid 作为索引，这个包要用本端 cid
+                                xchannel_serial_cmd(channel, XMSG_PACK_OKEY, channel->cid);
+                                // 回复 ACK 时，会检测是否有待发送的包，正好将 OKEY 一起发送
+                                __xbreak(!xchannel_recv_pack(channel, &rpack));
+                            }
                         }
 
                     } else {
@@ -1570,7 +1598,7 @@ Clean:
 
 static void free_channel(void *val)
 {
-    __xlogd("free_channel >>>>------------> 0x%x\n", val);
+    __xlogd("free_channel >>>>------------> 0x%x cid %u\n", val, ((xchannel_ptr)val)->cid);
     xchannel_free((xchannel_ptr)val);
 }
 

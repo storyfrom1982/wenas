@@ -242,6 +242,7 @@ static inline void xtree_clear(xtree root, void(*free_mapping)(void*))
             if (__tree2node(temp)->mapping){
                 __tree2node(root)->route--;
                 if (free_mapping){
+                    __xlogd("mapping addr 0x%X\n", &(__tree2node(temp)->mapping));
                     free_mapping(__tree2node(temp)->mapping);
                 }
             }
