@@ -342,6 +342,11 @@ static inline void xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
         __xchannel_dequeue(channel);
         __xchannel_enqueue(&channel->msger->send_list, channel);
     }
+
+    if (__serialbuf_sendable(channel->sendbuf) == 0){
+        // 确保将待发送数据写入了缓冲区
+        xchannel_serial_write(channel);
+    }
 }
 
 static inline bool xchannel_recv_message(xchannel_ptr channel)
@@ -517,10 +522,10 @@ static inline void xchannel_free(xchannel_ptr channel)
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
 {
-    if (__serialbuf_sendable(channel->sendbuf) == 0){
-        // 确保将待发送数据写入了缓冲区
-        xchannel_serial_write(channel);
-    }
+    // if (__serialbuf_sendable(channel->sendbuf) == 0){
+    //     // 确保将待发送数据写入了缓冲区
+    //     xchannel_serial_write(channel);
+    // }
 
     if (__serialbuf_sendable(channel->sendbuf) > 0){
 
@@ -656,6 +661,10 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
 
+            if (channel->pos != channel->len){
+                xchannel_send_pack(channel);
+            }
+
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
 
@@ -768,25 +777,32 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type, uint3
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    if (__serialbuf_sendable(channel->sendbuf) == 0){
-        // 确保将待发送数据写入了缓冲区
-        xchannel_serial_write(channel);
-    }
-    __xlogd("xchannel_send_ack >>>>------------------------> pos: %u len: %u sendable: %u writable: %u\n", channel->pos, channel->len, __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf));
-    // 判断是否有待发送数据和发送缓冲区是否可以写入
-    if (channel->pos != channel->len && __serialbuf_sendable(channel->sendbuf) > 0){
-        // 与要发送的包一起发送
-        xchannel_send_pack(channel);
+    // if (__serialbuf_sendable(channel->sendbuf) == 0){
+    //     // 确保将待发送数据写入了缓冲区
+    //     xchannel_serial_write(channel);
+    // }
+    // __xlogd("xchannel_send_ack >>>>------------------------> pos: %u len: %u sendable: %u writable: %u\n", channel->pos, channel->len, __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf));
+    // // 判断是否有待发送数据和发送缓冲区是否可以写入
+    // if (channel->pos != channel->len && __serialbuf_sendable(channel->sendbuf) > 0){
+    //     // 与要发送的包一起发送
+    //     xchannel_send_pack(channel);
 
+    // }else {
+    //     // 单独发送 ACK
+    //     __xlogd("SEND ACK (%u) >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->cid, channel->peer_cid, channel->ack.ack, channel->ack.acks);
+    //     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+    //         channel->ack.flag = 0;
+    //     }else {
+    //         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
+    //     }
+    // }
+    // 单独发送 ACK
+    __xlogd("SEND ACK (%u) >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->cid, channel->peer_cid, channel->ack.ack, channel->ack.acks);
+    if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+        channel->ack.flag = 0;
     }else {
-        // 单独发送 ACK
-        __xlogd("SEND ACK (%u) >>>>-------------------------------> (%u) ACK: %u ACKS: %u\n", channel->cid, channel->peer_cid, channel->ack.ack, channel->ack.acks);
-        if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
-            channel->ack.flag = 0;
-        }else {
-            __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
-        }
-    }
+        __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
+    }    
 }
 
 static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
@@ -804,11 +820,11 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         // __xlogd("xchannel_recv_pack >>>>-----------> (%u) SERIAL: %u\n", channel->peer_cid, pack->head.sn);
 
         pack->channel = channel;
-        // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
-        if (pack->head.flag != 0){
-            // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-            xchannel_serial_read(channel, pack);
-        }
+        // // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
+        // if (pack->head.flag != 0){
+        //     // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+        //     xchannel_serial_read(channel, pack);
+        // }
         // 保存 PACK
         channel->recvbuf->buf[index] = pack;
         *rpack = NULL;
@@ -851,11 +867,11 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             
             if (channel->recvbuf->buf[index] == NULL){
                 pack->channel = channel;
-                // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
-                if (pack->head.flag != 0){
-                    // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-                    xchannel_serial_read(channel, pack);
-                }
+                // // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
+                // if (pack->head.flag != 0){
+                //     // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+                //     xchannel_serial_read(channel, pack);
+                // }
                 // 这个 PACK 首次到达，保存 PACK
                 channel->recvbuf->buf[index] = pack;
                 *rpack = NULL;
@@ -875,7 +891,11 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         }
     }
 
-    xchannel_send_ack(channel);
+    if (pack->head.flag != 0 && *rpack != NULL){
+        xchannel_serial_read(channel, pack);
+    }else {
+        xchannel_send_ack(channel);
+    }
 
     return xchannel_recv_message(channel);
 }
@@ -1011,6 +1031,11 @@ static void* main_loop(void *ptr)
                         // 收到了重传的 HELLO，直接回复 ACK 即可
                         __xlogd("TRANSMITTING (%u) >>>>--------> (%u) RECV HELLO: FLAG(%u) ACK(%u) ACKS(%u)\n", channel->peer_cid, channel->cid, rpack->head.flag, rpack->head.ack, rpack->head.acks);
                         xchannel_serial_read(channel, rpack);
+                        channel->ack.type = XMSG_PACK_ACK;
+                        channel->ack.flag = rpack->head.type;
+                        channel->ack.acks = rpack->head.sn + 1;
+                        channel->ack.ack = channel->ack.acks;
+                        xchannel_send_ack(channel);
 
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         // 接收方使用（对端 ip + 对端 cid）作为索引，所以不用设置 cid，因为对方发送的使用就设置成了对端 cid
@@ -1258,7 +1283,7 @@ static void* main_loop(void *ptr)
                 next_channel = channel->next;
 
                 // 留一半缓冲区，给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-                if (__serialbuf_writable(channel->sendbuf) > (PACK_WINDOW_RANGE >> 1)){
+                if (__serialbuf_readable(channel->sendbuf) < (PACK_WINDOW_RANGE >> 1)){
                     xchannel_send_pack(channel);
                 }
 
