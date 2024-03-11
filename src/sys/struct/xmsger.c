@@ -18,7 +18,7 @@ enum {
 // #define PACK_BODY_SIZE              1280 // 1024 + 256
 #define PACK_BODY_SIZE              64
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
-#define PACK_WINDOW_RANGE           16
+#define PACK_WINDOW_RANGE           64
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
@@ -120,6 +120,8 @@ typedef struct xchannellist {
 struct xmsger {
     int sock;
     __atom_size pos, len;
+    __atom_size msglistlen;
+    __atom_size sendable;
     // 每次创建新的channel时加一
     uint32_t cid;
     xtree peers;
@@ -244,12 +246,14 @@ static inline void xchannel_serial_write(xchannel_ptr channel)
         pack->head.key = (XMSG_VAL ^ channel->peer_key);
         pack->head.sn = channel->sendbuf->wpos;
         __atom_add(channel->sendbuf->wpos, 1);
+        channel->msger->sendable++;
 
         // 判断消息是否全部写入缓冲区
         if (msg->wpos == msg->len){
             // 更新当前消息
             channel->send_ptr = channel->send_ptr->next;
             msg = channel->send_ptr;
+            channel->msger->msglistlen--;
         }
     }
 }
@@ -259,6 +263,7 @@ static inline void xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
     // 更新待发送计数
     __atom_add(msg->channel->len, msg->len);
     __atom_add(msg->channel->msger->len, msg->len);
+    channel->msger->msglistlen++;
 
     // 判断是否有正在发送的消息
     if (channel->send_ptr == NULL){ // 当前没有消息在发送
@@ -337,8 +342,6 @@ static inline void xchannel_send_message(xchannel_ptr channel, xmessage_ptr msg)
         __xchannel_dequeue(channel);
         __xchannel_enqueue(&channel->msger->send_list, channel);
     }
-
-    xchannel_serial_write(channel);
 }
 
 static inline bool xchannel_recv_message(xchannel_ptr channel)
@@ -514,7 +517,10 @@ static inline void xchannel_free(xchannel_ptr channel)
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
 {
-    xchannel_serial_write(channel);
+    if (__serialbuf_sendable(channel->sendbuf) == 0){
+        // 确保将待发送数据写入了缓冲区
+        xchannel_serial_write(channel);
+    }
 
     if (__serialbuf_sendable(channel->sendbuf) > 0){
 
@@ -535,6 +541,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 数据已发送，从待发送数据中减掉这部分长度
             __atom_add(channel->pos, pack->head.len);
             __atom_add(channel->msger->pos, pack->head.len);
+            channel->msger->sendable--;
 
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
@@ -557,6 +564,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
                 pack->prev->next = pack;
                 channel->flushinglist.len ++;
             }
+
+            // 如果有待发送数据，确保 sendable 会大于 0
+            xchannel_serial_write(channel);
+
+            __xlogd("SEND PACK (%u) >>>>----------------------------------------------------------------------------------------------------> (%u) sendable: %u writable: %u\n", channel->cid, channel->peer_cid, __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf));
 
         }else {
 
@@ -746,6 +758,7 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type, uint3
     __atom_add(channel->sendbuf->wpos, 1);
     channel->len += pack->head.len;
     channel->msger->len += pack->head.len;
+    channel->msger->sendable++;
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
         __xchannel_dequeue(channel);
@@ -755,8 +768,13 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type, uint3
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
+    if (__serialbuf_sendable(channel->sendbuf) == 0){
+        // 确保将待发送数据写入了缓冲区
+        xchannel_serial_write(channel);
+    }
+    __xlogd("xchannel_send_ack >>>>------------------------> pos: %u len: %u sendable: %u writable: %u\n", channel->pos, channel->len, __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf));
     // 判断是否有待发送数据和发送缓冲区是否可以写入
-    if (channel->pos != channel->len && __serialbuf_writable(channel->sendbuf) > 0){
+    if (channel->pos != channel->len && __serialbuf_sendable(channel->sendbuf) > 0){
         // 与要发送的包一起发送
         xchannel_send_pack(channel);
 
@@ -1239,7 +1257,10 @@ static void* main_loop(void *ptr)
             {
                 next_channel = channel->next;
 
-                xchannel_send_pack(channel);
+                // 留一半缓冲区，给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
+                if (__serialbuf_writable(channel->sendbuf) > (PACK_WINDOW_RANGE >> 1)){
+                    xchannel_send_pack(channel);
+                }
 
                 if (channel->flushinglist.len > 0){
 
@@ -1355,15 +1376,15 @@ static void* main_loop(void *ptr)
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (msger->pos == msger->len
+        if (msger->sendable == 0
             && xpipe_readable(msger->mpipe) == 0 
             && __is_false(msger->readable) 
             && __is_true(msger->listening)){
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
             if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do\n");
-                if (msger->pos == msger->len 
+                __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
+                if (msger->sendable == 0
                     && xpipe_readable(msger->mpipe) == 0 
                     && __is_false(msger->readable) 
                     && __is_true(msger->listening)){
@@ -1518,6 +1539,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     
     msger->running = true;
     msger->callback = callback;
+    msger->sendable = 0;
 
     msger->sock = __xapi->udp_open();
     __xbreak(msger->sock < 0);

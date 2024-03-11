@@ -75,7 +75,7 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
         }
     }else if(mcompare(cmd, "RES", 3) == 0){
         server->tasks->pos++;
-        xline_printf(msg);
+        // xline_printf(msg);
         __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
     }
     free(msg);
