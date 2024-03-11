@@ -7,10 +7,10 @@
 enum {
     XMSG_PACK_ACK = 0x00,
     XMSG_PACK_MSG = 0x01,
-    XMSG_PACK_BYE = 0x02,
-    XMSG_PACK_PING = 0x04,
-    XMSG_PACK_HELLO = 0x08,
-    XMSG_PACK_OKEY = 0x10
+    XMSG_PACK_PING = 0x02,
+    XMSG_PACK_PONG = 0x04,
+    XMSG_PACK_OKEY = 0x08,
+    XMSG_PACK_BYE = 0x10,
 };
 
 
@@ -401,7 +401,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
     // 设置连接 cid
     channel->cid = msger->cid;
     // 设置本地的校验码
-    channel->key = channel->cid % 255;
+    channel->key = channel->cid % XMSG_KEY;
     // 更新全局 cid
     msger->cid++;
     // 未建立连接前，使用默认 cid 和默认 key
@@ -989,7 +989,7 @@ static void* main_loop(void *ptr)
                         __xlogd("TRANSMITTING (%u) >>>>--------> (%u) RECV PING: SN(%u) FLAG(%u) ACK(%u) ACKS(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn, rpack->head.flag, rpack->head.ack, rpack->head.acks);
                         __xbreak(!xchannel_recv_pack(channel, &rpack));
 
-                    }else if (rpack->head.type == XMSG_PACK_HELLO){
+                    }else if (rpack->head.type == XMSG_PACK_PONG){
                         // 收到了重传的 HELLO，直接回复 ACK 即可
                         __xlogd("TRANSMITTING (%u) >>>>--------> (%u) RECV HELLO: FLAG(%u) ACK(%u) ACKS(%u)\n", channel->peer_cid, channel->cid, rpack->head.flag, rpack->head.ack, rpack->head.acks);
                         xchannel_serial_read(channel, rpack);
@@ -1032,9 +1032,9 @@ static void* main_loop(void *ptr)
                 remote_id.port = addr.port;
                 remote_id.cid = rpack->head.cid;
 
-                __xlogd("CONNECTION cid(%u) >>>>--------> TYPE(%u) RECV HELLO NEW: SN(%u)\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
+                __xlogd("CONNECTION cid(%u) >>>>--------> TYPE(%u) RECV CMD: SN(%u)\n", rpack->head.cid, rpack->head.type, rpack->head.sn);
 
-                if (rpack->head.type == XMSG_PACK_HELLO){
+                if (rpack->head.type == XMSG_PACK_PING){
 
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
 
@@ -1056,68 +1056,46 @@ static void* main_loop(void *ptr)
                             // 虽然已经设置了对端的 cid，但是对端无法通过 cid 索引到 channel，因为这时还是 addr 作为索引
                             channel->window = window;
                             channel->peer_cid = peer_cid;
-                            channel->peer_key = peer_cid % 255;
+                            channel->peer_key = peer_cid % XMSG_KEY;
                             channel->ack.cid = channel->peer_cid;
                             channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO NEW: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
+                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV PING: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
                             // 建立连接时，先用对端 IP&PORT&local_cid 三元组作为本地索引，以免收到重复的 HELLO，创建多个同样的连接
                             // 在收到回复的 HELLO 时，换成本端 cid 做为索引，进入传输模式
                             xtree_save(msger->peers, &remote_id, remote_id_size, channel);
                             // 这个包用对端 cid 正常回复
-                            xchannel_serial_cmd(channel, XMSG_PACK_HELLO, channel->peer_cid);
+                            xchannel_serial_cmd(channel, XMSG_PACK_PONG, channel->peer_cid);
                             // 回复 ACK 时，会检测是否有待发送的包，正好将 HELLO 一起发送
                             __xbreak(!xchannel_recv_pack(channel, &rpack));
 
                         }else {
-                            // 生成的校验码与默认的校验码冲突了
-                            channel = (xchannel_ptr)xtree_take(msger->peers, &remote_id, remote_id_size);
-                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO RESULT: SN(%u) KEY: %u\n", channel->peer_cid, channel->cid, rpack->head.sn, channel->key);
-                            if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
-                                // 连接建立成功，切换到传输模式
-                                xtree_save(msger->peers, &channel->cid, 4, channel);
-                                // 读取连接ID和校验码
-                                uint32_t peer_cid = *((uint32_t*)(rpack->body));
-                                uint32_t window = *((uint32_t*)(rpack->body + 4));
-                                // 设置连接校验码
-                                channel->window = window;
-                                channel->peer_cid = peer_cid;
-                                channel->peer_key = peer_cid % 255;
-                                __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO RESULT: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
-                                // 设置ACK的校验码
-                                channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-                                // 设置对端 cid
-                                channel->ack.cid = channel->peer_cid;
-                                // 对端此刻正在使用本端的 cid 作为索引，这个包要用本端 cid
-                                xchannel_serial_cmd(channel, XMSG_PACK_OKEY, channel->cid);
-                                // 回复 ACK 时，会检测是否有待发送的包，正好将 OKEY 一起发送
-                                __xbreak(!xchannel_recv_pack(channel, &rpack));
-                            }
+                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV PING AGAIN: SN(%u) KEY: %u\n", channel->peer_cid, channel->cid, rpack->head.sn, channel->key);
                         }
+                    }
 
-                    } else {
+                }else if (rpack->head.type == XMSG_PACK_PONG){
 
-                        // 收到回复的 HELLO，移除 IP&PORT&local_cid 三元组索引，建立 cid 索引
-                        channel = (xchannel_ptr)xtree_take(msger->peers, &remote_id, remote_id_size);
-                        if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
-                            // 连接建立成功，切换到传输模式
-                            xtree_save(msger->peers, &channel->cid, 4, channel);
-                            // 读取连接ID和校验码
-                            uint32_t peer_cid = *((uint32_t*)(rpack->body));
-                            uint32_t window = *((uint32_t*)(rpack->body + 4));
-                            // 设置连接校验码
-                            channel->window = window;
-                            channel->peer_cid = peer_cid;
-                            channel->peer_key = peer_cid % 255;
-                            __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV HELLO RESULT: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
-                            // 设置ACK的校验码
-                            channel->ack.key = (XMSG_VAL ^ channel->peer_key);
-                            // 设置对端 cid
-                            channel->ack.cid = channel->peer_cid;
-                            // 对端此刻正在使用本端的 cid 作为索引，这个包要用本端 cid
-                            xchannel_serial_cmd(channel, XMSG_PACK_OKEY, channel->cid);
-                            // 回复 ACK 时，会检测是否有待发送的包，正好将 OKEY 一起发送
-                            __xbreak(!xchannel_recv_pack(channel, &rpack));
-                        }
+                    // 收到回复的 HELLO，移除 IP&PORT&local_cid 三元组索引，建立 cid 索引
+                    channel = (xchannel_ptr)xtree_take(msger->peers, &remote_id, remote_id_size);
+                    if (channel && (rpack->head.key ^ channel->key) == XMSG_VAL){
+                        // 连接建立成功，切换到传输模式
+                        xtree_save(msger->peers, &channel->cid, 4, channel);
+                        // 读取连接ID和校验码
+                        uint32_t peer_cid = *((uint32_t*)(rpack->body));
+                        uint32_t window = *((uint32_t*)(rpack->body + 4));
+                        // 设置连接校验码
+                        channel->window = window;
+                        channel->peer_cid = peer_cid;
+                        channel->peer_key = peer_cid % XMSG_KEY;
+                        __xlogd("CONNECTION (%u) >>>>--------> (%u) RECV PONG: SN(%u)\n", channel->peer_cid, channel->cid, rpack->head.sn);
+                        // 设置ACK的校验码
+                        channel->ack.key = (XMSG_VAL ^ channel->peer_key);
+                        // 设置对端 cid
+                        channel->ack.cid = channel->peer_cid;
+                        // 对端此刻正在使用本端的 cid 作为索引，这个包要用本端 cid
+                        xchannel_serial_cmd(channel, XMSG_PACK_OKEY, channel->cid);
+                        // 回复 ACK 时，会检测是否有待发送的包，正好将 OKEY 一起发送
+                        __xbreak(!xchannel_recv_pack(channel, &rpack));
                     }
 
                 }else if (rpack->head.type == XMSG_PACK_OKEY){
@@ -1216,7 +1194,7 @@ static void* main_loop(void *ptr)
 
             }else {
 
-                if (msg->type == XMSG_PACK_HELLO){
+                if (msg->type == XMSG_PACK_PING){
 
                     channel = xchannel_create(msger, (__xipaddr_ptr)msg->data, true);
                     __xbreak(channel == NULL);
@@ -1228,7 +1206,7 @@ static void* main_loop(void *ptr)
                     remote_id.cid = channel->cid;
                     xtree_save(msger->peers, &remote_id, remote_id_size, channel);
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
-                    xchannel_serial_cmd(channel, XMSG_PACK_HELLO, channel->cid);
+                    xchannel_serial_cmd(channel, XMSG_PACK_PING, channel->cid);
 
                 }else {
 
@@ -1500,7 +1478,7 @@ bool xmsger_connect(xmsger_ptr msger, void *context, const char *host, uint16_t 
 {
     __xlogd("xmsger_connect enter\n");
 
-    xmessage_ptr msg = new_message(NULL, XMSG_PACK_HELLO, 0, NULL, 0);
+    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, NULL, 0);
 
     __xbreak(msg == NULL);
 
