@@ -513,15 +513,11 @@ static inline void xchannel_free(xchannel_ptr channel)
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
 {
-    // if (__serialbuf_sendable(channel->sendbuf) == 0){
-    //     // 确保将待发送数据写入了缓冲区
-    //     xchannel_serial_write(channel);
-    // }
-
     if (__serialbuf_sendable(channel->sendbuf) > 0){
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
         if (channel->ack.flag != 0){
+            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------------------------------------------------------------------> SEND ACK\n");
             // 携带 ACK
             pack->head.flag = channel->ack.flag;
             pack->head.ack = channel->ack.ack;
@@ -538,6 +534,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             __atom_add(channel->pos, pack->head.len);
             __atom_add(channel->msger->pos, pack->head.len);
             channel->msger->sendable--;
+
+            __xlogd("xchannel_send_pack >>>>-----------------!!!!!!!!!!!!!!!!!!!!!!!!-----------------------> sendable: %u writable: %u sendptr: 0x%X\n", 
+                        __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf), channel->send_ptr);
 
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
@@ -646,7 +645,8 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
 
-            if (channel->pos != channel->len){
+            if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
+                __xlogd("xchannel_serial_read >>>>---------------------------------------------------------------------------------------------> SEND PACK %u\n", channel->ack.flag);
                 xchannel_send_pack(channel);
             }
 
@@ -792,8 +792,6 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 
     uint16_t index = pack->head.sn & (channel->recvbuf->range - 1);
 
-    __xlogd("xchannel_recv_pack >>>>-----------> wpos(%u) SN(%u)\n", channel->recvbuf->wpos, pack->head.sn);
-
     // 如果收到连续的 PACK
     if (pack->head.sn == channel->recvbuf->wpos){        
 
@@ -825,8 +823,6 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             // 设置 ack 等于 acks 通知对端，acks 之前的 PACK 已经全都收到
             channel->ack.ack = channel->ack.acks;
         }
-
-        return xchannel_recv_message(channel);
 
     }else {
 
@@ -871,7 +867,7 @@ static inline bool xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         }
     }
 
-    return true;
+    return xchannel_recv_message(channel);
 }
 
 
@@ -970,7 +966,8 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            __xlogd("main_loop >>>>>-------------------------------------------------------------> RECV TYPE(%u) SN(%u)\n", rpack->head.type, rpack->head.sn);
+            __xlogd("main_loop (IP:%X) >>>>>-------------------------------------------------------------> RECV TYPE(%u) FLAG[%u:%u:%u] SN(%u)\n", 
+                    *(uint64_t*)(&addr.port), rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
 
             channel = (xchannel_ptr)xtree_find(msger->peers, &addr.port, 6);
 
@@ -982,7 +979,11 @@ static void* main_loop(void *ptr)
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         __xbreak(!xchannel_recv_pack(channel, &rpack));
                         if (channel->ack.flag != 0){
-                            xchannel_send_ack(channel);
+                            if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+                                xchannel_send_pack(channel);
+                            }else {
+                                xchannel_send_ack(channel);
+                            }
                         }
 
                     }else if (rpack->head.type == XMSG_PACK_ACK){
@@ -1136,7 +1137,7 @@ static void* main_loop(void *ptr)
                 next_channel = channel->next;
 
                 // 留一半缓冲区，给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-                if (__serialbuf_readable(channel->sendbuf) < (PACK_WINDOW_RANGE >> 1)){
+                if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
                     xchannel_send_pack(channel);
                 }
 
