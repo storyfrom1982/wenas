@@ -97,7 +97,7 @@ struct xchannel {
     __atom_size pos, len;
     __atom_size pack_in_pipe;
     struct __xipaddr addr;
-    void *usercontext;
+    void *userctx;
     xmsger_ptr msger;
     struct xhead ack;
     serialbuf_ptr recvbuf;
@@ -195,72 +195,10 @@ struct xmsger {
 #define __xchannel_move_to_end(rnode) \
     __ring_list_move_to_end((rnode)->worklist, (rnode))
 
-// static void __ring_list_take_out(xchannellist_ptr rlist, xchannel_ptr node)
-// {
-//     node->prev->next = node->next;
-//     node->next->prev = node->prev;
-//     rlist->len--;
-// }
-
-// static void __ring_list_put_into_end(xchannellist_ptr rlist, xchannel_ptr rnode)
-// {
-//     rnode->next = &rlist->head;
-//     rnode->prev = rlist->head.prev;
-//     rnode->prev->next = rnode;
-//     rnode->next->prev = rnode;
-//     rlist->len++;
-// }
-
-// static void __ring_list_put_into_head(xchannellist_ptr rlist, xchannel_ptr rnode)
-// {
-//     rnode->next = rlist->head.next;
-//     rnode->prev = &rlist->head;
-//     rnode->prev->next = rnode;
-//     rnode->next->prev = rnode;
-//     rlist->len++;
-// }
-
-// static void __ring_list_move_to_end(xchannellist_ptr rlist, xchannel_ptr rnode)
-// {
-//     rnode->prev->next = rnode->next;
-//     rnode->next->prev = rnode->prev;
-//     rnode->next = &rlist->head;
-//     rnode->prev = rlist->head.prev;
-//     rnode->prev->next = rnode;
-//     rnode->next->prev = rnode;
-// }
-
-// static void __ring_list_move_to_head(xchannellist_ptr rlist, xchannel_ptr rnode)
-// {
-//     rnode->prev->next = rnode->next;
-//     rnode->next->prev = rnode->prev;
-//     rnode->next = rlist->head.next;
-//     rnode->prev = &rlist->head;
-//     rnode->prev->next = rnode;
-//     rnode->next->prev = rnode;
-// }
-
-// static void __xchannel_put_into_list(xchannellist_ptr rlist, xchannel_ptr rnode)
-// {
-//     __ring_list_put_into_end(rlist, rnode);
-//     rnode->worklist = rlist;
-// }
-
-// static void __xchannel_tack_out_list(xchannel_ptr rnode)
-// {
-//     __ring_list_take_out(rnode->worklist, rnode);
-//     rnode->worklist = NULL;
-// }
-
-// static void __xchannel_move_to_end(xchannel_ptr rnode)
-// {
-//     __ring_list_move_to_end(rnode->worklist, rnode);
-// }
-
 void* xchannel_context(xchannel_ptr channel)
 {
     if (channel){
-        return channel->usercontext;
+        return channel->userctx;
     }
     return NULL;
 }
@@ -650,11 +588,14 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
         if (channel->ack.flag != 0){
-            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------------------------------------------------------------------> SEND ACK\n");
+            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
             // 携带 ACK
             pack->head.flag = channel->ack.flag;
             pack->head.ack = channel->ack.ack;
             pack->head.acks = channel->ack.acks;
+
+        }else {
+            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK\n");
         }
 
         // 判断发送是否成功
@@ -667,9 +608,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             __atom_add(channel->pos, pack->head.len);
             __atom_add(channel->msger->pos, pack->head.len);
             channel->msger->sendable--;
-
-            __xlogd("xchannel_send_pack >>>>-----------------!!!!!!!!!!!!!!!!!!!!!!!!-----------------------> sendable: %u writable: %u sendptr: 0x%X\n", 
-                        __serialbuf_sendable(channel->sendbuf), __serialbuf_writable(channel->sendbuf), channel->send_ptr);
 
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
@@ -692,6 +630,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
+    __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND ACK\n");
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
@@ -701,6 +640,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
 static inline void xchannel_send_final(xmsger_ptr msger, __xipaddr_ptr addr, xpack_ptr rpack)
 {
+    __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND FINAL ACK\n");
     rpack->head.type = XMSG_PACK_ACK;
     rpack->head.flag = XMSG_PACK_BYE;
     // 设置 acks，通知发送端已经接收了所有包
@@ -788,7 +728,6 @@ static inline void xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
-                __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------------------------------------------> SEND PACK %u\n", channel->ack.flag);
                 xchannel_send_pack(channel);
             }
 
@@ -835,6 +774,7 @@ static inline void xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                             // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                             pack->head.acks = channel->recvbuf->wpos;
                         }
+                        __xlogd("xchannel_serial_ack >>>>>>>>>>--------------------------------------------------------------------------------> RESEND PACK: %u\n", pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                             pack->timer = __xapi->clock() + channel->back_delay * 1.5;
                         }else {
@@ -1037,7 +977,7 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            __xlogd("main_loop (IP:%X) >>>>>-------------------------------------------------------------> RECV TYPE(%u) FLAG[%u:%u:%u] SN(%u)\n", 
+            __xlogd("main_loop (IP:%X) >>>>>---------------------------------> RECV: TYPE(%u) FLAG[%u:%u:%u] SN: %u\n", 
                     *(uint64_t*)(&addr.port), rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
 
             channel = (xchannel_ptr)xtree_find(msger->peers, &addr.port, 6);
@@ -1175,7 +1115,7 @@ static void* main_loop(void *ptr)
                     __xbreak(channel == NULL);
                     channel->keepalive = true;
                     __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
-                    channel->usercontext = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
+                    channel->userctx = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
                     // 建立连接时，先用对方的 IP&PORT&local_cid 三元组作为本地索引，在收到回复的 HELLO 时，换成 local_cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, 6, channel);
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1241,6 +1181,8 @@ static void* main_loop(void *ptr)
                                     // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                                     spack->head.acks = channel->recvbuf->wpos;
                                 }
+
+                                __xlogd("xmsger_loop >>>>>>>>>>--------------------------------------------------------------------------------> RESEND PACK: %u\n", spack->head.sn);
 
                                 // 判断发送是否成功
                                 if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
