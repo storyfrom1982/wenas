@@ -119,11 +119,10 @@ typedef struct xchannellist {
 
 struct xmsger {
     int sock;
+    xtree peers;
     __atom_size pos, len;
     __atom_size msglistlen;
     __atom_size sendable;
-    xtree peers;
-    struct __xipaddr addr;
     __xmutex_ptr mtx;
     __atom_bool running;
     //socket可读或者有数据待发送时为true
@@ -131,8 +130,8 @@ struct xmsger {
     __atom_bool readable;
     __atom_bool listening;
     xmsgercb_ptr callback;
-    xpipe_ptr mpipe, rpipe;
-    __xprocess_ptr mpid, rpid;
+    xpipe_ptr mpipe;
+    __xprocess_ptr mpid;
     struct xchannellist send_list, recv_list;
 };
 
@@ -195,7 +194,7 @@ struct xmsger {
 #define __xchannel_move_to_end(rnode) \
     __ring_list_move_to_end((rnode)->worklist, (rnode))
 
-void* xchannel_context(xchannel_ptr channel)
+void* xchannel_user_ctx(xchannel_ptr channel)
 {
     if (channel){
         return channel->userctx;
@@ -881,63 +880,6 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, xpack_ptr *rpack)
     xchannel_output_message(channel);
 }
 
-
-static void* recv_loop(void *ptr)
-{
-    __xlogd("recv_loop enter\n");
-
-    xmessage_ptr msg;
-    xpack_ptr pack;
-    xmsger_ptr msger = (xmsger_ptr)ptr;
-
-    while (__is_true(msger->running))
-    {
-        __xlogd("recv_loop >>>>-----> listen enter\n");
-        __set_true(msger->listening);
-        __xapi->udp_listen(msger->sock);
-        __set_false(msger->listening);
-        __set_true(msger->readable);
-        __xapi->mutex_notify(msger->mtx);
-        __xlogd("recv_loop >>>>-----> listen exit\n");
-        
-        while(xpipe_read(msger->rpipe, &pack, __sizeof_ptr) == __sizeof_ptr)
-        {
-            if (pack == NULL){
-                break;
-            }
-
-            // msg = &(pack->channel->streams[pack->head.sid]);
-
-            // if (pack->head.type == XMSG_PACK_MSG){
-            //     if (msg->data == NULL){
-            //         // 收到消息的第一个包，创建 msg，记录范围
-            //         msg->range = pack->head.range;
-            //         msg->data = malloc(msg->range * PACK_BODY_SIZE);
-            //         msg->wpos = 0;
-            //     }
-            //     mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
-            //     msg->wpos += pack->head.len;
-            //     msg->range--;
-            //     if (msg->range == 0){
-            //         msger->callback->on_msg_from_peer(msger->callback, pack->channel, msg->data, msg->wpos);
-            //         msg->data = NULL;
-            //     }
-            // }
-            // // 从 pipe 中取出一个 pack，计数减一
-            // __atom_sub(pack->channel->pack_in_pipe, 1);
-            // // 这里释放的是接收到的 PACK
-            // free(pack);
-        }
-    }
-
-    __xlogd("recv_loop exit\n");
-
-Clean:
-
-    return NULL;
-}
-
-
 xpack_ptr first_pack()
 {
     return (xpack_ptr)calloc(1, sizeof(struct xpack));;
@@ -1247,28 +1189,23 @@ static void* main_loop(void *ptr)
             }
         }
 
-        if (__set_false(msger->readable)){
-            // 通知接受线程开始监听 socket
-            __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
-        }
+        // if (__set_false(msger->readable)){
+        //     // 通知接受线程开始监听 socket
+        //     __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
+        // }
 
         // 判断休眠条件
         // 没有待发送的包
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (msger->sendable == 0
-            && xpipe_readable(msger->mpipe) == 0 
-            && __is_false(msger->readable) 
-            && __is_true(msger->listening)){
+        if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
             if (__xapi->mutex_trylock(msger->mtx)){
                 __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
-                if (msger->sendable == 0
-                    && xpipe_readable(msger->mpipe) == 0 
-                    && __is_false(msger->readable) 
-                    && __is_true(msger->listening)){
+                if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
+                    __xapi->mutex_notify(msger->mtx);
                     __xapi->mutex_timedwait(msger->mtx, timer);
                     timer = 10000000000UL; // 10 秒
                 }
@@ -1410,23 +1347,26 @@ Clean:
     return false;
 }
 
-xmsger_ptr xmsger_create(xmsgercb_ptr callback)
+void xmsger_notify(xmsger_ptr msger, uint64_t timing)
+{
+    __xapi->mutex_lock(msger->mtx);
+    __xapi->mutex_notify(msger->mtx);
+    __xapi->mutex_timedwait(msger->mtx, timing);
+    __xapi->mutex_unlock(msger->mtx);
+}
+
+xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
 {
     __xlogd("xmsger_create enter\n");
 
     __xbreak(callback == NULL);
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
-    
+
+    msger->sock = sock;
     msger->running = true;
     msger->callback = callback;
     msger->sendable = 0;
-
-    msger->sock = __xapi->udp_open();
-    __xbreak(msger->sock < 0);
-    __xbreak(!__xapi->udp_make_ipaddr(NULL, 9256, &msger->addr));
-    __xbreak(__xapi->udp_bind(msger->sock, &msger->addr) == -1);
-    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &msger->addr));
 
     msger->send_list.len = 0;
     msger->send_list.head.prev = &msger->send_list.head;
@@ -1444,12 +1384,6 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 
     msger->mpipe = xpipe_create(sizeof(void*) * 1024, "SEND PIPE");
     __xbreak(msger->mpipe == NULL);
-
-    msger->rpipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
-    __xbreak(msger->rpipe == NULL);
-
-    msger->rpid = __xapi->process_create(recv_loop, msger);
-    __xbreak(msger->rpid == NULL);
 
     msger->mpid = __xapi->process_create(main_loop, msger);
     __xbreak(msger->mpid == NULL);
@@ -1490,24 +1424,6 @@ void xmsger_free(xmsger_ptr *pptr)
             xpipe_break(msger->mpipe);
         }
 
-        if (msger->rpipe){
-            __xlogd("xmsger_free break rpipe\n");
-            xpipe_break(msger->rpipe);
-        }
-
-        if (msger->sock > 0){
-            int sock = __xapi->udp_open();
-            for (int i = 0; i < 10; ++i){
-                __xapi->udp_sendto(sock, &msger->addr, &i, sizeof(int));
-            }
-            __xapi->udp_close(sock);
-        }
-
-        if (msger->rpid){
-            __xlogd("xmsger_free recv process\n");
-            __xapi->process_free(msger->rpid);
-        }
-
         if (msger->mpid){
             __xlogd("xmsger_free main process\n");
             __xapi->process_free(msger->mpid);
@@ -1536,25 +1452,9 @@ void xmsger_free(xmsger_ptr *pptr)
             xpipe_free(&msger->mpipe);
         }
 
-        if (msger->rpipe){
-            __xlogd("xmsger_free recv pipe: %lu\n", xpipe_readable(msger->rpipe));
-            while (xpipe_readable(msger->rpipe) > 0){
-                xpack_ptr pack;
-                xpipe_read(msger->rpipe, &pack, __sizeof_ptr);
-                if (pack){
-                    free(pack);
-                }
-            }
-            xpipe_free(&msger->rpipe);
-        }
-
         if (msger->mtx){
             __xlogd("xmsger_free mutex\n");
             __xapi->mutex_free(msger->mtx);
-        }
-
-        if (msger->sock > 0){
-            __xapi->udp_close(msger->sock);
         }
 
         free(msger);

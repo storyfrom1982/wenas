@@ -116,3 +116,23 @@ void env_backtrace_setup()
     sigaction(SIGFPE, &action, NULL);
     sigaction(SIGSEGV, &action, NULL);
 }
+
+static void (*__sigint_callbakc)(void);
+
+static void __sigint_handler(int sig, siginfo_t* info, void* ucontext)
+{
+    if (__sigint_callbakc){
+        __sigint_callbakc();
+    }
+}
+
+void sigint_setup(void (*handler)())
+{
+    __sigint_callbakc = handler;
+    struct sigaction action = {};
+    memset(&action, 0, sizeof(action));
+    sigemptyset(&action.sa_mask);
+    action.sa_sigaction = __sigint_handler;
+    action.sa_flags = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
+    sigaction(SIGINT, &action, NULL);
+}
