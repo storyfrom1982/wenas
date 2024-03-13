@@ -588,34 +588,60 @@ static inline void xchannel_input_message(xchannel_ptr channel, xmessage_ptr msg
     }
 }
 
-static inline bool xchannel_output_message(xchannel_ptr channel)
+static inline void xchannel_output_message(xchannel_ptr channel)
 {
     if (__serialbuf_readable(channel->recvbuf) > 0){
-        uint8_t index = __serialbuf_rpos(channel->recvbuf);
-        while (channel->recvbuf->buf[index] != NULL)
-        {
-            // 交给接收线程来处理 pack
-            if (xpipe_write(channel->msger->rpipe, &channel->recvbuf->buf[index], __sizeof_ptr) != __sizeof_ptr) {
-                return false;
-            }
-            // 记录进入 pipe 中还没有被取出的 pack 数量
-            __atom_add(channel->pack_in_pipe, 1);
-            // 收到一个完整的消息，需要判断是否需要更新保活
-            if (channel->recvbuf->buf[index]->head.range == 1 && channel->worklist == &channel->msger->recv_list){
-                // 判断队列是否有多个成员
-                if (channel->worklist->len > 1){
-                    __xchannel_move_to_end(channel);
+
+        xmessage_ptr msg;
+        // 索引已接收的包
+        xpack_ptr pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
+
+        do {
+
+            // 索引对应的消息
+            msg = &(channel->streams[pack->head.sid]);
+            
+            if (pack->head.type == XMSG_PACK_MSG){
+                // 如果当前消息的数据为空，证明这个包是新消息的第一个包
+                if (msg->data == NULL){
+                    // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
+                    msg->range = pack->head.range;
+                    // 分配内存
+                    msg->data = malloc(msg->range * PACK_BODY_SIZE);
+                    // 写索引置零
+                    msg->wpos = 0;
                 }
+                mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
+                msg->wpos += pack->head.len;
+                msg->range--;
+                if (msg->range == 0){
+                    // 通知用户已收到一个完整的消息
+                    channel->msger->callback->on_msg_from_peer(channel->msger->callback, channel, msg->data, msg->wpos);
+                    msg->data = NULL;
+                }
+            }
+
+            // 收到一个完整的消息，需要判断是否需要更新保活
+            if (pack->head.range == 1 && channel->worklist == &channel->msger->recv_list){
                 // 更新时间戳
                 channel->timestamp = __xapi->clock();
+                // 判断队列是否有多个成员
+                if (channel->worklist->len > 1){
+                    // 将更新后的成员移动到队尾
+                    __xchannel_move_to_end(channel);
+                }
             }
-            channel->recvbuf->buf[index] = NULL;
+            // 处理玩的缓冲区置空
+            channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)] = NULL;
+            // 更新读索引
             channel->recvbuf->rpos++;
-            index = __serialbuf_rpos(channel->recvbuf);
-        }
-    }
+            // 释放资源
+            free(pack);
+            // 索引下一个缓冲区
+            pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
 
-    return true;
+        }while (pack != NULL); // 所用已接收包被处理完之后，接收缓冲区为空
+    }
 }
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
@@ -669,7 +695,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
-        __xlogd("xchannel_serial_recv >>>>------------------------> failed\n");
+        __xlogd("xchannel_serial_pack >>>>------------------------> failed\n");
     }
 }
 
@@ -690,7 +716,7 @@ static inline void xchannel_send_final(xmsger_ptr msger, __xipaddr_ptr addr, xpa
     }
 }
 
-static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
+static inline void xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 && ((uint8_t)(rpack->head.ack - channel->sendbuf->rpos) <= (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos))){
@@ -762,7 +788,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
-                __xlogd("xchannel_serial_read >>>>---------------------------------------------------------------------------------------------> SEND PACK %u\n", channel->ack.flag);
+                __xlogd("xchannel_serial_ack >>>>---------------------------------------------------------------------------------------------> SEND PACK %u\n", channel->ack.flag);
                 xchannel_send_pack(channel);
             }
 
@@ -771,7 +797,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
 
         if (rpack->head.ack != rpack->head.acks){
 
-            // __xlogd("xchannel_serial_read >>>>-----------> (%u) OUT OF OEDER ACK: %u\n", channel->peer_cid, rpack->head.ack);
+            // __xlogd("xchannel_serial_ack >>>>-----------> (%u) OUT OF OEDER ACK: %u\n", channel->peer_cid, rpack->head.ack);
 
             pack = &channel->sendbuf->buf[rpack->head.ack & (channel->sendbuf->range - 1)];
 
@@ -812,7 +838,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                             pack->timer = __xapi->clock() + channel->back_delay * 1.5;
                         }else {
-                            __xlogd("xchannel_serial_read >>>>------------------------> send failed\n");
+                            __xlogd("xchannel_serial_ack >>>>------------------------> send failed\n");
                         }
                     }
                 }
@@ -823,12 +849,12 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
 
     }else {
 
-        // __xlogd("xchannel_serial_read >>>>-----------> (%u) OUT OF RANGE: %u\n", channel->peer_cid, rpack->head.sn);
+        // __xlogd("xchannel_serial_ack >>>>-----------> (%u) OUT OF RANGE: %u\n", channel->peer_cid, rpack->head.sn);
 
     }
 }
 
-static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
+static inline void xchannel_serial_pack(xchannel_ptr channel, xpack_ptr *rpack)
 {
     xpack_ptr pack = *rpack;
 
@@ -844,7 +870,7 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
         // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
         if (pack->head.flag != 0){
             // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-            xchannel_serial_read(channel, pack);
+            xchannel_serial_ack(channel, pack);
         }
         // 保存 PACK
         channel->recvbuf->buf[index] = pack;
@@ -874,7 +900,7 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
         // SN 不在 rpos 与 wpos 之间
         if ((uint8_t)(channel->recvbuf->wpos - pack->head.sn) > (uint8_t)(pack->head.sn - channel->recvbuf->wpos)){
 
-            // __xlogd("xchannel_serial_recv >>>>-----------> (%u) EARLY: %u\n", channel->peer_cid, pack->head.sn);
+            // __xlogd("xchannel_serial_pack >>>>-----------> (%u) EARLY: %u\n", channel->peer_cid, pack->head.sn);
 
             // SN 在 wpos 方向越界，是提前到达的 PACK
 
@@ -891,7 +917,7 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
                 // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
                 if (pack->head.flag != 0){
                     // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-                    xchannel_serial_read(channel, pack);
+                    xchannel_serial_ack(channel, pack);
                 }
                 // 这个 PACK 首次到达，保存 PACK
                 channel->recvbuf->buf[index] = pack;
@@ -902,7 +928,7 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
             
         }else {
 
-            // __xlogd("xchannel_serial_recv >>>>-----------> (%u) AGAIN: %u\n", channel->peer_cid, pack->head.sn);
+            // __xlogd("xchannel_serial_pack >>>>-----------> (%u) AGAIN: %u\n", channel->peer_cid, pack->head.sn);
             
             // SN 在 rpos 方向越界，是滞后到达的 PACK，发生了重传
             // 回复 ACK 等于 ACKS，通知对端包已经收到
@@ -912,7 +938,7 @@ static inline bool xchannel_serial_recv(xchannel_ptr channel, xpack_ptr *rpack)
         }
     }
 
-    return xchannel_output_message(channel);
+    xchannel_output_message(channel);
 }
 
 
@@ -940,27 +966,27 @@ static void* recv_loop(void *ptr)
                 break;
             }
 
-            msg = &(pack->channel->streams[pack->head.sid]);
+            // msg = &(pack->channel->streams[pack->head.sid]);
 
-            if (pack->head.type == XMSG_PACK_MSG){
-                if (msg->data == NULL){
-                    // 收到消息的第一个包，创建 msg，记录范围
-                    msg->range = pack->head.range;
-                    msg->data = malloc(msg->range * PACK_BODY_SIZE);
-                    msg->wpos = 0;
-                }
-                mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
-                msg->wpos += pack->head.len;
-                msg->range--;
-                if (msg->range == 0){
-                    msger->callback->on_msg_from_peer(msger->callback, pack->channel, msg->data, msg->wpos);
-                    msg->data = NULL;
-                }
-            }
-            // 从 pipe 中取出一个 pack，计数减一
-            __atom_sub(pack->channel->pack_in_pipe, 1);
-            // 这里释放的是接收到的 PACK
-            free(pack);
+            // if (pack->head.type == XMSG_PACK_MSG){
+            //     if (msg->data == NULL){
+            //         // 收到消息的第一个包，创建 msg，记录范围
+            //         msg->range = pack->head.range;
+            //         msg->data = malloc(msg->range * PACK_BODY_SIZE);
+            //         msg->wpos = 0;
+            //     }
+            //     mcopy(msg->data + msg->wpos, pack->body, pack->head.len);
+            //     msg->wpos += pack->head.len;
+            //     msg->range--;
+            //     if (msg->range == 0){
+            //         msger->callback->on_msg_from_peer(msger->callback, pack->channel, msg->data, msg->wpos);
+            //         msg->data = NULL;
+            //     }
+            // }
+            // // 从 pipe 中取出一个 pack，计数减一
+            // __atom_sub(pack->channel->pack_in_pipe, 1);
+            // // 这里释放的是接收到的 PACK
+            // free(pack);
         }
     }
 
@@ -1022,7 +1048,7 @@ static void* main_loop(void *ptr)
                 if ((rpack->head.key ^ channel->local_key) == XMSG_VAL){
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
-                        __xbreak(!xchannel_serial_recv(channel, &rpack));
+                        xchannel_serial_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
                             if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
                                 xchannel_send_pack(channel);
@@ -1032,10 +1058,10 @@ static void* main_loop(void *ptr)
                         }
 
                     }else if (rpack->head.type == XMSG_PACK_ACK){
-                        xchannel_serial_read(channel, rpack);
+                        xchannel_serial_ack(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_ONL){
-                        __xbreak(!xchannel_serial_recv(channel, &rpack));
+                        xchannel_serial_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
                             xchannel_send_ack(channel);
                         }
@@ -1060,7 +1086,7 @@ static void* main_loop(void *ptr)
                             msger->callback->on_channel_to_peer(msger->callback, channel);
                         }
                         // 更新接收缓冲区和 ACK
-                        xchannel_serial_recv(channel, &rpack);
+                        xchannel_serial_pack(channel, &rpack);
                         // 回复 ACK
                         if (channel->ack.flag != 0){
                             xchannel_send_ack(channel);
@@ -1107,7 +1133,7 @@ static void* main_loop(void *ptr)
                         // 建立索引
                         xtree_save(msger->peers, &addr.port, 6, channel);
                         // 更新接收缓冲区和 ACK
-                        __xbreak(!xchannel_serial_recv(channel, &rpack));
+                        xchannel_serial_pack(channel, &rpack);
                         // 生成 PONG
                         xchannel_serial_cmd(channel, XMSG_PACK_PONG);
                         // 发送 PONG 和更新的 ACK
