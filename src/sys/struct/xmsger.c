@@ -91,7 +91,7 @@ struct xchannel {
     uint64_t back_delay;
     uint64_t back_range;
 
-    bool ping;
+    bool keepalive;
     bool breaker;
     bool connected; // 用peer_cid来标志是否连接
     __atom_size pos, len;
@@ -122,8 +122,6 @@ struct xmsger {
     __atom_size pos, len;
     __atom_size msglistlen;
     __atom_size sendable;
-    // 每次创建新的channel时加一
-    uint32_t cid;
     xtree peers;
     struct __xipaddr addr;
     __xmutex_ptr mtx;
@@ -135,7 +133,7 @@ struct xmsger {
     xmsgercb_ptr callback;
     xpipe_ptr mpipe, rpipe;
     __xprocess_ptr mpid, rpid;
-    struct xchannellist send_list, recv_list, recycle_list;
+    struct xchannellist send_list, recv_list;
 };
 
 #define __serialbuf_wpos(b)         ((b)->wpos & ((b)->range - 1))
@@ -658,7 +656,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                 // 判断是否有未发送的消息
                 if (channel->send_ptr == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
-                    if (channel->flushinglist.len == 0 && !channel->ping){
+                    if (channel->flushinglist.len == 0 && !channel->keepalive){
                         // 不需要保活，加入等待超时队列
                         __xchannel_dequeue(channel);
                         __xchannel_enqueue(&channel->msger->recv_list, channel);
@@ -1075,7 +1073,7 @@ static void* main_loop(void *ptr)
 
                     channel = xchannel_create(msger, (__xipaddr_ptr)msg->data, PACK_SERIAL_RANGE);
                     __xbreak(channel == NULL);
-                    channel->ping = true;
+                    channel->keepalive = true;
                     __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
                     channel->usercontext = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
                     // 建立连接时，先用对方的 IP&PORT&local_cid 三元组作为本地索引，在收到回复的 HELLO 时，换成 local_cid 做为索引
@@ -1120,6 +1118,8 @@ static void* main_loop(void *ptr)
 
                     while (spack != &channel->flushinglist.end)
                     {
+                        xpack_ptr next_pack = spack->next;
+
                         if ((delay = (spack->timer - __xapi->clock())) > 0) {
                             // 未超时
                             if (timer > delay){
@@ -1147,6 +1147,16 @@ static void* main_loop(void *ptr)
                                     // 记录重传次数
                                     spack->head.resend++;
                                     spack->timer = __xapi->clock() + channel->back_delay * 1.5;
+                                    // 列表中如果只有一个成员，就不能更新包的位置
+                                    if (channel->flushinglist.len > 1){
+                                        // 重传之后的包放入队尾
+                                        spack->next->prev = spack->prev;
+                                        spack->prev->next = spack->next;
+                                        spack->next = &channel->flushinglist.end;
+                                        spack->prev = spack->next->prev;
+                                        spack->next->prev = spack;
+                                        spack->prev->next = spack;
+                                    }
                                 }else {
                                     __xlogd("xmsger_loop >>>>------------------------> send failed\n");
                                 }
@@ -1155,12 +1165,12 @@ static void* main_loop(void *ptr)
                             }
                         }
 
-                        spack = spack->next;
+                        spack = next_pack;
                     }
 
                     // __xlogd("xmsger_loop >>>>------------------------> flusing exit\n");
 
-                }else if (channel->ping && channel->pos == channel->len && __serialbuf_readable(channel->sendbuf) == 0){
+                }else if (channel->keepalive && channel->pos == channel->len && __serialbuf_readable(channel->sendbuf) == 0){
 
                     if ((delay = (NANO_SECONDS * 9) - (__xapi->clock() - channel->timestamp)) > 0) {
                         // 未超时
@@ -1196,19 +1206,6 @@ static void* main_loop(void *ptr)
                     break;
                 }
 
-                channel = next_channel;
-            }
-        }
-
-        // 延迟释放连接
-        if (msger->recycle_list.len > 0){
-            channel = msger->recycle_list.head.next;
-            while (channel != &msger->recycle_list.end){
-                next_channel = channel->next;
-                __xlogd("main_loop >>>>-----> recycle list len: %lu\n", msger->recycle_list.len);
-                if (channel->pack_in_pipe == 0){
-                    xchannel_free(channel);
-                }
                 channel = next_channel;
             }
         }
@@ -1406,14 +1403,6 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     msger->recv_list.head.next = &msger->recv_list.end;
     msger->recv_list.end.prev = &msger->recv_list.head;
 
-    msger->recycle_list.len = 0;
-    msger->recycle_list.head.prev = NULL;
-    msger->recycle_list.end.next = NULL;
-    msger->recycle_list.head.next = &msger->recycle_list.end;
-    msger->recycle_list.end.prev = &msger->recycle_list.head;
-
-    msger->cid = __xapi->clock() % UINT16_MAX;
-
     msger->peers = xtree_create();
     __xbreak(msger->peers == NULL);
 
@@ -1533,20 +1522,6 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->sock > 0){
             __xapi->udp_close(msger->sock);
-        }
-
-        // 延迟释放连接
-        __xlogd("main_loop >>>>-----> recycle list len: %lu\n", msger->recycle_list.len);
-        if (msger->recycle_list.len > 0){
-            xchannel_ptr channel = msger->recycle_list.head.next;
-            while (channel != &msger->recycle_list.end){
-                xchannel_ptr next_channel = channel->next;
-                if (channel->pack_in_pipe == 0){
-                    __xchannel_dequeue(channel);
-                    xchannel_free(channel);
-                }
-                channel = next_channel;
-            }
         }
 
         free(msger);
