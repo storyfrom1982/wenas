@@ -65,7 +65,7 @@ typedef struct xpack {
 
 struct xpacklist {
     uint8_t len;
-    struct xpack head, end;
+    struct xpack head;
 };
 
 typedef struct serialbuf {
@@ -114,7 +114,7 @@ struct xchannel {
 //channellist
 typedef struct xchannellist {
     size_t len;
-    struct xchannel head, end;
+    struct xchannel head;
 }*xchannellist_ptr;
 
 struct xmsger {
@@ -149,29 +149,113 @@ struct xmsger {
 #define XMSG_KEY    'x'
 #define XMSG_VAL    'X'
 
-// TODO 要判断 next 和 prev 是否为空
-#define __xchannel_enqueue(que, ch) \
-    (ch)->next = &((que)->end); \
-    (ch)->prev = (que)->end.prev; \
-    (ch)->next->prev = (ch); \
-    (ch)->prev->next = (ch); \
-    (ch)->worklist = (que); \
-    (que)->len++
+#define __ring_list_take_out(rlist, rnode) \
+    (rnode)->prev->next = (rnode)->next; \
+    (rnode)->next->prev = (rnode)->prev; \
+    (rlist)->len--
 
-// TODO 出队之后，next 和 prev 要置空
-#define __xchannel_dequeue(ch) \
-    (ch)->prev->next = (ch)->next; \
-    (ch)->next->prev = (ch)->prev; \
-    (ch)->worklist->len--
+#define __ring_list_put_into_end(rlist, rnode) \
+    (rnode)->next = &(rlist)->head; \
+    (rnode)->prev = (rlist)->head.prev; \
+    (rnode)->prev->next = (rnode); \
+    (rnode)->next->prev = (rnode); \
+    (rlist)->len++
 
-#define __xchannel_keep_alive(ch) \
-    (ch)->prev->next = (ch)->next; \
-    (ch)->next->prev = (ch)->prev; \
-    (ch)->next = &((ch)->worklist->end); \
-    (ch)->prev = (ch)->worklist->end.prev; \
-    (ch)->next->prev = (ch); \
-    (ch)->prev->next = (ch)
+#define __ring_list_put_into_head(rlist, rnode) \
+    (rnode)->next = (rlist)->head.next; \
+    (rnode)->prev = &(rlist)->head; \
+    (rnode)->prev->next = (rnode); \
+    (rnode)->next->prev = (rnode); \
+    (rlist)->len++
 
+#define __ring_list_move_to_end(rlist, rnode) \
+    (rnode)->prev->next = (rnode)->next; \
+    (rnode)->next->prev = (rnode)->prev; \
+    (rnode)->next = &(rlist)->head; \
+    (rnode)->prev = (rlist)->head.prev; \
+    (rnode)->prev->next = (rnode); \
+    (rnode)->next->prev = (rnode)
+
+#define __ring_list_move_to_head(rlist, rnode) \
+    (rnode)->prev->next = (rnode)->next; \
+    (rnode)->next->prev = (rnode)->prev; \
+    (rnode)->next = (rlist)->head.next; \
+    (rnode)->prev = &(rlist)->head; \
+    (rnode)->prev->next = (rnode); \
+    (rnode)->next->prev = (rnode)
+
+#define __xchannel_put_into_list(rlist, rnode) \
+    __ring_list_put_into_end((rlist), (rnode)); \
+    (rnode)->worklist = (rlist)
+
+#define __xchannel_tack_out_list(rnode) \
+    __ring_list_take_out((rnode)->worklist, (rnode)); \
+    (rnode)->worklist = NULL
+
+#define __xchannel_move_to_end(rnode) \
+    __ring_list_move_to_end((rnode)->worklist, (rnode))
+
+// static void __ring_list_take_out(xchannellist_ptr rlist, xchannel_ptr node)
+// {
+//     node->prev->next = node->next;
+//     node->next->prev = node->prev;
+//     rlist->len--;
+// }
+
+// static void __ring_list_put_into_end(xchannellist_ptr rlist, xchannel_ptr rnode)
+// {
+//     rnode->next = &rlist->head;
+//     rnode->prev = rlist->head.prev;
+//     rnode->prev->next = rnode;
+//     rnode->next->prev = rnode;
+//     rlist->len++;
+// }
+
+// static void __ring_list_put_into_head(xchannellist_ptr rlist, xchannel_ptr rnode)
+// {
+//     rnode->next = rlist->head.next;
+//     rnode->prev = &rlist->head;
+//     rnode->prev->next = rnode;
+//     rnode->next->prev = rnode;
+//     rlist->len++;
+// }
+
+// static void __ring_list_move_to_end(xchannellist_ptr rlist, xchannel_ptr rnode)
+// {
+//     rnode->prev->next = rnode->next;
+//     rnode->next->prev = rnode->prev;
+//     rnode->next = &rlist->head;
+//     rnode->prev = rlist->head.prev;
+//     rnode->prev->next = rnode;
+//     rnode->next->prev = rnode;
+// }
+
+// static void __ring_list_move_to_head(xchannellist_ptr rlist, xchannel_ptr rnode)
+// {
+//     rnode->prev->next = rnode->next;
+//     rnode->next->prev = rnode->prev;
+//     rnode->next = rlist->head.next;
+//     rnode->prev = &rlist->head;
+//     rnode->prev->next = rnode;
+//     rnode->next->prev = rnode;
+// }
+
+// static void __xchannel_put_into_list(xchannellist_ptr rlist, xchannel_ptr rnode)
+// {
+//     __ring_list_put_into_end(rlist, rnode);
+//     rnode->worklist = rlist;
+// }
+
+// static void __xchannel_tack_out_list(xchannel_ptr rnode)
+// {
+//     __ring_list_take_out(rnode->worklist, rnode);
+//     rnode->worklist = NULL;
+// }
+
+// static void __xchannel_move_to_end(xchannel_ptr rnode)
+// {
+//     __ring_list_move_to_end(rnode->worklist, rnode);
+// }
 
 void* xchannel_context(xchannel_ptr channel)
 {
@@ -245,13 +329,11 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, __xipaddr_ptr addr,
     channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = channel->serial_number;
 
     channel->flushinglist.len = 0;
-    channel->flushinglist.head.prev = NULL;
-    channel->flushinglist.end.next = NULL;
-    channel->flushinglist.head.next = &channel->flushinglist.end;
-    channel->flushinglist.end.prev = &channel->flushinglist.head;
+    channel->flushinglist.head.prev = &channel->flushinglist.head;
+    channel->flushinglist.head.next = &channel->flushinglist.head;
 
     // 所有新创建的连接，都先进入接收队列，同时出入保活状态，检测到超时就会被释放
-    __xchannel_enqueue(&msger->recv_list, channel);
+    __xchannel_put_into_list(&msger->recv_list, channel);
 
     return channel;
 
@@ -306,8 +388,8 @@ static inline void xchannel_clear(xchannel_ptr channel)
     }
     // 清空冲洗队列
     channel->flushinglist.len = 0;
-    channel->flushinglist.head.next = &channel->flushinglist.end;
-    channel->flushinglist.end.prev = &channel->flushinglist.head;
+    channel->flushinglist.head.prev = &channel->flushinglist.head;
+    channel->flushinglist.head.next = &channel->flushinglist.head;
     // 刷新发送队列
     while(__serialbuf_sendable(channel->sendbuf) > 0)
     {
@@ -325,7 +407,7 @@ static inline void xchannel_free(xchannel_ptr channel)
 {
     __xlogd("xchannel_free enter\n");
     xchannel_clear(channel);
-    __xchannel_dequeue(channel);
+    __xchannel_tack_out_list(channel);
     for (int i = 0; i < 3; ++i){
         if (channel->streams[i].data != NULL){
             // TODO 会导致 on_msg_from_peer 中释放内存崩溃
@@ -369,8 +451,8 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type)
     channel->msger->sendable++;
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
-        __xchannel_dequeue(channel);
-        __xchannel_enqueue(&channel->msger->send_list, channel);
+        __xchannel_tack_out_list(channel);
+        __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
 }
 
@@ -496,8 +578,8 @@ static inline void xchannel_input_message(xchannel_ptr channel, xmessage_ptr msg
 
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
-        __xchannel_dequeue(channel);
-        __xchannel_enqueue(&channel->msger->send_list, channel);
+        __xchannel_tack_out_list(channel);
+        __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
 
     if (__serialbuf_sendable(channel->sendbuf) == 0){
@@ -522,7 +604,7 @@ static inline bool xchannel_output_message(xchannel_ptr channel)
             if (channel->recvbuf->buf[index]->head.range == 1 && channel->worklist == &channel->msger->recv_list){
                 // 判断队列是否有多个成员
                 if (channel->worklist->len > 1){
-                    __xchannel_keep_alive(channel);
+                    __xchannel_move_to_end(channel);
                 }
                 // 更新时间戳
                 channel->timestamp = __xapi->clock();
@@ -569,13 +651,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->timestamp = __xapi->clock();
             channel->timestamp = pack->timestamp;
-
             pack->timer = pack->timestamp + channel->back_delay * 1.5;
-            pack->next = &channel->flushinglist.end;
-            pack->prev = channel->flushinglist.end.prev;
-            pack->next->prev = pack;
-            pack->prev->next = pack;
-            channel->flushinglist.len ++;
+            __ring_list_put_into_end(&channel->flushinglist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
@@ -650,16 +727,15 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
 
-                pack->next->prev = pack->prev;
-                pack->prev->next = pack->next;
-                channel->flushinglist.len--;
+                __ring_list_take_out(&channel->flushinglist, pack);
+
                 // 判断是否有未发送的消息
                 if (channel->send_ptr == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
                     if (channel->flushinglist.len == 0 && !channel->keepalive){
                         // 不需要保活，加入等待超时队列
-                        __xchannel_dequeue(channel);
-                        __xchannel_enqueue(&channel->msger->recv_list, channel);
+                        __xchannel_tack_out_list(channel);
+                        __xchannel_put_into_list(&channel->msger->recv_list, channel);
                     }
                 }
             }
@@ -713,9 +789,7 @@ static inline void xchannel_serial_read(xchannel_ptr channel, xpack_ptr rpack)
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
                 // 从定时队列中移除
-                pack->next->prev = pack->prev;
-                pack->prev->next = pack->next;
-                channel->flushinglist.len--;
+                __ring_list_take_out(&channel->flushinglist, pack);
             }
 
             // 使用临时变量
@@ -1103,7 +1177,7 @@ static void* main_loop(void *ptr)
             // 从头开始，每个连接发送一个 pack
             channel = msger->send_list.head.next;
 
-            while (channel != &msger->send_list.end)
+            while (channel != &msger->send_list.head)
             {
                 next_channel = channel->next;
 
@@ -1116,7 +1190,7 @@ static void* main_loop(void *ptr)
 
                     spack = channel->flushinglist.head.next;
 
-                    while (spack != &channel->flushinglist.end)
+                    while (spack != &channel->flushinglist.head)
                     {
                         xpack_ptr next_pack = spack->next;
 
@@ -1150,12 +1224,7 @@ static void* main_loop(void *ptr)
                                     // 列表中如果只有一个成员，就不能更新包的位置
                                     if (channel->flushinglist.len > 1){
                                         // 重传之后的包放入队尾
-                                        spack->next->prev = spack->prev;
-                                        spack->prev->next = spack->next;
-                                        spack->next = &channel->flushinglist.end;
-                                        spack->prev = spack->next->prev;
-                                        spack->next->prev = spack;
-                                        spack->prev->next = spack;
+                                        __ring_list_move_to_end(&channel->flushinglist, spack);
                                     }
                                 }else {
                                     __xlogd("xmsger_loop >>>>------------------------> send failed\n");
@@ -1196,7 +1265,7 @@ static void* main_loop(void *ptr)
             
             channel = msger->recv_list.head.next;
 
-            while (channel != &msger->recv_list.end){
+            while (channel != &msger->recv_list.head){
                 next_channel = channel->next;
                 // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
@@ -1392,16 +1461,12 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &msger->addr));
 
     msger->send_list.len = 0;
-    msger->send_list.head.prev = NULL;
-    msger->send_list.end.next = NULL;
-    msger->send_list.head.next = &msger->send_list.end;
-    msger->send_list.end.prev = &msger->send_list.head;
+    msger->send_list.head.prev = &msger->send_list.head;
+    msger->send_list.head.next = &msger->send_list.head;
 
     msger->recv_list.len = 0;
-    msger->recv_list.head.prev = NULL;
-    msger->recv_list.end.next = NULL;
-    msger->recv_list.head.next = &msger->recv_list.end;
-    msger->recv_list.end.prev = &msger->recv_list.head;
+    msger->recv_list.head.prev = &msger->recv_list.head;
+    msger->recv_list.head.next = &msger->recv_list.head;
 
     msger->peers = xtree_create();
     __xbreak(msger->peers == NULL);
