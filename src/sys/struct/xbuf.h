@@ -53,7 +53,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
     while (__is_false(pipe->breaking) && pos < len) {
 
-        pos += __pipe_write(pipe, data + pos, len - pos);
+        pos += __pipe_write(pipe, (uint8_t*)data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
             // __pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
@@ -107,7 +107,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
     // 长度大于 0 才能进入读循环
     while (pos < len) {
 
-        pos += __pipe_read(pipe, buf + pos, len - pos);
+        pos += __pipe_read(pipe, (uint8_t*)buf + pos, len - pos);
 
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
@@ -322,15 +322,15 @@ static inline int xtask_push(xtask_ptr task, struct xtask_enter enter)
 //     xbuf_update_writer(task->buf);
 // }
 
-static inline xtask_ptr xtask_run(__xtask_enter_func func, void *ctx)
-{
-    xtask_ptr task = xtask_create();
-    struct xtask_enter enter = {
-        func, ctx, NULL, NULL
-    };
-    xtask_push(task, enter);
-    return task;
-}
+//static inline xtask_ptr xtask_run(__xtask_enter_func func, void *ctx)
+//{
+//    xtask_ptr task = xtask_create();
+//    struct xtask_enter enter = {
+//        func, ctx, NULL, NULL
+//    };
+//    xtask_push(task, enter);
+//    return task;
+//}
 
 
 #endif //__XBUF_H__

@@ -420,12 +420,12 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
     int len = slength(key);
 
     if (depth == 1){
-        __xlogd("%*s: {\n", (depth) * 4, key);
+        __xlogi("%*s: {\n", (depth) * 4, key);
     }else {
         if (len == 0){
-            __xlogd("%*s{\n", (depth) * 4, "");
+            __xlogi("%*s{\n", (depth) * 4, "");
         }else {
-            __xlogd("%*s: {\n", (depth) * 4, key);
+            __xlogi("%*s: {\n", (depth) * 4, key);
         }
     }
 
@@ -433,23 +433,23 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
     {
         if (__typeis_int(xptr)){
 
-            __xlogd("%*s: %ld,\n", (depth + 1) * 4, parser.key, __l2i(xptr));
+            __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __l2i(xptr));
 
         }else if (__typeis_float(xptr)){
 
-            __xlogd("%*s: %lf,\n", (depth + 1) * 4, parser.key, __l2f(xptr));
+            __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __l2f(xptr));
 
         }else if (__typeis_word(xptr)){
 
-            __xlogd("%*s: %s,\n", (depth + 1) * 4, parser.key, __l2data(xptr));
+            __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __l2data(xptr));
 
         }else if (__typeis_tree(xptr)){
 
-            __xline_printf(xptr, parser.key, depth + 1);
+            __xline_printf(xptr, (const char*)parser.key, depth + 1);
 
         }else if (__typeis_list(xptr)){
 
-            __xlogd("%*s: {\n", (depth + 1) * 4, parser.key);
+            __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
 
             struct xmaker list = xline_parse(xptr);
 
@@ -457,7 +457,7 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
             {
                 if (__typeis_int(xptr)){
 
-                    __xlogd("    %*d,\n", depth * 4, __l2i(xptr));
+                    __xlogi("    %*d,\n", depth * 4, __l2i(xptr));
 
                 }else if (__typeis_tree(xptr)){
                     
@@ -465,7 +465,7 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
                 }
             }
 
-            __xlogd("  %*s},\n", depth * 4, "");
+            __xlogi("  %*s},\n", depth * 4, "");
 
         }else {
             __xloge("__xline_printf >>>>--------> type error\n");
@@ -473,12 +473,12 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
     }
 
     if (depth == 1){
-        __xlogd("%*s}\n", (depth - 1) * 4, "");
+        __xlogi("%*s}\n", (depth - 1) * 4, "");
     }else {
         if (len == 0){
-            __xlogd("%*s},\n", (depth) * 4, "");
+            __xlogi("%*s},\n", (depth) * 4, "");
         }else {
-            __xlogd("%*s},\n", (depth) * 4, "");
+            __xlogi("%*s},\n", (depth) * 4, "");
         }   
     }
 }
