@@ -212,7 +212,7 @@ void xlog_recorder_close()
         mclear(srecorder, sizeof(global_logrecorder));
     }
 
-#if defined(XMALLOC_BACKTRACE)
+#ifdef XMALLOC_BACKTRACE
     xmalloc_leak_trace(memory_leak_cb);
 #endif
 }
@@ -221,7 +221,9 @@ extern void env_backtrace_setup();
 
 int xlog_recorder_open(const char *path, __xlog_cb cb)
 {
+#ifdef XMALLOC_BACKTRACE
     env_backtrace_setup();
+#endif
     // test();
 
     static char buf[BUFSIZ];

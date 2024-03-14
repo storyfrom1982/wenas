@@ -59,24 +59,10 @@ check_c_source_compiles("
 
 
 set(kzx_sources
-    # src/main.c
-    src/sys/struct/xmsger.c
+    src/ex/xlog.c
     src/ex/ex.c
     src/sys/struct/xmalloc.c
-    # src/ex/pipe.c 
-    # src/ex/file.c
-    src/ex/xlog.c
-    # src/ex/task.c
-    # src/env/linetask.c
-    # test/env/storage_test.c
-    # test/env/logger_test.c
-    # test/env/socket_test.c
-    # test/sys/struct/heap_test.c
-    # test/sys/struct/linedb_test.c
-    # test/sys/struct/linekv_test.c
-    # test/sys/struct/tree_test.c
-    # test/env/linetask_test.c
-    # test/test.c
+    src/sys/struct/xmsger.c
 )
 
 set(kzx_defines "")
@@ -87,8 +73,6 @@ set(kzx_inclides "")
 set(kzx_directories "")
 
 set(kzx_cflags "-m64;-O0;-g;-Wno-format;")
-
-# set(CMAKE_CXX_FLAGS "-Wl,--export-dynamic")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR CMAKE_CXX_COMPILER_ID STREQUAL AppleClang)
     list(APPEND kzx_cflags "-Wno-c++11-narrowing;")
@@ -103,17 +87,13 @@ endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     list(APPEND kzx_defines -D__XDEBUG__)
-endif()
-
-if(ENV_CHECK_BACKTRACE)
-    if (NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(ENV_CHECK_BACKTRACE)
         list(APPEND kzx_defines -DXMALLOC_BACKTRACE)
-        list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0xA000000 -DXMALLOC_MAX_POOL=8)
+        list(APPEND kzx_sources src/ex/backtrace.c)
     endif()
-    list(APPEND kzx_defines -DENV_HAVA_BACKTRACE)
-    list(APPEND kzx_sources src/ex/backtrace.c)
 endif()
 
+list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
@@ -124,8 +104,17 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
 endfunction(build_executable)
 
-# build_executable(kapp src/main.cpp)
-# build_executable(xleader src/app/xleader.c)
-build_executable(xfollower src/app/xfollower.c)
-# build_executable(kapp test/sys/struct/tree_test.c)
-# build_executable(kapp test/sys/struct/heap_test.c)
+function(build_library LIBRARY_NAME)
+    add_library(${LIBRARY_NAME} ${kzx_sources})
+    target_compile_definitions(${LIBRARY_NAME} PRIVATE ${kzx_defines})
+    target_compile_options(${LIBRARY_NAME} PRIVATE ${kzx_cflags})
+    target_include_directories(${LIBRARY_NAME} PRIVATE src ${kzx_inclides})
+    target_link_directories(${LIBRARY_NAME} PRIVATE ${kzx_directories})
+    target_link_libraries(${LIBRARY_NAME} ${kzx_ldflags})
+endfunction(build_library)
+
+if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
+    build_executable(xfollower src/app/xfollower.c)
+else()
+    build_library(Kangzixin)
+endif()
