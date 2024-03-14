@@ -40,7 +40,7 @@ static void* xtask_loop(void *p)
             break;
         }
 
-        post_func = (__xtask_enter)xline_find_ptr(ctx, "func");
+        post_func = (__xtask_enter)xline_find_pointer(ctx, "func");
         if (post_func){
             (post_func)(ctx);
         }
@@ -108,8 +108,8 @@ xtask_ptr xtask_run(__xtask_enter func, void *ctx)
 {
     xtask_ptr task = xtask_create();
     xmaker_ptr maker = xtask_hold_pusher(task);
-    xline_add_ptr(maker, "func", (void*)func);
-    xline_add_ptr(maker, "ctx", ctx);
+    xline_add_pointer(maker, "func", (void*)func);
+    xline_add_pointer(maker, "ctx", ctx);
     xtask_update_pusher(task);
     return task;
 }

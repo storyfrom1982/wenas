@@ -82,6 +82,7 @@ static inline double __xline2float(xline_ptr l)
 #define __typeis_bin(l)         ((l)->b[0] == XLINE_TYPE_BIN)
 #define __typeis_list(l)        ((l)->b[0] == XLINE_TYPE_LIST)
 #define __typeis_tree(l)        ((l)->b[0] == XLINE_TYPE_TREE)
+#define __typeis_object(l)      ((l)->b[0] > XLINE_TYPE_FLOAT)
 
 #define __sizeof_head(l)        (l)->b[0] > XLINE_TYPE_FLOAT ? XLINE_SIZE : 1
 #define __sizeof_data(l)        (l)->b[0] > XLINE_TYPE_FLOAT ? __l2u((l)) : 8
@@ -92,7 +93,10 @@ typedef struct xmaker {
     uint64_t wpos, rpos, range;
     uint8_t *key;
     xline_ptr val;
-    uint8_t *head;
+    union{
+        uint8_t *head;
+        xline_ptr line;
+    };
 }xmaker_t;
 
 typedef xmaker_t xparser_t;
@@ -212,7 +216,7 @@ static inline uint64_t xline_add_binary(xmaker_ptr maker, const char *key, const
     return xline_add_object(maker, key, slength(key), val, size, XLINE_TYPE_BIN);
 }
 
-static inline uint64_t xline_add_map(xmaker_ptr maker, const char *key, xmaker_ptr mapmaker)
+static inline uint64_t xline_add_tree(xmaker_ptr maker, const char *key, xmaker_ptr mapmaker)
 {
     return xline_add_object(maker, key, slength(key), mapmaker->head, mapmaker->wpos, XLINE_TYPE_TREE);
 }
@@ -222,7 +226,7 @@ static inline uint64_t xline_add_list(xmaker_ptr maker, const char *key, xmaker_
     return xline_add_object(maker, key, slength(key), listmaker->head, listmaker->wpos, XLINE_TYPE_LIST);
 }
 
-static inline uint64_t xline_add_number(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
+static inline uint64_t xline_add_real_numbers(xmaker_ptr maker, const char *key, size_t keylen, struct xline val)
 {
     // key 本身的长度不能超过 253，因为 uint8_t 只能存储 0-255 之间的数字
     // 253 + 一个字节的头 + 一个字节的尾，正好等于 255
@@ -259,35 +263,38 @@ static inline uint64_t xline_add_number(xmaker_ptr maker, const char *key, size_
     return maker->wpos;
 }
 
-static inline uint64_t xline_add_int(xmaker_ptr maker, const char *key, int64_t n64)
+static inline uint64_t xline_add_integer(xmaker_ptr maker, const char *key, int64_t n64)
 {
-    return xline_add_number(maker, key, slength(key), __n2l(n64));
+    return xline_add_real_numbers(maker, key, slength(key), __n2l(n64));
 }
 
-static inline uint64_t xline_add_num(xmaker_ptr maker, const char *key, uint64_t u64)
+static inline uint64_t xline_add_number(xmaker_ptr maker, const char *key, uint64_t u64)
 {
-    return xline_add_number(maker, key, slength(key), __n2l(u64));
+    return xline_add_real_numbers(maker, key, slength(key), __n2l(u64));
 }
 
 static inline uint64_t xline_add_float(xmaker_ptr maker, const char *key, double f64)
 {
-    return xline_add_number(maker, key, slength(key), __f2l(f64));
+    return xline_add_real_numbers(maker, key, slength(key), __f2l(f64));
 }
 
-static inline uint64_t xline_add_ptr(xmaker_ptr maker, const char *key, void *p)
+static inline uint64_t xline_add_pointer(xmaker_ptr maker, const char *key, void *p)
 {
-    int64_t n = (int64_t)(p);
-    return xline_add_number(maker, key, slength(key), __n2l(n));
+    uint64_t n = (uint64_t)(p);
+    return xline_add_real_numbers(maker, key, slength(key), __n2l(n));
 }
 
-static inline xparser_t xline_parse(xline_ptr xmap)
+static inline xparser_t xline_parse(xline_ptr line)
 {
-    // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
     xparser_t parser = {0};
-    parser.rpos = 0;
-    parser.wpos = __sizeof_data(xmap);
-    parser.range = parser.wpos;
-    parser.head = xmap->b + XLINE_SIZE;
+    if (__typeis_tree(line) || __typeis_list(line)){
+        parser.rpos = 0;
+        parser.wpos = __sizeof_data(line);
+        parser.range = parser.wpos;
+        parser.head = line->b + XLINE_SIZE;
+    }else {
+        parser.line = line;
+    }
     return parser;
 }
 
@@ -339,7 +346,7 @@ static inline xline_ptr xline_find(xparser_ptr parser, const char *key)
     return NULL;
 }
 
-static inline int64_t xline_find_int(xparser_ptr parser, const char *key)
+static inline int64_t xline_find_integer(xparser_ptr parser, const char *key)
 {
     xline_ptr val = xline_find(parser, key);
     if (val){
@@ -348,7 +355,7 @@ static inline int64_t xline_find_int(xparser_ptr parser, const char *key)
     return EENDED;
 }
 
-static inline uint64_t xline_find_num(xparser_ptr parser, const char *key)
+static inline uint64_t xline_find_number(xparser_ptr parser, const char *key)
 {
     xline_ptr val = xline_find(parser, key);
     if (val){
@@ -375,7 +382,7 @@ static inline const char* xline_find_word(xparser_ptr parser, const char *key)
     return NULL;
 }
 
-static inline void* xline_find_ptr(xparser_ptr parser, const char *key)
+static inline void* xline_find_pointer(xparser_ptr parser, const char *key)
 {
     xline_ptr val = xline_find(parser, key);
     if (val){
