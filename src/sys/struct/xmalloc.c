@@ -732,7 +732,6 @@ int posix_memalign(void* *ptr, size_t align, size_t size)
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#if 0
 char* strdup(const char *s)
 {
     char *result = NULL;
@@ -765,7 +764,7 @@ char* strndup(const char *s, size_t n)
 
     return result;
 }
-#endif
+
 size_t slength(const char *s)
 {
     if (!s){

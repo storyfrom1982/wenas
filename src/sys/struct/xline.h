@@ -95,10 +95,12 @@ typedef struct xmaker {
     uint8_t *head;
 }xmaker_t;
 
+typedef xmaker_t xparser_t;
 typedef xmaker_t* xmaker_ptr;
+typedef xparser_t* xparser_ptr;
 
 
-static inline struct xmaker xmaker_build(uint64_t size)
+static inline struct xmaker xline_make(uint64_t size)
 {
     struct xmaker maker;
     if (size < 1024){
@@ -110,14 +112,14 @@ static inline struct xmaker xmaker_build(uint64_t size)
     return maker;
 }
 
-static inline void xmaker_clear(xmaker_ptr maker)
+static inline void xline_clear(xmaker_ptr maker)
 {
     if (maker && maker->head){
         free(maker->head);
     }
 }
 
-static inline uint64_t xmaker_hold_tree(xmaker_ptr maker, const char *key)
+static inline uint64_t xline_hold_tree(xmaker_ptr maker, const char *key)
 {
     maker->key = maker->head + maker->wpos;
     maker->key[0] = slength(key) + 1;
@@ -128,33 +130,33 @@ static inline uint64_t xmaker_hold_tree(xmaker_ptr maker, const char *key)
     return pos;
 }
 
-static inline void xmaker_save_tree(xmaker_ptr maker, uint64_t pos)
+static inline void xline_save_tree(xmaker_ptr maker, uint64_t pos)
 {
     uint64_t len = maker->wpos - pos - XLINE_SIZE;
     *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_TREE);
 }
 
-static inline uint64_t xmaker_hold_list(xmaker_ptr maker, const char *key)
+static inline uint64_t xline_hold_list(xmaker_ptr maker, const char *key)
 {
-    return xmaker_hold_tree(maker, key);
+    return xline_hold_tree(maker, key);
 }
 
-static inline void xmaker_save_list(xmaker_ptr maker, uint64_t pos)
+static inline void xline_save_list(xmaker_ptr maker, uint64_t pos)
 {
     uint64_t len = maker->wpos - pos - XLINE_SIZE;
     *((xline_ptr)(maker->head + pos)) = __s2l(len, XLINE_TYPE_LIST);
 }
 
-static inline uint64_t xmaker_list_hold_tree(xmaker_ptr maker)
+static inline uint64_t xline_list_hold_tree(xmaker_ptr maker)
 {
     maker->rpos = maker->wpos;
     maker->wpos += XLINE_SIZE;
     return maker->rpos;
 }
 
-static inline void xmaker_list_save_tree(xmaker_ptr maker, uint64_t pos)
+static inline void xline_list_save_tree(xmaker_ptr maker, uint64_t pos)
 {
-    return xmaker_save_tree(maker, pos);
+    return xline_save_tree(maker, pos);
 }
 
 static inline uint64_t xline_add_object(xmaker_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
@@ -262,7 +264,7 @@ static inline uint64_t xline_add_int(xmaker_ptr maker, const char *key, int64_t 
     return xline_add_number(maker, key, slength(key), __n2l(n64));
 }
 
-static inline uint64_t xline_add_uint(xmaker_ptr maker, const char *key, uint64_t u64)
+static inline uint64_t xline_add_num(xmaker_ptr maker, const char *key, uint64_t u64)
 {
     return xline_add_number(maker, key, slength(key), __n2l(u64));
 }
@@ -278,104 +280,104 @@ static inline uint64_t xline_add_ptr(xmaker_ptr maker, const char *key, void *p)
     return xline_add_number(maker, key, slength(key), __n2l(n));
 }
 
-static inline struct xmaker xline_parse(xline_ptr xmap)
+static inline xparser_t xline_parse(xline_ptr xmap)
 {
     // parse 生成的 maker 是在栈上分配的，离开作用域，会自动释放
-    struct xmaker maker = {0};
-    maker.rpos = 0;
-    maker.wpos = __sizeof_data(xmap);
-    maker.range = maker.wpos;
-    maker.head = xmap->b + XLINE_SIZE;
-    return maker;
+    xparser_t parser = {0};
+    parser.rpos = 0;
+    parser.wpos = __sizeof_data(xmap);
+    parser.range = parser.wpos;
+    parser.head = xmap->b + XLINE_SIZE;
+    return parser;
 }
 
-static inline xline_ptr xline_next(xmaker_ptr maker)
+static inline xline_ptr xline_next(xparser_ptr parser)
 {
-    if (maker->rpos < maker->wpos){
-        maker->key = maker->head + maker->rpos;
-        maker->rpos += 1 + maker->key[0];
-        maker->key++;
-        maker->val = (xline_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_line(maker->val);
-        return maker->val;
+    if (parser->rpos < parser->wpos){
+        parser->key = parser->head + parser->rpos;
+        parser->rpos += 1 + parser->key[0];
+        parser->key++;
+        parser->val = (xline_ptr)(parser->head + parser->rpos);
+        parser->rpos += __sizeof_line(parser->val);
+        return parser->val;
     }
     return NULL;
 }
 
-static inline xline_ptr xline_find(xmaker_ptr maker, const char *key)
+static inline xline_ptr xline_find(xparser_ptr parser, const char *key)
 {
-    uint64_t rpos = maker->rpos;
+    uint64_t rpos = parser->rpos;
 
-    while (maker->rpos < maker->wpos) {
-        maker->key = maker->head + maker->rpos;
-        maker->rpos += 1 + maker->key[0];
-        maker->val = (xline_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_line(maker->val);
-        if (slength(key) + 1 == maker->key[0]
-            && mcompare(key, maker->key + 1, maker->key[0]) == 0){
-            maker->key++;
-            return maker->val;
+    while (parser->rpos < parser->wpos) {
+        parser->key = parser->head + parser->rpos;
+        parser->rpos += 1 + parser->key[0];
+        parser->val = (xline_ptr)(parser->head + parser->rpos);
+        parser->rpos += __sizeof_line(parser->val);
+        if (slength(key) + 1 == parser->key[0]
+            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
+            parser->key++;
+            return parser->val;
         }
     }
 
-    maker->rpos = 0;
+    parser->rpos = 0;
 
-    while (maker->rpos < rpos) {
-        maker->key = maker->head + maker->rpos;
-        maker->rpos += 1 + maker->key[0];
-        maker->val = (xline_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_line(maker->val);
-        if (slength(key) + 1 == maker->key[0]
-            && mcompare(key, maker->key + 1, maker->key[0]) == 0){
-            maker->key++;
-            return maker->val;
+    while (parser->rpos < rpos) {
+        parser->key = parser->head + parser->rpos;
+        parser->rpos += 1 + parser->key[0];
+        parser->val = (xline_ptr)(parser->head + parser->rpos);
+        parser->rpos += __sizeof_line(parser->val);
+        if (slength(key) + 1 == parser->key[0]
+            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
+            parser->key++;
+            return parser->val;
         }
     }
 
-    maker->rpos = 0;
+    parser->rpos = 0;
 
     return NULL;
 }
 
-static inline int64_t xline_find_int(xmaker_ptr maker, const char *key)
+static inline int64_t xline_find_int(xparser_ptr parser, const char *key)
 {
-    xline_ptr val = xline_find(maker, key);
+    xline_ptr val = xline_find(parser, key);
     if (val){
         return __l2i(val);
     }
     return EENDED;
 }
 
-static inline uint64_t xline_find_uint(xmaker_ptr maker, const char *key)
+static inline uint64_t xline_find_num(xparser_ptr parser, const char *key)
 {
-    xline_ptr val = xline_find(maker, key);
+    xline_ptr val = xline_find(parser, key);
     if (val){
         return __l2u(val);
     }
     return EENDED;
 }
 
-static inline double xline_find_float(xmaker_ptr maker, const char *key)
+static inline double xline_find_float(xparser_ptr parser, const char *key)
 {
-    xline_ptr val = xline_find(maker, key);
+    xline_ptr val = xline_find(parser, key);
     if (val){
         return __l2f(val);
     }
     return EENDED;
 }
 
-static inline const char* xline_find_word(xmaker_ptr maker, const char *key)
+static inline const char* xline_find_word(xparser_ptr parser, const char *key)
 {
-    xline_ptr val = xline_find(maker, key);
+    xline_ptr val = xline_find(parser, key);
     if (val){
         return (const char*)__l2data(val);
     }
     return NULL;
 }
 
-static inline void* xline_find_ptr(xmaker_ptr maker, const char *key)
+static inline void* xline_find_ptr(xparser_ptr parser, const char *key)
 {
-    xline_ptr val = xline_find(maker, key);
+    xline_ptr val = xline_find(parser, key);
     if (val){
         return (void *)(__l2u(val));
     }
@@ -403,11 +405,11 @@ static inline uint64_t xline_list_append(xmaker_ptr maker, xline_ptr ptr)
     return maker->wpos;
 }
 
-static inline xline_ptr xline_list_next(xmaker_ptr maker)
+static inline xline_ptr xline_list_next(xparser_ptr parser)
 {
-    if (maker->rpos < maker->wpos){
-        xline_ptr ptr = (xline_ptr)(maker->head + maker->rpos);
-        maker->rpos += __sizeof_line(ptr);
+    if (parser->rpos < parser->wpos){
+        xline_ptr ptr = (xline_ptr)(parser->head + parser->rpos);
+        parser->rpos += __sizeof_line(ptr);
         return ptr;
     }
     return NULL;
@@ -415,7 +417,7 @@ static inline xline_ptr xline_list_next(xmaker_ptr maker)
 
 static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
 {
-    xmaker_t parser = xline_parse(xptr);
+    xparser_t parser = xline_parse(xptr);
 
     int len = slength(key);
 
@@ -451,9 +453,9 @@ static inline void __xline_printf(xline_ptr xptr, const char *key, int depth)
 
             __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
 
-            struct xmaker list = xline_parse(xptr);
+            xparser_t plist = xline_parse(xptr);
 
-            while ((xptr = xline_list_next(&list)) != NULL)
+            while ((xptr = xline_list_next(&plist)) != NULL)
             {
                 if (__typeis_int(xptr)){
 

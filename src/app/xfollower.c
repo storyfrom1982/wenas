@@ -28,46 +28,46 @@ static void build_msg(xmaker_ptr maker)
 {
     xline_add_word(maker, "cmd", "REQ");
     xline_add_word(maker, "api", "PUT");
-    uint64_t ipos = xmaker_hold_tree(maker, "int");
+    uint64_t ipos = xline_hold_tree(maker, "int");
     xline_add_int(maker, "int8", 8);
     xline_add_int(maker, "int16", 16);
-    xline_add_uint(maker, "uint32", 32);
-    xline_add_uint(maker, "uint64", 64);
-    uint64_t fpos = xmaker_hold_tree(maker, "float");
+    xline_add_num(maker, "uint32", 32);
+    xline_add_num(maker, "uint64", 64);
+    uint64_t fpos = xline_hold_tree(maker, "float");
     xline_add_float(maker, "real32", 32.3232);
     xline_add_float(maker, "real64", 64.6464);
-    xmaker_save_tree(maker, fpos);
-    xmaker_save_tree(maker, ipos);
-    xline_add_uint(maker, "uint64", 64);
+    xline_save_tree(maker, fpos);
+    xline_save_tree(maker, ipos);
+    xline_add_num(maker, "uint64", 64);
     xline_add_float(maker, "real64", 64.6464);
 
-    uint64_t lpos = xmaker_hold_list(maker, "list");
+    uint64_t lpos = xline_hold_list(maker, "list");
     for (int i = 0; i < 10; ++i){
         struct xline line = __n2l(i);
         xline_list_append(maker, &line);
     }
-    xmaker_save_list(maker, lpos);
+    xline_save_list(maker, lpos);
 
-    lpos = xmaker_hold_list(maker, "list-tree");
+    lpos = xline_hold_list(maker, "list-tree");
     for (int i = 0; i < 10; ++i){
-        ipos = xmaker_list_hold_tree(maker);
+        ipos = xline_list_hold_tree(maker);
         xline_add_word(maker, "key", "tree");
         xline_add_int(maker, "real32", i);
         xline_add_float(maker, "real64", 64.6464 * i);
-        xmaker_list_save_tree(maker, ipos);
+        xline_list_save_tree(maker, ipos);
     }
-    xmaker_save_list(maker, lpos);
+    xline_save_list(maker, lpos);
     
 }
 
 static void make_message_task(xfollower_ptr server)
 {
     if (server->tasks->channel){
-        struct xmaker maker = xmaker_build(1024);
+        struct xmaker maker = xline_make(1024);
         build_msg(&maker);
         xline_add_word(&maker, "msg", "UPDATE");
         server->tasks->len++;
-        xline_add_uint(&maker, "count", server->tasks->len);
+        xline_add_num(&maker, "count", server->tasks->len);
         xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
     }
 }
@@ -99,17 +99,17 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
     if (mcompare(cmd, "REQ", 3) == 0){
         cmd = xline_find_word(&maker, "api");
         if (mcompare(cmd, "PUT", 3) == 0){
-            xmaker_t builder = xmaker_build(1024);
+            xmaker_t builder = xline_make(1024);
             xline_add_word(&builder, "cmd", "RES");
             xline_add_int(&builder, "code", 0);
-            // uint64_t ipos = xmaker_hold_tree(&builder, "REQ");
+            // uint64_t ipos = xline_hold_tree(&builder, "REQ");
             xline_add_map(&builder, "REQ", &maker);
-            // xmaker_save_tree(&builder, ipos);
+            // xline_save_tree(&builder, ipos);
             xmsger_send_message(server->msger, channel, builder.head, builder.wpos);
         }
     }else if(mcompare(cmd, "RES", 3) == 0){
         server->tasks->pos++;
-        // xline_printf(msg);
+        xline_printf(msg);
         __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
         // make_message_task(server);
     }
@@ -123,7 +123,7 @@ static void find_msg(xline_ptr msg){
     xmaker_ptr maker = &m;
     xline_ptr ptr;
 
-    uint64_t u64 = xline_find_uint(maker, "uint64");
+    uint64_t u64 = xline_find_num(maker, "uint64");
     __xlogd("xline find uint = %lu\n", u64);
 
     double f64 = xline_find_float(maker, "real64");

@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
             break;
         }
         str[len-1] = '\0';
-        // xmaker_ptr maker = xmaker_build(2);
+        // xmaker_ptr maker = xline_make(2);
         // build_msg(maker);
         // xline_add_word(maker, "msg", str);
         // // parse_msg((xline_ptr)maker->head, maker->wpos);

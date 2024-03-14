@@ -23,10 +23,9 @@ extern void free(void* address);
 // extern void free_test(void* address);
 extern void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid));
 
-//extern char* strdup(const char *s);
-//extern char* strndup(const char *s, size_t n);
-
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
+extern char* strdup(const char *s);
+extern char* strndup(const char *s, size_t n);
 extern size_t slength(const char *s);
 extern int mcompare(const void *s1, const void *s2, size_t n);
 extern void* mcopy(void *dst, const void *src, size_t n);
