@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(kangzixin LANGUAGES C CXX)
+project(kangzixin LANGUAGES C)
 
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
 
 include (TestBigEndian)
 include (CheckCSourceCompiles)
@@ -72,13 +71,25 @@ set(kzx_ldflags "")
 set(kzx_inclides "")
 set(kzx_directories "")
 
-set(kzx_cflags "-m64;-O0;-g;-Wno-format;")
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR CMAKE_CXX_COMPILER_ID STREQUAL AppleClang)
-    list(APPEND kzx_cflags "-Wno-c++11-narrowing;")
-    list(APPEND kzx_ldflags "-Wl,-export_dynamic;")
-else()
+# 检查编译器类型
+if(CMAKE_C_COMPILER_ID MATCHES "GNU")
+    message(STATUS "Using GCC compiler")
+    list(APPEND kzx_defines -DXMALLOC_ENABLE)
+    list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
     list(APPEND kzx_ldflags "-Wl,--export-dynamic;")
+endif()
+
+if(CMAKE_C_COMPILER_ID STREQUAL Clang OR CMAKE_C_COMPILER_ID STREQUAL AppleClang)
+    message(STATUS "Using Clang compiler")
+    if(NOT DEFINED ENV{QTDIR})
+        list(APPEND kzx_ldflags "-Wl,-export_dynamic;")
+        list(APPEND kzx_defines -DXMALLOC_ENABLE)
+        list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
+    endif()
+endif()
+
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Android")
+    message(STATUS "Detected Android system")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -86,14 +97,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(kzx_cflags "-m64;-O0;-g;-Wno-format;")
     list(APPEND kzx_defines -D__XDEBUG__)
-    if(ENV_CHECK_BACKTRACE)
-        list(APPEND kzx_defines -DXMALLOC_BACKTRACE)
-        list(APPEND kzx_sources src/ex/backtrace.c)
-    endif()
 endif()
 
-list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
+if(ENV_CHECK_BACKTRACE)
+    list(APPEND kzx_defines -DUNWIND_BACKTRACE)
+    list(APPEND kzx_sources src/ex/backtrace.c)
+endif()
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})

@@ -29,12 +29,12 @@
 /////////////////////////////////////////////////////////////////////////////
 
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
 # define __backtrace_depth			16
 # define __backtrace_size			( sizeof(void*) * __backtrace_depth )
 #else
 # define __backtrace_size			0
-#endif //XMALLOC_BACKTRACE
+#endif //UNWIND_BACKTRACE
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ typedef struct xpointer {
      * 定位指针信息
      */
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
     char trace[__backtrace_size];
 #endif
 
@@ -379,9 +379,10 @@ static inline void flush_cache()
 // 	}
 // }
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef XMALLOC_ENABLE
 static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_t ptr_pid)
 {
+#ifdef UNWIND_BACKTRACE
     int result;
     size_t n = 0;
     char buf[10240];
@@ -404,8 +405,8 @@ static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_
         n += result;
     }
     __xlog_debug("[!!! Segmentation fault !!!] 0x%X->0x%X\n%s\n", ptr_pid, (uint64_t)__xapi->process_self(), buf);
+#endif //UNWIND_BACKTRACE
 }
-#endif
 
 void free(void* address)
 {
@@ -418,14 +419,14 @@ void free(void* address)
     if (address){
         ptr = __address2pointer(address);
         if (ptr->size == 0 || ptr->flag == 0){
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
             memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
 #endif
         }
 
         pool_id = ((__next_pointer(ptr)->flag >> 11) & 0x3FF);
         if ((pool_id >= mm->pool_number) || (pool_id != mm->pool[pool_id].id)){
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
             memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
 #endif
         }
@@ -433,7 +434,7 @@ void free(void* address)
         pool = &(mm->pool[pool_id]);
         page_id = ((__next_pointer(ptr)->flag >> 1) & 0x3FF);
         if ((page_id >= pool->page_number) || page_id != pool->page[page_id].id){
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
             memory_backtrace(((void**)ptr->trace) + 1, *((int64_t*)ptr->trace), *(((int64_t*)ptr->trace) + *((int64_t*)ptr->trace)));
 #endif
         }
@@ -531,7 +532,7 @@ void* malloc(size_t size)
 
         __atom_unlock(pool->page[i].lock);
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
         // ptr->trace 的开始位置用来存储获取跟踪堆栈的深度
         *((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
         *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
@@ -583,7 +584,7 @@ void* malloc(size_t size)
 
     __atom_unlock(page->lock);
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
     *((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
     *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
 #endif
@@ -696,7 +697,7 @@ void* aligned_alloc(size_t alignment, size_t size)
         aligned_pointer->flag = __next_pointer(pointer)->flag;
         pointer->size = free_size;
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
         mcopy(aligned_pointer->trace, pointer->trace, __backtrace_size);
 #endif
 
@@ -728,6 +729,53 @@ int posix_memalign(void* *ptr, size_t align, size_t size)
     return 0;
 }
 
+void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid))
+{
+    __xptr *ptr = NULL;
+    xmalloc_pool_t *pool = NULL;
+
+    if (cb == NULL){
+        return;
+    }
+
+    int result = 0;
+    size_t len = 10240;
+    char buf[10240];
+
+    flush_cache();
+
+    for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+        pool = &(mm->pool[pool_id]);
+        for (size_t page_id = 0; page_id < pool->page_number; ++page_id){
+            if (pool->page[page_id].start_address
+                && pool->page[page_id].ptr->size
+                       != pool->page[page_id].size - __free_pointer_size * 2){
+                cb("[!!! Found a memory leak !!!]", 0xFFFFFFFF);
+                ptr = (__next_pointer(pool->page[page_id].head));
+                while(ptr != pool->page[page_id].end){
+#ifdef UNWIND_BACKTRACE
+                    if (!__mergeable(__next_pointer(ptr))){
+                        size_t n = 0;
+                        int64_t count = *((int64_t*)ptr->trace);
+                        void** buffer = ((void**)ptr->trace) + 1;
+                        for (size_t idx = 0; idx < count; ++idx) {
+                            result = __xapi->dladdr((const void*)(buffer[idx]), buf + n, len - n - 1);
+                            if (result == -1){
+                                break;
+                            }
+                            n += result;
+                        }
+                        buf[n] = '\0';
+                        cb(buf, *(((int64_t*)ptr->trace) + count));
+                    }
+#endif
+                    ptr = __next_pointer(ptr);
+                }
+            }
+        }
+    }
+}
+#endif //XMALLOC_ENABLE
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
@@ -850,52 +898,6 @@ void xmalloc_release()
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid))
-{
-    __xptr *ptr = NULL;
-    xmalloc_pool_t *pool = NULL;
-
-    if (cb == NULL){
-        return;
-    }
-
-    int result = 0;
-    size_t len = 10240;
-    char buf[10240];
-
-    flush_cache();
-
-    for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-        pool = &(mm->pool[pool_id]);
-        for (size_t page_id = 0; page_id < pool->page_number; ++page_id){
-            if (pool->page[page_id].start_address
-                && pool->page[page_id].ptr->size
-                       != pool->page[page_id].size - __free_pointer_size * 2){
-                cb("[!!! Found a memory leak !!!]", 0xFFFFFFFF);
-                ptr = (__next_pointer(pool->page[page_id].head));
-                while(ptr != pool->page[page_id].end){
-#ifdef XMALLOC_BACKTRACE
-                    if (!__mergeable(__next_pointer(ptr))){
-                        size_t n = 0;
-                        int64_t count = *((int64_t*)ptr->trace);
-                        void** buffer = ((void**)ptr->trace) + 1;
-                        for (size_t idx = 0; idx < count; ++idx) {
-                            result = __xapi->dladdr((const void*)(buffer[idx]), buf + n, len - n - 1);
-                            if (result == -1){
-                                break;
-                            }
-                            n += result;
-                        }
-                        buf[n] = '\0';
-                        cb(buf, *(((int64_t*)ptr->trace) + count));
-                    }
-#endif
-                    ptr = __next_pointer(ptr);
-                }
-            }
-        }
-    }
-}
 
 /////////////////////////////////////////////////////////////////////////////
 ////

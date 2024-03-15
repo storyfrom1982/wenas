@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+#ifdef XMALLOC_ENABLE
 extern void* malloc(size_t size);
 extern void* calloc(size_t number, size_t size);
 extern void* realloc(void* address, size_t size);
@@ -22,6 +23,9 @@ extern int posix_memalign(void* *ptr, size_t align, size_t size);
 extern void free(void* address);
 // extern void free_test(void* address);
 extern void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid));
+#else //XMALLOC_ENABLE
+# include <stdlib.h>
+#endif //XMALLOC_ENABLE
 
 // 如果编译报错，跟 C 库冲突，就改成 slength, mcopy, mcompare
 extern char* strdup(const char *s);

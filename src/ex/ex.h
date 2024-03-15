@@ -103,11 +103,11 @@ typedef struct __xapi_enter {
 
 ///////////////////////////////////////////////////////
 ///// 调用堆栈回溯
-///////////////////////////////////////////////////////    
-#ifdef XMALLOC_BACKTRACE
+///////////////////////////////////////////////////////
+#ifdef UNWIND_BACKTRACE
     int64_t (*backtrace)(void** stacks, int depth);
     int (*dladdr)(const void* addr, void *buf, size_t size);
-#endif    
+#endif
 
 }*__xapi_enter_ptr;
 

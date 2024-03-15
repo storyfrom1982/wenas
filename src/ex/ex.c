@@ -390,7 +390,7 @@ int __ex_munmap(void *addr, size_t len)
 }
 
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -488,7 +488,7 @@ struct __xapi_enter posix_api_enter = {
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,
 
-#ifdef XMALLOC_BACKTRACE
+#ifdef UNWIND_BACKTRACE
     .backtrace = __ex_unwind_backtrace,
     .dladdr = __ex_dladdr,
 #endif    

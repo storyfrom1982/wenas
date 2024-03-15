@@ -181,6 +181,7 @@ static void* listen_loop(void *ptr)
         __xlogd("recv_loop >>>>-----> listen exit\n");
         xmsger_notify(server->msger, 5000000000);
     }
+    return NULL;
 }
 
 static void* task_loop(void *ptr)
