@@ -370,7 +370,7 @@ static inline double xline_find_float(xparser_ptr parser, const char *key)
     if (val){
         return __l2f(val);
     }
-    return EENDED;
+    return (double)EENDED;
 }
 
 static inline const char* xline_find_word(xparser_ptr parser, const char *key)
