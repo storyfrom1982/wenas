@@ -11,6 +11,8 @@ typedef struct xpipe {
     __atom_size writer;
     __atom_size reader;
     __atom_bool breaking;
+    __atom_bool rlock;
+    __atom_bool wlock;
     __xmutex_ptr mutex;
     char name[16];
     uint8_t *buf;
@@ -19,6 +21,10 @@ typedef struct xpipe {
 
 static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 {
+    if(!__atom_try_lock(pipe->wlock)){
+        return 0;
+    }
+
     uint64_t writable = pipe->len - pipe->writer + pipe->reader;
 
     if (writable > len){
@@ -35,8 +41,10 @@ static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             mcopy(pipe->buf, ((uint8_t*)data) + leftover, writable - leftover);
         }
         __atom_add(pipe->writer, writable);
-        __xapi->mutex_notify(pipe->mutex);
     }
+
+    __atom_unlock(pipe->wlock);
+    __xapi->mutex_notify(pipe->mutex);
 
     return writable;
 }
@@ -71,6 +79,10 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
 static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 {
+    if(!__atom_try_lock(pipe->rlock)){
+        return 0;
+    }
+
     uint64_t readable = pipe->writer - pipe->reader;
 
     if (readable > len){
@@ -87,8 +99,10 @@ static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
             mcopy(((uint8_t*)buf) + leftover, pipe->buf, readable - leftover);
         }
         __atom_add(pipe->reader, readable);
-        __xapi->mutex_notify(pipe->mutex);
     }
+
+    __atom_unlock(pipe->rlock);
+    __xapi->mutex_notify(pipe->mutex);
 
     return readable;
 }
@@ -201,6 +215,7 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
+    pipe->rlock = pipe->wlock = false;
 
     return pipe;
 

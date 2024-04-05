@@ -186,7 +186,7 @@ struct xmsger {
 #define __xchannel_put_into_list(rlist, rnode) \
     __ring_list_put_into_end((rlist), (rnode)); \
     (rnode)->worklist = (rlist)
-
+//TODO __xchannel_take_out_list
 #define __xchannel_tack_out_list(rnode) \
     __ring_list_take_out((rnode)->worklist, (rnode)); \
     (rnode)->worklist = NULL
