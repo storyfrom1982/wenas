@@ -13,7 +13,7 @@ typedef struct xtasklist {
     struct xtasklist *prev, *next;
 }*xtasklist_ptr;
 
-typedef struct xfollower{
+typedef struct xpeer{
     int sock;
     __atom_bool runnig;
     struct __xipaddr addr;
@@ -22,7 +22,14 @@ typedef struct xfollower{
     xpipe_ptr task_pipe;
     __xprocess_ptr task_pid, listen_pid;
     struct xmsgercb listener;
-}*xfollower_ptr;
+    // 通信录，好友ID列表，一个好友ID可以对应多个设备地址，但是只与主设备建立一个 channel，设备地址是动态更新的，不需要存盘。好友列表需要写数据库
+    // 设备列表，用户自己的所有设备，每个设备建立一个 channel，channel 的消息实时共享，设备地址是动态更新的，设备 ID 需要存盘
+    // 任务树，每个请求（发起的请求或接收的请求）都是一个任务，每个任务都有开始，执行和结束。请求是任务的开始，之后可能有多次消息传递，数据传输完成，双方各自结束任务，释放资源。
+    // 单个任务本身的消息是串行的，但是多个任务之间是并行的，所以用树来维护任务列表，以便多个任务切换时，可以快速定位任务。
+    // 每个任务都有一个唯一ID，通信双方维护各自的任务ID，发型消息时，要携带自身的任务ID并且指定对方的任务ID
+    // 每个任务都有执行进度
+
+}*xpeer_ptr;
 
 static void build_msg(xmaker_ptr maker)
 {
@@ -60,7 +67,7 @@ static void build_msg(xmaker_ptr maker)
     
 }
 
-static void make_message_task(xfollower_ptr server)
+static void make_message_task(xpeer_ptr server)
 {
     if (server->tasks->channel){
         struct xmaker maker = xline_make(1024);
@@ -75,7 +82,7 @@ static void make_message_task(xfollower_ptr server)
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xtasklist_ptr task = xchannel_user_ctx(channel);
     if (task){
 
@@ -93,7 +100,7 @@ static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void
 static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xmaker_t maker = xline_parse((xline_ptr)msg);
     const char *cmd = xline_find_word(&maker, "cmd");
     if (mcompare(cmd, "REQ", 3) == 0){
@@ -140,12 +147,12 @@ static void make_tasklist()
 
 }
 
-static void make_connect_task(xfollower_ptr server, const char *ip, uint16_t port)
+static void make_connect_task(xpeer_ptr server, const char *ip, uint16_t port)
 {
     xmsger_connect(server->msger, server->tasks, ip, port);
 }
 
-static void make_disconnect_task(xfollower_ptr server)
+static void make_disconnect_task(xpeer_ptr server)
 {
     xmsger_disconnect(server->msger, server->tasks->channel);
 }
@@ -153,7 +160,7 @@ static void make_disconnect_task(xfollower_ptr server)
 static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
     server->tasks = xchannel_user_ctx(channel);
     server->tasks->channel = channel;
     for (int i = 0; i < 10; ++i){
@@ -165,7 +172,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xfollower_ptr server = (xfollower_ptr)listener->ctx;
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xtasklist_ptr task = xchannel_user_ctx(channel);
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -173,7 +180,7 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 
 static void* listen_loop(void *ptr)
 {
-    xfollower_ptr server = (xfollower_ptr)ptr;
+    xpeer_ptr server = (xpeer_ptr)ptr;
     while (__is_true(server->runnig))
     {
         __xlogd("recv_loop >>>>-----> listen enter\n");
@@ -189,7 +196,7 @@ static void* task_loop(void *ptr)
     __xlogd("task_loop enter\n");
 
     xtask_enter_ptr task;
-    xfollower_ptr server = (xfollower_ptr)ptr;
+    xpeer_ptr server = (xpeer_ptr)ptr;
 
     while (xpipe_read(server->task_pipe, &task, __sizeof_ptr) == __sizeof_ptr)
     {
@@ -204,7 +211,7 @@ Clean:
 }
 
 
-static xfollower_ptr g_server = NULL;
+static xpeer_ptr g_server = NULL;
 
 static void __sigint_handler()
 {
@@ -227,9 +234,9 @@ int main(int argc, char *argv[])
     char *host = NULL;
     uint16_t port = 0;
 
-    xlog_recorder_open("./tmp/follow/log", NULL);
+    xlog_recorder_open("./tmp/xpeer/log", NULL);
 
-    xfollower_ptr server = (xfollower_ptr)calloc(1, sizeof(struct xfollower));
+    xpeer_ptr server = (xpeer_ptr)calloc(1, sizeof(struct xpeer));
     __xlogi("server: 0x%X\n", server);
 
     __set_true(server->runnig);
