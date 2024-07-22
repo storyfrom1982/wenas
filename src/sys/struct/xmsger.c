@@ -1461,5 +1461,5 @@ void* xmsger_get_channel_ctx(xchannel_ptr channel)
 
 void xmsger_set_channel_ctx(xchannel_ptr channel, void *ctx)
 {
-    return channel->userctx = ctx;
+    channel->userctx = ctx;
 }

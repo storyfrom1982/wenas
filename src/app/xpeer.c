@@ -83,7 +83,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xtasklist_ptr task = xchannel_user_ctx(channel);
+    xtasklist_ptr task = xmsger_get_channel_ctx(channel);
     if (task){
 
     }
@@ -149,7 +149,7 @@ static void make_tasklist()
 
 static void make_connect_task(xpeer_ptr server, const char *ip, uint16_t port)
 {
-    xmsger_connect(server->msger, server->tasks, ip, port);
+    xmsger_connect(server->msger, ip, port);
 }
 
 static void make_disconnect_task(xpeer_ptr server)
@@ -161,7 +161,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    server->tasks = xchannel_user_ctx(channel);
+    xmsger_set_channel_ctx(channel, server->tasks);
     server->tasks->channel = channel;
     for (int i = 0; i < 10; ++i){
         make_message_task(server);
@@ -173,7 +173,8 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xtasklist_ptr task = xchannel_user_ctx(channel);
+    xmsger_set_channel_ctx(channel, server->tasks);
+    server->tasks->channel = channel;
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
