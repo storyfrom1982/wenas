@@ -9,20 +9,11 @@
 #define KEY_LIMIT   (1 << KEY_SPACE)
 
 
-typedef struct chord* chord_ptr;
-
-
-typedef struct node {
-    uint64_t key;
-    chord_ptr chord;
-}node_t;
-
-
 typedef struct chord {
-    node_t node;
-    node_t* predecessor;
-    node_t* finger_table[KEY_SPACE];
-}chord_t;
+    uint64_t key;
+    struct chord* predecessor;
+    struct chord* finger_table[KEY_SPACE];
+}*chord_ptr;
 
 chord_ptr nodes[KEY_LIMIT] = {0};
 
@@ -70,93 +61,94 @@ static inline bool key_in_right_closed_interval(uint64_t key, uint64_t a, uint64
     return key_in_open_interval(key, a, b);
 }
 #include <stdlib.h>
-node_t* closest_preceding_finger(chord_ptr chord, uint64_t key)
+chord_ptr closest_preceding_finger(chord_ptr chord, uint64_t key)
 {
     for (int i = KEY_SPACE - 1; i >= 0; --i) {
-        __xlogd("closest_preceding_finger enter (n->key=%u < finger[%d]->key=%u < key=%u)\n", 
-            chord->node.key, i, chord->finger_table[i]->key, key);
-        if (key_in_open_interval(chord->finger_table[i]->key, chord->node.key, key)) {
-            __xlogd("closest_preceding_finger exit  predecessor->key=%u\n", chord->finger_table[i]->key);
+        // __xlogd("closest_preceding_finger enter (n->key=%u < finger[%d]->key=%u < key=%u)\n", 
+        //     chord->key, i, chord->finger_table[i]->key, key);
+        if (key_in_open_interval(chord->finger_table[i]->key, chord->key, key)) {
+            // __xlogd("closest_preceding_finger exit  predecessor->key=%u\n", chord->finger_table[i]->key);
             // 节点 i 大于 n，并且在 n 与 key 之间，逐步缩小范围
             return chord->finger_table[i];
         }
     }
     // n 的路由表中必须包含一个 key 所在的区间
-    __xlogd("closest_preceding_finger  exit n->key=%u\n", chord->node.key);
+    __xlogd("closest_preceding_finger  exit n->key=%u\n", chord->key);
     exit(0);
     // 网络中只有一个节点
-    return &chord->node;
+    return chord;
 }
 
-node_t* find_predecessor(chord_ptr chord, uint64_t key)
+chord_ptr find_predecessor(chord_ptr chord, uint64_t key)
 {
-    node_t *n = &chord->node;
-    node_t *suc = chord->finger_table[1];
-    __xlogd("find_predecessor enter (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
+    chord_ptr n = chord;
+    chord_ptr suc = chord->finger_table[1];
+    // __xlogd("find_predecessor enter (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
     // key 大于 n 并且小于等于 n 的后继，所以 n 是 key 的前继
     while (!key_in_right_closed_interval(key, n->key, suc->key)) {
         // n 的后继不是 key 的后继，要继续查找
-        n = closest_preceding_finger(n->chord, key);
-        suc = n->chord->finger_table[1];
+        n = closest_preceding_finger(n, key);
+        suc = n->finger_table[1];
+        // __xlogd("find_predecessor (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
     }
-    __xlogd("find_predecessor exit  (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
+    // __xlogd("find_predecessor exit  (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
     return n;
 }
 
-node_t* find_successor(chord_ptr chord, uint64_t key) {
-    __xlogd("find_successor enter key=%u n->key=%u\n", key, chord->node.key);
-    if (key == chord->node.key){
-        return &chord->node;
+chord_ptr find_successor(chord_ptr chord, uint64_t key) {
+    // __xlogd("find_successor enter key=%u n->key=%u\n", key, chord->key);
+    if (key == chord->key){
+        return chord;
     }
-    node_t *n = find_predecessor(chord, key);
-    __xlogd("find_successor exit  key=%u suc->key=%u\n", key, n->chord->finger_table[1]->key);
-    return n->chord->finger_table[1];
+    chord_ptr n = find_predecessor(chord, key);
+    // __xlogd("find_successor exit  key=%u suc->key=%u\n", key, n->finger_table[1]->key);
+    return n->finger_table[1];
 }
 
-void print_node(node_t *node)
+void print_node(chord_ptr node)
 {
     __xlogd("node->key=======================================%u enter\n", node->key);
-    __xlogd("node->predecessor=%u\n", node->chord->predecessor->key);
+    __xlogd("node->predecessor=%u\n", node->predecessor->key);
     uint8_t product = 1;
     for (int i = 0; i < KEY_SPACE; ++i){
         __xlogd("node->finger[%u] start_key=%u key=%u\n", 
-            i, (node->key + product) % KEY_LIMIT, node->chord->finger_table[i]->key);
+            i, (node->key + product) % KEY_LIMIT, node->finger_table[i]->key);
         product *= 2;
     }
-    if (node->key == node->chord->finger_table[1]->key){
+    if (node->key == node->finger_table[1]->key){
         __xlogd("exit key=%u\n", node->key);
         exit(0);
     }
     __xlogd("node->key=======================================%u exit\n", node->key);
 }
 
-void update_others(node_t *node)
+void update_others(chord_ptr node)
 {
     __xlogd("update_others enter\n");
     print_node(node);
     uint8_t key;
     uint8_t product = 1;
-    node_t *prev;
+    chord_ptr prev;
     for (int i = 1; i < KEY_SPACE; ++i){
-        // if (key_in_left_closed_interval(node->key, node->chord->predecessor->key, 
-        //         node->chord->predecessor->chord->finger_table[i]->key)){
-        //     node->chord->predecessor->chord->finger_table[i] = node;
+        // if (key_in_left_closed_interval(node->key, node->predecessor->key, 
+        //         node->predecessor->chord->finger_table[i]->key)){
+        //     node->predecessor->chord->finger_table[i] = node;
         // }
         key = (node->key - product) % KEY_LIMIT;
         // 找到与 n 至少相隔 2**m-1 的前继节点
-        prev = find_predecessor(node->chord, key);
+        prev = find_predecessor(node, key);
         __xlogd("update_others [prev->key=%u node->key=%u prev->finger[%d]->key=%u)\n", 
-            prev->key, node->key, i, prev->chord->finger_table[i]->key);
+            prev->key, node->key, i, prev->finger_table[i]->key);
         // n 大于等于 prev 并且小于 prev 的路由表中第 i 项，所以 n 要替换路由表的第 i 项
-        while (key_in_left_closed_interval(node->key, prev->key, prev->chord->finger_table[i]->key)){
+        while (key_in_left_closed_interval(node->key, prev->key, prev->finger_table[i]->key)){
             // node 在 prev 与 prev 的后继之间
             if (i == 1 && prev->key == node->key){
                 __xlogd("update_others i=%d prev->key=%u node->key=%u\n", i, prev->key, node->key);
-                prev = prev->chord->predecessor;
+                prev = prev->predecessor;
             }else {
                 __xlogd("update_others prev->finder[%d]->key=%u\n", i, node->key);
-                prev->chord->finger_table[i] = node;
-                prev = prev->chord->predecessor;
+                prev->finger_table[i] = node;
+                prev = prev->predecessor;
             }
         }
         product *= 2;
@@ -168,14 +160,13 @@ void update_others(node_t *node)
 chord_ptr chord_create(uint8_t key)
 {
     __xlogd("chord_create enter\n");
-    chord_ptr ring = (chord_ptr)calloc(1, sizeof(chord_t));
+    chord_ptr ring = (chord_ptr)calloc(1, sizeof(struct chord));
 
-    ring->node.key = key;
-    ring->predecessor = &ring->node;
-    ring->node.chord = ring;
+    ring->key = key;
+    ring->predecessor = ring;
 
     for (int i = 0; i < KEY_SPACE; i++) {
-        ring->finger_table[i] = &ring->node;
+        ring->finger_table[i] = ring;
     }
 
     __xlogd("chord_create exit\n");
@@ -183,60 +174,66 @@ chord_ptr chord_create(uint8_t key)
     return ring;
 }
 
-void chord_join(chord_ptr chord, node_t *ring)
+void chord_join(chord_ptr chord, chord_ptr ring)
 {
     __xlogd("chord_join enter\n");
 
     uint32_t start;
 
-    if (chord->node.key == ring->key){
+    if (chord->key == ring->key){
         return;
     }
 
-    if (ring->chord->predecessor->key == ring->key){
+    if (ring->predecessor->key == ring->key){
         // 第一个节点加入，首先要更新自己的前继和后继，使两个节点组成一个环
-        ring->chord->predecessor = &chord->node;
-        ring->chord->finger_table[1] = &chord->node;
+        ring->predecessor = chord;
+        ring->finger_table[1] = chord;
         chord->predecessor = ring;
         chord->finger_table[1] = ring;
         // 更新自己的路由表
         for (int i = 1, stride = 1; i < KEY_SPACE; ++i, stride *= 2){
             start = (ring->key + stride) % KEY_LIMIT;
-            if (key_in_right_closed_interval(start, ring->key, chord->node.key)){
+            if (key_in_right_closed_interval(start, ring->key, chord->key)){
                 // start 在 node 与新 node 之间
-                ring->chord->finger_table[i] = &chord->node;
+                ring->finger_table[i] = chord;
             }
         }        
     }else {
-        node_t *suc = find_successor(ring->chord, chord->node.key);
-        if (suc->key == chord->node.key){
-            __xlogd("Duplicate key node->key=%u suc->%u\n", chord->node.key, suc->key);
+        chord_ptr suc = find_successor(ring, chord->key);
+        if (suc->key == chord->key){
+            __xlogd("Duplicate key node->key=%u suc->%u\n", chord->key, suc->key);
             return;
         }
-        __xlogd("node->%u suc->%u\n", chord->node.key, suc->key);
+        __xlogd("node->%u suc->%u\n", chord->key, suc->key);
         // 设置 n 的后继
         chord->finger_table[1] = suc;
         // 设置 n 的前继
-        chord->predecessor = suc->chord->predecessor;
+        chord->predecessor = suc->predecessor;
         // 设置 n 的前继的后继等于 n
-        chord->predecessor->chord->finger_table[1] = &chord->node;
+        chord->predecessor->finger_table[1] = chord;
         // 设置 n 的后继的前继等于 n
-        suc->chord->predecessor = &chord->node;
+        suc->predecessor = chord;
     }
 
     for (int i = 1, stride = 2; i < KEY_SPACE -1; ++i, stride *= 2){
-        start = (chord->node.key + stride) % KEY_LIMIT;
-        if (key_in_left_closed_interval(start, chord->node.key, chord->finger_table[i]->key)){
+        start = (chord->key + stride) % KEY_LIMIT;
+        if (key_in_left_closed_interval(start, chord->key, chord->finger_table[i]->key)){
             // start 在 n 与 finger[i] 之间，所以 n + start 小于 finger[i], 所以 finger[i] 是 start 的后继节点
             chord->finger_table[i+1] = chord->finger_table[i];
         }else {
-            chord->finger_table[i+1] = find_successor(ring->chord, start);
+            chord->finger_table[i+1] = find_successor(ring, start);
         }
     }
 
+    print_node(ring);
+    print_node(chord);
+
     __xlogd("chord_join ----------------------------------------------- update_others enter\n");
-    update_others(&chord->node);
+    update_others(chord);
     __xlogd("chord_join ----------------------------------------------- update_others exit\n");
+
+    print_node(ring);
+    print_node(chord);
 }
 
 
@@ -251,9 +248,14 @@ int main(int argc, char *argv[])
         nodes[i] = chord_create(i);
     }
 
+    int k = 4;
     for (int i = 0; i < KEY_LIMIT; ++i){
-        if ((i % 2) == 0){
-            chord_join(nodes[(i+1)%KEY_LIMIT], &nodes[0]->node);
+        if ((i % k) == 0){
+            if (i <= k){
+                chord_join(nodes[(i)%KEY_LIMIT], nodes[0]);
+            }else {
+                chord_join(nodes[(i)%KEY_LIMIT], nodes[k]);
+            }
         }
     }
 
@@ -262,8 +264,13 @@ int main(int argc, char *argv[])
     // }
 
     for (int i = 0; i < KEY_LIMIT; ++i){
-        node_t *search_node = find_successor(nodes[0], (i+1)%KEY_LIMIT);
-        __xlogd("search key %u: fond %u\n", (i+1)%KEY_LIMIT, search_node->key);
+        if (i <= k){
+            chord_ptr search_node = find_successor(nodes[0], (i+1)%KEY_LIMIT);
+            __xlogd("search key %u: fond %u\n", (i+1)%KEY_LIMIT, search_node->key);
+        }else {
+            chord_ptr search_node = find_successor(nodes[k], (i+1)%KEY_LIMIT);
+            __xlogd("search key %u: fond %u\n", (i+1)%KEY_LIMIT, search_node->key);
+        }
     }
 
     for (int i = 0; i < KEY_LIMIT; ++i){
