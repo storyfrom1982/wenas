@@ -224,7 +224,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
 
 #ifdef UNWIND_BACKTRACE
     env_backtrace_setup();
-    test();
+    // test();
 #endif
 
     static char buf[BUFSIZ];
