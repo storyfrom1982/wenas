@@ -187,21 +187,25 @@ void chord_join(chord_ptr chord, node_t *ring)
 {
     __xlogd("chord_join enter\n");
 
+    uint32_t start;
+
+    if (chord->node.key == ring->key){
+        return;
+    }
+
     if (ring->chord->predecessor->key == ring->key){
+        // 第一个节点加入，首先要更新自己的前继和后继，使两个节点组成一个环
         ring->chord->predecessor = &chord->node;
         ring->chord->finger_table[1] = &chord->node;
         chord->predecessor = ring;
         chord->finger_table[1] = ring;
-        // 第一个节点加入，首先要更新自己的路由表，使两个节点组成一个环
-        uint8_t start_key;
-        uint8_t product = 1;
-        for (int i = 1; i < KEY_SPACE; ++i){
-            start_key = (ring->key + product) % KEY_LIMIT;
-            if (key_in_right_closed_interval(start_key, ring->key, chord->node.key)){
-                // start key 在 node 与新 node 之间
+        // 更新自己的路由表
+        for (int i = 1, stride = 1; i < KEY_SPACE; ++i, stride *= 2){
+            start = (ring->key + stride) % KEY_LIMIT;
+            if (key_in_right_closed_interval(start, ring->key, chord->node.key)){
+                // start 在 node 与新 node 之间
                 ring->chord->finger_table[i] = &chord->node;
             }
-            product *= 2;
         }        
     }else {
         node_t *suc = find_successor(ring->chord, chord->node.key);
@@ -220,29 +224,19 @@ void chord_join(chord_ptr chord, node_t *ring)
         suc->chord->predecessor = &chord->node;
     }
 
-    uint8_t start_key;
-    uint8_t product = 2;
-    for (int i = 1; i < KEY_SPACE -1; ++i){
-        start_key = (chord->node.key + product) % KEY_LIMIT;
-        if (key_in_left_closed_interval(start_key, chord->node.key, chord->finger_table[i]->key)){
-            // start key 在 n 与 finger[i] 之间，所以 finger[i] 是 start key 的后继节点
-            __xlogd("chord_join >>>>>>>>>>>---------------------->\n");
+    for (int i = 1, stride = 2; i < KEY_SPACE -1; ++i, stride *= 2){
+        start = (chord->node.key + stride) % KEY_LIMIT;
+        if (key_in_left_closed_interval(start, chord->node.key, chord->finger_table[i]->key)){
+            // start 在 n 与 finger[i] 之间，所以 n + start 小于 finger[i], 所以 finger[i] 是 start 的后继节点
             chord->finger_table[i+1] = chord->finger_table[i];
         }else {
-            chord->finger_table[i+1] = find_successor(ring->chord, start_key);
+            chord->finger_table[i+1] = find_successor(ring->chord, start);
         }
-        product *= 2;
     }
-
-    for (int i = 0; i < chord->node.key; ++i)
-        print_node(&nodes[i]->node);
 
     __xlogd("chord_join ----------------------------------------------- update_others enter\n");
     update_others(&chord->node);
     __xlogd("chord_join ----------------------------------------------- update_others exit\n");
-
-    for (int i = 0; i < chord->node.key; ++i)
-        print_node(&nodes[i]->node);
 }
 
 
@@ -257,9 +251,10 @@ int main(int argc, char *argv[])
         nodes[i] = chord_create(i);
     }
 
-    for (int i = 0; i < KEY_LIMIT - 8; ++i){
-        // chord_join(nodes[(i+1)%KEY_LIMIT], &nodes[i]->node);
-        chord_join(nodes[(i+1)%KEY_LIMIT], &nodes[0]->node);
+    for (int i = 0; i < KEY_LIMIT; ++i){
+        if ((i % 2) == 0){
+            chord_join(nodes[(i+1)%KEY_LIMIT], &nodes[0]->node);
+        }
     }
 
     // for (int i = 0; i < KEY_LIMIT; ++i){
@@ -267,7 +262,6 @@ int main(int argc, char *argv[])
     // }
 
     for (int i = 0; i < KEY_LIMIT; ++i){
-        // node_t *search_node = find_successor(nodes[i%(KEY_LIMIT-8)], (i+1)%KEY_LIMIT);
         node_t *search_node = find_successor(nodes[0], (i+1)%KEY_LIMIT);
         __xlogd("search key %u: fond %u\n", (i+1)%KEY_LIMIT, search_node->key);
     }
