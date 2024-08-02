@@ -143,7 +143,7 @@ void update_others(chord_ptr node)
     __xlogd("update_others enter\n");
     print_node_all(node);
     uint8_t start;
-    chord_ptr prev;
+    chord_ptr prev, next, finger_node;
     for (int i = 1; i < KEY_BITS; ++i){
         start = (node->key - (1 << (i-1))) % KEY_SPACE;
         __xlogd("update_others start %u\n", start);
@@ -151,17 +151,24 @@ void update_others(chord_ptr node)
         prev = find_predecessor(node, start);
         __xlogd("update_others [prev->key=%u node->key=%u prev->finger[%d]->key=%u)\n", 
             prev->key, node->key, i, prev->finger_table[i]->key);
-        chord_ptr suc = prev->finger_table[1];
-        if (suc->key == start 
-                && (key_in_open_interval(node->key, suc->key, suc->finger_table[i]->key) || suc->key == suc->finger_table[i]->key)){
-            suc->finger_table[i] = node;
+        next = prev->finger_table[1];
+        if (next->key == start){
+            // start 的位置正好指向一个 node，所以这个 node 的路由表中可能会指向当前 node
+            finger_node = next->finger_table[i];
+            if ((key_in_open_interval(node->key, next->key, finger_node->key) 
+                    || next->key == finger_node->key /*原来的路由表指向本身，需要更新*/)){
+                next->finger_table[i] = node;
+            }
         }
         // n 大于等于 prev 并且小于 prev 的路由表中第 i 项，所以 n 要替换路由表的第 i 项
-        while (key_in_open_interval(node->key, prev->key, prev->finger_table[i]->key) || prev->key == prev->finger_table[i]->key){
+        finger_node = prev->finger_table[i];
+        while (key_in_open_interval(node->key, prev->key, finger_node->key) 
+                || prev->key == finger_node->key /*原来的路由表指向本身，需要更新*/){
             // node 在 prev 与 prev 的后继之间
             __xlogd("update_others prev->finder[%d]->key=%u\n", i, node->key);
             prev->finger_table[i] = node;
             prev = prev->predecessor;
+            finger_node = prev->finger_table[i];
             __xlogd("update_others [prev->key=%u node->key=%u prev->finger[%d]->key=%u)\n", 
                 prev->key, node->key, i, prev->finger_table[i]->key);                
         }
@@ -271,7 +278,7 @@ int main(int argc, char *argv[])
 
     nodes[0] = chord_create(0);
 
-    int k = 3;
+    int k = 4;
     chord_ptr n = NULL;
     for (int i = 1; i < KEY_SPACE; ++i){
         if ((i % k) == 0){
