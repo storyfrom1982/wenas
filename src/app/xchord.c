@@ -5,7 +5,7 @@
 #include <sys/struct/xsha256.h>
 
 // 2 <= KEY_BITS
-#define KEY_BITS    4
+#define KEY_BITS    6
 #define KEY_SPACE   (1 << KEY_BITS)
 
 
@@ -22,13 +22,11 @@ static inline bool key_in_open_interval(uint64_t key, uint64_t a, uint64_t b)
 {
     if (a < b){ 
         if (a < key && key < b){
-            // __xlogd("key_in_open_interval --- a < b\n");
             //(a=2)->(key=7)->(b=13) 不含零点
             return true;
         }
     }else if (a > b){
         if ((a < key && key > b) || (a > key && key < b)){ 
-            // __xlogd("key_in_open_interval a > b --- key=%lu, a=%lu, b=%lu\n", key, a, b);
             //(a=13)->(key=15)->0->(b=2) 环绕零点
             //(a=13)->0->(key=1)->(b=2) 环绕零点
             return true;
@@ -60,21 +58,17 @@ static inline bool key_in_right_closed_interval(uint64_t key, uint64_t a, uint64
     }
     return key_in_open_interval(key, a, b);
 }
-#include <stdlib.h>
+
 chord_ptr closest_preceding_finger(chord_ptr chord, uint64_t key)
 {
+    chord_ptr finger;
     for (int i = KEY_BITS - 1; i >= 0; --i) {
-        // __xlogd("closest_preceding_finger enter (n->key=%u < finger[%d]->key=%u < key=%u)\n", 
-        //     chord->key, i, chord->finger_table[i]->key, key);
-        if (key_in_open_interval(chord->finger_table[i]->key, chord->key, key)) {
-            // __xlogd("closest_preceding_finger exit  predecessor->key=%u\n", chord->finger_table[i]->key);
+        finger = chord->finger_table[i];
+        if (key_in_open_interval(finger->key, chord->key, key)) {
             // 节点 i 大于 n，并且在 n 与 key 之间，逐步缩小范围
             return chord->finger_table[i];
         }
     }
-    // n 的路由表中必须包含一个 key 所在的区间
-    __xlogd("closest_preceding_finger  exit n->key=%u\n", chord->key);
-    exit(0);
     // 网络中只有一个节点
     return chord;
 }
@@ -82,43 +76,32 @@ chord_ptr closest_preceding_finger(chord_ptr chord, uint64_t key)
 chord_ptr find_predecessor(chord_ptr chord, uint64_t key)
 {
     chord_ptr n = chord;
-    chord_ptr suc = chord->finger_table[1];
-    // __xlogd("find_predecessor enter (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
+    chord_ptr successor = chord->finger_table[1];
     // key 大于 n 并且小于等于 n 的后继，所以 n 是 key 的前继
-    while (!key_in_right_closed_interval(key, n->key, suc->key)) {
+    while (!key_in_right_closed_interval(key, n->key, successor->key)) {
         // n 的后继不是 key 的后继，要继续查找
         n = closest_preceding_finger(n, key);
-        suc = n->finger_table[1];
-        // __xlogd("find_predecessor (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
+        successor = n->finger_table[1];
     }
-    // __xlogd("find_predecessor exit  (n->key=%u < key=%u <= suc->key=%u]\n", n->key, key, suc->key);
     return n;
 }
 
 chord_ptr find_successor(chord_ptr chord, uint64_t key) {
-    // __xlogd("find_successor enter key=%u n->key=%u\n", key, chord->key);
     if (key == chord->key){
         return chord;
     }
     chord_ptr n = find_predecessor(chord, key);
-    // __xlogd("find_successor exit  key=%u suc->key=%u\n", key, n->finger_table[1]->key);
     return n->finger_table[1];
 }
 
 void print_node(chord_ptr node)
 {
     __xlogd("node->key >>>>--------------------------> enter %u\n", node->key);
-    uint8_t product = 1;
     for (int i = 1; i < KEY_BITS; ++i){
         __xlogd("node->finger[%u] start_key=%u key=%u\n", 
-            i, (node->key + product) % KEY_SPACE, node->finger_table[i]->key);
-        product *= 2;
+            i, (node->key + (1 << (i-1))) % KEY_SPACE, node->finger_table[i]->key);
     }
     __xlogd("node->predecessor=%u\n", node->predecessor->key);
-    if (node->key == node->finger_table[1]->key){
-        __xlogd("exit key=%u\n", node->key);
-        exit(0);
-    }
     __xlogd("node->key >>>>-----------------------> exit %u\n", node->key);
 }
 
@@ -153,7 +136,7 @@ void update_others(chord_ptr node)
             prev->key, node->key, i, prev->finger_table[i]->key);
         next = prev->finger_table[1];
         if (next->key == start){
-            // start 的位置正好指向一个 node，所以这个 node 的路由表中可能会指向当前 node
+            // start 的位置正好指向一个 node，所以这个 node 的路由表项可能会指向当前 node
             finger_node = next->finger_table[i];
             if ((key_in_open_interval(node->key, next->key, finger_node->key) 
                     || next->key == finger_node->key /*原来的路由表指向本身，需要更新*/)){
@@ -278,7 +261,7 @@ int main(int argc, char *argv[])
 
     nodes[0] = chord_create(0);
 
-    int k = 4;
+    int k = 3;
     chord_ptr n = NULL;
     for (int i = 1; i < KEY_SPACE; ++i){
         if ((i % k) == 0){
@@ -293,10 +276,6 @@ int main(int argc, char *argv[])
             n = NULL;
         }
     }
-
-    // for (int i = 0; i < KEY_LIMIT; ++i){
-    //     print_node(&nodes[i]->node);
-    // }
 
     for (int i = 0; i < KEY_SPACE; ++i){
         if (i <= k){
