@@ -230,6 +230,7 @@ static void __sigint_handler()
 
 extern void sigint_setup(void (*handler)());
 
+#include <arpa/inet.h>
 int main(int argc, char *argv[])
 {
     char *host = NULL;
@@ -268,9 +269,13 @@ int main(int argc, char *argv[])
 
     server->sock = __xapi->udp_open();
     __xbreak(server->sock < 0);
-    __xbreak(!__xapi->udp_make_ipaddr(NULL, 9256, &server->addr));
+    __xbreak(!__xapi->udp_make_ipaddr(NULL, 0, &server->addr));
     __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
-    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &server->addr));
+    struct sockaddr_in server_addr; 
+    socklen_t addr_len = sizeof(server_addr);
+    __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
+    __xlogd("自动分配的端口号: %d\n", ntohs(server_addr.sin_port));
+    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
 
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xbreak(server->task_pipe == NULL);
@@ -283,9 +288,8 @@ int main(int argc, char *argv[])
     server->listen_pid = __xapi->process_create(listen_loop, server);
     __xbreak(server->listen_pid == NULL);
 
-    if (host){
-        make_connect_task(server, host, port);
-    }
+    // make_connect_task(server, "47.99.146.226", 9256);
+    make_connect_task(server, "192.168.43.173", 9256);
 
     char str[1024];
     while (1)
