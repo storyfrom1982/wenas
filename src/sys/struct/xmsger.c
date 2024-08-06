@@ -1051,6 +1051,7 @@ static void* main_loop(void *ptr)
                     __xbreak(channel == NULL);
                     channel->keepalive = true;
                     __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
+                    channel->userctx = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
                     // 建立连接时，先用对方的 IP&PORT&local_cid 三元组作为本地索引，在收到回复的 HELLO 时，换成 local_cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, 6, channel);
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1306,7 +1307,7 @@ Clean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
+bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port, void *user_context)
 {
     __xlogd("xmsger_connect enter\n");
 
@@ -1315,6 +1316,8 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port)
     __xbreak(msg == NULL);
 
     __xbreak(!__xapi->udp_make_ipaddr(host, port, (__xipaddr_ptr)msg->data));
+
+    *(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))) = (uint64_t)user_context;
     
     __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 

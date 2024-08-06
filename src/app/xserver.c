@@ -5,11 +5,13 @@
 #include <sys/struct/xbuf.h>
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h> 
 
 typedef struct xtasklist {
     uint64_t pos, len;
     xchannel_ptr channel;
+    void *msg;
+    struct xpeer *server;
     struct xtasklist *prev, *next;
 }*xtasklist_ptr;
 
@@ -31,53 +33,6 @@ typedef struct xpeer{
 
 }*xpeer_ptr;
 
-static void build_msg(xmaker_ptr maker)
-{
-    xline_add_word(maker, "cmd", "REQ");
-    xline_add_word(maker, "api", "PUT");
-    uint64_t ipos = xline_hold_tree(maker, "int");
-    xline_add_integer(maker, "int8", 8);
-    xline_add_integer(maker, "int16", 16);
-    xline_add_number(maker, "uint32", 32);
-    xline_add_number(maker, "uint64", 64);
-    uint64_t fpos = xline_hold_tree(maker, "float");
-    xline_add_float(maker, "real32", 32.3232);
-    xline_add_float(maker, "real64", 64.6464);
-    xline_save_tree(maker, fpos);
-    xline_save_tree(maker, ipos);
-    xline_add_number(maker, "uint64", 64);
-    xline_add_float(maker, "real64", 64.6464);
-
-    uint64_t lpos = xline_hold_list(maker, "list");
-    for (int i = 0; i < 10; ++i){
-        struct xline line = __n2l(i);
-        xline_list_append(maker, &line);
-    }
-    xline_save_list(maker, lpos);
-
-    lpos = xline_hold_list(maker, "list-tree");
-    for (int i = 0; i < 10; ++i){
-        ipos = xline_list_hold_tree(maker);
-        xline_add_word(maker, "key", "tree");
-        xline_add_integer(maker, "real32", i);
-        xline_add_float(maker, "real64", 64.6464 * i);
-        xline_list_save_tree(maker, ipos);
-    }
-    xline_save_list(maker, lpos);
-    
-}
-
-static void make_message_task(xpeer_ptr server)
-{
-    if (server->tasks->channel){
-        struct xmaker maker = xline_make(1024);
-        build_msg(&maker);
-        xline_add_word(&maker, "msg", "UPDATE");
-        server->tasks->len++;
-        xline_add_number(&maker, "count", server->tasks->len);
-        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
-    }
-}
 
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
@@ -101,55 +56,9 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmaker_t maker = xline_parse((xline_ptr)msg);
-    const char *cmd = xline_find_word(&maker, "cmd");
-    if (mcompare(cmd, "REQ", 3) == 0){
-        cmd = xline_find_word(&maker, "api");
-        if (mcompare(cmd, "PUT", 3) == 0){
-            xmaker_t builder = xline_make(1024);
-            xline_add_word(&builder, "cmd", "RES");
-            xline_add_integer(&builder, "code", 0);
-            // uint64_t ipos = xline_hold_tree(&builder, "REQ");
-            xline_add_tree(&builder, "REQ", &maker);
-            // xline_save_tree(&builder, ipos);
-            xmsger_send_message(server->msger, channel, builder.head, builder.wpos);
-        }
-    }else if(mcompare(cmd, "RES", 3) == 0){
-        server->tasks->pos++;
-        xline_printf(msg);
-        __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
-        // make_message_task(server);
-    }
-    free(msg);
+    server->tasks->msg = msg;
+    xpipe_write(server->task_pipe, &server->tasks, __sizeof_ptr);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
-}
-
-static void find_msg(xline_ptr msg){
-
-    struct xmaker m = xline_parse(msg);
-    xmaker_ptr maker = &m;
-    xline_ptr ptr;
-
-    uint64_t u64 = xline_find_number(maker, "uint64");
-    __xlogd("xline find uint = %lu\n", u64);
-
-    double f64 = xline_find_float(maker, "real64");
-    __xlogd("xline find real64 = %lf\n", f64);
-
-    const char *text = xline_find_word(maker, "cmd");
-    __xlogd("xline find type = %s\n", text);
-    text = xline_find_word(maker, "api");
-    __xlogd("xline find api = %s\n", text);
-}
-
-static void make_tasklist()
-{
-
-}
-
-static void make_connect_task(xpeer_ptr server, const char *ip, uint16_t port)
-{
-    xmsger_connect(server->msger, ip, port);
 }
 
 static void make_disconnect_task(xpeer_ptr server)
@@ -161,20 +70,18 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsger_set_channel_ctx(channel, server->tasks);
+    server->tasks = xmsger_get_channel_ctx(channel);
     server->tasks->channel = channel;
-    for (int i = 0; i < 10; ++i){
-        make_message_task(server);
-    }
+    server->tasks->server = server;
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsger_set_channel_ctx(channel, server->tasks);
-    server->tasks->channel = channel;
+    // xpeer_ptr server = (xpeer_ptr)listener->ctx;
+    // xmsger_set_channel_ctx(channel, server->tasks);
+    // server->tasks->channel = channel;
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -196,12 +103,31 @@ static void* task_loop(void *ptr)
 {
     __xlogd("task_loop enter\n");
 
-    xtask_enter_ptr task;
+    xtasklist_ptr task;
     xpeer_ptr server = (xpeer_ptr)ptr;
 
     while (xpipe_read(server->task_pipe, &task, __sizeof_ptr) == __sizeof_ptr)
     {
-
+        xline_ptr msg = (xline_ptr)task->msg;
+        xmaker_t maker = xline_parse(msg);
+        const char *cmd = xline_find_word(&maker, "msg");
+        if (mcompare(cmd, "req", 3) == 0){
+            cmd = xline_find_word(&maker, "task");
+            if (mcompare(cmd, "add", 3) == 0){
+                cmd = xline_find_word(&maker, "ip");
+                __xlogd("add ip=%s\n", cmd);
+                unsigned port = xline_find_number(&maker, "port");
+                __xlogd("add port=%u\n", port);
+                unsigned key = xline_find_number(&maker, "key");
+                __xlogd("add key=%u\n", key);
+            }
+        }else if(mcompare(cmd, "res", 3) == 0){
+            server->tasks->pos++;
+            xline_printf(msg);
+            __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
+            // make_message_task(server);
+        }
+        free(msg);
     }
 
     __xlogd("task_loop exit\n");
@@ -229,7 +155,7 @@ static void __sigint_handler()
 }
 
 extern void sigint_setup(void (*handler)());
-
+#include <arpa/inet.h>
 int main(int argc, char *argv[])
 {
     char *host = NULL;
@@ -270,7 +196,12 @@ int main(int argc, char *argv[])
     __xbreak(server->sock < 0);
     __xbreak(!__xapi->udp_make_ipaddr(NULL, 9256, &server->addr));
     __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
-    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &server->addr));
+    // struct sockaddr_in server_addr; 
+    // socklen_t addr_len = sizeof(server_addr);
+    // __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
+    // __xlogd("自动分配的端口号: %d\n", ntohs(server_addr.sin_port));
+    // __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
+    // __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &server->addr));
 
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xbreak(server->task_pipe == NULL);
@@ -288,24 +219,24 @@ int main(int argc, char *argv[])
     // }
 
     char str[1024];
-    while (1)
+    while (g_server->runnig)
     {
         __xlogi("Enter a value :\n");
         fgets(str, 1000, stdin);
-        size_t len = slength(str);
-        if (len == 2){
-            if (str[0] == 'c'){
-                make_connect_task(server, host, port);
-            }else if (str[0] == 'd'){
-                make_disconnect_task(server);
-            }else if (str[0] == 's'){
-                make_message_task(server);   
-            }else if (str[0] == 'q'){
-                break;
-            }
-        }else {
-            make_message_task(server);
-        }
+        // size_t len = slength(str);
+        // if (len == 2){
+        //     if (str[0] == 'c'){
+        //         make_connect_task(server, host, port);
+        //     }else if (str[0] == 'd'){
+        //         make_disconnect_task(server);
+        //     }else if (str[0] == 's'){
+        //         make_message_task(server);   
+        //     }else if (str[0] == 'q'){
+        //         break;
+        //     }
+        // }else {
+        //     make_message_task(server);
+        // }
     }
 
     if (server->task_pipe){

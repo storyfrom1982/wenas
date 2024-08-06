@@ -67,18 +67,6 @@ static void build_msg(xmaker_ptr maker)
     
 }
 
-static void make_message_task(xpeer_ptr server)
-{
-    if (server->tasks->channel){
-        struct xmaker maker = xline_make(1024);
-        build_msg(&maker);
-        xline_add_word(&maker, "msg", "UPDATE");
-        server->tasks->len++;
-        xline_add_number(&maker, "count", server->tasks->len);
-        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
-    }
-}
-
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
@@ -102,19 +90,18 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xmaker_t maker = xline_parse((xline_ptr)msg);
-    const char *cmd = xline_find_word(&maker, "cmd");
-    if (mcompare(cmd, "REQ", 3) == 0){
-        cmd = xline_find_word(&maker, "api");
-        if (mcompare(cmd, "PUT", 3) == 0){
-            xmaker_t builder = xline_make(1024);
-            xline_add_word(&builder, "cmd", "RES");
-            xline_add_integer(&builder, "code", 0);
-            // uint64_t ipos = xline_hold_tree(&builder, "REQ");
-            xline_add_tree(&builder, "REQ", &maker);
-            // xline_save_tree(&builder, ipos);
-            xmsger_send_message(server->msger, channel, builder.head, builder.wpos);
+    const char *cmd = xline_find_word(&maker, "msg");
+    if (mcompare(cmd, "req", 3) == 0){
+        cmd = xline_find_word(&maker, "req");
+        if (mcompare(cmd, "add", 3) == 0){
+            cmd = xline_find_word(&maker, "ip");
+            __xlogd("add ip=%s\n", cmd);
+            int port = xline_find_word(&maker, "port");
+            __xlogd("add port=%d\n", port);
+            int key = xline_find_word(&maker, "key");
+            __xlogd("add key=%d\n", key);
         }
-    }else if(mcompare(cmd, "RES", 3) == 0){
+    }else if(mcompare(cmd, "res", 3) == 0){
         server->tasks->pos++;
         xline_printf(msg);
         __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
@@ -149,7 +136,7 @@ static void make_tasklist()
 
 static void make_connect_task(xpeer_ptr server, const char *ip, uint16_t port)
 {
-    xmsger_connect(server->msger, ip, port);
+    xmsger_connect(server->msger, ip, port, server->tasks);
 }
 
 static void make_disconnect_task(xpeer_ptr server)
@@ -161,20 +148,17 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsger_set_channel_ctx(channel, server->tasks);
+    server->tasks = xmsger_get_channel_ctx(channel);
     server->tasks->channel = channel;
-    for (int i = 0; i < 10; ++i){
-        make_message_task(server);
-    }
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsger_set_channel_ctx(channel, server->tasks);
-    server->tasks->channel = channel;
+    // xpeer_ptr server = (xpeer_ptr)listener->ctx;
+    // xmsger_set_channel_ctx(channel, server->tasks);
+    // server->tasks->channel = channel;
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -229,6 +213,19 @@ static void __sigint_handler()
 }
 
 extern void sigint_setup(void (*handler)());
+
+
+static void make_message_task(xpeer_ptr server)
+{
+    if (server->tasks->channel){
+        struct xmaker maker = xline_make(1024);
+        build_msg(&maker);
+        xline_add_word(&maker, "msg", "UPDATE");
+        server->tasks->len++;
+        xline_add_number(&maker, "count", server->tasks->len);
+        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+    }
+}
 
 #include <arpa/inet.h>
 int main(int argc, char *argv[])
@@ -292,24 +289,27 @@ int main(int argc, char *argv[])
     make_connect_task(server, "192.168.43.173", 9256);
 
     char str[1024];
-    while (1)
+    while (g_server->runnig)
     {
         __xlogi("Enter a value :\n");
         fgets(str, 1000, stdin);
-        size_t len = slength(str);
-        if (len == 2){
-            if (str[0] == 'c'){
-                make_connect_task(server, host, port);
-            }else if (str[0] == 'd'){
-                make_disconnect_task(server);
-            }else if (str[0] == 's'){
-                make_message_task(server);   
-            }else if (str[0] == 'q'){
-                break;
-            }
-        }else {
-            make_message_task(server);
+        if (!g_server->runnig){
+            break;
         }
+
+        int key = atoi(str);
+        __xlogd("add node %d\n", key);
+
+        struct xmaker maker = xline_make(1024);
+        build_msg(&maker);
+        xline_add_word(&maker, "msg", "req");
+        xline_add_word(&maker, "task", "add");
+        xline_add_word(&maker, "ip", "192.168.43.173");
+        xline_add_number(&maker, "port", 9256);
+        xline_add_number(&maker, "key", key);
+        server->tasks->len++;
+        xline_add_number(&maker, "count", server->tasks->len);
+        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
     }
 
     if (server->task_pipe){
