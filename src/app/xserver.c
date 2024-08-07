@@ -368,7 +368,6 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     server->tasks->channel = channel;
     server->tasks->server = server;
-    server->tasks->msg = xmsger_get_channel_ctx(channel);
     xpipe_write(server->task_pipe, &server->tasks, __sizeof_ptr);
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
