@@ -471,6 +471,27 @@ static int msg_join_node(xTask_Ptr task)
     return 0;
 }
 
+static int req_turn(xTask_Ptr task)
+{
+    __xlogd("req_turn enter\n");
+    uint32_t key = xline_find_number(&task->maker, "key");
+    Node_Ptr node = find_successor(task->server->ring, key);
+    if (node == task->server->ring){
+        char *msg = xline_find_word(&task->maker, "text");
+        __xlogd("receive >>>>>---------------------------------> text: %s\n", msg);
+    }else {
+        char *msg = xline_find_word(&task->maker, "text");
+        xmaker_t ctx = xline_make(0);
+        xline_add_word(&ctx, "msg", "req");
+        xline_add_word(&ctx, "task", "turn");
+        xline_add_number(&ctx, "key", key);
+        xline_add_word(&ctx, "text", msg);
+        xmsger_send_message(task->server->msger, task->channel, ctx.head, ctx.wpos);
+    }
+    __xlogd("req_turn exit\n");
+    return 0;
+}
+
 static int req_add_node(xTask_Ptr task)
 {
     __xlogd("req_add_node enter\n");
@@ -562,6 +583,8 @@ static void* task_loop(void *ptr)
                 req_invite_node(task);
             }else if (mcompare(cmd, "add", slength("add")) == 0){
                 req_add_node(task);
+            }else if (mcompare(cmd, "turn", slength("turn")) == 0){
+                req_turn(task);
             }
         }else if(mcompare(cmd, "res", 3) == 0){
             xline_printf(msg);
