@@ -365,10 +365,9 @@ static void make_disconnect_task(xpeer_ptr server)
 static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    server->tasks->channel = channel;
-    server->tasks->server = server;
-    xpipe_write(server->task_pipe, &server->tasks, __sizeof_ptr);
+    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    task->channel = channel;
+    xpipe_write(task->server->task_pipe, &task, __sizeof_ptr);
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
