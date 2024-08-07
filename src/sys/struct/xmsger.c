@@ -1466,3 +1466,8 @@ void xmsger_set_channel_ctx(xchannel_ptr channel, void *ctx)
 {
     channel->userctx = ctx;
 }
+
+__xipaddr_ptr xmsger_get_channel_ipaddr(xchannel_ptr channel)
+{
+    return &channel->addr;
+}

@@ -29,6 +29,7 @@ extern bool xmsger_connect(xmsger_ptr msger, const char *addr, uint16_t port, vo
 extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel);
 extern void* xmsger_get_channel_ctx(xchannel_ptr channel);
 extern void xmsger_set_channel_ctx(xchannel_ptr channel, void *ctx);
+extern __xipaddr_ptr xmsger_get_channel_ipaddr(xchannel_ptr channel);
 
 
 #endif //__XMSGER_H__

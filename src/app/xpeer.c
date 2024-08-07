@@ -7,18 +7,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct xtasklist {
+typedef struct XTask {
     uint64_t pos, len;
     xchannel_ptr channel;
-    struct xtasklist *prev, *next;
-}*xtasklist_ptr;
+    struct XTask *prev, *next;
+}*xTask_Ptr;
 
 typedef struct xpeer{
     int sock;
     __atom_bool runnig;
     struct __xipaddr addr;
     xmsger_ptr msger;
-    xtasklist_ptr tasks;
+    xTask_Ptr tasks;
     xpipe_ptr task_pipe;
     __xprocess_ptr task_pid, listen_pid;
     struct xmsgercb listener;
@@ -71,7 +71,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xtasklist_ptr task = xmsger_get_channel_ctx(channel);
+    xTask_Ptr task = xmsger_get_channel_ctx(channel);
     if (task){
 
     }
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
     g_server = server;
     sigint_setup(__sigint_handler);
 
-    server->tasks = (xtasklist_ptr)calloc(1, sizeof(struct xtasklist));
+    server->tasks = (xTask_Ptr)calloc(1, sizeof(struct XTask));
 
     if (argc == 3){
         host = strdup(argv[1]);
@@ -303,8 +303,8 @@ int main(int argc, char *argv[])
         struct xmaker maker = xline_make(1024);
         build_msg(&maker);
         xline_add_word(&maker, "msg", "req");
-        xline_add_word(&maker, "task", "add");
-        xline_add_word(&maker, "ip", "192.168.43.173");
+        xline_add_word(&maker, "task", "join");
+        xline_add_word(&maker, "ip", "47.99.146.226");
         xline_add_number(&maker, "port", 9256);
         xline_add_number(&maker, "key", key);
         server->tasks->len++;
