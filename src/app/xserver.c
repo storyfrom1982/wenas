@@ -314,6 +314,8 @@ typedef struct xpeer{
     int sock;
     __atom_bool runnig;
     struct __xipaddr addr;
+    char ip[16];
+    uint16_t port;
     Node_Ptr ring;
     xmsger_ptr msger;
     xTask_Ptr tasks;
@@ -431,8 +433,8 @@ static int msg_join_node(xTask_Ptr task)
     xline_add_word(&maker, "msg", "req");
     xline_add_word(&maker, "task", "invite");
     uint64_t pos = xline_hold_list(&maker, "nodes");
-    Node_Ptr n = task->server->ring;
-    do {
+    Node_Ptr n = task->server->ring->predecessor;
+    while (n != task->server->ring) {
         uint64_t tpos = xline_list_hold_tree(&maker);
         __xipaddr_ptr addr = xmsger_get_channel_ipaddr(n->channel);
         char ip[INET_ADDRSTRLEN];
@@ -443,9 +445,15 @@ static int msg_join_node(xTask_Ptr task)
         xline_add_number(&maker, "key", n->key);
         xline_list_save_tree(&maker, tpos);
         n = n->predecessor;
-    }while (n != task->server->ring);
-    xline_save_list(&maker, pos);
+    }
 
+    uint64_t tpos = xline_list_hold_tree(&maker);
+    xline_add_word(&maker, "ip", task->server->ip);
+    xline_add_number(&maker, "port",task->server->port);
+    xline_add_number(&maker, "key", task->server->ring->key);
+    xline_list_save_tree(&maker, tpos);
+
+    xline_save_list(&maker, pos);
     xmsger_send_message(task->server->msger, task->channel, maker.head, maker.wpos);
 
     Node_Ptr node = node_create(key);
@@ -573,27 +581,20 @@ extern void sigint_setup(void (*handler)());
 #include <arpa/inet.h>
 int main(int argc, char *argv[])
 {
-    char *host = NULL;
-    uint16_t port = 0;
-
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     xpeer_ptr server = (xpeer_ptr)calloc(1, sizeof(struct xpeer));
-    __xlogi("server: 0x%X\n", server);
-    __xlogi("argv[1]=%s\n", argv[1]);
+    mcopy(server->ip, argv[1], slength(argv[1]));
+    server->port = atoi(argv[2]);
+    server->ring = node_create(atoi(argv[3]));
 
-    server->ring = node_create(atoi(argv[1]));
+    __xlogi("ip=%s port=%u key=%u\n", server->ip, server->port, server->ring->key);
 
     __set_true(server->runnig);
     g_server = server;
     sigint_setup(__sigint_handler);
 
     server->tasks = (xTask_Ptr)calloc(1, sizeof(struct XTask));
-
-    if (argc == 3){
-        host = strdup(argv[1]);
-        port = atoi(argv[2]);
-    }
 
     // const char *host = "127.0.0.1";
     // const char *host = "47.99.146.226";
@@ -685,10 +686,6 @@ int main(int argc, char *argv[])
     }
     
     free(server);
-
-    if (host){
-        free(host);
-    }
 
     xlog_recorder_close();
 
