@@ -406,6 +406,7 @@ typedef struct task_type {
 #include <arpa/inet.h>
 static int req_join_node(xTask_Ptr task)
 {
+    __xlogd("req_join_node enter\n");
     char *ip = xline_find_word(&task->maker, "ip");
     __xlogd("add ip=%s\n", ip);
     unsigned port = xline_find_number(&task->maker, "port");
@@ -421,11 +422,13 @@ static int req_join_node(xTask_Ptr task)
     new_task->server = task->server;
     new_task->msg = ctx.head;
     xmsger_connect(task->server->msger, ip, port, new_task);
+    __xlogd("req_join_node exit\n");
     return 0;
 }
 
 static int msg_join_node(xTask_Ptr task)
 {
+    __xlogd("msg_join_node enter\n");
     uint32_t key = xline_find_number(&task->maker, "key");
     __xlogd("add key=%u\n", key);
 
@@ -462,20 +465,26 @@ static int msg_join_node(xTask_Ptr task)
     if (ret == -1){
         return -1;
     }
+    node_print_all(task->server->ring);
+    __xlogd("msg_join_node exit\n");
 
     return 0;
 }
 
 static int req_add_node(xTask_Ptr task)
 {
+    __xlogd("req_add_node enter\n");
     uint32_t key = xline_find_number(&task->maker, "key");
     Node_Ptr node = node_create(key);
     node->channel = task->channel;
     node_join(task->server->ring, node);
+    node_print_all(task->server->ring);
+    __xlogd("req_add_node exit\n");
 }
 
 static int msg_invite_node(xTask_Ptr task)
 {
+    __xlogd("msg_invite_node enter\n");
     Node_Ptr node = xline_find_pointer(&task->maker, "node");
     node->channel = task->channel;
     xmaker_t new_node = xline_make(0);
@@ -483,11 +492,14 @@ static int msg_invite_node(xTask_Ptr task)
     xline_add_word(&new_node, "task", "add");
     xline_add_number(&task->maker, "key", task->server->ring->key);
     xmsger_send_message(task->server->msger, node->channel, new_node.head, new_node.wpos);
+    node_print_all(task->server->ring);
+    __xlogd("msg_invite_node exit\n");
     return 0;
 }
 
 static int req_invite_node(xTask_Ptr task)
 {
+    __xlogd("req_invite_node enter\n");
     xline_ptr nodes = xline_find(&task->maker, "nodes");
 
     xline_ptr xptr;
@@ -518,6 +530,7 @@ static int req_invite_node(xTask_Ptr task)
         }
     }
     node_print_all(task->server->ring);
+    __xlogd("req_invite_node exit\n");
     
     return 0;
 }
