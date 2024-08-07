@@ -476,6 +476,7 @@ static int req_turn(xTask_Ptr task)
     __xlogd("req_turn enter\n");
     uint32_t key = xline_find_number(&task->maker, "key");
     Node_Ptr node = find_successor(task->server->ring, key);
+    __xlogd("req_turn successor node key=%u\n", node->key);
     if (node == task->server->ring){
         char *msg = xline_find_word(&task->maker, "text");
         __xlogd("receive >>>>>---------------------------------> text: %s\n", msg);
@@ -486,7 +487,7 @@ static int req_turn(xTask_Ptr task)
         xline_add_word(&ctx, "task", "turn");
         xline_add_number(&ctx, "key", key);
         xline_add_word(&ctx, "text", msg);
-        xmsger_send_message(task->server->msger, task->channel, ctx.head, ctx.wpos);
+        xmsger_send_message(task->server->msger, node->channel, ctx.head, ctx.wpos);
     }
     __xlogd("req_turn exit\n");
     return 0;
