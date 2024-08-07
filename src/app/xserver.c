@@ -475,6 +475,7 @@ static int req_turn(xTask_Ptr task)
 {
     __xlogd("req_turn enter\n");
     uint32_t key = xline_find_number(&task->maker, "key");
+    __xlogd("req_turn find key=%u\n", key);
     Node_Ptr node = find_successor(task->server->ring, key);
     __xlogd("req_turn successor node key=%u\n", node->key);
     if (node == task->server->ring){

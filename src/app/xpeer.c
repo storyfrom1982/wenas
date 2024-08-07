@@ -92,20 +92,10 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
     xmaker_t maker = xline_parse((xline_ptr)msg);
     const char *cmd = xline_find_word(&maker, "msg");
     if (mcompare(cmd, "req", 3) == 0){
-        cmd = xline_find_word(&maker, "req");
-        if (mcompare(cmd, "add", 3) == 0){
-            cmd = xline_find_word(&maker, "ip");
-            __xlogd("add ip=%s\n", cmd);
-            int port = xline_find_word(&maker, "port");
-            __xlogd("add port=%d\n", port);
-            int key = xline_find_word(&maker, "key");
-            __xlogd("add key=%d\n", key);
-        }
+        xline_printf(msg);
     }else if(mcompare(cmd, "res", 3) == 0){
         server->tasks->pos++;
         xline_printf(msg);
-        __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>--------------------------------------------------------------> pos: %lu len: %lu\n", server->tasks->pos, server->tasks->len);
-        // make_message_task(server);
     }
     free(msg);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -285,31 +275,92 @@ int main(int argc, char *argv[])
     server->listen_pid = __xapi->process_create(listen_loop, server);
     __xbreak(server->listen_pid == NULL);
 
-    // make_connect_task(server, "47.99.146.226", 9256);
-    make_connect_task(server, "192.168.43.173", 9256);
+    make_connect_task(server, "47.99.146.226", 9256);
+    // make_connect_task(server, "192.168.43.173", 9256);
+    // make_connect_task(server, "47.92.77.19", 9256);
+    // make_connect_task(server, "120.78.155.213", 9256);
 
     char str[1024];
+    char input[256];
+    char command[256];
+    char ip[256];
+    uint32_t key;
     while (g_server->runnig)
     {
-        __xlogi("Enter a value :\n");
-        fgets(str, 1000, stdin);
-        if (!g_server->runnig){
-            break;
+        printf("> "); // 命令提示符
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            break; // 读取失败，退出循环
         }
 
-        int key = atoi(str);
-        __xlogd("add node %d\n", key);
+        // 去掉输入字符串末尾的换行符
+        input[strcspn(input, "\n")] = 0;
 
-        struct xmaker maker = xline_make(1024);
-        build_msg(&maker);
-        xline_add_word(&maker, "msg", "req");
-        xline_add_word(&maker, "task", "join");
-        xline_add_word(&maker, "ip", "47.99.146.226");
-        xline_add_number(&maker, "port", 9256);
-        xline_add_number(&maker, "key", key);
-        server->tasks->len++;
-        xline_add_number(&maker, "count", server->tasks->len);
-        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+        // 分割命令和参数
+        sscanf(input, "%s", command);
+
+        if (strcmp(command, "help") == 0) {
+            // print_help();
+        } else if (strcmp(command, "join") == 0) {
+            __xlogi("输入IP地址: ");
+            if (fgets(input, sizeof(input), stdin) != NULL) {
+                input[strcspn(input, "\n")] = 0;
+                strcpy(ip, input);
+            } else {
+                __xlogi("读取IP地址失败\n");
+                continue;
+            }
+
+            __xlogi("输入端口号: ");
+            if (fgets(input, sizeof(input), stdin) != NULL) {
+                input[strcspn(input, "\n")] = 0;
+                port = atoi(input);
+            } else {
+                printf("读取端口号失败\n");
+                continue;
+            }
+
+            __xlogi("输入键值: ");
+            if (fgets(input, sizeof(input), stdin) != NULL) {
+                input[strcspn(input, "\n")] = 0;
+                key = atoi(input);
+            } else {
+                __xlogi("读取键值失败\n");
+                continue;
+            }
+
+            struct xmaker maker = xline_make(1024);
+            xline_add_word(&maker, "msg", "req");
+            xline_add_word(&maker, "task", "join");
+            xline_add_word(&maker, "ip", ip);
+            xline_add_number(&maker, "port", port);
+            xline_add_number(&maker, "key", key);
+            xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+
+            // handle_join(ip, port, key);
+        }else if (strcmp(command, "turn") == 0) {
+            __xlogi("输入键值: ");
+            if (fgets(input, sizeof(input), stdin) != NULL) {
+                input[strcspn(input, "\n")] = 0;
+                key = atoi(input);
+            } else {
+                __xlogi("读取键值失败\n");
+                continue;
+            }
+
+            struct xmaker maker = xline_make(1024);
+            xline_add_word(&maker, "msg", "req");
+            xline_add_word(&maker, "task", "turn");
+            xline_add_number(&maker, "key", key);
+            xline_add_word(&maker, "text", "Hello World");
+            xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+
+            // handle_join(ip, port, key);
+        } else if (strcmp(command, "exit") == 0) {
+            __xlogi("再见！\n");
+            break;
+        } else {
+            __xlogi("未知命令: %s\n", command);
+        }
     }
 
     if (server->task_pipe){
