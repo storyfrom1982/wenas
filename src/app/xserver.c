@@ -495,7 +495,7 @@ static int msg_invite_node(xTask_Ptr task)
     __xlogd("msg_invite_node 4\n");
     xline_add_word(&new_node, "task", "add");
     __xlogd("msg_invite_node 5\n");
-    xline_add_number(&task->maker, "key", task->server->ring->key);
+    xline_add_number(&new_node, "key", task->server->ring->key);
     __xlogd("msg_invite_node 6\n");
     xmsger_send_message(task->server->msger, node->channel, new_node.head, new_node.wpos);
     __xlogd("msg_invite_node 7\n");
