@@ -68,14 +68,11 @@ xhtnode_t* xhtnode_create(uint64_t hash_key, uint8_t *uuid, uint8_t uuid_len)
 {
     xhtnode_t *node = (xhtnode_t*)calloc(1, sizeof(xhtnode_t));
     node->key = hash_key;
-    node->uuid_len = uuid_len;
     if (uuid && uuid_len){
+        node->uuid_len = uuid_len;
         node->uuid = (uint8_t*)malloc(node->uuid_len + 1);
         mcopy(node->uuid, uuid, node->uuid_len + 1);
     }
-    node->node.parent = &node->node;
-    node->node.left = (struct avl_node*)node;
-    node->node.right = (struct avl_node*)node;
     node->next = node;
     node->prev = node;
     return node;

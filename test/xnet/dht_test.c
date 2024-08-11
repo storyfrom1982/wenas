@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     test_hash_tree();
-    // test_hash_table();
+    test_hash_table();
 
     xlog_recorder_close();
 
