@@ -4,358 +4,284 @@
 
 static inline int number_compare(const void *a, const void *b)
 {
-	xnode_t *x = (xnode_t*)a;
-	xnode_t *y = (xnode_t*)b;
-	return x->hash - y->hash;
+	xhtnode_t *x = (xhtnode_t*)a;
+	xhtnode_t *y = (xhtnode_t*)b;
+	return x->key - y->key;
 }
 
 static inline int bytes_compare(const void *a, const void *b)
 {
-    xnode_t *na = (xnode_t*)a;
-	xnode_t *nb = (xnode_t*)b;
-    // __xlogd("bytes_compare enter %s<>%s\n", na->key, nb->key);
-    char *s1 = na->key; 
-    char *s2 = nb->key;
-    int len = (na->key_len < nb->key_len ? na->key_len : nb->key_len);
+    xhtnode_t *na = (xhtnode_t*)a;
+	xhtnode_t *nb = (xhtnode_t*)b;
+    char *s1 = na->uuid; 
+    char *s2 = nb->uuid;
+    int len = (na->uuid_len < nb->uuid_len ? na->uuid_len : nb->uuid_len);
     while (--len && *(char*)s1 == *(char*)s2){
         s1 = (char*)s1 + 1;
         s2 = (char*)s2 + 1;
     }
     len = (*(char*)s1 - *(char*)s2);
     if (len == 0){
-        return na->key_len - nb->key_len;
+        return na->uuid_len - nb->uuid_len;
     }
     return len;
 }
 
 static inline int memory_compare(const void *a, const void *b)
 {
-    // __xlogd("memory_compare enter\n");
-    xnode_t *na = (xnode_t*)a;
-	xnode_t *nb = (xnode_t*)b;
-    // __xlogd("memory_compare a.len=%lu b.len=%lu\n", na->key_len, nb->key_len);
-    uint64_t *x = (uint64_t*)na->key;
-    uint64_t *y = (uint64_t*)nb->key;
-    if (na->key_len == nb->key_len && (na->key_len & 7) == 0){
-        for (int i = 0; i < na->key_len; i+=8){
-            // __xlogd("memory_compare x=%lu y=%lu\n", x, y);
+    xhtnode_t *na = (xhtnode_t*)a;
+	xhtnode_t *nb = (xhtnode_t*)b;
+    uint64_t *x = (uint64_t*)na->uuid;
+    uint64_t *y = (uint64_t*)nb->uuid;
+    if (na->uuid_len == nb->uuid_len && (na->uuid_len & 7) == 0){
+        for (int i = 0; i < na->uuid_len; i+=8){
             if (x != y){
                 return x - y;
             }
             x ++;
             y ++;
         }
-        // __xlogd("memory_compare exit\n");
         return 0;
     }
     return bytes_compare(a, b);
 }
 
-#define HASHWORDBITS 32
-
-static inline uint32_t hash_string (const char *key, uint32_t *key_len)
+static inline uint32_t hash_string(const char *uuid, uint32_t *uuid_len)
 {
     unsigned long int hval, g;
-    const char *str = key;
+    const char *str = uuid;
     hval = 0;
     while (*str != '\0'){
-        (*key_len)++;
+        (*uuid_len)++;
         hval <<= 4;
         hval += (unsigned char) *str++;
-        g = hval & ((unsigned long int) 0xf << (HASHWORDBITS - 4));
+        g = hval & ((unsigned long int) 0xf << (32 - 4));
         if (g != 0){
-            hval ^= g >> (HASHWORDBITS - 8);
+            hval ^= g >> (32 - 8);
             hval ^= g;
         }
     }
     return hval;
 }
 
-xnode_t* xnode_create(uint64_t hash, uint8_t *key, uint8_t key_len)
+xhtnode_t* xhtnode_create(uint64_t hash_key, uint8_t *uuid, uint8_t uuid_len)
 {
-    xnode_t *node = (xnode_t*)calloc(1, sizeof(xnode_t));
-    node->hash = hash;
-    node->key_len = key_len;
-    if (key && key_len){
-        node->key = (uint8_t*)malloc(node->key_len + 1);
-        mcopy(node->key, key, node->key_len + 1);
+    xhtnode_t *node = (xhtnode_t*)calloc(1, sizeof(xhtnode_t));
+    node->key = hash_key;
+    node->uuid_len = uuid_len;
+    if (uuid && uuid_len){
+        node->uuid = (uint8_t*)malloc(node->uuid_len + 1);
+        mcopy(node->uuid, uuid, node->uuid_len + 1);
     }
-    node->list_len = 0;
     node->node.parent = &node->node;
     node->node.left = (struct avl_node*)node;
     node->node.right = (struct avl_node*)node;
     node->next = node;
     node->prev = node;
-    return node;    
+    return node;
 }
 
-void xhash_table_init(xhash_table_t *table, uint32_t size /*must be the power of 2*/)
+void xhash_table_init(xhash_table_t *ht, uint32_t size)
 {
-    table->count = 0;
-    table->size = size;
-    table->mask = size - 1;
-    table->head.next = &(table->head);
-    table->head.prev = &(table->head);
-    table->table = (xnode_t**)calloc(size, sizeof(void*));
-    avl_tree_init(&table->tree, bytes_compare, sizeof(xnode_t), AVL_OFFSET(xnode_t, node));
+    ht->count = 0;
+    ht->size = size;
+    ht->mask = size - 1;
+    ht->head.next = &(ht->head);
+    ht->head.prev = &(ht->head);
+    ht->table = (xhtnode_t**)calloc(size, sizeof(void*));
+    avl_tree_init(&ht->tree, bytes_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
 }
 
 
-void xhash_table_clear(xhash_table_t *table)
+void xhash_table_clear(xhash_table_t *ht)
 {
-    __xlogd("xhash_table_clear enter\n");   
-    if (table == NULL){
-        return;
-    }
-    for (xnode_t *node = table->head.next; node != &table->head; node = node->next){
-        __xlogd("xhash_table_clear list len=%u key=%s pos=(%u)\n", node->list_len, node->key, node->hash & table->mask);
-        if (((node->hash & table->mask) != (node->prev->hash & table->mask)) && node->prev != &table->head && node->list_len == 0){
-            __xlogd("xhash_table_clear list len=%u key=%s pos=(%u)\n", node->list_len, node->key, node->hash & table->mask);
-            __xlogd("xhash_table_clear error\n");
-            exit(0);
+    if (ht){
+        for (xhtnode_t *node = ht->head.next; node != &ht->head; node = node->next){
+            free(node->uuid);
+            free(node);
         }
-        free(node->key);
-        free(node);
+        free(ht->table);
+        mclear(ht, sizeof(xhash_table_t));
     }
-    free(table->table);
-    mclear(table, sizeof(xhash_table_t));
-    __xlogd("xhash_table_clear exit\n");
 }
 
-void xhash_table_add(xhash_table_t *table, const char *key, void *value)
+void xhash_table_add(xhash_table_t *ht, const char *uuid, void *value)
 {
-    // __xlogd("xhash_table_add enter\n");
-    xnode_t *node = xnode_create(0, NULL, 0);
-    node->hash = hash_string(key, &node->key_len);
-    // __xlogd("xhash_table_add hash %lu str_len=%u\n", node->hash, node->key_len);
-    node->key = (uint8_t*)malloc(node->key_len + 1);
-    mcopy(node->key, key, node->key_len + 1);
+    xhtnode_t *node = xhtnode_create(0, NULL, 0);
+    node->key = hash_string(uuid, &node->uuid_len);
+    node->uuid = (uint8_t*)malloc(node->uuid_len + 1);
+    mcopy(node->uuid, uuid, node->uuid_len + 1);
     node->value = value;
-    uint32_t pos = node->hash & table->mask;
-    __xlogd("xhash_table_add hash key %s hash=%lu pos=(%u)\n", node->key, node->hash, pos);
-    if (table->table[pos] == NULL){
-        // __xlogd("xhash_table_add 1\n");
-        table->table[pos] = node;
-        node->prev = &table->head;
-        node->next = table->head.next;
+    uint32_t pos = node->key & ht->mask;
+
+    if (ht->table[pos] == NULL){
+        ht->table[pos] = node;
+        node->prev = &ht->head;
+        node->next = ht->head.next;
         node->next->prev = node;
         node->prev->next = node;
         node->list_len = 0;
-        table->count++;
+        ht->count++;
+
+    }else if (bytes_compare(node, ht->table[pos]) != 0 
+                && avl_tree_add(&ht->tree, node) == NULL){
+        xhtnode_t *head = ht->table[pos];
+        node->prev = head;
+        node->next = head->next;
+        node->prev->next = node;
+        node->next->prev = node;
+        head->list_len++;
+        ht->count++;
+
     }else {
-        if (bytes_compare(node, table->table[pos]) != 0 && avl_tree_add(&table->tree, node) == NULL){
-            xnode_t *head = table->table[pos];
-            node->prev = head;
-            node->next = head->next;
-            node->prev->next = node;
-            node->next->prev = node;
-            head->list_len++;
-            table->count++;
-            __xlogd("xhash_table_add pos=(%u) list len=(%u)\n", head->hash & table->mask, head->list_len);
-        }else {
-            __xlogd("xhash_table_add repeat key ###### %s\n", node->key);
-            free(node->key);
-            free(node);
-        }
-        // __xlogd("xhash_table_add 2.3\n");
+        free(node->uuid);
+        free(node);
     }
-    
-    // __xlogd("xhash_table_add exit\n");
 }
 
-void* xhash_table_del(xhash_table_t *table, const char *key)
+void* xhash_table_del(xhash_table_t *ht, const char *uuid)
 {
-    __xlogd("xhash_table_del enter %s\n", key);
-    xnode_t node = {0};
+    xhtnode_t node = {0};
     void *value = NULL;
-    node.hash = hash_string(key, &node.key_len);
-    node.key = (uint8_t*)key;
-    uint32_t pos = (node.hash & table->mask);
-    __xlogd("xhash_table_del hash key %s hash=%lu pos=(%u)\n", node.key, node.hash, pos);
-    if (table->table[pos] != NULL){
-        // xnode_t *next = NULL;
-        xnode_t *head = table->table[pos];
+    node.key = hash_string(uuid, &node.uuid_len);
+    node.uuid = (uint8_t*)uuid;
+    uint32_t pos = (node.key & ht->mask);
+
+    if (ht->table[pos] != NULL){
+
+        xhtnode_t *head = ht->table[pos];
+
         if (head->list_len == 0){
             if (bytes_compare(&node, head) == 0){
-                table->table[pos] = NULL;
+                ht->table[pos] = NULL;
             }else {
-                __xlogd("xhash_table_del next->key=%s next->pos=(%u) remove key (%s)(%u) == (%s)(%u)\n", 
-                        head->next->key, head->next->hash & table->mask, node.key, node.hash & table->mask, head->key, head->hash & table->mask);                
                 return NULL;
             }
-        }else if (node.key_len == head->key_len && bytes_compare(&node, head) == 0){
-            // if ((head->hash & table->mask) != (head->next->hash & table->mask)){
-            //     __xlogd("xhash_table_del remove head list_len=%u head hash=%u next hash=%u prev hash=%u\n", 
-            //         head->list_len, head->hash & table->mask, head->next->hash & table->mask, head->prev->hash & table->mask);
-            //     exit(0);
-            // }
+
+        }else if (node.uuid_len == head->uuid_len 
+                    && bytes_compare(&node, head) == 0){
             head->next->list_len = (head->list_len-1);
-            table->table[pos] = head->next;
-            // next = table->table[pos];
-            avl_tree_remove(&table->tree, head->next); 
-            if (bytes_compare(&node, head) != 0){
-                __xlogd("xhash_table_del >>> next->key=%s next->pos=(%u) remove key (%s)(%u) == (%s)(%u)\n", 
-                        head->next->key, head->next->hash & table->mask, node.key, node.hash & table->mask, head->key, head->hash & table->mask);
-                exit(0);
-            }            
+            ht->table[pos] = head->next;
+            avl_tree_remove(&ht->tree, head->next);
+
         }else {
-            head = avl_tree_find(&table->tree, &node);
+            head = avl_tree_find(&ht->tree, &node);
             if (head){
-                // __xlogd("xhash_table_del remove node list_len=%u prev len=%u head hash=%u next hash=%u prev hash=%u\n", 
-                //     head->list_len, head->prev->list_len, head->hash & table->mask, head->next->hash & table->mask, head->prev->hash & table->mask);
-                table->table[pos]->list_len--;
-                // __xlogd("xhash_table_del remove %s key=%s\n", key, head->key);
-                // next = table->table[pos];
-                // __xlogd("xhash_table_del remove next list_len=%u head hash=%u next hash=%u prev hash=%u\n", 
-                //     next->list_len, next->hash & table->mask, next->next->hash & table->mask, next->prev->hash & table->mask);                                
-                avl_tree_remove(&table->tree, head);
-                // next = table->table[pos];
-                if (bytes_compare(&node, head) != 0){
-                    __xlogd("xhash_table_del ###>>> next->key=%s next->pos=(%u) remove key (%s)(%u) == (%s)(%u)\n", 
-                            head->next->key, head->next->hash & table->mask, node.key, node.hash & table->mask, head->key, head->hash & table->mask);
-                    exit(0);
-                }                
-            }else {
-                __xlogd("xhash_table_del remove ###### %s len=%u\n", node.key, node.key_len);
-                // exit(0);
-            }
+                ht->table[pos]->list_len--;
+                avl_tree_remove(&ht->tree, head);
+            }else {}
         }
-        // __xlogd("xhash_table_del >>> remove next list_len=%u head hash=%u next hash=%u prev hash=%u\n", 
-        //     next->list_len, next->hash & table->mask, next->next->hash & table->mask, next->prev->hash & table->mask);          
+
         if (head){
             head->next->prev = head->prev;
             head->prev->next = head->next;
             value = head->value;
-            free(head->key);
+            free(head->uuid);
             free(head);
-            table->count--;
+            ht->count--;
         }
-        // if (next){
-        //     if (next->list_len > 0 && ((next->hash & table->mask) != (next->next->hash & table->mask))){
-        //         __xlogd("xhash_table_del remove next list_len=%u head hash=%u next hash=%u prev hash=%u\n", 
-        //             next->list_len, next->hash & table->mask, next->next->hash & table->mask, next->prev->hash & table->mask);                
-        //         exit(0);
-        //     }
-        // }
     }
-    __xlogd("xhash_table_del exit\n");
+
     return value;
 }
 
-void* xhash_table_find(xhash_table_t *table, const char *key)
+void* xhash_table_find(xhash_table_t *ht, const char *uuid)
 {
-    // __xlogd("xhash_table_find enter %s\n", key);
-    xnode_t node = {0};
-    node.hash = hash_string(key, &node.key_len);
-    // __xlogd("xhash_table_find key-len=%u\n", node.key_len);
-    node.key = (uint8_t*)key;
-    uint32_t pos = node.hash & table->mask;
-    if (table->table[pos] != NULL){
-        // __xlogd("xhash_table_find str=%s pos=%s len=%u=%u\n", key, table->table[pos]->key, node.key_len, table->table[pos]->key_len);
-        if (node.key_len == table->table[pos]->key_len 
-            && bytes_compare(&node, table->table[pos]) == 0){
-            // __xlogd("xhash_table_find exit 1=%s\n", table->table[pos]->value);
-            return table->table[pos]->value;
+    xhtnode_t node = {0};
+    node.key = hash_string(uuid, &node.uuid_len);
+    node.uuid = (uint8_t*)uuid;
+    uint32_t pos = node.key & ht->mask;
+    if (ht->table[pos] != NULL){
+        if (node.uuid_len == ht->table[pos]->uuid_len 
+            && bytes_compare(&node, ht->table[pos]) == 0){
+            return ht->table[pos]->value;
         }else {
-            xnode_t *ret = avl_tree_find(&table->tree, &node);
-            // __xlogd("xhash_table_find exit 2 %s\n", ret->value);
+            xhtnode_t *ret = avl_tree_find(&ht->tree, &node);
             if (ret){
                 return ret->value;
             }
         }
     }
-    // __xlogd("xhash_table_find exit\n");
     return NULL;
 }
 
-void xtree_table_init(xtree_table_t *table)
+///////////////////////////////////////////
+///////////////////////////////////////////
+///////////////////////////////////////////
+
+void xhash_tree_init(xhash_tree_t *ht)
 {
-    table->count = 0;
-    avl_tree_init(&table->hash_tree, number_compare, sizeof(xnode_t), AVL_OFFSET(xnode_t, node));
-    avl_tree_init(&table->origin_tree, memory_compare, sizeof(xnode_t), AVL_OFFSET(xnode_t, node));
+    ht->count = 0;
+    avl_tree_init(&ht->hash_tree, number_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
+    avl_tree_init(&ht->uuid_tree, memory_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
 }
 
-void xtree_table_clear(xtree_table_t *table)
+void xhash_tree_clear(xhash_tree_t *ht)
 {
-
+    ht->count = 0;
+    avl_tree_clear(&ht->hash_tree, NULL);
+    avl_tree_clear(&ht->uuid_tree, NULL);
 }
 
-void xtree_table_add(xtree_table_t *table, xnode_t *node)
+void xhash_tree_add(xhash_tree_t *ht, xhtnode_t *node)
 {
-    // __xlogd("xtree_table_add enter %lu\n", node->hash);
-    table->count++;
-    // __xlogd("xtree_table_add 1\n");
-    xnode_t *head = avl_tree_add(&table->hash_tree, node);
-    // __xlogd("xtree_table_add 2\n");
+    xhtnode_t *head = avl_tree_add(&ht->hash_tree, node);
     if (head){
-        // __xlogd("xtree_table_add 3\n");
-        node->next = head;
-        node->prev = head->prev;
-        node->next->prev = node;
-        node->prev->next = node;
-        head->list_len++;
-        // __xlogd("xtree_table_add 4\n");
-        head = avl_tree_add(&table->origin_tree, node);
-        // __xlogd("xtree_table_add 5\n");
-        __xlogd("xtree_table_add origin tree count %lu\n", table->origin_tree.count);
+        if (avl_tree_add(&ht->uuid_tree, node) == NULL){
+            ht->count++;
+            head->list_len++;
+            node->next = head;
+            node->prev = head->prev;
+            node->next->prev = node;
+            node->prev->next = node;
+        }
+    }else {
+        ht->count++;
     }
-    // __xlogd("xtree_table_add exit\n");
 }
 
-xnode_t* xtree_table_remove(xtree_table_t *table, xnode_t *node)
+xhtnode_t* xhash_tree_del(xhash_tree_t *ht, xhtnode_t *node)
 {
-    // __xlogd("xtree_table_remove enter\n");
-    xnode_t *head = avl_tree_find(&table->hash_tree, node);
+    xhtnode_t *head = avl_tree_find(&ht->hash_tree, node);
     if (head){
-        table->count--;
+        ht->count--;
         if (head->list_len == 0){
-            // __xlogd("xtree_table_remove 1\n");
             // 这个节点没有冲突的值，直接从哈希树中删除
-            avl_tree_remove(&table->hash_tree, head);
-            // __xlogd("xtree_table_remove 1.1\n");
-        }else if (mcompare(head->key, node->key, node->key_len) == 0){
-            // __xlogd("xtree_table_remove 2\n");
+            avl_tree_remove(&ht->hash_tree, head);
+        }else if (mcompare(head->uuid, node->uuid, node->uuid_len) == 0){
             // 这个节点哈希值冲突，这个节点是冲突列表的头，节点在哈希树中
-            xnode_t *second = head->next;
+            xhtnode_t *second = head->next;
             // 让下一个节点成为列表头，并且更新列表长度
             second->list_len = head->list_len - 1;
             // 将要删除的节点移出冲突列表
             head->next->prev = head->prev;
             head->prev->next = head->next;
-            // __xlogd("xtree_table_remove 2.1\n");
-            avl_tree_remove(&table->origin_tree, second);
-            // __xlogd("xtree_table_remove 2.2\n");
+            avl_tree_remove(&ht->uuid_tree, second);
             // 用第二个节点替换原来的节点
-            avl_tree_replace(&table->hash_tree, head, second);
-            // __xlogd("xtree_table_remove 2.3\n");
+            avl_tree_replace(&ht->hash_tree, head, second);
         }else {
-            // __xlogd("xtree_table_remove 3\n");
             // 这个节点有冲突的值，这个节点不是冲突列表的头，节点在原始树中
             // 列表头没有改变，只是长度减一
             head->list_len--;
             // 在原始树找到要要删除的节点
-            head = avl_tree_find(&table->origin_tree, node);
-            // __xlogd("xtree_table_remove 3.1\n");
+            head = avl_tree_find(&ht->uuid_tree, node);
             // 把删除的节点移出冲突列表
             head->next->prev = head->prev;
             head->prev->next = head->next;
             // 将节点移出原始树
-            // __xlogd("xtree_table_remove 3.2\n");
-            avl_tree_remove(&table->origin_tree, head);
-            // __xlogd("xtree_table_remove 3.3\n");
+            avl_tree_remove(&ht->uuid_tree, head);
         }
     }
-    // __xlogd("xtree_table_remove exit\n");
     return head;
 }
 
-xnode_t* xtree_table_find(xtree_table_t *table, uint64_t hash, uint8_t *key, uint32_t len)
+xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, const uint8_t *uuid, uint32_t len)
 {
-    xnode_t node, *head = NULL;
-    node.hash = hash;
+    xhtnode_t node, *head = NULL;
     node.key = key;
-    node.key_len = len;
-    head = avl_tree_find(&table->hash_tree, &node);
+    node.uuid = uuid;
+    node.uuid_len = len;
+    head = avl_tree_find(&ht->hash_tree, &node);
     if (head){
         // 找到哈希值
         if (memory_compare(&node, head) == 0){
@@ -363,35 +289,35 @@ xnode_t* xtree_table_find(xtree_table_t *table, uint64_t hash, uint8_t *key, uin
             return head;
         }else if (head->list_len > 0){
             // uuid 不一致，但是这个哈希值对应多个 uuid，在原始树中查找 uuid
-            return avl_tree_find(&table->origin_tree, &node);
+            return avl_tree_find(&ht->uuid_tree, &node);
         }
     }
     return NULL;
 }
 
-xnode_t* xtree_table_find_same_hash(xtree_table_t *table, uint64_t hash)
+xhtnode_t* xhash_tree_find_by_key(xhash_tree_t *ht, uint64_t key)
 {
-    xnode_t node, *head;
-    node.hash = hash;
-    return avl_tree_find(&table->hash_tree, &node);
+    xhtnode_t node, *head;
+    node.key = key;
+    return avl_tree_find(&ht->hash_tree, &node);
 }
 
-xnode_t *xtree_table_first(xtree_table_t *table)
+xhtnode_t *xhash_tree_first(xhash_tree_t *ht)
 {
-    return avl_tree_first(&table->hash_tree);
+    return avl_tree_first(&ht->hash_tree);
 }
 
-xnode_t *xtree_table_last(xtree_table_t *table)
+xhtnode_t *xhash_tree_last(xhash_tree_t *ht)
 {
-    return avl_tree_last(&table->hash_tree);
+    return avl_tree_last(&ht->hash_tree);
 }
 
-xnode_t *xtree_table_next(xtree_table_t *table, xnode_t *node)
+xhtnode_t *xhash_tree_next(xhash_tree_t *ht, xhtnode_t *node)
 {
-    return avl_tree_next(&table->hash_tree, node);
+    return avl_tree_next(&ht->hash_tree, node);
 }
 
-xnode_t *xtree_table_prev(xtree_table_t *table, xnode_t *node)
+xhtnode_t *xhash_tree_prev(xhash_tree_t *ht, xhtnode_t *node)
 {
-    return avl_tree_prev(&table->hash_tree, node);
+    return avl_tree_prev(&ht->hash_tree, node);
 }

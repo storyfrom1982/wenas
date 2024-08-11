@@ -8,18 +8,18 @@
 #define TEST_INTERVAL   256
 
 
-static void test_hashtree()
+static void test_hash_tree()
 {
     char text[1024] = {0};
 
     uint8_t sha256[32];
     SHA256_CTX shactx;
 
-    xnode_t *node;
-    xtree_table_t tree;
-    xtree_table_init(&tree);
+    xhtnode_t *node;
+    xhash_tree_t tree;
+    xhash_tree_init(&tree);
 
-    xnode_t *nodes[TEST_INTERVAL];
+    xhtnode_t *nodes[TEST_INTERVAL];
 
     for (int i = 0; i < TEST_INTERVAL; ++i){
         uint64_t millisecond = __xapi->time();
@@ -40,37 +40,37 @@ static void test_hashtree()
 
         uint64_t h64 = xxhash64(sha256, 32, 0);
 
-        nodes[i] = xnode_create(h64 % 16, sha256, 32);
+        nodes[i] = xhtnode_create(h64 % 16, sha256, 32);
 
         __xlogd("dth test add node\n");
-        xtree_table_add(&tree, nodes[i]);
+        xhash_tree_add(&tree, nodes[i]);
         __xlogd("table count %lu hash tree count %lu origin tree count %lu\n",
-                tree.count, tree.hash_tree.count, tree.origin_tree.count);
+                tree.count, tree.hash_tree.count, tree.uuid_tree.count);
     }
 
     for (int i = TEST_INTERVAL-1; i >= 0; --i){
-        node = xtree_table_find(&tree, nodes[i]->hash, nodes[i]->key, nodes[i]->key_len);
+        node = xhash_tree_find(&tree, nodes[i]->key, nodes[i]->uuid, nodes[i]->uuid_len);
         // __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
-        if (mcompare(node->key, nodes[i]->key, node->key_len) != 0){
-            __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+        if (mcompare(node->uuid, nodes[i]->uuid, node->uuid_len) != 0){
+            __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->key, nodes[i]->uuid, node->key, node->uuid);
             exit(0);
         }
     }    
 
 
-    node = xtree_table_first(&tree);
-    for (xnode_t *last = xtree_table_last(&tree);;node = xtree_table_next(&tree, node)) {
-        xnode_t *ret = xtree_table_find(&tree, node->hash, node->key, node->key_len);
-        __xlogd("fond %lu->(%s)=%lu->(%s)\n", node->hash, node->key, ret->hash, ret->key);
+    node = xhash_tree_first(&tree);
+    for (xhtnode_t *last = xhash_tree_last(&tree);;node = xhash_tree_next(&tree, node)) {
+        xhtnode_t *ret = xhash_tree_find(&tree, node->key, node->uuid, node->uuid_len);
+        __xlogd("fond %lu->(%s)=%lu->(%s)\n", node->key, node->uuid, ret->key, ret->uuid);
         __xlogd("list len %lu\n", ret->list_len);
-        if (mcompare(node->key, ret->key, node->key_len) != 0){
-            __xlogd("find %lu->(%s) %lu->(%s)\n", ret->hash, ret->key, node->hash, node->key);
+        if (mcompare(node->uuid, ret->uuid, node->uuid_len) != 0){
+            __xlogd("find %lu->(%s) %lu->(%s)\n", ret->key, ret->uuid, node->key, node->uuid);
             exit(0);
         }             
         if (ret->list_len > 0){
-            xnode_t *head = ret;
+            xhtnode_t *head = ret;
             do {
-                __xlogd("head %lu->(%s)\n", head->hash, head->key);
+                __xlogd("head %lu->(%s)\n", head->key, head->uuid);
                 head = head->next;
             }while (head != ret);
         }
@@ -81,16 +81,16 @@ static void test_hashtree()
     
 
     for (int i = TEST_INTERVAL-1; i >= 0; --i){
-        node = xtree_table_remove(&tree, nodes[i]);
+        node = xhash_tree_del(&tree, nodes[i]);
         // __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
         __xlogd("table count %lu hash tree count %lu origin tree count %lu\n",
-                tree.count, tree.hash_tree.count, tree.origin_tree.count);
-        if (mcompare(node->key, nodes[i]->key, node->key_len) != 0){
-            __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+                tree.count, tree.hash_tree.count, tree.uuid_tree.count);
+        if (mcompare(node->uuid, nodes[i]->uuid, node->uuid_len) != 0){
+            __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->key, nodes[i]->uuid, node->key, node->uuid);
             exit(0);
         }
         // node = nodes[i];
-        free(node->key);
+        free(node->uuid);
         free(node);
     }
 }
@@ -117,7 +117,7 @@ char * rand_str(int in_len)
   return __r; 
 }
 
-static void test_htable()
+static void test_hash_table()
 {
     char text[1024] = {0};
 
@@ -172,8 +172,8 @@ int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
-    test_hashtree();
-    // test_htable();
+    test_hash_tree();
+    // test_hash_table();
 
     xlog_recorder_close();
 
