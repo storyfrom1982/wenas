@@ -351,19 +351,22 @@ xnode_t* xtree_table_remove(xtree_table_t *table, xnode_t *node)
 
 xnode_t* xtree_table_find(xtree_table_t *table, uint64_t hash, uint8_t *key, uint32_t len)
 {
-    xnode_t node, *head;
+    xnode_t node, *head = NULL;
     node.hash = hash;
     node.key = key;
     node.key_len = len;
     head = avl_tree_find(&table->hash_tree, &node);
     if (head){
-        if (head->list_len == 0 || mcompare(head->key, key, len) == 0){
+        // 找到哈希值
+        if (memory_compare(&node, head) == 0){
+            // uuid 一致
             return head;
-        }else {
+        }else if (head->list_len > 0){
+            // uuid 不一致，但是这个哈希值对应多个 uuid，在原始树中查找 uuid
             return avl_tree_find(&table->origin_tree, &node);
         }
     }
-    return head;
+    return NULL;
 }
 
 xnode_t* xtree_table_find_same_hash(xtree_table_t *table, uint64_t hash)

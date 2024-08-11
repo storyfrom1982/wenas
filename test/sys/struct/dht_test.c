@@ -48,33 +48,48 @@ static void test_hashtree()
                 tree.count, tree.hash_tree.count, tree.origin_tree.count);
     }
 
-    node = xtree_table_first(&tree);
-    xnode_t *last = xtree_table_last(&tree);
-    __xlogd("first %lu->(%s) last %lu->(%s)\n", node->hash, last->key, last->hash, last->key);
+    for (int i = TEST_INTERVAL-1; i >= 0; --i){
+        node = xtree_table_find(&tree, nodes[i]->hash, nodes[i]->key, nodes[i]->key_len);
+        // __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+        if (mcompare(node->key, nodes[i]->key, node->key_len) != 0){
+            __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+            exit(0);
+        }
+    }    
 
-    
-    // do {
-    //     xnode_t *ret = xtree_table_find(&tree, node->hash, node->key, node->key_len);
-    //     __xlogd("fond %lu->(%s)=%lu->(%s)\n", node->hash, node->key, ret->hash, ret->key);
-    //     __xlogd("list len %lu\n", ret->list_len);
-    //     if (ret->list_len > 0){
-    //         xnode_t *head = ret->next;
-    //         while (head != ret)
-    //         {
-    //             __xlogd("head %lu->(%s)\n", head->hash, head->key);
-    //             head = head->next;
-    //         }
-            
-    //     }
-    //     node = xtree_table_next(&tree, node);
-    // }while (node != last);
+
+    node = xtree_table_first(&tree);
+    for (xnode_t *last = xtree_table_last(&tree);;node = xtree_table_next(&tree, node)) {
+        xnode_t *ret = xtree_table_find(&tree, node->hash, node->key, node->key_len);
+        __xlogd("fond %lu->(%s)=%lu->(%s)\n", node->hash, node->key, ret->hash, ret->key);
+        __xlogd("list len %lu\n", ret->list_len);
+        if (mcompare(node->key, ret->key, node->key_len) != 0){
+            __xlogd("find %lu->(%s) %lu->(%s)\n", ret->hash, ret->key, node->hash, node->key);
+            exit(0);
+        }             
+        if (ret->list_len > 0){
+            xnode_t *head = ret;
+            do {
+                __xlogd("head %lu->(%s)\n", head->hash, head->key);
+                head = head->next;
+            }while (head != ret);
+        }
+        if (node == last){
+            break;
+        }
+    }
     
 
     for (int i = TEST_INTERVAL-1; i >= 0; --i){
         node = xtree_table_remove(&tree, nodes[i]);
-        __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+        // __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
         __xlogd("table count %lu hash tree count %lu origin tree count %lu\n",
                 tree.count, tree.hash_tree.count, tree.origin_tree.count);
+        if (mcompare(node->key, nodes[i]->key, node->key_len) != 0){
+            __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
+            exit(0);
+        }
+        // node = nodes[i];
         free(node->key);
         free(node);
     }
@@ -157,8 +172,8 @@ int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
-    // test_hashtree();
-    test_htable();
+    test_hashtree();
+    // test_htable();
 
     xlog_recorder_close();
 
