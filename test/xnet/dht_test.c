@@ -1,7 +1,7 @@
-#include <sys/struct/xavlmini.h>
-#include <sys/struct/xhash64.h>
-#include <sys/struct/xsha256.h>
-#include <sys/struct/xtable.h>
+#include <xlib/avlmini.h>
+#include <xlib/xxhash.h>
+#include <xlib/xsha256.h>
+#include <xnet/xtable.h>
 
 #include <stdio.h>
 
@@ -38,7 +38,7 @@ static void test_hashtree()
         sha256_update(&shactx, text, n);
         sha256_finish(&shactx, sha256);
 
-        uint64_t h64 = xhash64(sha256, 32, 0);
+        uint64_t h64 = xxhash64(sha256, 32, 0);
 
         nodes[i] = xnode_create(h64 % 16, sha256, 32);
 

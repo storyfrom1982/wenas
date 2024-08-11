@@ -1,5 +1,5 @@
-#ifndef __EX_EX_H__
-#define __EX_EX_H__
+#ifndef __XAPI_H__
+#define __XAPI_H__
 
 #if !defined(__linux__) && !defined(__APPLE__)
 #error Not yet adapted to the environment
@@ -157,4 +157,4 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
 
 
 
-#endif //__EX_EX_H__
+#endif //__XAPI_H__

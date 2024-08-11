@@ -58,14 +58,14 @@ check_c_source_compiles("
 
 
 set(kzx_sources
-    src/ex/xlog.c
-    src/ex/ex.c
-    src/sys/struct/xmalloc.c
-    src/sys/struct/xmsger.c
-    src/sys/struct/xhash64.c
-    src/sys/struct/xsha256.c
-    src/sys/struct/xavlmini.c
-    src/sys/struct/xtable.c
+    src/xapi/xlog.c
+    src/xapi/xapi.c
+    src/xnet/xmalloc.c
+    src/xnet/xmsger.c
+    src/xnet/xtable.c
+    src/xlib/avlmini.c
+    src/xlib/xxhash.c
+    src/xlib/xsha256.c
 )
 
 set(kzx_defines "")
@@ -107,7 +107,7 @@ endif()
 
 if(ENV_CHECK_BACKTRACE)
     list(APPEND kzx_defines -DUNWIND_BACKTRACE)
-    list(APPEND kzx_sources src/ex/backtrace.c)
+    list(APPEND kzx_sources src/xapi/backtrace.c)
 endif()
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
@@ -131,7 +131,7 @@ endfunction(build_library)
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
     # build_executable(xserver src/app/xserver.c)
     # build_executable(xpeer src/app/xpeer.c)
-    build_executable(xserver test/sys/struct/dht_test.c)
+    build_executable(xserver test/xnet/dht_test.c)
     # build_executable(xchord src/app/xchord.c)
 else()
     build_library(xuser src/app/xpeer.c)

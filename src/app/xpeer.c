@@ -1,8 +1,8 @@
-#include "ex/ex.h"
+#include "xapi/xapi.h"
 
-#include <sys/struct/xtree.h>
-#include <sys/struct/xmsger.h>
-#include <sys/struct/xbuf.h>
+#include <xnet/xtree.h>
+#include <xnet/xmsger.h>
+#include <xnet/xbuf.h>
 
 #include <stdio.h>
 #include <stdlib.h>

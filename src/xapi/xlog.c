@@ -2,7 +2,7 @@
 // Created by liyong kang on 2022/12/2.
 //
 
-#include "ex.h"
+#include "xapi.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include "sys/struct/xmalloc.h"
+#include "xnet/xmalloc.h"
 
 #define __log_text_size			1024
 #define __log_text_end			( __log_text_size - 2 )

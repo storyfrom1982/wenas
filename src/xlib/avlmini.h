@@ -10,7 +10,7 @@
 #define __AVLMINI_H__
 
 
-#include "xmalloc.h"
+#include "xnet/xmalloc.h"
 
 
 /*====================================================================*/

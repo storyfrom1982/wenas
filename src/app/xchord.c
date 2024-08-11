@@ -1,8 +1,8 @@
-#include "ex/ex.h"
+#include "xapi/xapi.h"
 
-#include <sys/struct/xmsger.h>
-#include <sys/struct/xhash64.h>
-#include <sys/struct/xsha256.h>
+#include <xnet/xtree.h>
+#include <xnet/xmsger.h>
+#include <xnet/xbuf.h>
 
 // KEY_BITS >= 2
 #define KEY_BITS    4

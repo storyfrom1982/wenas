@@ -1,4 +1,4 @@
-#include "xhash64.h"
+#include "xxhash.h"
 
 typedef uint8_t xxh_u8;
 typedef uint32_t xxh_u32;
@@ -274,7 +274,7 @@ static inline xxh_u64 XXH64_endian_align(const xxh_u8* input, size_t len, xxh_u6
     return XXH64_finalize(h64, input, len, align);
 }
 
-uint32_t xhash32 (const void* input, size_t len, uint32_t seed)
+uint32_t xxhash32 (const void* input, size_t len, uint32_t seed)
 {
     if ((((size_t)input) & 3) == 0) {
         return XXH32_endian_align((const xxh_u8*)input, len, seed, XXH_aligned);
@@ -282,7 +282,7 @@ uint32_t xhash32 (const void* input, size_t len, uint32_t seed)
     return XXH32_endian_align((const xxh_u8*)input, len, seed, XXH_unaligned);
 }
 
-uint64_t xhash64(const void* input, size_t len, uint64_t seed)
+uint64_t xxhash64(const void* input, size_t len, uint64_t seed)
 {
     if ((((size_t)input) & 7)==0) {
         return XXH64_endian_align((const xxh_u8*)input, len, seed, XXH_aligned);

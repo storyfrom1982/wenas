@@ -1,7 +1,7 @@
 #ifndef __XMALLOC_H__
 #define __XMALLOC_H__
 
-#include <ex/ex.h>
+#include <xapi/xapi.h>
 
 #define EENDED  0xFFFFFFFFFFFFFFFF
 // #define NULL  ((void*)0)

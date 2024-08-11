@@ -2,7 +2,7 @@
 #define __XTABLE_H__
 
 #include "xmalloc.h"
-#include "xavlmini.h"
+#include "xlib/avlmini.h"
 
 
 #define ORIGIN_KEY_MAX      32
