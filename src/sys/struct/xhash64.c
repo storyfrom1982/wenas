@@ -15,6 +15,8 @@ typedef enum {
 #define XXH_PRIME32_4  0x27D4EB2FU  /*!< 0b00100111110101001110101100101111 */
 #define XXH_PRIME32_5  0x165667B1U  /*!< 0b00010110010101100110011110110001 */
 
+#define XXH_rotl32(x,r) (((x) << (r)) | ((x) >> (32 - (r))))
+
 static inline xxh_u32 XXH_readLE32(const void* memPtr)
 {
     const xxh_u8* bytePtr = (const xxh_u8 *)memPtr;
@@ -49,6 +51,82 @@ static inline xxh_u32 XXH_readLE32_align(const void* ptr, XXH_alignment align)
         return __LITTLE_ENDIAN__ ? *(const xxh_u32*)ptr : XXH_swap32(*(const xxh_u32*)ptr);
     }
 }
+
+static xxh_u32 XXH32_round(xxh_u32 acc, xxh_u32 input)
+{
+    acc += input * XXH_PRIME32_2;
+    acc  = XXH_rotl32(acc, 13);
+    acc *= XXH_PRIME32_1;
+    return acc;
+}
+
+static xxh_u32 XXH32_avalanche(xxh_u32 hash)
+{
+    hash ^= hash >> 15;
+    hash *= XXH_PRIME32_2;
+    hash ^= hash >> 13;
+    hash *= XXH_PRIME32_3;
+    hash ^= hash >> 16;
+    return hash;
+}
+
+#define XXH_get32bits(p) XXH_readLE32_align(p, align)
+
+static inline xxh_u32 XXH32_finalize(xxh_u32 hash, const xxh_u8* ptr, size_t len, XXH_alignment align)
+{
+#define XXH_PROCESS1 do {                             \
+    hash += (*ptr++) * XXH_PRIME32_5;                 \
+    hash = XXH_rotl32(hash, 11) * XXH_PRIME32_1;      \
+} while (0)
+
+#define XXH_PROCESS4 do {                             \
+    hash += XXH_get32bits(ptr) * XXH_PRIME32_3;       \
+    ptr += 4;                                         \
+    hash  = XXH_rotl32(hash, 17) * XXH_PRIME32_4;     \
+} while (0)
+
+    len &= 15;
+    while (len >= 4) {
+        XXH_PROCESS4;
+        len -= 4;
+    }
+    while (len > 0) {
+        XXH_PROCESS1;
+        --len;
+    }
+    return XXH32_avalanche(hash);
+}
+
+static inline xxh_u32 XXH32_endian_align(const xxh_u8* input, size_t len, xxh_u32 seed, XXH_alignment align)
+{
+    xxh_u32 h32;
+
+    if (len>=16) {
+        const xxh_u8* const bEnd = input + len;
+        const xxh_u8* const limit = bEnd - 15;
+        xxh_u32 v1 = seed + XXH_PRIME32_1 + XXH_PRIME32_2;
+        xxh_u32 v2 = seed + XXH_PRIME32_2;
+        xxh_u32 v3 = seed + 0;
+        xxh_u32 v4 = seed - XXH_PRIME32_1;
+
+        do {
+            v1 = XXH32_round(v1, XXH_get32bits(input)); input += 4;
+            v2 = XXH32_round(v2, XXH_get32bits(input)); input += 4;
+            v3 = XXH32_round(v3, XXH_get32bits(input)); input += 4;
+            v4 = XXH32_round(v4, XXH_get32bits(input)); input += 4;
+        } while (input < limit);
+
+        h32 = XXH_rotl32(v1, 1)  + XXH_rotl32(v2, 7)
+            + XXH_rotl32(v3, 12) + XXH_rotl32(v4, 18);
+    } else {
+        h32  = seed + XXH_PRIME32_5;
+    }
+
+    h32 += (xxh_u32)len;
+
+    return XXH32_finalize(h32, input, len&15, align);
+}
+
 
 #define XXH_PRIME64_1  0x9E3779B185EBCA87ULL  /*!< 0b1001111000110111011110011011000110000101111010111100101010000111 */
 #define XXH_PRIME64_2  0xC2B2AE3D27D4EB4FULL  /*!< 0b1100001010110010101011100011110100100111110101001110101101001111 */
@@ -130,6 +208,8 @@ static inline xxh_u64 XXH_readLE64_align(const void* ptr, XXH_alignment align)
         return __LITTLE_ENDIAN__ ? *(const xxh_u64*)ptr : XXH_swap64(*(const xxh_u64*)ptr);
 }
 
+#define XXH_get64bits(p) XXH_readLE64_align(p, align)
+
 static inline xxh_u64 XXH64_finalize(xxh_u64 hash, const xxh_u8* ptr, size_t len, XXH_alignment align)
 {
     if (ptr==NULL){
@@ -137,14 +217,14 @@ static inline xxh_u64 XXH64_finalize(xxh_u64 hash, const xxh_u8* ptr, size_t len
     }
     len &= 31;
     while (len >= 8) {
-        xxh_u64 const k1 = XXH64_round(0, XXH_readLE64_align(ptr, align));
+        xxh_u64 const k1 = XXH64_round(0, XXH_get64bits(ptr));
         ptr += 8;
         hash ^= k1;
         hash  = XXH_rotl64(hash,27) * XXH_PRIME64_1 + XXH_PRIME64_4;
         len -= 8;
     }
     if (len >= 4) {
-        hash ^= (xxh_u64)(XXH_readLE32_align(ptr, align)) * XXH_PRIME64_1;
+        hash ^= (xxh_u64)(XXH_get32bits(ptr)) * XXH_PRIME64_1;
         ptr += 4;
         hash = XXH_rotl64(hash, 23) * XXH_PRIME64_2 + XXH_PRIME64_3;
         len -= 4;
@@ -173,10 +253,10 @@ static inline xxh_u64 XXH64_endian_align(const xxh_u8* input, size_t len, xxh_u6
         xxh_u64 v4 = seed - XXH_PRIME64_1;
 
         do {
-            v1 = XXH64_round(v1, XXH_readLE64_align(input, align)); input+=8;
-            v2 = XXH64_round(v2, XXH_readLE64_align(input, align)); input+=8;
-            v3 = XXH64_round(v3, XXH_readLE64_align(input, align)); input+=8;
-            v4 = XXH64_round(v4, XXH_readLE64_align(input, align)); input+=8;
+            v1 = XXH64_round(v1, XXH_get64bits(input)); input+=8;
+            v2 = XXH64_round(v2, XXH_get64bits(input)); input+=8;
+            v3 = XXH64_round(v3, XXH_get64bits(input)); input+=8;
+            v4 = XXH64_round(v4, XXH_get64bits(input)); input+=8;
         } while (input<limit);
 
         h64 = XXH_rotl64(v1, 1) + XXH_rotl64(v2, 7) + XXH_rotl64(v3, 12) + XXH_rotl64(v4, 18);
@@ -194,6 +274,13 @@ static inline xxh_u64 XXH64_endian_align(const xxh_u8* input, size_t len, xxh_u6
     return XXH64_finalize(h64, input, len, align);
 }
 
+uint32_t xhash32 (const void* input, size_t len, uint32_t seed)
+{
+    if ((((size_t)input) & 3) == 0) {
+        return XXH32_endian_align((const xxh_u8*)input, len, seed, XXH_aligned);
+    }   
+    return XXH32_endian_align((const xxh_u8*)input, len, seed, XXH_unaligned);
+}
 
 uint64_t xhash64(const void* input, size_t len, uint64_t seed)
 {

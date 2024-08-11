@@ -65,6 +65,7 @@ set(kzx_sources
     src/sys/struct/xhash64.c
     src/sys/struct/xsha256.c
     src/sys/struct/xavlmini.c
+    src/sys/struct/xtable.c
 )
 
 set(kzx_defines "")
@@ -128,9 +129,9 @@ function(build_library LIBRARY_NAME LIBRARY_SOURCES)
 endfunction(build_library)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
-    build_executable(xserver src/app/xserver.c)
-    build_executable(xpeer src/app/xpeer.c)
-    # build_executable(xserver test/sys/struct/dht_test.c)
+    # build_executable(xserver src/app/xserver.c)
+    # build_executable(xpeer src/app/xpeer.c)
+    build_executable(xserver test/sys/struct/dht_test.c)
     # build_executable(xchord src/app/xchord.c)
 else()
     build_library(xuser src/app/xpeer.c)
