@@ -31,26 +31,26 @@ typedef struct xpeer{
 
 }*xpeer_ptr;
 
-static void build_msg(xmaker_ptr maker)
+static void build_msg(xline_ptr maker)
 {
     xline_add_word(maker, "cmd", "REQ");
     xline_add_word(maker, "api", "PUT");
     uint64_t ipos = xline_hold_tree(maker, "int");
     xline_add_integer(maker, "int8", 8);
     xline_add_integer(maker, "int16", 16);
-    xline_add_number(maker, "uint32", 32);
-    xline_add_number(maker, "uint64", 64);
+    xline_add_unsigned(maker, "uint32", 32);
+    xline_add_unsigned(maker, "uint64", 64);
     uint64_t fpos = xline_hold_tree(maker, "float");
-    xline_add_float(maker, "real32", 32.3232);
-    xline_add_float(maker, "real64", 64.6464);
+    xline_add_real(maker, "real32", 32.3232);
+    xline_add_real(maker, "real64", 64.6464);
     xline_save_tree(maker, fpos);
     xline_save_tree(maker, ipos);
-    xline_add_number(maker, "uint64", 64);
-    xline_add_float(maker, "real64", 64.6464);
+    xline_add_unsigned(maker, "uint64", 64);
+    xline_add_real(maker, "real64", 64.6464);
 
     uint64_t lpos = xline_hold_list(maker, "list");
     for (int i = 0; i < 10; ++i){
-        struct xline line = __n2l(i);
+        struct xbyte line = __n2l(i);
         xline_list_append(maker, &line);
     }
     xline_save_list(maker, lpos);
@@ -60,7 +60,7 @@ static void build_msg(xmaker_ptr maker)
         ipos = xline_list_hold_tree(maker);
         xline_add_word(maker, "key", "tree");
         xline_add_integer(maker, "real32", i);
-        xline_add_float(maker, "real64", 64.6464 * i);
+        xline_add_real(maker, "real64", 64.6464 * i);
         xline_list_save_tree(maker, ipos);
     }
     xline_save_list(maker, lpos);
@@ -89,7 +89,7 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmaker_t maker = xline_parse((xline_ptr)msg);
+    xline_t maker = xline_parser((xbyte_ptr)msg);
     const char *cmd = xline_find_word(&maker, "msg");
     if (mcompare(cmd, "req", 3) == 0){
         xline_printf(msg);
@@ -101,13 +101,13 @@ static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, vo
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void find_msg(xline_ptr msg){
+static void find_msg(xbyte_ptr msg){
 
-    struct xmaker m = xline_parse(msg);
-    xmaker_ptr maker = &m;
-    xline_ptr ptr;
+    struct xline m = xline_parser(msg);
+    xline_ptr maker = &m;
+    xbyte_ptr ptr;
 
-    uint64_t u64 = xline_find_number(maker, "uint64");
+    uint64_t u64 = xline_find_unsigned(maker, "uint64");
     __xlogd("xline find uint = %lu\n", u64);
 
     double f64 = xline_find_float(maker, "real64");
@@ -208,11 +208,11 @@ extern void sigint_setup(void (*handler)());
 static void make_message_task(xpeer_ptr server)
 {
     if (server->tasks->channel){
-        struct xmaker maker = xline_make(1024);
+        struct xline maker = xline_maker(1024);
         build_msg(&maker);
         xline_add_word(&maker, "msg", "UPDATE");
         server->tasks->len++;
-        xline_add_number(&maker, "count", server->tasks->len);
+        xline_add_unsigned(&maker, "count", server->tasks->len);
         xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
     }
 }
@@ -328,12 +328,12 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            struct xmaker maker = xline_make(1024);
+            struct xline maker = xline_maker(1024);
             xline_add_word(&maker, "msg", "req");
             xline_add_word(&maker, "task", "join");
             xline_add_word(&maker, "ip", ip);
-            xline_add_number(&maker, "port", port);
-            xline_add_number(&maker, "key", key);
+            xline_add_unsigned(&maker, "port", port);
+            xline_add_unsigned(&maker, "key", key);
             xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);
@@ -347,10 +347,10 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            struct xmaker maker = xline_make(1024);
+            struct xline maker = xline_maker(1024);
             xline_add_word(&maker, "msg", "req");
             xline_add_word(&maker, "task", "turn");
-            xline_add_number(&maker, "key", key);
+            xline_add_unsigned(&maker, "key", key);
             xline_add_word(&maker, "text", "Hello World");
             xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
 

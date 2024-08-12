@@ -47,8 +47,9 @@ void xhash_tree_init(xhash_tree_t *ht);
 void xhash_tree_clear(xhash_tree_t *ht);
 void xhash_tree_add(xhash_tree_t *ht, xhtnode_t *node);
 xhtnode_t* xhash_tree_del(xhash_tree_t *ht, xhtnode_t *node);
-xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, const uint8_t *uuid, uint32_t len);
+xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len);
 xhtnode_t* xhash_tree_find_by_key(xhash_tree_t *ht, uint64_t key);
+xhtnode_t* xhash_tree_del_by_key(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len);
 
 xhtnode_t *xhash_tree_first(xhash_tree_t *ht);
 xhtnode_t *xhash_tree_last(xhash_tree_t *ht);

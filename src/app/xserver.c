@@ -307,7 +307,7 @@ typedef struct XTask {
     XTaskEntry entry;
     xchannel_ptr channel;
     struct xpeer *server;
-    xmaker_t maker;
+    xline_t maker;
 };
 
 typedef struct xpeer{
@@ -409,15 +409,15 @@ static int req_join_node(xTask_Ptr task)
     __xlogd("req_join_node enter\n");
     char *ip = xline_find_word(&task->maker, "ip");
     __xlogd("add ip=%s\n", ip);
-    unsigned port = xline_find_number(&task->maker, "port");
+    unsigned port = xline_find_unsigned(&task->maker, "port");
     __xlogd("add port=%u\n", port);
-    uint32_t key = xline_find_number(&task->maker, "key");
+    uint32_t key = xline_find_unsigned(&task->maker, "key");
     __xlogd("add key=%u\n", key);
-    xmaker_t ctx = xline_make(0);
+    xline_t ctx = xline_maker(0);
     xline_add_word(&ctx, "msg", "join");
     xline_add_word(&ctx, "ip", ip);
-    xline_add_number(&ctx, "port", port);
-    xline_add_number(&ctx, "key", key);
+    xline_add_unsigned(&ctx, "port", port);
+    xline_add_unsigned(&ctx, "key", key);
     xTask_Ptr new_task = (xTask_Ptr)malloc(sizeof(struct XTask));
     new_task->server = task->server;
     new_task->msg = ctx.head;
@@ -429,10 +429,10 @@ static int req_join_node(xTask_Ptr task)
 static int msg_join_node(xTask_Ptr task)
 {
     __xlogd("msg_join_node enter\n");
-    uint32_t key = xline_find_number(&task->maker, "key");
+    uint32_t key = xline_find_unsigned(&task->maker, "key");
     __xlogd("add key=%u\n", key);
 
-    xmaker_t maker = xline_make(0);
+    xline_t maker = xline_maker(0);
     xline_add_word(&maker, "msg", "req");
     xline_add_word(&maker, "task", "invite");
     uint64_t pos = xline_hold_list(&maker, "nodes");
@@ -444,16 +444,16 @@ static int msg_join_node(xTask_Ptr task)
         inet_ntop(AF_INET, &addr->ip, ip, sizeof(ip));
         uint16_t port = ntohs(addr->port);
         xline_add_word(&maker, "ip", ip);
-        xline_add_number(&maker, "port", port);
-        xline_add_number(&maker, "key", n->key);
+        xline_add_unsigned(&maker, "port", port);
+        xline_add_unsigned(&maker, "key", n->key);
         xline_list_save_tree(&maker, tpos);
         n = n->predecessor;
     }
 
     uint64_t tpos = xline_list_hold_tree(&maker);
     xline_add_word(&maker, "ip", task->server->ip);
-    xline_add_number(&maker, "port",task->server->port);
-    xline_add_number(&maker, "key", task->server->ring->key);
+    xline_add_unsigned(&maker, "port",task->server->port);
+    xline_add_unsigned(&maker, "key", task->server->ring->key);
     xline_list_save_tree(&maker, tpos);
 
     xline_save_list(&maker, pos);
@@ -474,7 +474,7 @@ static int msg_join_node(xTask_Ptr task)
 static int req_turn(xTask_Ptr task)
 {
     __xlogd("req_turn enter\n");
-    uint32_t key = xline_find_number(&task->maker, "key");
+    uint32_t key = xline_find_unsigned(&task->maker, "key");
     __xlogd("req_turn find key=%u\n", key);
     Node_Ptr node = find_successor(task->server->ring, key);
     __xlogd("req_turn successor node key=%u\n", node->key);
@@ -483,10 +483,10 @@ static int req_turn(xTask_Ptr task)
         __xlogd("receive >>>>>---------------------------------> text: %s\n", msg);
     }else {
         char *msg = xline_find_word(&task->maker, "text");
-        xmaker_t ctx = xline_make(0);
+        xline_t ctx = xline_maker(0);
         xline_add_word(&ctx, "msg", "req");
         xline_add_word(&ctx, "task", "turn");
-        xline_add_number(&ctx, "key", key);
+        xline_add_unsigned(&ctx, "key", key);
         xline_add_word(&ctx, "text", msg);
         xmsger_send_message(task->server->msger, node->channel, ctx.head, ctx.wpos);
     }
@@ -497,7 +497,7 @@ static int req_turn(xTask_Ptr task)
 static int req_add_node(xTask_Ptr task)
 {
     __xlogd("req_add_node enter\n");
-    uint32_t key = xline_find_number(&task->maker, "key");
+    uint32_t key = xline_find_unsigned(&task->maker, "key");
     Node_Ptr node = node_create(key);
     node->channel = task->channel;
     node_join(task->server->ring, node);
@@ -512,13 +512,13 @@ static int msg_invite_node(xTask_Ptr task)
     __xlogd("msg_invite_node 1\n");
     node->channel = task->channel;
     __xlogd("msg_invite_node 2\n");
-    xmaker_t new_node = xline_make(0);
+    xline_t new_node = xline_maker(0);
     __xlogd("msg_invite_node 3\n");
     xline_add_word(&new_node, "msg", "req");
     __xlogd("msg_invite_node 4\n");
     xline_add_word(&new_node, "task", "add");
     __xlogd("msg_invite_node 5\n");
-    xline_add_number(&new_node, "key", task->server->ring->key);
+    xline_add_unsigned(&new_node, "key", task->server->ring->key);
     __xlogd("msg_invite_node 6\n");
     xmsger_send_message(task->server->msger, node->channel, new_node.head, new_node.wpos);
     __xlogd("msg_invite_node 7\n");
@@ -530,19 +530,19 @@ static int msg_invite_node(xTask_Ptr task)
 static int req_invite_node(xTask_Ptr task)
 {
     __xlogd("req_invite_node enter\n");
-    xline_ptr nodes = xline_find(&task->maker, "nodes");
+    xbyte_ptr nodes = xline_find(&task->maker, "nodes");
 
-    xline_ptr xptr;
-    xparser_t plist = xline_parse(nodes);
+    xbyte_ptr xptr;
+    xparser_t plist = xline_parser(nodes);
 
     __xipaddr_ptr addr = xmsger_get_channel_ipaddr(task->channel);
 
     while ((xptr = xline_list_next(&plist)) != NULL)
     {
-        xparser_t node_parser = xline_parse(xptr);
+        xparser_t node_parser = xline_parser(xptr);
         char *ip = xline_find_word(&node_parser, "ip");
-        uint16_t port = xline_find_number(&node_parser, "port");
-        uint32_t key = xline_find_number(&node_parser, "key");
+        uint16_t port = xline_find_unsigned(&node_parser, "port");
+        uint32_t key = xline_find_unsigned(&node_parser, "key");
 
         Node_Ptr node = node_create(key);
         __xapi->udp_make_ipaddr(ip, port, &node->ip);
@@ -550,7 +550,7 @@ static int req_invite_node(xTask_Ptr task)
         if (node->ip.ip == addr->ip){
             node->channel = task->channel;
         }else {
-            xmaker_t ctx = xline_make(0);
+            xline_t ctx = xline_maker(0);
             xline_add_word(&ctx, "msg", "invite");
             xline_add_pointer(&ctx, "node", node);
             xTask_Ptr new_task = (xTask_Ptr)malloc(sizeof(struct XTask));
@@ -574,8 +574,8 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &task, __sizeof_ptr) == __sizeof_ptr)
     {
-        xline_ptr msg = (xline_ptr)task->msg;
-        task->maker = xline_parse(msg);
+        xbyte_ptr msg = (xbyte_ptr)task->msg;
+        task->maker = xline_parser(msg);
         const char *cmd = xline_find_word(&task->maker, "msg");
         if (mcompare(cmd, "req", 3) == 0){
             cmd = xline_find_word(&task->maker, "task");

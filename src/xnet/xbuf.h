@@ -247,7 +247,7 @@ typedef void (*__xtask_enter_func)(xtask_enter_ptr ctx);
 
 static inline void* xtask_loop(void *p)
 {
-    xmaker_ptr ctx;
+    xline_ptr ctx;
     struct xtask_enter enter;
     xtask_ptr task = (xtask_ptr)p;
     uint64_t size = sizeof(struct xtask_enter);

@@ -272,7 +272,16 @@ xhtnode_t* xhash_tree_del(xhash_tree_t *ht, xhtnode_t *node)
     return head;
 }
 
-xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, const uint8_t *uuid, uint32_t len)
+xhtnode_t* xhash_tree_del_by_key(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len)
+{
+    xhtnode_t node;
+    node.key = key;
+    node.uuid = uuid;
+    node.uuid_len = len;
+    return xhash_tree_del(ht, &node);
+}
+
+xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len)
 {
     xhtnode_t node, *head = NULL;
     node.key = key;
