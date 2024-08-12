@@ -3,69 +3,40 @@
 #include <xnet/xtree.h>
 #include <xnet/xmsger.h>
 #include <xnet/xbuf.h>
+#include <xnet/xtable.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 
+
+
 typedef struct XTask {
-    uint64_t pos, len;
+    struct avl_node node;
+    uint64_t task_id;
+    void *msg;
     xchannel_ptr channel;
-    struct XTask *prev, *next;
+    struct xpeer *peer;
 }*xTask_Ptr;
 
 typedef struct xpeer{
     int sock;
     __atom_bool runnig;
+    uint64_t task_id;
     struct __xipaddr addr;
+    xchannel_ptr channel;
     xmsger_ptr msger;
-    xTask_Ptr tasks;
     xpipe_ptr task_pipe;
     __xprocess_ptr task_pid, listen_pid;
     struct xmsgercb listener;
+    struct avl_tree task_tree;
     // 通信录，好友ID列表，一个好友ID可以对应多个设备地址，但是只与主设备建立一个 channel，设备地址是动态更新的，不需要存盘。好友列表需要写数据库
     // 设备列表，用户自己的所有设备，每个设备建立一个 channel，channel 的消息实时共享，设备地址是动态更新的，设备 ID 需要存盘
     // 任务树，每个请求（发起的请求或接收的请求）都是一个任务，每个任务都有开始，执行和结束。请求是任务的开始，之后可能有多次消息传递，数据传输完成，双方各自结束任务，释放资源。
     // 单个任务本身的消息是串行的，但是多个任务之间是并行的，所以用树来维护任务列表，以便多个任务切换时，可以快速定位任务。
     // 每个任务都有一个唯一ID，通信双方维护各自的任务ID，发型消息时，要携带自身的任务ID并且指定对方的任务ID
     // 每个任务都有执行进度
-
 }*xpeer_ptr;
 
-static void build_msg(xline_ptr maker)
-{
-    xline_add_word(maker, "cmd", "REQ");
-    xline_add_word(maker, "api", "PUT");
-    uint64_t ipos = xline_hold_tree(maker, "int");
-    xline_add_integer(maker, "int8", 8);
-    xline_add_integer(maker, "int16", 16);
-    xline_add_unsigned(maker, "uint32", 32);
-    xline_add_unsigned(maker, "uint64", 64);
-    uint64_t fpos = xline_hold_tree(maker, "float");
-    xline_add_real(maker, "real32", 32.3232);
-    xline_add_real(maker, "real64", 64.6464);
-    xline_save_tree(maker, fpos);
-    xline_save_tree(maker, ipos);
-    xline_add_unsigned(maker, "uint64", 64);
-    xline_add_real(maker, "real64", 64.6464);
-
-    uint64_t lpos = xline_hold_list(maker, "list");
-    for (int i = 0; i < 10; ++i){
-        struct xbyte line = __n2l(i);
-        xline_list_append(maker, &line);
-    }
-    xline_save_list(maker, lpos);
-
-    lpos = xline_hold_list(maker, "list-tree");
-    for (int i = 0; i < 10; ++i){
-        ipos = xline_list_hold_tree(maker);
-        xline_add_word(maker, "key", "tree");
-        xline_add_integer(maker, "real32", i);
-        xline_add_real(maker, "real64", 64.6464 * i);
-        xline_list_save_tree(maker, ipos);
-    }
-    xline_save_list(maker, lpos);
-    
-}
 
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
@@ -88,67 +59,38 @@ static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void
 static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xline_t maker = xline_parser((xbyte_ptr)msg);
-    const char *cmd = xline_find_word(&maker, "msg");
-    if (mcompare(cmd, "req", 3) == 0){
-        xline_printf(msg);
-    }else if(mcompare(cmd, "res", 3) == 0){
-        server->tasks->pos++;
-        xline_printf(msg);
-    }
-    free(msg);
+    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    task->msg = msg;
+    xpipe_write(task->peer->task_pipe, &task, __sizeof_ptr);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
-}
-
-static void find_msg(xbyte_ptr msg){
-
-    struct xline m = xline_parser(msg);
-    xline_ptr maker = &m;
-    xbyte_ptr ptr;
-
-    uint64_t u64 = xline_find_unsigned(maker, "uint64");
-    __xlogd("xline find uint = %lu\n", u64);
-
-    double f64 = xline_find_float(maker, "real64");
-    __xlogd("xline find real64 = %lf\n", f64);
-
-    const char *text = xline_find_word(maker, "cmd");
-    __xlogd("xline find type = %s\n", text);
-    text = xline_find_word(maker, "api");
-    __xlogd("xline find api = %s\n", text);
-}
-
-static void make_tasklist()
-{
-
-}
-
-static void make_connect_task(xpeer_ptr server, const char *ip, uint16_t port)
-{
-    xmsger_connect(server->msger, ip, port, server->tasks);
 }
 
 static void make_disconnect_task(xpeer_ptr server)
 {
-    xmsger_disconnect(server->msger, server->tasks->channel);
+    xmsger_disconnect(server->msger, server->channel);
 }
 
 static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    server->tasks = xmsger_get_channel_ctx(channel);
-    server->tasks->channel = channel;
+    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    task->channel = channel;
+    if (task->peer == server){
+        server->channel = channel;
+    }else {
+        task->peer = server;
+    }
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    // xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    // xmsger_set_channel_ctx(channel, server->tasks);
-    // server->tasks->channel = channel;
+    xTask_Ptr task = (xTask_Ptr)malloc(sizeof(struct XTask));
+    task->peer = (xpeer_ptr)listener->ctx;
+    task->channel = channel;
+    xmsger_set_channel_ctx(channel, task);
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -186,6 +128,23 @@ Clean:
 }
 
 
+void login(xpeer_ptr peer)
+{
+    xline_t xl = xline_maker(1024);
+    xline_add_word(&xl, "api", "login");
+    xTask_Ptr task = xmsger_get_channel_ctx(peer->channel);
+    task->task_id = peer->task_id++;
+    avl_tree_add(&peer->task_tree, task);
+    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+}
+
+void logout(xpeer_ptr peer)
+{
+    xline_t xl = xline_maker(1024);
+    xline_add_word(&xl, "api", "logout");
+    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+}
+
 static xpeer_ptr g_server = NULL;
 
 static void __sigint_handler()
@@ -204,17 +163,11 @@ static void __sigint_handler()
 
 extern void sigint_setup(void (*handler)());
 
-
-static void make_message_task(xpeer_ptr server)
+static inline int number_compare(const void *a, const void *b)
 {
-    if (server->tasks->channel){
-        struct xline maker = xline_maker(1024);
-        build_msg(&maker);
-        xline_add_word(&maker, "msg", "UPDATE");
-        server->tasks->len++;
-        xline_add_unsigned(&maker, "count", server->tasks->len);
-        xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
-    }
+	xTask_Ptr x = (xTask_Ptr)a;
+	xTask_Ptr y = (xTask_Ptr)b;
+	return x->task_id - y->task_id;
 }
 
 #include <arpa/inet.h>
@@ -228,11 +181,11 @@ int main(int argc, char *argv[])
     xpeer_ptr server = (xpeer_ptr)calloc(1, sizeof(struct xpeer));
     __xlogi("server: 0x%X\n", server);
 
+    avl_tree_init(&server->task_tree, number_compare, sizeof(struct XTask), AVL_OFFSET(struct XTask, node));
+
     __set_true(server->runnig);
     g_server = server;
     sigint_setup(__sigint_handler);
-
-    server->tasks = (xTask_Ptr)calloc(1, sizeof(struct XTask));
 
     if (argc == 3){
         host = strdup(argv[1]);
@@ -275,8 +228,10 @@ int main(int argc, char *argv[])
     server->listen_pid = __xapi->process_create(listen_loop, server);
     __xbreak(server->listen_pid == NULL);
 
-    make_connect_task(server, "47.99.146.226", 9256);
-    // make_connect_task(server, "192.168.43.173", 9256);
+    xTask_Ptr task = (xTask_Ptr)malloc(sizeof(struct XTask));
+    task->peer = server;
+    // xmsger_connect(server->msger, "47.99.146.226", 9256, task);
+    xmsger_connect(server->msger, "192.168.43.173", 9256, task);
     // make_connect_task(server, "47.92.77.19", 9256);
     // make_connect_task(server, "120.78.155.213", 9256);
 
@@ -298,8 +253,10 @@ int main(int argc, char *argv[])
         // 分割命令和参数
         sscanf(input, "%s", command);
 
-        if (strcmp(command, "help") == 0) {
-            // print_help();
+        if (strcmp(command, "login") == 0) {
+            login(server);
+        } else if (strcmp(command, "logout") == 0) {
+            logout(server);
         } else if (strcmp(command, "join") == 0) {
             __xlogi("输入IP地址: ");
             if (fgets(input, sizeof(input), stdin) != NULL) {
@@ -332,9 +289,9 @@ int main(int argc, char *argv[])
             xline_add_word(&maker, "msg", "req");
             xline_add_word(&maker, "task", "join");
             xline_add_word(&maker, "ip", ip);
-            xline_add_unsigned(&maker, "port", port);
-            xline_add_unsigned(&maker, "key", key);
-            xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+            xline_add_uint64(&maker, "port", port);
+            xline_add_uint64(&maker, "key", key);
+            xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);
         }else if (strcmp(command, "turn") == 0) {
@@ -350,9 +307,9 @@ int main(int argc, char *argv[])
             struct xline maker = xline_maker(1024);
             xline_add_word(&maker, "msg", "req");
             xline_add_word(&maker, "task", "turn");
-            xline_add_unsigned(&maker, "key", key);
+            xline_add_uint64(&maker, "key", key);
             xline_add_word(&maker, "text", "Hello World");
-            xmsger_send_message(server->msger, server->tasks->channel, maker.head, maker.wpos);
+            xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);
         } else if (strcmp(command, "exit") == 0) {
@@ -384,7 +341,7 @@ int main(int argc, char *argv[])
     
     xmsger_free(&server->msger);
 
-    free(server->tasks);
+    avl_tree_clear(&server->task_tree, NULL);
 
     if (server->sock > 0){
         __xapi->udp_close(server->sock);

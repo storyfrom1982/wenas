@@ -186,8 +186,8 @@ struct xmsger {
 #define __xchannel_put_into_list(rlist, rnode) \
     __ring_list_put_into_end((rlist), (rnode)); \
     (rnode)->worklist = (rlist)
-//TODO __xchannel_take_out_list
-#define __xchannel_tack_out_list(rnode) \
+
+#define __xchannel_take_out_list(rnode) \
     __ring_list_take_out((rnode)->worklist, (rnode)); \
     (rnode)->worklist = NULL
 
@@ -338,7 +338,7 @@ static inline void xchannel_free(xchannel_ptr channel)
 {
     __xlogd("xchannel_free enter\n");
     xchannel_clear(channel);
-    __xchannel_tack_out_list(channel);
+    __xchannel_take_out_list(channel);
     for (int i = 0; i < 3; ++i){
         if (channel->streams[i].data != NULL){
             // TODO 会导致 on_msg_from_peer 中释放内存崩溃
@@ -382,7 +382,7 @@ static inline void xchannel_serial_cmd(xchannel_ptr channel, uint8_t type)
     channel->msger->sendable++;
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
-        __xchannel_tack_out_list(channel);
+        __xchannel_take_out_list(channel);
         __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
 }
@@ -509,7 +509,7 @@ static inline void xchannel_input_message(xchannel_ptr channel, xmessage_ptr msg
 
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
-        __xchannel_tack_out_list(channel);
+        __xchannel_take_out_list(channel);
         __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
 
@@ -693,7 +693,7 @@ static inline void xchannel_serial_ack(xchannel_ptr channel, xpack_ptr rpack)
                     // 判断是否有待重传的包，再判断是否需要保活
                     if (channel->flushinglist.len == 0 && !channel->keepalive){
                         // 不需要保活，加入等待超时队列
-                        __xchannel_tack_out_list(channel);
+                        __xchannel_take_out_list(channel);
                         __xchannel_put_into_list(&channel->msger->recv_list, channel);
                     }
                 }
@@ -1108,6 +1108,9 @@ static void* main_loop(void *ptr)
                             if (spack->head.resend > XCHANNEL_RESEND_LIMIT){
 
                                 msger->callback->on_channel_break(msger->callback, channel);
+                                // 移除超时的连接
+                                xtree_take(msger->peers, &channel->addr.port, 6);
+                                xchannel_free(channel);
 
                             }else {
 
@@ -1174,6 +1177,9 @@ static void* main_loop(void *ptr)
                 // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                     msger->callback->on_channel_break(msger->callback, channel);
+                    // 移除超时的连接
+                    xtree_take(msger->peers, &channel->addr.port, 6);
+                    xchannel_free(channel);
                 }else {
                     // 队列的第一个连接没有超时，后面的连接就都没有超时
                     break;

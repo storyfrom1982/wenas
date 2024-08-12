@@ -149,7 +149,6 @@ typedef struct xline {
         uint8_t *head;
         xbyte_t *byte;
     };
-    struct xline *maker;
 }xline_t;
 
 typedef xline_t* xline_ptr;
@@ -164,7 +163,6 @@ static inline struct xline xline_maker(uint64_t size)
     maker.size = size;
     maker.wpos = XLINE_HEAD_SIZE;
     maker.head = (uint8_t*) malloc(maker.size);
-    maker.maker = &maker;
     return maker;
 }
 
@@ -313,7 +311,7 @@ static inline uint64_t xline_add_integer(xline_ptr maker, const char *key, int64
     return xline_add_number(maker, key, slength(key), __n2b(i64));
 }
 
-static inline uint64_t xline_add_unsigned(xline_ptr maker, const char *key, uint64_t u64)
+static inline uint64_t xline_add_uint64(xline_ptr maker, const char *key, uint64_t u64)
 {
     return xline_add_number(maker, key, slength(key), __n2b(u64));
 }
