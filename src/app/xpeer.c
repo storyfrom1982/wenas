@@ -4,19 +4,31 @@
 #include <xnet/xmsger.h>
 #include <xnet/xbuf.h>
 #include <xnet/xtable.h>
+#include <xlib/xxhash.h>
+#include <xlib/xsha256.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 
 
+typedef struct xtask {
+    uint8_t tid;
+    void (*req)(struct xtask*);
+    void (*res)(struct xtask*);
+    uint64_t len, pos;
+    struct xpeer_ctx *ctx;
+    struct xtask *prev, *next;
+}xtask_t;
 
-typedef struct XTask {
+typedef struct xpeer_ctx {
     struct avl_node node;
     uint64_t task_id;
     void *msg;
     xchannel_ptr channel;
     struct xpeer *peer;
-}*xTask_Ptr;
+    xline_t maker;
+    xtask_t head;
+}*xpeer_ctx_ptr;
 
 typedef struct xpeer{
     int sock;
@@ -29,6 +41,9 @@ typedef struct xpeer{
     __xprocess_ptr task_pid, listen_pid;
     struct xmsgercb listener;
     struct avl_tree task_tree;
+    uint16_t task_count;
+    uint8_t task_index;
+    xtask_t *task_table[256];
     // 通信录，好友ID列表，一个好友ID可以对应多个设备地址，但是只与主设备建立一个 channel，设备地址是动态更新的，不需要存盘。好友列表需要写数据库
     // 设备列表，用户自己的所有设备，每个设备建立一个 channel，channel 的消息实时共享，设备地址是动态更新的，设备 ID 需要存盘
     // 任务树，每个请求（发起的请求或接收的请求）都是一个任务，每个任务都有开始，执行和结束。请求是任务的开始，之后可能有多次消息传递，数据传输完成，双方各自结束任务，释放资源。
@@ -42,7 +57,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    xpeer_ctx_ptr task = xmsger_get_channel_ctx(channel);
     if (task){
 
     }
@@ -59,7 +74,7 @@ static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void
 static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, void *msg, size_t len)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    xpeer_ctx_ptr task = xmsger_get_channel_ctx(channel);
     task->msg = msg;
     xpipe_write(task->peer->task_pipe, &task, __sizeof_ptr);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -74,7 +89,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xTask_Ptr task = xmsger_get_channel_ctx(channel);
+    xpeer_ctx_ptr task = xmsger_get_channel_ctx(channel);
     task->channel = channel;
     if (task->peer == server){
         server->channel = channel;
@@ -87,7 +102,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xTask_Ptr task = (xTask_Ptr)malloc(sizeof(struct XTask));
+    xpeer_ctx_ptr task = (xpeer_ctx_ptr)malloc(sizeof(struct xpeer_ctx));
     task->peer = (xpeer_ptr)listener->ctx;
     task->channel = channel;
     xmsger_set_channel_ctx(channel, task);
@@ -112,12 +127,18 @@ static void* task_loop(void *ptr)
 {
     __xlogd("task_loop enter\n");
 
-    xtask_enter_ptr task;
+    xpeer_ctx_ptr ctx;
     xpeer_ptr server = (xpeer_ptr)ptr;
 
-    while (xpipe_read(server->task_pipe, &task, __sizeof_ptr) == __sizeof_ptr)
+    while (xpipe_read(server->task_pipe, &ctx, __sizeof_ptr) == __sizeof_ptr)
     {
-
+        ctx->maker = xline_parser(ctx->msg);
+        char *api = xline_find_word(&ctx->maker, "api");
+        if (mcompare(api, "res", slength("res")) == 0){
+            uint8_t tid = xline_find_uint64(&ctx->maker, "tid");
+            xtask_t *task = ctx->peer->task_table[tid];
+            task->res(task);
+        }
     }
 
     __xlogd("task_loop exit\n");
@@ -127,22 +148,87 @@ Clean:
     return NULL;
 }
 
-
-void login(xpeer_ptr peer)
+static void res_login(xtask_t *task)
 {
+    xline_printf(task->ctx->msg);
+}
+
+static void req_login(xtask_t *task)
+{
+    __xlogd("req_login ----------------------- enter\n");
+    xpeer_ptr peer = task->ctx->peer;
+    char text[1024] = {0};
+    uint8_t sha256[32];
+    SHA256_CTX shactx;
+
+    uint64_t millisecond = __xapi->time();
+    __xapi->strftime(text, 1024, millisecond / NANO_SECONDS);
+
+    millisecond = __xapi->clock();
+    __xapi->strftime(text, 1024, millisecond / NANO_SECONDS);
+
+    int n = snprintf(text, 1024, "%lu%lu%s", __xapi->time(), __xapi->clock(), "Hello");
+
+    sha256_init(&shactx);
+    sha256_update(&shactx, text, n);
+    sha256_finish(&shactx, sha256);
+
+    while (peer->task_table[peer->task_index] != NULL){
+        peer->task_index++;
+    }
+    peer->task_table[peer->task_index] = task;
+    task->tid = peer->task_index;
+    peer->task_index++;
+    task->res = res_login;
+
     xline_t xl = xline_maker(1024);
     xline_add_word(&xl, "api", "login");
-    xTask_Ptr task = xmsger_get_channel_ctx(peer->channel);
-    task->task_id = peer->task_id++;
-    avl_tree_add(&peer->task_tree, task);
+    xline_add_uint64(&xl, "tid", task->tid);
+    xline_add_uint64(&xl, "key", xxhash64(sha256, 32, 0));
+    xline_add_uint64(&xl, "len", 32);
+    xline_add_binary(&xl, "uuid", sha256, 32);
+
+    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+    __xlogd("req_login ----------------------- exit\n");
+}
+
+static void res_logout(xtask_t *task)
+{
+    xline_printf(task->ctx->msg);
+}
+
+static void req_logout(xtask_t *task)
+{
+    xpeer_ptr peer = task->ctx->peer;
+    while (peer->task_table[peer->task_index] != NULL){
+        peer->task_index++;
+    }
+    peer->task_table[peer->task_index] = task;
+    task->tid = peer->task_index;
+    peer->task_index++;
+    task->res = res_logout;
+
+    xline_t xl = xline_maker(1024);
+    xline_add_word(&xl, "api", "logout");
+    xline_add_uint64(&xl, "tid", task->tid);
     xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
 }
 
-void logout(xpeer_ptr peer)
+void create_task(xpeer_ptr peer, void(*api)(xtask_t*))
 {
-    xline_t xl = xline_maker(1024);
-    xline_add_word(&xl, "api", "logout");
-    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+    xpeer_ctx_ptr ctx = xmsger_get_channel_ctx(peer->channel);
+    xtask_t *task = (xtask_t*)malloc(sizeof(xtask_t));
+    task->ctx = ctx;
+    if (peer->task_count == 256){
+        task->req = api;
+        task->next = ctx->head.next;
+        task->prev = &ctx->head;
+        task->next->prev = task;
+        task->prev->next = task;
+    }else {
+        peer->task_count++;
+        api(task);
+    }
 }
 
 static xpeer_ptr g_server = NULL;
@@ -165,8 +251,8 @@ extern void sigint_setup(void (*handler)());
 
 static inline int number_compare(const void *a, const void *b)
 {
-	xTask_Ptr x = (xTask_Ptr)a;
-	xTask_Ptr y = (xTask_Ptr)b;
+	xpeer_ctx_ptr x = (xpeer_ctx_ptr)a;
+	xpeer_ctx_ptr y = (xpeer_ctx_ptr)b;
 	return x->task_id - y->task_id;
 }
 
@@ -181,7 +267,7 @@ int main(int argc, char *argv[])
     xpeer_ptr server = (xpeer_ptr)calloc(1, sizeof(struct xpeer));
     __xlogi("server: 0x%X\n", server);
 
-    avl_tree_init(&server->task_tree, number_compare, sizeof(struct XTask), AVL_OFFSET(struct XTask, node));
+    avl_tree_init(&server->task_tree, number_compare, sizeof(struct xpeer_ctx), AVL_OFFSET(struct xpeer_ctx, node));
 
     __set_true(server->runnig);
     g_server = server;
@@ -228,7 +314,7 @@ int main(int argc, char *argv[])
     server->listen_pid = __xapi->process_create(listen_loop, server);
     __xbreak(server->listen_pid == NULL);
 
-    xTask_Ptr task = (xTask_Ptr)malloc(sizeof(struct XTask));
+    xpeer_ctx_ptr task = (xpeer_ctx_ptr)malloc(sizeof(struct xpeer_ctx));
     task->peer = server;
     // xmsger_connect(server->msger, "47.99.146.226", 9256, task);
     xmsger_connect(server->msger, "192.168.43.173", 9256, task);
@@ -254,9 +340,11 @@ int main(int argc, char *argv[])
         sscanf(input, "%s", command);
 
         if (strcmp(command, "login") == 0) {
-            login(server);
+            __xlogd("command login ----------------------- enter\n");
+            create_task(server, req_login);
+            __xlogd("command login ----------------------- exit\n");
         } else if (strcmp(command, "logout") == 0) {
-            logout(server);
+            create_task(server, req_logout);
         } else if (strcmp(command, "join") == 0) {
             __xlogi("输入IP地址: ");
             if (fgets(input, sizeof(input), stdin) != NULL) {

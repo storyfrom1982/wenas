@@ -1106,11 +1106,12 @@ static void* main_loop(void *ptr)
                         }else {
 
                             if (spack->head.resend > XCHANNEL_RESEND_LIMIT){
-
+                                // __xlogd("on_channel_break %p\n", channel);
                                 msger->callback->on_channel_break(msger->callback, channel);
                                 // 移除超时的连接
                                 xtree_take(msger->peers, &channel->addr.port, 6);
                                 xchannel_free(channel);
+                                break;
 
                             }else {
 
@@ -1176,6 +1177,7 @@ static void* main_loop(void *ptr)
                 next_channel = channel->next;
                 // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
+                    // __xlogd("on_channel_break 2\n");
                     msger->callback->on_channel_break(msger->callback, channel);
                     // 移除超时的连接
                     xtree_take(msger->peers, &channel->addr.port, 6);

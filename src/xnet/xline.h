@@ -5,11 +5,12 @@
 
 enum {
     XLINE_TYPE_INT = 0x01, //整数
-    XLINE_TYPE_FLOAT = 0x02, //实数
-    XLINE_TYPE_STR = 0x04, //字符串
-    XLINE_TYPE_BIN = 0x08, //二进制数据
-    XLINE_TYPE_LIST = 0x10, //列表
-    XLINE_TYPE_TREE = 0x20 //树
+    XLINE_TYPE_UINT = 0x02, //自然数
+    XLINE_TYPE_FLOAT = 0x04, //实数
+    XLINE_TYPE_STR = 0x08, //字符串
+    XLINE_TYPE_BIN = 0x10, //二进制数据
+    XLINE_TYPE_LIST = 0x20, //列表
+    XLINE_TYPE_TREE = 0x40 //树
 };
 
 //xbyte 静态分配的最大长度（ 64bit 数的长度为 8 字节，加 1 字节头部标志位 ）
@@ -29,23 +30,18 @@ union float64 {
 
 #ifdef __LITTLE_ENDIAN__
 
-#define __n2b(n) \
+#define __n2b(n, type) \
         (struct xbyte){ \
-            XLINE_TYPE_INT, \
+            type, \
             (((char*)&(n))[0]), (((char*)&(n))[1]), \
             (((char*)&(n))[2]), (((char*)&(n))[3]), \
             (((char*)&(n))[4]), (((char*)&(n))[5]), \
             (((char*)&(n))[6]), (((char*)&(n))[7]) \
         }
 
-#define __f2b(n) \
-        (struct xbyte){ \
-            XLINE_TYPE_FLOAT, \
-            (((char*)&(n))[0]), (((char*)&(n))[1]), \
-            (((char*)&(n))[2]), (((char*)&(n))[3]), \
-            (((char*)&(n))[4]), (((char*)&(n))[5]), \
-            (((char*)&(n))[6]), (((char*)&(n))[7]) \
-        }
+#define __i2b(n) __n2b(n, XLINE_TYPE_INT)
+#define __u2b(n) __n2b(n, XLINE_TYPE_UINT)
+#define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
 
 #define __o2b(n, type) \
         (struct xbyte){ \
@@ -76,23 +72,18 @@ static inline double __xbyte2float(xbyte_ptr b)
 
 #else //__LITTLE_ENDIAN__
 
-#define __n2b(n) \
+#define __n2b(n, type) \
         (struct xbyte){ \
-            XLINE_TYPE_INT, \
+            type, \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
             (((char*)&(n))[5]), (((char*)&(n))[4]), \
             (((char*)&(n))[3]), (((char*)&(n))[2]), \
             (((char*)&(n))[1]), (((char*)&(n))[0]) \
         }
 
-#define __f2b(n) \
-        (struct xbyte){ \
-            XLINE_TYPE_FLOAT, \
-            (((char*)&(n))[7]), (((char*)&(n))[6]), \
-            (((char*)&(n))[5]), (((char*)&(n))[4]), \
-            (((char*)&(n))[3]), (((char*)&(n))[2]), \
-            (((char*)&(n))[1]), (((char*)&(n))[0]) \
-        }
+#define __i2b(n) __n2b(n, XLINE_TYPE_INT)
+#define __u2b(n) __n2b(n, XLINE_TYPE_UINT)
+#define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
 
 #define __o2b(n, type) \
         (struct xbyte){ \
@@ -129,6 +120,7 @@ static inline double __xbyte2float(xbyte_ptr b)
 #define __b2d(b)    (&(b)->h[XLINE_HEAD_SIZE])
 
 #define __typeis_int(b)         ((b)->h[0] == XLINE_TYPE_INT)
+#define __typeis_uint(b)        ((b)->h[0] == XLINE_TYPE_UINT)
 #define __typeis_float(b)       ((b)->h[0] == XLINE_TYPE_FLOAT)
 #define __typeis_word(b)        ((b)->h[0] == XLINE_TYPE_STR)
 #define __typeis_bin(b)         ((b)->h[0] == XLINE_TYPE_BIN)
@@ -308,12 +300,12 @@ static inline uint64_t xline_add_number(xline_ptr maker, const char *key, size_t
 
 static inline uint64_t xline_add_integer(xline_ptr maker, const char *key, int64_t i64)
 {
-    return xline_add_number(maker, key, slength(key), __n2b(i64));
+    return xline_add_number(maker, key, slength(key), __i2b(i64));
 }
 
 static inline uint64_t xline_add_uint64(xline_ptr maker, const char *key, uint64_t u64)
 {
-    return xline_add_number(maker, key, slength(key), __n2b(u64));
+    return xline_add_number(maker, key, slength(key), __u2b(u64));
 }
 
 static inline uint64_t xline_add_real(xline_ptr maker, const char *key, double f64)
@@ -324,7 +316,7 @@ static inline uint64_t xline_add_real(xline_ptr maker, const char *key, double f
 static inline uint64_t xline_add_pointer(xline_ptr maker, const char *key, void *p)
 {
     uint64_t n = (uint64_t)(p);
-    return xline_add_number(maker, key, slength(key), __n2b(n));
+    return xline_add_number(maker, key, slength(key), __u2b(n));
 }
 
 static inline xline_t xline_parser(xbyte_ptr byte)
@@ -398,7 +390,7 @@ static inline int64_t xline_find_integer(xline_ptr parser, const char *key)
     return EENDED;
 }
 
-static inline uint64_t xline_find_unsigned(xline_ptr parser, const char *key)
+static inline uint64_t xline_find_uint64(xline_ptr parser, const char *key)
 {
     xbyte_ptr val = xline_find(parser, key);
     if (val){
@@ -486,6 +478,10 @@ static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
         if (__typeis_int(xptr)){
 
             __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __b2i(xptr));
+
+        }else if (__typeis_uint(xptr)){
+
+            __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __b2i(xptr));
 
         }else if (__typeis_float(xptr)){
 

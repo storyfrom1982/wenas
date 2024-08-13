@@ -226,106 +226,106 @@ Clean:
     return NULL;
 }
 
-typedef struct xtask {
-    __atom_bool running;
-    __xprocess_ptr pid;
-    // xbuf_ptr buf;
-    xpipe_ptr pipe;
-}*xtask_ptr;
+// typedef struct xtask {
+//     __atom_bool running;
+//     __xprocess_ptr pid;
+//     // xbuf_ptr buf;
+//     xpipe_ptr pipe;
+// }*xtask_ptr;
 
 
-typedef struct xtask_enter {
-    void *func;
-    void *ctx;
-    void *index;
-    void *xline;
-}*xtask_enter_ptr;
+// typedef struct xtask_enter {
+//     void *func;
+//     void *ctx;
+//     void *index;
+//     void *xline;
+// }*xtask_enter_ptr;
 
 
-typedef void (*__xtask_enter_func)(xtask_enter_ptr ctx);
+// typedef void (*__xtask_enter_func)(xtask_enter_ptr ctx);
 
 
-static inline void* xtask_loop(void *p)
-{
-    xline_ptr ctx;
-    struct xtask_enter enter;
-    xtask_ptr task = (xtask_ptr)p;
-    uint64_t size = sizeof(struct xtask_enter);
+// static inline void* xtask_loop(void *p)
+// {
+//     xline_ptr ctx;
+//     struct xtask_enter enter;
+//     xtask_ptr task = (xtask_ptr)p;
+//     uint64_t size = sizeof(struct xtask_enter);
 
-    __xlogi("xtask_loop(0x%X) enter\n", __xapi->process_self());
+//     __xlogi("xtask_loop(0x%X) enter\n", __xapi->process_self());
     
-    while (__is_true(task->running)) {
+//     while (__is_true(task->running)) {
 
-        if (xpipe_read(task->pipe, (uint8_t*)&enter, size) != size){
-            break;
-        }
+//         if (xpipe_read(task->pipe, (uint8_t*)&enter, size) != size){
+//             break;
+//         }
 
-        if (enter.func){
-            ((__xtask_enter_func)(enter.func))(&enter);
-        }
-    }
+//         if (enter.func){
+//             ((__xtask_enter_func)(enter.func))(&enter);
+//         }
+//     }
 
-    __xlogi("xtask_loop(0x%X) exit\n", __xapi->process_self());
+//     __xlogi("xtask_loop(0x%X) exit\n", __xapi->process_self());
 
-    return NULL;
-}
+//     return NULL;
+// }
 
 
-static inline xtask_ptr xtask_create()
-{
-    __xlogi("xtask_create enter\n");
+// static inline xtask_ptr xtask_create()
+// {
+//     __xlogi("xtask_create enter\n");
 
-    int ret;
-    xtask_ptr task = (xtask_ptr)malloc(sizeof(struct xtask));
-    __xbreak(task == NULL);
+//     int ret;
+//     xtask_ptr task = (xtask_ptr)malloc(sizeof(struct xtask));
+//     __xbreak(task == NULL);
 
-    // task->buf = xbuf_create(2);
-    task->pipe = xpipe_create(sizeof(struct xtask_enter) * 256, "TASK");
-    __xbreak(task->pipe == NULL);
+//     // task->buf = xbuf_create(2);
+//     task->pipe = xpipe_create(sizeof(struct xtask_enter) * 256, "TASK");
+//     __xbreak(task->pipe == NULL);
 
-    task->running = true;
-    task->pid = __xapi->process_create(xtask_loop, task);
-    __xbreak(task->pid == NULL);
+//     task->running = true;
+//     task->pid = __xapi->process_create(xtask_loop, task);
+//     __xbreak(task->pid == NULL);
 
-    __xlogi("xtask_create exit\n");
+//     __xlogi("xtask_create exit\n");
 
-    return task;
+//     return task;
 
-Clean:
+// Clean:
 
-    if (task){
-        free(task);
-    }
+//     if (task){
+//         free(task);
+//     }
 
-    if (task->pipe){
-        xpipe_free(&task->pipe);
-    }
+//     if (task->pipe){
+//         xpipe_free(&task->pipe);
+//     }
 
-    return NULL;
-}
+//     return NULL;
+// }
 
-static inline void xtask_free(xtask_ptr *pptr)
-{
-    __xlogi("xtask_free enter\n");
+// static inline void xtask_free(xtask_ptr *pptr)
+// {
+//     __xlogi("xtask_free enter\n");
 
-    if (pptr && *pptr) {
-        xtask_ptr task = *pptr;
-        *pptr = NULL;
+//     if (pptr && *pptr) {
+//         xtask_ptr task = *pptr;
+//         *pptr = NULL;
 
-        xpipe_break(task->pipe);
-        __xapi->process_free(task->pid);
-        xpipe_free(&task->pipe);
+//         xpipe_break(task->pipe);
+//         __xapi->process_free(task->pid);
+//         xpipe_free(&task->pipe);
 
-        free(task);
-    }
+//         free(task);
+//     }
 
-    __xlogi("xtask_free exit\n");
-}
+//     __xlogi("xtask_free exit\n");
+// }
 
-static inline int xtask_push(xtask_ptr task, struct xtask_enter enter)
-{
-    return xpipe_write(task->pipe, (uint8_t*)&enter, sizeof(enter));
-}
+// static inline int xtask_push(xtask_ptr task, struct xtask_enter enter)
+// {
+//     return xpipe_write(task->pipe, (uint8_t*)&enter, sizeof(enter));
+// }
 
 // static inline xmaker_ptr xtask_hold_pusher(xtask_ptr task)
 // {
