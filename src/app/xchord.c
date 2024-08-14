@@ -9,11 +9,11 @@
 #define KEY_SPACE   (1 << KEY_BITS)
 
 
-typedef struct Node {
+typedef struct XChord {
     uint32_t key;
-    struct Node* predecessor;
-    struct Node* finger_table[KEY_BITS];
-}*Node_Ptr;
+    struct XChord* predecessor;
+    struct XChord* finger_table[KEY_BITS];
+}*XChord_Ptr;
 
 // Node_Ptr nodes[KEY_SPACE] = {0};
 
@@ -21,8 +21,8 @@ typedef struct Node {
 typedef struct XChord {
 
     uint32_t count;
-    Node_Ptr ring;
-    Node_Ptr prev, next;
+    XChord_Ptr ring;
+    XChord_Ptr prev, next;
 
 }*XChord_Ptr;
 
@@ -68,9 +68,9 @@ static inline bool key_in_right_closed_interval(uint64_t key, uint64_t a, uint64
     return key_in_open_interval(key, a, b);
 }
 
-Node_Ptr closest_preceding_finger(Node_Ptr chord, uint32_t key)
+XChord_Ptr closest_preceding_finger(XChord_Ptr chord, uint32_t key)
 {
-    Node_Ptr finger;
+    XChord_Ptr finger;
     for (int i = KEY_BITS - 1; i >= 0; --i) {
         finger = chord->finger_table[i];
         if (key_in_open_interval(finger->key, chord->key, key)) {
@@ -82,10 +82,10 @@ Node_Ptr closest_preceding_finger(Node_Ptr chord, uint32_t key)
     return chord;
 }
 
-Node_Ptr find_predecessor(Node_Ptr chord, uint32_t key)
+XChord_Ptr find_predecessor(XChord_Ptr chord, uint32_t key)
 {
-    Node_Ptr n = chord;
-    Node_Ptr successor = chord->finger_table[1];
+    XChord_Ptr n = chord;
+    XChord_Ptr successor = chord->finger_table[1];
     // key 大于 n 并且小于等于 n 的后继，所以 n 是 key 的前继
     while (!key_in_right_closed_interval(key, n->key, successor->key)) {
         // n 的后继不是 key 的后继，要继续查找
@@ -98,15 +98,15 @@ Node_Ptr find_predecessor(Node_Ptr chord, uint32_t key)
     return n;
 }
 
-Node_Ptr find_successor(Node_Ptr chord, uint32_t key) {
+XChord_Ptr find_successor(XChord_Ptr chord, uint32_t key) {
     if (key == chord->key){
         return chord;
     }
-    Node_Ptr n = find_predecessor(chord, key);
+    XChord_Ptr n = find_predecessor(chord, key);
     return n->finger_table[1];
 }
 
-void print_node(Node_Ptr node)
+void print_node(XChord_Ptr node)
 {
     __xlogd("node->key >>>>--------------------------> enter %u\n", node->key);
     for (int i = 1; i < KEY_BITS; ++i){
@@ -117,12 +117,12 @@ void print_node(Node_Ptr node)
     __xlogd("node->key >>>>-----------------------> exit %u\n", node->key);
 }
 
-void node_print_all(Node_Ptr node)
+void node_print_all(XChord_Ptr node)
 {
     __xlogd("node_print_all >>>>------------------------------------------------> enter\n");
-    Node_Ptr n = node->predecessor;
+    XChord_Ptr n = node->predecessor;
     while (n != node){
-        Node_Ptr t = n->predecessor;
+        XChord_Ptr t = n->predecessor;
         print_node(n);
         n = t;
         if (n == node){
@@ -133,12 +133,12 @@ void node_print_all(Node_Ptr node)
     __xlogd("node_print_all >>>>------------------------------------------------> exit\n"); 
 }
 
-void update_others(Node_Ptr node)
+void update_others(XChord_Ptr node)
 {
     __xlogd("update_others enter\n");
     node_print_all(node);
     uint32_t start;
-    Node_Ptr prev, next, finger_node;
+    XChord_Ptr prev, next, finger_node;
     for (int i = 1; i < KEY_BITS; ++i){
         start = (node->key - (1 << (i-1))) % KEY_SPACE;
         __xlogd("update_others start %u\n", start);
@@ -172,11 +172,11 @@ void update_others(Node_Ptr node)
     __xlogd("update_others exit\n");
 }
 
-Node_Ptr node_create(uint32_t key)
+XChord_Ptr node_create(uint32_t key)
 {
     __xlogd("node_create enter\n");
 
-    Node_Ptr node = (Node_Ptr)calloc(1, sizeof(struct Node));
+    XChord_Ptr node = (XChord_Ptr)calloc(1, sizeof(struct XChord));
 
     node->key = key;
     node->predecessor = node;
@@ -191,13 +191,13 @@ Node_Ptr node_create(uint32_t key)
 }
 
 
-Node_Ptr node_join(Node_Ptr ring, uint32_t key)
+XChord_Ptr node_join(XChord_Ptr ring, uint32_t key)
 {
     __xlogd("node_join >>>>--------------------> enter %u\n", key);
 
     uint32_t start;
-    Node_Ptr node = NULL;
-    Node_Ptr successor = NULL;
+    XChord_Ptr node = NULL;
+    XChord_Ptr successor = NULL;
 
     if (key == ring->key){
         return NULL;
@@ -249,11 +249,11 @@ Node_Ptr node_join(Node_Ptr ring, uint32_t key)
     return node;
 }
 
-void node_remove(Node_Ptr ring, uint32_t key)
+void node_remove(XChord_Ptr ring, uint32_t key)
 {
     __xlogd("node_remove enter %u\n", key);
     uint32_t start;
-    Node_Ptr node, prev, next, finger_node, successor;
+    XChord_Ptr node, prev, next, finger_node, successor;
     successor = find_successor(ring, key);
     if (successor->key == key){
         node = successor;
@@ -303,10 +303,10 @@ int main(int argc, char *argv[])
 
     struct XChord chord = {0};
     chord.ring = node_create(0);
-    Node_Ptr ring = chord.ring;
+    XChord_Ptr ring = chord.ring;
 
     uint32_t k = 1;
-    Node_Ptr n = NULL, s = NULL;
+    XChord_Ptr n = NULL, s = NULL;
     for (int i = 1; i < KEY_SPACE; ++i){
         if ((i % k) == 0){
             if (i <= k){
@@ -330,17 +330,17 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < KEY_SPACE; ++i){
         if (i <= k){
-            Node_Ptr search_node = find_successor(ring, (i+1)%KEY_SPACE);
+            XChord_Ptr search_node = find_successor(ring, (i+1)%KEY_SPACE);
             __xlogd("search key %u: fond %u\n", (i+1)%KEY_SPACE, search_node->key);
         }else {
-            Node_Ptr search_node = find_successor(ring, (i+1)%KEY_SPACE);
+            XChord_Ptr search_node = find_successor(ring, (i+1)%KEY_SPACE);
             __xlogd("search key %u: fond %u\n", (i+1)%KEY_SPACE, search_node->key);
         }
     }
 
     n = ring->predecessor;
     while (n != ring){
-        Node_Ptr t = n->predecessor;
+        XChord_Ptr t = n->predecessor;
         print_node(n);
         n = t;
         if (n == ring){
@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
 
     n = ring->predecessor;
     while (n != ring){
-        Node_Ptr t = n->predecessor;
+        XChord_Ptr t = n->predecessor;
         __xlogd("free node n=%u addr=0x%x\n", n->key, n);
         free(n);
         n = t;

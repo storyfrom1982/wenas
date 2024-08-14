@@ -1061,10 +1061,15 @@ static void* main_loop(void *ptr)
 
                     if (msg->channel != NULL){
                         channel = msg->channel;
-                        // __xlogd("xmsger_loop (%u) >>>>-------------> break channel(%u)\n", channel->cid, channel->peer_cid);
-                        // 换成对端 cid 作为当前的索引，对端不需要再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
-                        xchannel_clear(channel);
-                        xchannel_serial_cmd(channel, XMSG_PACK_BYE);
+                        if (channel->breaker){
+                            xtree_take(msger->peers, &channel->addr.port, 6);
+                            xchannel_free(channel);
+                        }else {
+                            // __xlogd("xmsger_loop (%u) >>>>-------------> break channel(%u)\n", channel->cid, channel->peer_cid);
+                            // 换成对端 cid 作为当前的索引，对端不需要再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
+                            xchannel_clear(channel);
+                            xchannel_serial_cmd(channel, XMSG_PACK_BYE);
+                        }
                     }
                 }
 
@@ -1107,11 +1112,14 @@ static void* main_loop(void *ptr)
 
                             if (spack->head.resend > XCHANNEL_RESEND_LIMIT){
                                 // __xlogd("on_channel_break %p\n", channel);
-                                msger->callback->on_channel_break(msger->callback, channel);
-                                // 移除超时的连接
-                                xtree_take(msger->peers, &channel->addr.port, 6);
-                                xchannel_free(channel);
-                                break;
+                                if (!channel->breaker){
+                                    channel->breaker = true;
+                                    msger->callback->on_channel_break(msger->callback, channel);
+                                    // // 移除超时的连接
+                                    // xtree_take(msger->peers, &channel->addr.port, 6);
+                                    // xchannel_free(channel);
+                                    break;
+                                }
 
                             }else {
 
@@ -1177,11 +1185,14 @@ static void* main_loop(void *ptr)
                 next_channel = channel->next;
                 // 10 秒钟超时
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
-                    // __xlogd("on_channel_break 2\n");
-                    msger->callback->on_channel_break(msger->callback, channel);
-                    // 移除超时的连接
-                    xtree_take(msger->peers, &channel->addr.port, 6);
-                    xchannel_free(channel);
+                    if (!channel->breaker){
+                        channel->breaker = true;
+                        // __xlogd("on_channel_break 2\n");
+                        msger->callback->on_channel_break(msger->callback, channel);
+                        // // 移除超时的连接
+                        // xtree_take(msger->peers, &channel->addr.port, 6);
+                        // xchannel_free(channel);
+                    }
                 }else {
                     // 队列的第一个连接没有超时，后面的连接就都没有超时
                     break;
@@ -1280,7 +1291,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
     __xlogd("xmsger_disconnect channel 0x%X enter\n", channel);
 
     // 避免重复调用
-    if (!__set_true(channel->breaker)){
+    if (!__set_false(channel->connected)){
         __xlogd("xmsger_disconnect channel 0x%X repeated calls\n", channel);
         return true;
     }
