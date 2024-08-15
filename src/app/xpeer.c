@@ -26,7 +26,7 @@ typedef struct xpeer_ctx {
     void *msg;
     xchannel_ptr channel;
     struct xpeer *peer;
-    xline_t maker;
+    xline_t parser;
     xtask_t head;
 }*xpeer_ctx_ptr;
 
@@ -132,10 +132,10 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &ctx, __sizeof_ptr) == __sizeof_ptr)
     {
-        ctx->maker = xline_parser(ctx->msg);
-        char *api = xline_find_word(&ctx->maker, "api");
+        ctx->parser = xline_parser(ctx->msg);
+        char *api = xline_find_word(&ctx->parser, "api");
         if (mcompare(api, "res", slength("res")) == 0){
-            uint8_t tid = xline_find_uint64(&ctx->maker, "tid");
+            uint8_t tid = xline_find_uint64(&ctx->parser, "tid");
             xtask_t *task = ctx->peer->task_table[tid];
             task->res(task);
         }
@@ -355,15 +355,6 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            __xlogi("输入端口号: ");
-            if (fgets(input, sizeof(input), stdin) != NULL) {
-                input[strcspn(input, "\n")] = 0;
-                port = atoi(input);
-            } else {
-                printf("读取端口号失败\n");
-                continue;
-            }
-
             __xlogi("输入键值: ");
             if (fgets(input, sizeof(input), stdin) != NULL) {
                 input[strcspn(input, "\n")] = 0;
@@ -373,11 +364,15 @@ int main(int argc, char *argv[])
                 continue;
             }
 
+            xtask_t *task = (xtask_t *)malloc(sizeof(xtask_t));
+            server->task_table[0] = task;
+            task->res = res_logout;
+
             struct xline maker = xline_maker(1024);
-            xline_add_word(&maker, "msg", "req");
-            xline_add_word(&maker, "task", "join");
+            xline_add_word(&maker, "api", "chord_join");
+            xline_add_word(&maker, "tid", 0);
             xline_add_word(&maker, "ip", ip);
-            xline_add_uint64(&maker, "port", port);
+            xline_add_uint64(&maker, "port", 9266);
             xline_add_uint64(&maker, "key", key);
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 

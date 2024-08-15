@@ -288,8 +288,8 @@ void node_remove(XChord_Ptr ring, uint32_t key)
 
 
 typedef struct xtask {
-    uint8_t tid;
-    void (*req)(struct xtask*);
+    struct avl_node node;
+    uint64_t tid, rid;
     void (*res)(struct xtask*);
     uint64_t len, pos;
     struct xpeer_ctx *ctx;
@@ -300,8 +300,8 @@ typedef struct xpeer_ctx {
     xhtnode_t node;
     xchannel_ptr channel;
     struct xpeer *server;
-    xtask_t *task;
-    xline_t maker;
+    xline_t parser;
+    xtask_t task_list;
 }*xpeer_ctx_ptr;
 
 typedef struct xpeer{
@@ -317,6 +317,9 @@ typedef struct xpeer{
     struct xmsgercb listener;
     xhash_table_t api_tabel;
     xhash_tree_t uuid_table;
+    uint64_t task_count;
+    xtask_t *task_table[256];
+    struct avl_tree task_tree;
 }*xpeer_ptr;
 
 
@@ -362,9 +365,14 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsg_ctx_t mctx;
-    mctx.pctx = xmsger_get_channel_ctx(channel);
-    if (mctx.pctx->task){
+    xmsg_ctx_t mctx = {0};
+    mctx.msg = xmsger_get_channel_ctx(channel);
+    xpeer_ctx_ptr pctx = (xpeer_ctx_ptr)calloc(1, sizeof(struct xpeer_ctx));
+    pctx->server = server;
+    pctx->channel = channel;
+    xmsger_set_channel_ctx(channel, pctx);
+    if (mctx.msg){
+        mctx.pctx = pctx;
         xpipe_write(server->task_pipe, &mctx, sizeof(xmsg_ctx_t));
     }
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -395,20 +403,98 @@ static void* listen_loop(void *ptr)
     return NULL;
 }
 
+inline static xtask_t* add_task(xpeer_ctx_ptr ctx, void(*api)(xtask_t*))
+{
+    xtask_t *task = (xtask_t*)malloc(sizeof(xtask_t));
+    task->tid = ctx->server->task_count;
+    task->res = api;
+    uint8_t pos = ctx->server->task_count % 256;
+    if (ctx->server->task_table[pos] == NULL){
+        ctx->server->task_table[pos] = task;
+    }else {
+        avl_tree_add(&ctx->server->task_tree, task);
+    }
+    task->next = ctx->task_list.next;
+    task->prev = &ctx->task_list;
+    task->prev->next = task;
+    task->next->prev = task;
+    return task;
+}
+
+inline static xtask_t* remove_task(xtask_t *task)
+{
+    xpeer_ptr server = task->ctx->server;
+    if (server->task_table[task->tid] == task->tid){
+        server->task_table[task->tid] = NULL;
+    }else {
+        avl_tree_remove(&server->task_tree, task);
+    }
+    task->prev->next = task->next;
+    task->next->prev = task->prev;
+    free(task);
+}
 
 #include <arpa/inet.h>
-static int res_join_node(xpeer_ctx_ptr task)
+static void res_chord_join_invite(xtask_t *task)
 {
-    __xlogd("msg_join_node enter\n");
-    uint32_t key = xline_find_uint64(&task->maker, "key");
+    __xlogd("res_chord_join_invite enter\n");
+    xpeer_ptr server = task->ctx->server;
+
+    xline_t xl = xline_maker(1024);
+
+    uint64_t res_code = xline_find_uint64(&task->ctx->parser, "code");
+
+    if (res_code == 200){
+
+        uint64_t key = xline_find_uint64(&task->ctx->parser, "key");
+        XChord_Ptr node = node_create(key);
+        node->channel = task->ctx->channel;
+        int ret = node_join(server->ring, node);
+        node_print_all(server->ring);
+
+        
+        xline_add_word(&xl, "api", "res");
+        xline_add_uint64(&xl, "tid", task->rid);
+        xline_add_uint64(&xl, "code", res_code);
+
+        uint64_t lpos = xline_hold_list(&xl, "nodes");
+        XChord_Ptr node = server->ring->predecessor;
+        while (node != server->ring)
+        {
+            uint64_t tpos = xline_list_hold_tree(&xl);
+            xline_add_word(&xl, "key", node->key);
+            xline_list_save_tree(&xl, tpos);
+        }
+        xline_save_list(&xl, lpos);
+
+    }else {
+
+        xline_add_word(&xl, "api", "res");
+        xline_add_uint64(&xl, "tid", task->rid);
+        xline_add_uint64(&xl, "code", res_code);
+    }
+
+    xmsger_send_message(task->ctx->server->msger, task->ctx->channel, xl.byte, xl.wpos);
+
+    remove_task(task);
+
+    __xlogd("res_chord_join_invite exit\n");
+}
+
+static void api_chord_join_invite(xpeer_ctx_ptr pctx)
+{
+    __xlogd("api_chord_join_invite enter\n");
+    xpeer_ptr server = pctx->server;
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
+    uint32_t key = xline_find_uint64(&pctx->parser, "key");
     __xlogd("add key=%u\n", key);
 
     xline_t maker = xline_maker(0);
-    xline_add_word(&maker, "msg", "req");
-    xline_add_word(&maker, "task", "invite");
+    xline_add_word(&maker, "api", "chord_invite");
+    xline_add_uint64(&maker, "tid", tid);
     uint64_t pos = xline_hold_list(&maker, "nodes");
-    XChord_Ptr n = task->server->ring->predecessor;
-    while (n != task->server->ring) {
+    XChord_Ptr n = pctx->server->ring->predecessor;
+    while (n != pctx->server->ring) {
         uint64_t tpos = xline_list_hold_tree(&maker);
         __xipaddr_ptr addr = xmsger_get_channel_ipaddr(n->channel);
         char ip[INET_ADDRSTRLEN];
@@ -422,140 +508,150 @@ static int res_join_node(xpeer_ctx_ptr task)
     }
 
     uint64_t tpos = xline_list_hold_tree(&maker);
-    xline_add_word(&maker, "ip", task->server->ip);
-    xline_add_uint64(&maker, "port",task->server->port);
-    xline_add_uint64(&maker, "key", task->server->ring->key);
+    xline_add_word(&maker, "ip", pctx->server->ip);
+    xline_add_uint64(&maker, "port",pctx->server->port);
+    xline_add_uint64(&maker, "key", pctx->server->ring->key);
     xline_list_save_tree(&maker, tpos);
-
     xline_save_list(&maker, pos);
-    xmsger_send_message(task->server->msger, task->channel, maker.head, maker.wpos);
 
-    XChord_Ptr node = node_create(key);
-    node->channel = task->channel;
-    int ret = node_join(task->server->ring, node);
-    if (ret == -1){
-        return -1;
-    }
-    node_print_all(task->server->ring);
-    __xlogd("msg_join_node exit\n");
-
-    return 0;
+    xmsger_send_message(pctx->server->msger, pctx->channel, maker.head, maker.wpos);
 }
 
-static int req_join_node(xpeer_ctx_ptr ctx)
+static void api_chord_join(xpeer_ctx_ptr pctx)
 {
-    __xlogd("req_join_node enter\n");
-    char *ip = xline_find_word(&ctx->maker, "ip");
+    xpeer_ptr server = pctx->server;
+    __xlogd("api_chord_join enter\n");
+    uint64_t tid = xline_find_word(&pctx->parser, "tid");
+    char *ip = xline_find_word(&pctx->parser, "ip");
     __xlogd("add ip=%s\n", ip);
-    unsigned port = xline_find_uint64(&ctx->maker, "port");
+    unsigned port = xline_find_uint64(&pctx->parser, "port");
     __xlogd("add port=%u\n", port);
-    uint32_t key = xline_find_uint64(&ctx->maker, "key");
+    uint32_t key = xline_find_uint64(&pctx->parser, "key");
     __xlogd("add key=%u\n", key);
-    xtask_t *new_task = (xtask_t *)malloc(sizeof(xtask_t));
-    new_task->ctx = ctx;
-    new_task->res = res_join_node;
-    xmsger_connect(ctx->server->msger, ip, port, new_task);
-    __xlogd("req_join_node exit\n");
-    return 0;
+
+    xtask_t *task = add_task(pctx, res_chord_join_invite);
+    task->rid = tid;
+
+    xline_t xl = xline_maker(1024);
+    xline_add_word(&xl, "api", "chord_join_invite");
+    xline_add_uint64(&xl, "tid", task->tid);
+    xline_add_uint64(&xl, "key", key);
+
+    xmsger_connect(pctx->server->msger, ip, port, xl.byte);
+    __xlogd("api_chord_join exit\n");
 }
 
-static int req_turn(xpeer_ctx_ptr task)
+static void api_chord_add(xpeer_ctx_ptr pctx)
 {
-    __xlogd("req_turn enter\n");
-    uint32_t key = xline_find_uint64(&task->maker, "key");
-    __xlogd("req_turn find key=%u\n", key);
-    XChord_Ptr node = find_successor(task->server->ring, key);
-    __xlogd("req_turn successor node key=%u\n", node->key);
-    if (node == task->server->ring){
-        char *msg = xline_find_word(&task->maker, "text");
-        __xlogd("receive >>>>>---------------------------------> text: %s\n", msg);
-    }else {
-        char *msg = xline_find_word(&task->maker, "text");
-        xline_t ctx = xline_maker(0);
-        xline_add_word(&ctx, "msg", "req");
-        xline_add_word(&ctx, "task", "turn");
-        xline_add_uint64(&ctx, "key", key);
-        xline_add_word(&ctx, "text", msg);
-        xmsger_send_message(task->server->msger, node->channel, ctx.head, ctx.wpos);
-    }
-    __xlogd("req_turn exit\n");
-    return 0;
-}
-
-static int req_add_node(xpeer_ctx_ptr task)
-{
-    __xlogd("req_add_node enter\n");
-    uint32_t key = xline_find_uint64(&task->maker, "key");
+    __xlogd("api_chord_add enter\n");
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
+    uint32_t key = xline_find_uint64(&pctx->parser, "key");
     XChord_Ptr node = node_create(key);
-    node->channel = task->channel;
-    node_join(task->server->ring, node);
-    node_print_all(task->server->ring);
-    __xlogd("req_add_node exit\n");
+    node->channel = pctx->channel;
+    node_join(pctx->server->ring, node);
+
+    xline_t xl = xline_maker(0);
+    xline_add_word(&xl, "api", "res");
+    xline_add_word(&xl, "tid", tid);
+    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
+
+    node_print_all(pctx->server->ring);
+    __xlogd("api_chord_add exit\n");
 }
 
-static int res_invite_node(xpeer_ctx_ptr task)
+static void res_chord_invite_add(xtask_t *task)
 {
-    __xlogd("msg_invite_node enter\n");
-    XChord_Ptr node = xline_find_pointer(&task->maker, "node");
-    __xlogd("msg_invite_node 1\n");
-    node->channel = task->channel;
-    __xlogd("msg_invite_node 2\n");
-    xline_t new_node = xline_maker(0);
-    __xlogd("msg_invite_node 3\n");
-    xline_add_word(&new_node, "msg", "req");
-    __xlogd("msg_invite_node 4\n");
-    xline_add_word(&new_node, "task", "add");
-    __xlogd("msg_invite_node 5\n");
-    xline_add_uint64(&new_node, "key", task->server->ring->key);
-    __xlogd("msg_invite_node 6\n");
-    xmsger_send_message(task->server->msger, node->channel, new_node.head, new_node.wpos);
-    __xlogd("msg_invite_node 7\n");
-    node_print_all(task->server->ring);
-    __xlogd("msg_invite_node exit\n");
-    return 0;
+    __xlogd("res_chord_invite_add enter\n");
+    remove_task(task);
+    __xlogd("res_chord_invite_add exit\n");
 }
 
-static int req_invite_node(xpeer_ctx_ptr ctx)
+static void api_chord_invite_add(xpeer_ctx_ptr pctx)
 {
-    __xlogd("req_invite_node enter\n");
-    xbyte_ptr nodes = xline_find(&ctx->maker, "nodes");
+    __xlogd("api_chord_invite_add enter\n");
+    XChord_Ptr node = xline_find_pointer(&pctx->parser, "node");
+    node->channel = pctx->channel;
 
-    xbyte_ptr xptr;
-    xline_t plist = xline_parser(nodes);
+    xtask_t *task = add_task(pctx, res_chord_invite_add);
 
-    __xipaddr_ptr addr = xmsger_get_channel_ipaddr(ctx->channel);
+    xline_t xl = xline_maker(0);
+    xline_add_word(&xl, "api", "chord_add");
+    xline_add_word(&xl, "tid", task->tid);
+    xline_add_uint64(&xl, "key", pctx->server->ring->key);
+    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
+    node_print_all(pctx->server->ring);
+    __xlogd("api_chord_invite_add exit\n");
+}
 
-    while ((xptr = xline_list_next(&plist)) != NULL)
+static void api_chord_invite(xpeer_ctx_ptr pctx)
+{
+    __xlogd("api_chord_invite enter\n");
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
+    xbyte_ptr nodes = xline_find(&pctx->parser, "nodes");
+
+    xbyte_ptr xnode;
+    xline_t node_list = xline_parser(nodes);
+
+    __xipaddr_ptr addr = xmsger_get_channel_ipaddr(pctx->channel);
+
+    while ((xnode = xline_list_next(&node_list)) != NULL)
     {
-        xline_t node_parser = xline_parser(xptr);
-        char *ip = xline_find_word(&node_parser, "ip");
-        uint16_t port = xline_find_uint64(&node_parser, "port");
-        uint32_t key = xline_find_uint64(&node_parser, "key");
+        xline_t parser = xline_parser(xnode);
+        char *ip = xline_find_word(&parser, "ip");
+        uint16_t port = xline_find_uint64(&parser, "port");
+        uint32_t key = xline_find_uint64(&parser, "key");
 
         XChord_Ptr node = node_create(key);
         __xapi->udp_make_ipaddr(ip, port, &node->ip);
-        node_join(ctx->server->ring, node);
+        node_join(pctx->server->ring, node);
         if (node->ip.ip == addr->ip){
-            node->channel = ctx->channel;
+            node->channel = pctx->channel;
         }else {
-            xtask_t *new_task = (xtask_t *)malloc(sizeof(xtask_t));
-            new_task->ctx = ctx;
-            new_task->res = res_invite_node;
-            xmsger_connect(ctx->server->msger, ip, port, new_task);
+            xline_t xl = xline_maker(1024);
+            xline_add_word(&xl, "api", "chord_invite_add");
+            xline_add_pointer(&xl, "node", node);
+            xmsger_connect(pctx->server->msger, ip, port, xl.byte);
         }
     }
-    node_print_all(ctx->server->ring);
-    __xlogd("req_invite_node exit\n");
-    
-    return 0;
+
+    xline_t xl = xline_maker(1024);
+    xline_add_word(&xl, "api", "res");
+    xline_add_uint64(&xl, "tid", tid);
+    xline_add_uint64(&xl, "code", 200);
+    xline_add_uint64(&xl, "key", pctx->server->ring->key);
+    xmsger_send_message(pctx->server->msger, pctx->channel, xl.byte, xl.wpos);
+
+    node_print_all(pctx->server->ring);
+    __xlogd("api_chord_invite exit\n");
+}
+
+static void api_messaging(xpeer_ctx_ptr pctx)
+{
+    __xlogd("api_messaging enter\n");
+    uint32_t key = xline_find_uint64(&pctx->parser, "key");
+    __xlogd("api_messaging find key=%u\n", key);
+    XChord_Ptr node = find_successor(pctx->server->ring, key);
+    __xlogd("api_messaging successor node key=%u\n", node->key);
+    if (node == pctx->server->ring){
+        char *msg = xline_find_word(&pctx->parser, "text");
+        __xlogd("receive >>>>>---------------------------------> text: %s\n", msg);
+    }else {
+        char *msg = xline_find_word(&pctx->parser, "text");
+        xline_t xl = xline_maker(0);
+        xline_add_word(&xl, "api", "messaging");
+        xline_add_uint64(&xl, "key", key);
+        xline_add_word(&xl, "text", msg);
+        xmsger_send_message(pctx->server->msger, node->channel, xl.head, xl.wpos);
+    }
+    __xlogd("api_messaging exit\n");
 }
 
 static void api_login(xpeer_ctx_ptr pctx)
 {
-    uint64_t tid = xline_find_uint64(&pctx->maker, "tid");
-    pctx->node.key = xline_find_uint64(&pctx->maker, "key");
-    pctx->node.uuid_len = xline_find_uint64(&pctx->maker, "len");
-    xbyte_ptr xb = xline_find(&pctx->maker, "uuid");
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
+    pctx->node.key = xline_find_uint64(&pctx->parser, "key");
+    pctx->node.uuid_len = xline_find_uint64(&pctx->parser, "len");
+    xbyte_ptr xb = xline_find(&pctx->parser, "uuid");
     uint8_t *uuid = __b2d(xb);
     pctx->node.uuid = (uint8_t*)malloc(pctx->node.uuid_len);
     mcopy(pctx->node.uuid, uuid, pctx->node.uuid_len);
@@ -573,7 +669,7 @@ static void api_login(xpeer_ctx_ptr pctx)
 static void api_logout(xpeer_ctx_ptr pctx)
 {
     xhtnode_t *node = xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
-    uint64_t tid = xline_find_uint64(&pctx->maker, "tid");
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
     __xlogd("node key=%lu tid=%lu\n", node->key, tid);
     free(pctx->node.uuid);
     xline_t res = xline_maker(1024);
@@ -589,9 +685,34 @@ static void api_break(xpeer_ctx_ptr pctx)
     xpeer_ptr server = pctx->server;
     xmsger_disconnect(server->msger, pctx->channel);
     __xlogd("task_loop >>>>---------------------------> free peer ctx node %lu\n", pctx->node.key);
-    xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
+    if (pctx->node.uuid_len != 0){
+        xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
+    }
     __xlogd("task_loop >>>>---------------------------> uuid tree count %lu\n", pctx->server->uuid_table.count);
-    free(pctx);    
+    if (pctx->task_list.next != &pctx->task_list){
+        xtask_t *next = pctx->task_list.next;
+        while (next != &pctx->task_list)
+        {
+            xtask_t *next_task = next->next;
+            remove_task(next);
+            next = next_task;
+        }
+    }
+    free(pctx);
+}
+
+static void api_response(xpeer_ctx_ptr pctx)
+{
+    uint8_t tid = xline_find_uint64(&pctx->parser, "tid");
+    xtask_t *task = pctx->server->task_table[tid];
+    if (task && task->tid != tid){
+        xtask_t t;
+        t.tid = tid;
+        task = avl_tree_find(&pctx->server->task_tree, &t);
+    }
+    if (task){
+        task->res(task);
+    }
 }
 
 typedef void(*api_task_enter)(xmsg_ctx_t *task);
@@ -614,14 +735,13 @@ static void* task_loop(void *ptr)
 
         if (mctx.msg){
             xline_printf(mctx.msg);
-            pctx->maker = xline_parser((xbyte_ptr)mctx.msg);
-            const char *api = xline_find_word(&pctx->maker, "api");
+            pctx->parser = xline_parser((xbyte_ptr)mctx.msg);
+            const char *api = xline_find_word(&pctx->parser, "api");
             api_task_enter enter = xhash_table_find(&pctx->server->api_tabel, api);
             if (enter){
                 enter(pctx);
             }
             free(mctx.msg);
-
         }
     }
 
@@ -632,6 +752,12 @@ Clean:
     return NULL;
 }
 
+static inline int number_compare(const void *a, const void *b)
+{
+	xtask_t *x = (xtask_t*)a;
+	xtask_t *y = (xtask_t*)b;
+	return x->tid - y->tid;
+}
 
 static xpeer_ptr g_server = NULL;
 
@@ -672,12 +798,20 @@ int main(int argc, char *argv[])
     // uint16_t port = atoi(argv[1]);
     // uint16_t port = 9256;
 
+    avl_tree_init(&server->task_tree, number_compare, sizeof(xtask_t), AVL_OFFSET(xtask_t, node));
     xhash_tree_init(&server->uuid_table);
     xhash_table_init(&server->api_tabel, 256);
 
+    xhash_table_add(&server->api_tabel, "res", api_response);
     xhash_table_add(&server->api_tabel, "login", api_login);
     xhash_table_add(&server->api_tabel, "logout", api_logout);
+    xhash_table_add(&server->api_tabel, "messaging", api_messaging);
     xhash_table_add(&server->api_tabel, "break", api_break);
+    xhash_table_add(&server->api_tabel, "chord_join", api_chord_join);
+    xhash_table_add(&server->api_tabel, "chord_join_invite", api_chord_join_invite);
+    xhash_table_add(&server->api_tabel, "chord_invite", api_chord_invite);
+    xhash_table_add(&server->api_tabel, "chord_invite_add", api_chord_invite_add);
+    xhash_table_add(&server->api_tabel, "chord_add", api_chord_add);
 
     xmsgercb_ptr listener = &server->listener;
 
