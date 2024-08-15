@@ -9,8 +9,8 @@ enum {
     XLINE_TYPE_FLOAT = 0x04, //实数
     XLINE_TYPE_STR = 0x08, //字符串
     XLINE_TYPE_BIN = 0x10, //二进制数据
-    XLINE_TYPE_LIST = 0x20, //列表
-    XLINE_TYPE_TREE = 0x40 //树
+    XLINE_TYPE_LKV = 0x20, //键值对
+    XLINE_TYPE_LIST = 0x40 //列表
 };
 
 //xbyte 静态分配的最大长度（ 64bit 数的长度为 8 字节，加 1 字节头部标志位 ）
@@ -30,20 +30,7 @@ union float64 {
 
 #ifdef __LITTLE_ENDIAN__
 
-#define __n2b(n, type) \
-        (struct xl){ \
-            type, \
-            (((char*)&(n))[0]), (((char*)&(n))[1]), \
-            (((char*)&(n))[2]), (((char*)&(n))[3]), \
-            (((char*)&(n))[4]), (((char*)&(n))[5]), \
-            (((char*)&(n))[6]), (((char*)&(n))[7]) \
-        }
-
-#define __i2b(n) __n2b(n, XLINE_TYPE_INT)
-#define __u2b(n) __n2b(n, XLINE_TYPE_UINT)
-#define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
-
-#define __o2b(n, type) \
+#define __n2xl(n, type) \
         (struct xl){ \
             (type), \
             (((char*)&(n))[0]), (((char*)&(n))[1]), \
@@ -52,27 +39,32 @@ union float64 {
             (((char*)&(n))[6]), (((char*)&(n))[7]) \
         }
 
-#define __b2n(b, type) \
-        ( (type)(b)->h[8] << 56 | (type)(b)->h[7] << 48 | (type)(b)->h[6] << 40 | (type)(b)->h[5] << 32 \
-        | (type)(b)->h[4] << 24 | (type)(b)->h[3] << 16 | (type)(b)->h[2] << 8 | (type)(b)->h[1] )
+#define __i2xl(n) __n2xl(n, XLINE_TYPE_INT)
+#define __u2xl(n) __n2xl(n, XLINE_TYPE_UINT)
+#define __f2xl(n) __n2xl(n, XLINE_TYPE_FLOAT)
 
-static inline double __xbyte2float(xl_ptr b)
+
+#define __xl2n(l, type) \
+        ( (type)(l)->h[8] << 56 | (type)(l)->h[7] << 48 | (type)(l)->h[6] << 40 | (type)(l)->h[5] << 32 \
+        | (type)(l)->h[4] << 24 | (type)(l)->h[3] << 16 | (type)(l)->h[2] << 8 | (type)(l)->h[1] )
+
+static inline double __xl2float(xl_ptr l)
 {
     union float64 f;
-    f.b[0] = b->h[1];
-    f.b[1] = b->h[2];
-    f.b[2] = b->h[3];
-    f.b[3] = b->h[4];
-    f.b[4] = b->h[5];
-    f.b[5] = b->h[6];
-    f.b[6] = b->h[7];
-    f.b[7] = b->h[8];
+    f.b[0] = l->h[1];
+    f.b[1] = l->h[2];
+    f.b[2] = l->h[3];
+    f.b[3] = l->h[4];
+    f.b[4] = l->h[5];
+    f.b[5] = l->h[6];
+    f.b[6] = l->h[7];
+    f.b[7] = l->h[8];
     return f.f;
 }
 
 #else //__LITTLE_ENDIAN__
 
-#define __n2b(n, type) \
+#define __n2xl(n, type) \
         (struct xl){ \
             type, \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
@@ -81,11 +73,11 @@ static inline double __xbyte2float(xl_ptr b)
             (((char*)&(n))[1]), (((char*)&(n))[0]) \
         }
 
-#define __i2b(n) __n2b(n, XLINE_TYPE_INT)
-#define __u2b(n) __n2b(n, XLINE_TYPE_UINT)
-#define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
+#define __i2xl(n) __n2xl(n, XLINE_TYPE_INT)
+#define __u2xl(n) __n2xl(n, XLINE_TYPE_UINT)
+#define __f2xl(n) __n2xl(n, XLINE_TYPE_FLOAT)
 
-#define __o2b(n, type) \
+#define __n2xl(n, type) \
         (struct xl){ \
             (type), \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
@@ -94,43 +86,43 @@ static inline double __xbyte2float(xl_ptr b)
             (((char*)&(n))[1]), (((char*)&(n))[0]) \
         }
 
-#define __b2n(b, type) \
-        ( (type)(b)->h[1] << 56 | (type)(b)->h[2] << 48 | (type)(b)->h[3] << 40 | (type)(b)->h[4] << 32 \
-        | (type)(b)->h[5] << 24 | (type)(b)->h[6] << 16 | (type)(b)->h[7] << 8 | (type)(b)->h[8] )
+#define __xl2n(l, type) \
+        ( (type)(l)->h[1] << 56 | (type)(l)->h[2] << 48 | (type)(l)->h[3] << 40 | (type)(l)->h[4] << 32 \
+        | (type)(l)->h[5] << 24 | (type)(l)->h[6] << 16 | (type)(l)->h[7] << 8 | (type)(l)->h[8] )
 
-static inline double __xbyte2float(xl_ptr b)
+static inline double __xl2float(xl_ptr l)
 {
     union float64 f;
-    f.b[0] = b->h[8];
-    f.b[1] = b->h[7];
-    f.b[2] = b->h[6];
-    f.b[3] = b->h[5];
-    f.b[4] = b->h[4];
-    f.b[5] = b->h[3];
-    f.b[6] = b->h[2];
-    f.b[7] = b->h[1];
+    f.b[0] = l->h[8];
+    f.b[1] = l->h[7];
+    f.b[2] = l->h[6];
+    f.b[3] = l->h[5];
+    f.b[4] = l->h[4];
+    f.b[5] = l->h[3];
+    f.b[6] = l->h[2];
+    f.b[7] = l->h[1];
     return f.f;
 }
 
 #endif //__LITTLE_ENDIAN__
 
-#define __b2i(b)   __b2n(b, int64_t)
-#define __b2u(b)   __b2n(b, uint64_t)
-#define __b2f(b)   __xbyte2float(b)
-#define __b2d(b)    (&(b)->h[XLINE_HEAD_SIZE])
+#define __xl2i(l)   __xl2n(l, int64_t)
+#define __xl2u(l)   __xl2n(l, uint64_t)
+#define __xl2f(l)   __xl2float(l)
+#define __xl2o(l)    (&(l)->h[XLINE_HEAD_SIZE])
 
-#define __typeis_int(b)         ((b)->h[0] == XLINE_TYPE_INT)
-#define __typeis_uint(b)        ((b)->h[0] == XLINE_TYPE_UINT)
-#define __typeis_float(b)       ((b)->h[0] == XLINE_TYPE_FLOAT)
-#define __typeis_word(b)        ((b)->h[0] == XLINE_TYPE_STR)
-#define __typeis_bin(b)         ((b)->h[0] == XLINE_TYPE_BIN)
-#define __typeis_list(b)        ((b)->h[0] == XLINE_TYPE_LIST)
-#define __typeis_tree(b)        ((b)->h[0] == XLINE_TYPE_TREE)
-#define __typeis_object(b)      ((b)->h[0] > XLINE_TYPE_FLOAT)
+#define __typeis_int(l)         ((l)->h[0] == XLINE_TYPE_INT)
+#define __typeis_uint(l)        ((l)->h[0] == XLINE_TYPE_UINT)
+#define __typeis_float(l)       ((l)->h[0] == XLINE_TYPE_FLOAT)
+#define __typeis_object(l)      ((l)->h[0] > XLINE_TYPE_FLOAT)
+#define __typeis_str(l)         ((l)->h[0] == XLINE_TYPE_STR)
+#define __typeis_bin(l)         ((l)->h[0] == XLINE_TYPE_BIN)
+#define __typeis_lkv(l)         ((l)->h[0] == XLINE_TYPE_LKV)
+#define __typeis_list(l)        ((l)->h[0] == XLINE_TYPE_LIST)
 
-#define __sizeof_head(b)        (b)->h[0] > XLINE_TYPE_FLOAT ? XLINE_HEAD_SIZE : 1
-#define __sizeof_data(b)        (b)->h[0] > XLINE_TYPE_FLOAT ? __b2u((b)) : 8
-#define __sizeof_line(b)        (b)->h[0] > XLINE_TYPE_FLOAT ? __b2u((b)) + XLINE_HEAD_SIZE : XLINE_HEAD_SIZE
+#define __sizeof_head(l)        __typeis_object(l) ? XLINE_HEAD_SIZE : 1
+#define __sizeof_data(l)        __typeis_object(l) ? __xl2u((l)) : 8
+#define __sizeof_line(l)        __typeis_object(l) ? __xl2u((l)) + XLINE_HEAD_SIZE : XLINE_HEAD_SIZE
 
 
 typedef struct xlkv {
@@ -169,7 +161,7 @@ static inline uint64_t xl_hold_kv(xlkv_ptr kv, const char *key)
 static inline void xl_save_kv(xlkv_ptr kv, uint64_t pos)
 {
     uint64_t len = kv->wpos - pos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head + pos)) = __o2b(len, XLINE_TYPE_TREE);
+    *((xl_ptr)(kv->head + pos)) = __n2xl(len, XLINE_TYPE_LKV);
 }
 
 static inline uint64_t xl_hold_list(xlkv_ptr kv, const char *key)
@@ -180,7 +172,7 @@ static inline uint64_t xl_hold_list(xlkv_ptr kv, const char *key)
 static inline void xl_save_list(xlkv_ptr kv, uint64_t pos)
 {
     uint64_t len = kv->wpos - pos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head + pos)) = __o2b(len, XLINE_TYPE_LIST);
+    *((xl_ptr)(kv->head + pos)) = __n2xl(len, XLINE_TYPE_LIST);
 }
 
 static inline uint64_t xl_list_hold_kv(xlkv_ptr kv)
@@ -225,11 +217,11 @@ static inline uint64_t xl_append_object(xlkv_ptr kv, const char *key, size_t key
     // 因为我们的 key 出了字符串的长度还有一个字节的头，所以这里再加 1
     kv->wpos += (1 + kv->key[0]);
     kv->val = (xl_ptr)(kv->head + kv->wpos);
-    *(kv->val) = __o2b(size, flag);
+    *(kv->val) = __n2xl(size, flag);
     mcopy(&(kv->val->h[XLINE_HEAD_SIZE]), val, size);
     kv->wpos += (XLINE_HEAD_SIZE + size);
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
     return kv->wpos;
 }
 
@@ -250,7 +242,7 @@ static inline uint64_t xl_add_bin(xlkv_ptr kv, const char *key, const void *val,
 
 static inline uint64_t xl_add_kv(xlkv_ptr kv, const char *key, xlkv_ptr subkv)
 {
-    return xl_append_object(kv, key, slength(key), subkv->head, subkv->wpos, XLINE_TYPE_TREE);
+    return xl_append_object(kv, key, slength(key), subkv->head, subkv->wpos, XLINE_TYPE_LKV);
 }
 
 static inline uint64_t xl_add_list(xlkv_ptr kv, const char *key, xlkv_ptr sublist)
@@ -291,35 +283,35 @@ static inline uint64_t xl_append_number(xlkv_ptr kv, const char *key, size_t key
     *(kv->val) = val;
     kv->wpos += __sizeof_line(kv->val);
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
     return kv->wpos;
 }
 
 static inline uint64_t xl_add_integer(xlkv_ptr kv, const char *key, int64_t i64)
 {
-    return xl_append_number(kv, key, slength(key), __i2b(i64));
+    return xl_append_number(kv, key, slength(key), __i2xl(i64));
 }
 
 static inline uint64_t xl_add_number(xlkv_ptr kv, const char *key, uint64_t u64)
 {
-    return xl_append_number(kv, key, slength(key), __u2b(u64));
+    return xl_append_number(kv, key, slength(key), __u2xl(u64));
 }
 
 static inline uint64_t xl_add_float(xlkv_ptr kv, const char *key, double f64)
 {
-    return xl_append_number(kv, key, slength(key), __f2b(f64));
+    return xl_append_number(kv, key, slength(key), __f2xl(f64));
 }
 
 static inline uint64_t xl_add_ptr(xlkv_ptr kv, const char *key, void *p)
 {
     uint64_t n = (uint64_t)(p);
-    return xl_append_number(kv, key, slength(key), __u2b(n));
+    return xl_append_number(kv, key, slength(key), __u2xl(n));
 }
 
 static inline xlkv_t xl_parser(xl_ptr xl)
 {
     xlkv_t kv = {0};
-    if (__typeis_tree(xl) || __typeis_list(xl)){
+    if (__typeis_lkv(xl) || __typeis_list(xl)){
         kv.rpos = XLINE_HEAD_SIZE;
         kv.wpos = __sizeof_data(xl);
         kv.size = kv.wpos;
@@ -389,7 +381,7 @@ static inline uint64_t xl_find_number(xlkv_ptr kv, const char *key)
 {
     xl_ptr val = xl_find(kv, key);
     if (val){
-        return __b2u(val);
+        return __xl2u(val);
     }
     return EENDED;
 }
@@ -398,7 +390,7 @@ static inline double xl_find_float(xlkv_ptr kv, const char *key)
 {
     xl_ptr val = xl_find(kv, key);
     if (val){
-        return __b2f(val);
+        return __xl2f(val);
     }
     return (double)EENDED;
 }
@@ -407,7 +399,7 @@ static inline const char* xl_find_word(xlkv_ptr kv, const char *key)
 {
     xl_ptr val = xl_find(kv, key);
     if (val){
-        return (const char*)__b2d(val);
+        return (const char*)__xl2o(val);
     }
     return NULL;
 }
@@ -416,7 +408,7 @@ static inline void* xl_find_ptr(xlkv_ptr kv, const char *key)
 {
     xl_ptr val = xl_find(kv, key);
     if (val){
-        return (void *)(__b2u(val));
+        return (void *)(__xl2u(val));
     }
     return NULL;
 }
@@ -438,7 +430,7 @@ static inline uint64_t xl_list_append(xlkv_ptr kv, xl_ptr ptr)
     mcopy(kv->head + kv->wpos, ptr->h, kv->rpos);
     kv->wpos += kv->rpos;
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
     return kv->wpos;
 }
 
@@ -452,9 +444,9 @@ static inline xl_ptr xl_list_next(xlkv_ptr kv)
     return NULL;
 }
 
-static inline void __xl_printf(xl_ptr xptr, const char *key, int depth)
+static inline void __xl_printf(xl_ptr xl, const char *key, int depth)
 {
-    xlkv_t parser = xl_parser(xptr);
+    xlkv_t parser = xl_parser(xl);
 
     int len = slength(key);
 
@@ -468,50 +460,50 @@ static inline void __xl_printf(xl_ptr xptr, const char *key, int depth)
         }
     }
 
-    while ((xptr = xl_next(&parser)) != NULL)
+    while ((xl = xl_next(&parser)) != NULL)
     {
-        if (__typeis_int(xptr)){
+        if (__typeis_int(xl)){
 
-            __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __b2i(xptr));
+            __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
 
-        }else if (__typeis_uint(xptr)){
+        }else if (__typeis_uint(xl)){
 
-            __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __b2i(xptr));
+            __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
 
-        }else if (__typeis_float(xptr)){
+        }else if (__typeis_float(xl)){
 
-            __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __b2f(xptr));
+            __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl2f(xl));
 
-        }else if (__typeis_word(xptr)){
+        }else if (__typeis_str(xl)){
 
-            __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __b2d(xptr));
+            __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __xl2o(xl));
 
-        }else if (__typeis_tree(xptr)){
+        }else if (__typeis_lkv(xl)){
 
-            __xl_printf(xptr, (const char*)parser.key, depth + 1);
+            __xl_printf(xl, (const char*)parser.key, depth + 1);
 
-        }else if (__typeis_list(xptr)){
+        }else if (__typeis_list(xl)){
 
             __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
 
-            xlkv_t plist = xl_parser(xptr);
+            xlkv_t plist = xl_parser(xl);
 
-            while ((xptr = xl_list_next(&plist)) != NULL)
+            while ((xl = xl_list_next(&plist)) != NULL)
             {
-                if (__typeis_int(xptr)){
+                if (__typeis_int(xl)){
 
-                    __xlogi("    %*d,\n", depth * 4, __b2i(xptr));
+                    __xlogi("    %*d,\n", depth * 4, __xl2i(xl));
 
-                }else if (__typeis_tree(xptr)){
+                }else if (__typeis_lkv(xl)){
                     
-                    __xl_printf(xptr, "", depth + 1);
+                    __xl_printf(xl, "", depth + 1);
                 }
             }
 
             __xlogi("  %*s},\n", depth * 4, "");
 
         }else {
-            __xloge("__xl_printf >>>>--------> type error\n");
+            __xloge("__xl_printf >>>>--------> type (0x%X)\n", xl->h[0]);
         }
     }
 

@@ -676,7 +676,7 @@ static void api_login(xpeer_ctx_ptr pctx)
     pctx->node.key = xl_find_number(&pctx->parser, "key");
     pctx->node.uuid_len = xl_find_number(&pctx->parser, "len");
     xl_ptr xb = xl_find(&pctx->parser, "uuid");
-    uint8_t *uuid = __b2d(xb);
+    uint8_t *uuid = __xl2o(xb);
     pctx->node.uuid = (uint8_t*)malloc(pctx->node.uuid_len);
     mcopy(pctx->node.uuid, uuid, pctx->node.uuid_len);
     xhash_tree_add(&pctx->server->uuid_table, &pctx->node);
