@@ -458,7 +458,7 @@ static void res_chord_join_invite(xtask_t *task)
         xline_add_uint64(&xl, "code", res_code);
 
         uint64_t lpos = xline_hold_list(&xl, "nodes");
-        XChord_Ptr node = server->ring->predecessor;
+        node = server->ring->predecessor;
         while (node != server->ring)
         {
             uint64_t tpos = xline_list_hold_tree(&xl);
