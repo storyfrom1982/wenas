@@ -422,6 +422,7 @@ inline static xtask_t* add_task(xpeer_ctx_ptr ctx, void(*api)(xtask_t*))
         __xlogd("add_task 3\n");
         avl_tree_add(&ctx->server->task_tree, task);
     }
+    ctx->server->task_count++;
     __xlogd("add_task 4\n");
     task->next = ctx->task_list.next;
     __xlogd("add_task 5\n");
