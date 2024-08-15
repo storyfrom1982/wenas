@@ -132,12 +132,18 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &ctx, __sizeof_ptr) == __sizeof_ptr)
     {
+        xline_printf(ctx->msg);
         ctx->parser = xline_parser(ctx->msg);
         char *api = xline_find_word(&ctx->parser, "api");
         if (mcompare(api, "res", slength("res")) == 0){
             uint8_t tid = xline_find_uint64(&ctx->parser, "tid");
-            xtask_t *task = ctx->peer->task_table[tid];
-            task->res(task);
+            __xlogd("task_loop tid=%u\n", tid);
+            xtask_t *task = server->task_table[tid];
+            __xlogd("task_loop task=%p\n", task);
+            if (task && task->res){
+                __xlogd("task_loop res=%p\n", task->res);
+                task->res(task);
+            }
         }
     }
 
@@ -367,6 +373,7 @@ int main(int argc, char *argv[])
             xtask_t *task = (xtask_t *)malloc(sizeof(xtask_t));
             server->task_table[0] = task;
             task->res = res_logout;
+            task->ctx = xmsger_get_channel_ctx(server->channel);
 
             struct xline maker = xline_maker(1024);
             xline_add_word(&maker, "api", "chord_join");
