@@ -689,15 +689,15 @@ static void api_break(xpeer_ctx_ptr pctx)
         xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
     }
     __xlogd("task_loop >>>>---------------------------> uuid tree count %lu\n", pctx->server->uuid_table.count);
-    if (pctx->task_list.next != &pctx->task_list){
-        xtask_t *next = pctx->task_list.next;
-        while (next != &pctx->task_list)
-        {
-            xtask_t *next_task = next->next;
-            remove_task(next);
-            next = next_task;
-        }
-    }
+    // if (pctx->task_list.next != &pctx->task_list){
+    //     xtask_t *next = pctx->task_list.next;
+    //     while (next != &pctx->task_list)
+    //     {
+    //         xtask_t *next_task = next->next;
+    //         remove_task(next);
+    //         next = next_task;
+    //     }
+    // }
     free(pctx);
 }
 

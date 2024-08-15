@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
     char str[1024];
     char input[256];
     char command[256];
-    char ip[256];
+    char ip[256] = {0};
     uint32_t key;
     while (g_server->runnig)
     {
@@ -370,9 +370,9 @@ int main(int argc, char *argv[])
 
             struct xline maker = xline_maker(1024);
             xline_add_word(&maker, "api", "chord_join");
-            xline_add_word(&maker, "tid", 0);
+            xline_add_uint64(&maker, "tid", 0);
             xline_add_word(&maker, "ip", ip);
-            xline_add_uint64(&maker, "port", 9266);
+            xline_add_uint64(&maker, "port", 9256);
             xline_add_uint64(&maker, "key", key);
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
