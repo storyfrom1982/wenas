@@ -238,7 +238,7 @@ Clean:
 //     void *func;
 //     void *ctx;
 //     void *index;
-//     void *xline;
+//     void *xlkv;
 // }*xtask_enter_ptr;
 
 
@@ -247,7 +247,7 @@ Clean:
 
 // static inline void* xtask_loop(void *p)
 // {
-//     xline_ptr ctx;
+//     xlkv_ptr ctx;
 //     struct xtask_enter enter;
 //     xtask_ptr task = (xtask_ptr)p;
 //     uint64_t size = sizeof(struct xtask_enter);

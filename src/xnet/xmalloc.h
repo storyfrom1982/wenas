@@ -3,7 +3,7 @@
 
 #include <xapi/xapi.h>
 
-#define EENDED  0xFFFFFFFFFFFFFFFF
+#define EENDED  0xFFFFFFFFFFFFFFFFUL
 // #define NULL  ((void*)0)
 
 #define __sizeof_ptr    sizeof(void*)

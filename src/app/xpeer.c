@@ -26,7 +26,7 @@ typedef struct xpeer_ctx {
     void *msg;
     xchannel_ptr channel;
     struct xpeer *peer;
-    xline_t parser;
+    xlkv_t parser;
     xtask_t head;
 }*xpeer_ctx_ptr;
 
@@ -132,11 +132,11 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &ctx, __sizeof_ptr) == __sizeof_ptr)
     {
-        xline_printf(ctx->msg);
-        ctx->parser = xline_parser(ctx->msg);
-        char *api = xline_find_word(&ctx->parser, "api");
+        xl_printf(ctx->msg);
+        ctx->parser = xl_parser(ctx->msg);
+        char *api = xl_find_word(&ctx->parser, "api");
         if (mcompare(api, "res", slength("res")) == 0){
-            uint8_t tid = xline_find_uint64(&ctx->parser, "tid");
+            uint8_t tid = xl_find_number(&ctx->parser, "tid");
             __xlogd("task_loop tid=%u\n", tid);
             xtask_t *task = server->task_table[tid];
             __xlogd("task_loop task=%p\n", task);
@@ -156,7 +156,7 @@ Clean:
 
 static void res_login(xtask_t *task)
 {
-    xline_printf(task->ctx->msg);
+    xl_printf(task->ctx->msg);
 }
 
 static void req_login(xtask_t *task)
@@ -187,20 +187,20 @@ static void req_login(xtask_t *task)
     peer->task_index++;
     task->res = res_login;
 
-    xline_t xl = xline_maker(1024);
-    xline_add_word(&xl, "api", "login");
-    xline_add_uint64(&xl, "tid", task->tid);
-    xline_add_uint64(&xl, "key", xxhash64(sha256, 32, 0));
-    xline_add_uint64(&xl, "len", 32);
-    xline_add_binary(&xl, "uuid", sha256, 32);
+    xlkv_t xl = xl_maker(1024);
+    xl_add_word(&xl, "api", "login");
+    xl_add_number(&xl, "tid", task->tid);
+    xl_add_number(&xl, "key", xxhash64(sha256, 32, 0));
+    xl_add_number(&xl, "len", 32);
+    xl_add_bin(&xl, "uuid", sha256, 32);
 
-    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+    xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
     __xlogd("req_login ----------------------- exit\n");
 }
 
 static void res_logout(xtask_t *task)
 {
-    xline_printf(task->ctx->msg);
+    xl_printf(task->ctx->msg);
 }
 
 static void req_logout(xtask_t *task)
@@ -214,10 +214,10 @@ static void req_logout(xtask_t *task)
     peer->task_index++;
     task->res = res_logout;
 
-    xline_t xl = xline_maker(1024);
-    xline_add_word(&xl, "api", "logout");
-    xline_add_uint64(&xl, "tid", task->tid);
-    xmsger_send_message(peer->msger, peer->channel, xl.byte, xl.wpos);
+    xlkv_t xl = xl_maker(1024);
+    xl_add_word(&xl, "api", "logout");
+    xl_add_number(&xl, "tid", task->tid);
+    xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
 }
 
 void create_task(xpeer_ptr peer, void(*api)(xtask_t*))
@@ -322,8 +322,8 @@ int main(int argc, char *argv[])
 
     xpeer_ctx_ptr task = (xpeer_ctx_ptr)malloc(sizeof(struct xpeer_ctx));
     task->peer = server;
-    xmsger_connect(server->msger, "47.99.146.226", 9256, task);
-    // xmsger_connect(server->msger, "192.168.43.173", 9256, task);
+    // xmsger_connect(server->msger, "47.99.146.226", 9256, task);
+    xmsger_connect(server->msger, "192.168.43.173", 9256, task);
     // make_connect_task(server, "47.92.77.19", 9256);
     // make_connect_task(server, "120.78.155.213", 9256);
 
@@ -375,12 +375,12 @@ int main(int argc, char *argv[])
             task->res = res_logout;
             task->ctx = xmsger_get_channel_ctx(server->channel);
 
-            struct xline maker = xline_maker(1024);
-            xline_add_word(&maker, "api", "chord_join");
-            xline_add_uint64(&maker, "tid", 0);
-            xline_add_word(&maker, "ip", ip);
-            xline_add_uint64(&maker, "port", 9256);
-            xline_add_uint64(&maker, "key", key);
+            struct xlkv maker = xl_maker(1024);
+            xl_add_word(&maker, "api", "chord_join");
+            xl_add_number(&maker, "tid", 0);
+            xl_add_word(&maker, "ip", ip);
+            xl_add_number(&maker, "port", 9256);
+            xl_add_number(&maker, "key", key);
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);
@@ -394,11 +394,11 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            struct xline maker = xline_maker(1024);
-            xline_add_word(&maker, "msg", "req");
-            xline_add_word(&maker, "task", "turn");
-            xline_add_uint64(&maker, "key", key);
-            xline_add_word(&maker, "text", "Hello World");
+            struct xlkv maker = xl_maker(1024);
+            xl_add_word(&maker, "msg", "req");
+            xl_add_word(&maker, "task", "turn");
+            xl_add_number(&maker, "key", key);
+            xl_add_word(&maker, "text", "Hello World");
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);

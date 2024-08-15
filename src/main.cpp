@@ -20,7 +20,7 @@ struct targs {
 
 static void mutex_task(xmaker_ptr kv)
 {
-    struct targs *targ = (struct targs *)xline_find_pointer(kv, "ctx");
+    struct targs *targ = (struct targs *)xl_find_ptr(kv, "ctx");
 
     std::cout << "tt: " << *targ->testTrue << std::endl;
     while (1)
@@ -98,9 +98,9 @@ int main(int argc, char *argv[])
     xtask_ptr task = xtask_create();
     struct xmaker ctx;
     xline_make(&ctx, NULL, 1024);
-    xline_add_pointer(&ctx, "func", (void*)mutex_task);
-    xline_add_pointer(&ctx, "ctx", (void*)&targ);
-    __ex_task_post(task, ctx.xline);
+    xl_add_ptr(&ctx, "func", (void*)mutex_task);
+    xl_add_ptr(&ctx, "ctx", (void*)&targ);
+    __ex_task_post(task, ctx.xlkv);
 
     // ___thread_ptr tid = ___thread_create(mutex_task, &targ);
 

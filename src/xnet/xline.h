@@ -17,11 +17,11 @@ enum {
 #define XLINE_HEAD_SIZE      9
 
 
-typedef struct xbyte {
+typedef struct xl {
     uint8_t h[XLINE_HEAD_SIZE];
-}xbyte_t;
+}xl_t;
 
-typedef xbyte_t* xbyte_ptr;
+typedef xl_t* xl_ptr;
 
 union float64 {
     double f;
@@ -31,7 +31,7 @@ union float64 {
 #ifdef __LITTLE_ENDIAN__
 
 #define __n2b(n, type) \
-        (struct xbyte){ \
+        (struct xl){ \
             type, \
             (((char*)&(n))[0]), (((char*)&(n))[1]), \
             (((char*)&(n))[2]), (((char*)&(n))[3]), \
@@ -44,7 +44,7 @@ union float64 {
 #define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
 
 #define __o2b(n, type) \
-        (struct xbyte){ \
+        (struct xl){ \
             (type), \
             (((char*)&(n))[0]), (((char*)&(n))[1]), \
             (((char*)&(n))[2]), (((char*)&(n))[3]), \
@@ -56,7 +56,7 @@ union float64 {
         ( (type)(b)->h[8] << 56 | (type)(b)->h[7] << 48 | (type)(b)->h[6] << 40 | (type)(b)->h[5] << 32 \
         | (type)(b)->h[4] << 24 | (type)(b)->h[3] << 16 | (type)(b)->h[2] << 8 | (type)(b)->h[1] )
 
-static inline double __xbyte2float(xbyte_ptr b)
+static inline double __xbyte2float(xl_ptr b)
 {
     union float64 f;
     f.b[0] = b->h[1];
@@ -73,7 +73,7 @@ static inline double __xbyte2float(xbyte_ptr b)
 #else //__LITTLE_ENDIAN__
 
 #define __n2b(n, type) \
-        (struct xbyte){ \
+        (struct xl){ \
             type, \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
             (((char*)&(n))[5]), (((char*)&(n))[4]), \
@@ -86,7 +86,7 @@ static inline double __xbyte2float(xbyte_ptr b)
 #define __f2b(n) __n2b(n, XLINE_TYPE_FLOAT)
 
 #define __o2b(n, type) \
-        (struct xbyte){ \
+        (struct xl){ \
             (type), \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
             (((char*)&(n))[5]), (((char*)&(n))[4]), \
@@ -98,7 +98,7 @@ static inline double __xbyte2float(xbyte_ptr b)
         ( (type)(b)->h[1] << 56 | (type)(b)->h[2] << 48 | (type)(b)->h[3] << 40 | (type)(b)->h[4] << 32 \
         | (type)(b)->h[5] << 24 | (type)(b)->h[6] << 16 | (type)(b)->h[7] << 8 | (type)(b)->h[8] )
 
-static inline double __xbyte2float(xbyte_ptr b)
+static inline double __xbyte2float(xl_ptr b)
 {
     union float64 f;
     f.b[0] = b->h[8];
@@ -133,72 +133,69 @@ static inline double __xbyte2float(xbyte_ptr b)
 #define __sizeof_line(b)        (b)->h[0] > XLINE_TYPE_FLOAT ? __b2u((b)) + XLINE_HEAD_SIZE : XLINE_HEAD_SIZE
 
 
-typedef struct xline {
+typedef struct xlkv {
     uint64_t wpos, rpos, size;
+    uint8_t *head;
     uint8_t *key;
-    xbyte_t *val;
-    union{
-        uint8_t *head;
-        xbyte_t *byte;
-    };
-}xline_t;
+    xl_ptr val;
+}xlkv_t;
 
-typedef xline_t* xline_ptr;
+typedef xlkv_t* xlkv_ptr;
 
 
-static inline struct xline xline_maker(uint64_t size)
+static inline struct xlkv xl_maker(uint64_t size)
 {
-    struct xline maker;
+    struct xlkv kv;
     if (size < 1024){
         size = 1024;
     }
-    maker.size = size;
-    maker.wpos = XLINE_HEAD_SIZE;
-    maker.head = (uint8_t*) malloc(maker.size);
-    return maker;
+    kv.size = size;
+    kv.wpos = XLINE_HEAD_SIZE;
+    kv.head = (uint8_t*) malloc(kv.size);
+    return kv;
 }
 
-static inline uint64_t xline_hold_tree(xline_ptr maker, const char *key)
+static inline uint64_t xl_hold_kv(xlkv_ptr kv, const char *key)
 {
-    maker->key = maker->head + maker->wpos;
-    maker->key[0] = slength(key) + 1;
-    mcopy(maker->key + 1, key, maker->key[0]);
-    maker->wpos += 1 + maker->key[0];
-    uint64_t pos = maker->wpos;
-    maker->wpos += XLINE_HEAD_SIZE;
+    kv->key = kv->head + kv->wpos;
+    kv->key[0] = slength(key) + 1;
+    mcopy(kv->key + 1, key, kv->key[0]);
+    kv->wpos += 1 + kv->key[0];
+    uint64_t pos = kv->wpos;
+    kv->wpos += XLINE_HEAD_SIZE;
     return pos;
 }
 
-static inline void xline_save_tree(xline_ptr maker, uint64_t pos)
+static inline void xl_save_kv(xlkv_ptr kv, uint64_t pos)
 {
-    uint64_t len = maker->wpos - pos - XLINE_HEAD_SIZE;
-    *((xbyte_ptr)(maker->head + pos)) = __o2b(len, XLINE_TYPE_TREE);
+    uint64_t len = kv->wpos - pos - XLINE_HEAD_SIZE;
+    *((xl_ptr)(kv->head + pos)) = __o2b(len, XLINE_TYPE_TREE);
 }
 
-static inline uint64_t xline_hold_list(xline_ptr maker, const char *key)
+static inline uint64_t xl_hold_list(xlkv_ptr kv, const char *key)
 {
-    return xline_hold_tree(maker, key);
+    return xl_hold_kv(kv, key);
 }
 
-static inline void xline_save_list(xline_ptr maker, uint64_t pos)
+static inline void xl_save_list(xlkv_ptr kv, uint64_t pos)
 {
-    uint64_t len = maker->wpos - pos - XLINE_HEAD_SIZE;
-    *((xbyte_ptr)(maker->head + pos)) = __o2b(len, XLINE_TYPE_LIST);
+    uint64_t len = kv->wpos - pos - XLINE_HEAD_SIZE;
+    *((xl_ptr)(kv->head + pos)) = __o2b(len, XLINE_TYPE_LIST);
 }
 
-static inline uint64_t xline_list_hold_tree(xline_ptr maker)
+static inline uint64_t xl_list_hold_kv(xlkv_ptr kv)
 {
-    maker->rpos = maker->wpos;
-    maker->wpos += XLINE_HEAD_SIZE;
-    return maker->rpos;
+    kv->rpos = kv->wpos;
+    kv->wpos += XLINE_HEAD_SIZE;
+    return kv->rpos;
 }
 
-static inline void xline_list_save_tree(xline_ptr maker, uint64_t pos)
+static inline void xl_list_save_kv(xlkv_ptr kv, uint64_t pos)
 {
-    return xline_save_tree(maker, pos);
+    return xl_save_kv(kv, pos);
 }
 
-static inline uint64_t xline_add_object(xline_ptr maker, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
+static inline uint64_t xl_append_object(xlkv_ptr kv, const char *key, size_t keylen, const void *val, size_t size, uint8_t flag)
 {
     // key 本身的长度不能超过 253，因为 uint8_t 只能存储 0-255 之间的数字
     // 253 + 一个字节的头 + 一个字节的尾，正好等于 255
@@ -206,62 +203,62 @@ static inline uint64_t xline_add_object(xline_ptr maker, const char *key, size_t
         keylen = 253;
     }
     uint64_t len = (2 + keylen + XLINE_HEAD_SIZE + size);
-    if ((int64_t)(maker->size - maker->wpos) < len){
-        maker->size += (maker->size + len);
-        maker->key = (uint8_t*)malloc(maker->size);
-        if(maker->key == NULL){
+    if ((int64_t)(kv->size - kv->wpos) < len){
+        kv->size += (kv->size + len);
+        kv->key = (uint8_t*)malloc(kv->size);
+        if(kv->key == NULL){
             return EENDED;
         }
-        mcopy(maker->key, maker->head, maker->wpos);
-        free(maker->head);
-        maker->head = maker->key;
+        mcopy(kv->key, kv->head, kv->wpos);
+        free(kv->head);
+        kv->head = kv->key;
     }
-    maker->key = maker->head + maker->wpos;
+    kv->key = kv->head + kv->wpos;
     // 这里加上了一个字节的长度，因为我们要在最后补上一个‘\0’作为字符串的尾部
-    maker->key[0] = keylen + 1;
+    kv->key[0] = keylen + 1;
     // 这里从 key[1] 开始复制
-    mcopy(maker->key + 1, key, keylen);
+    mcopy(kv->key + 1, key, keylen);
     // 因为 key 有可能被截断过，所以复制的最后一个字节有可能不是‘\0’
     // 本来应该是 *(maker->key + 1 + keylen) = '\0';
     // 但是 key[0] = keylen + 1; 所以这里没问题
-    *(maker->key + maker->key[0]) = '\0';
+    *(kv->key + kv->key[0]) = '\0';
     // 因为我们的 key 出了字符串的长度还有一个字节的头，所以这里再加 1
-    maker->wpos += (1 + maker->key[0]);
-    maker->val = (xbyte_ptr)(maker->head + maker->wpos);
-    *(maker->val) = __o2b(size, flag);
-    mcopy(&(maker->val->h[XLINE_HEAD_SIZE]), val, size);
-    maker->wpos += (XLINE_HEAD_SIZE + size);
-    maker->rpos = maker->wpos - XLINE_HEAD_SIZE;
-    *((xbyte_ptr)(maker->head)) = __o2b(maker->rpos, XLINE_TYPE_TREE);
-    return maker->wpos;
+    kv->wpos += (1 + kv->key[0]);
+    kv->val = (xl_ptr)(kv->head + kv->wpos);
+    *(kv->val) = __o2b(size, flag);
+    mcopy(&(kv->val->h[XLINE_HEAD_SIZE]), val, size);
+    kv->wpos += (XLINE_HEAD_SIZE + size);
+    kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
+    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    return kv->wpos;
 }
 
-static inline uint64_t xline_add_word(xline_ptr maker, const char *key, const char *word)
+static inline uint64_t xl_add_word(xlkv_ptr kv, const char *key, const char *word)
 {
-    return xline_add_object(maker, key, slength(key), word, slength(word) + 1, XLINE_TYPE_STR);
+    return xl_append_object(kv, key, slength(key), word, slength(word) + 1, XLINE_TYPE_STR);
 }
 
-static inline uint64_t xline_add_string(xline_ptr maker, const char *key, const char *str, uint64_t size)
+static inline uint64_t xl_add_str(xlkv_ptr kv, const char *key, const char *str, uint64_t size)
 {
-    return xline_add_object(maker, key, slength(key), str, size, XLINE_TYPE_STR);
+    return xl_append_object(kv, key, slength(key), str, size, XLINE_TYPE_STR);
 }
 
-static inline uint64_t xline_add_binary(xline_ptr maker, const char *key, const void *val, uint64_t size)
+static inline uint64_t xl_add_bin(xlkv_ptr kv, const char *key, const void *val, uint64_t size)
 {
-    return xline_add_object(maker, key, slength(key), val, size, XLINE_TYPE_BIN);
+    return xl_append_object(kv, key, slength(key), val, size, XLINE_TYPE_BIN);
 }
 
-static inline uint64_t xline_add_tree(xline_ptr maker, const char *key, xline_ptr treemaker)
+static inline uint64_t xl_add_kv(xlkv_ptr kv, const char *key, xlkv_ptr subkv)
 {
-    return xline_add_object(maker, key, slength(key), treemaker->head, treemaker->wpos, XLINE_TYPE_TREE);
+    return xl_append_object(kv, key, slength(key), subkv->head, subkv->wpos, XLINE_TYPE_TREE);
 }
 
-static inline uint64_t xline_add_list(xline_ptr maker, const char *key, xline_ptr listmaker)
+static inline uint64_t xl_add_list(xlkv_ptr kv, const char *key, xlkv_ptr sublist)
 {
-    return xline_add_object(maker, key, slength(key), listmaker->head, listmaker->wpos, XLINE_TYPE_LIST);
+    return xl_append_object(kv, key, slength(key), sublist->head, sublist->wpos, XLINE_TYPE_LIST);
 }
 
-static inline uint64_t xline_add_number(xline_ptr maker, const char *key, size_t keylen, struct xbyte val)
+static inline uint64_t xl_append_number(xlkv_ptr kv, const char *key, size_t keylen, struct xl val)
 {
     // key 本身的长度不能超过 253，因为 uint8_t 只能存储 0-255 之间的数字
     // 253 + 一个字节的头 + 一个字节的尾，正好等于 255
@@ -269,197 +266,195 @@ static inline uint64_t xline_add_number(xline_ptr maker, const char *key, size_t
         keylen = 253;
     }
     uint64_t len = (2 + keylen + XLINE_HEAD_SIZE);
-    if ((int64_t)(maker->size - maker->wpos) < len){
-        maker->size += (maker->size + len);
-        maker->key = (uint8_t*)malloc(maker->size);
-        if(maker->key == NULL){
+    if ((int64_t)(kv->size - kv->wpos) < len){
+        kv->size += (kv->size + len);
+        kv->key = (uint8_t*)malloc(kv->size);
+        if(kv->key == NULL){
             return EENDED;
         }
-        mcopy(maker->key, maker->head, maker->wpos);
-        free(maker->head);
-        maker->head = maker->key;
+        mcopy(kv->key, kv->head, kv->wpos);
+        free(kv->head);
+        kv->head = kv->key;
     }
-    maker->key = maker->head + maker->wpos;
+    kv->key = kv->head + kv->wpos;
     // 这里加上了一个字节的长度，因为我们要在最后补上一个‘\0’作为字符串的尾部
-    maker->key[0] = keylen + 1;
+    kv->key[0] = keylen + 1;
     // 这里从 key[1] 开始复制
-    mcopy(maker->key + 1, key, keylen);
+    mcopy(kv->key + 1, key, keylen);
     // 因为 key 有可能被截断过，所以复制的最后一个字节有可能不是‘\0’
     // 本来应该是 *(maker->key + 1 + keylen) = '\0';
     // 但是 key[0] = keylen + 1; 所以这里没问题
-    *(maker->key + maker->key[0]) = '\0';
+    *(kv->key + kv->key[0]) = '\0';
     // 因为我们的 key 出了字符串的长度还有一个字节的头，所以这里再加 1
-    maker->wpos += (1 + maker->key[0]);
-    maker->val = (xbyte_ptr)(maker->head + maker->wpos);
-    *(maker->val) = val;
-    maker->wpos += __sizeof_line(maker->val);
-    maker->rpos = maker->wpos - XLINE_HEAD_SIZE;
-    *((xbyte_ptr)(maker->head)) = __o2b(maker->rpos, XLINE_TYPE_TREE);
-    return maker->wpos;
+    kv->wpos += (1 + kv->key[0]);
+    kv->val = (xl_ptr)(kv->head + kv->wpos);
+    *(kv->val) = val;
+    kv->wpos += __sizeof_line(kv->val);
+    kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
+    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    return kv->wpos;
 }
 
-static inline uint64_t xline_add_integer(xline_ptr maker, const char *key, int64_t i64)
+static inline uint64_t xl_add_integer(xlkv_ptr kv, const char *key, int64_t i64)
 {
-    return xline_add_number(maker, key, slength(key), __i2b(i64));
+    return xl_append_number(kv, key, slength(key), __i2b(i64));
 }
 
-static inline uint64_t xline_add_uint64(xline_ptr maker, const char *key, uint64_t u64)
+static inline uint64_t xl_add_number(xlkv_ptr kv, const char *key, uint64_t u64)
 {
-    return xline_add_number(maker, key, slength(key), __u2b(u64));
+    return xl_append_number(kv, key, slength(key), __u2b(u64));
 }
 
-static inline uint64_t xline_add_real(xline_ptr maker, const char *key, double f64)
+static inline uint64_t xl_add_float(xlkv_ptr kv, const char *key, double f64)
 {
-    return xline_add_number(maker, key, slength(key), __f2b(f64));
+    return xl_append_number(kv, key, slength(key), __f2b(f64));
 }
 
-static inline uint64_t xline_add_pointer(xline_ptr maker, const char *key, void *p)
+static inline uint64_t xl_add_ptr(xlkv_ptr kv, const char *key, void *p)
 {
     uint64_t n = (uint64_t)(p);
-    return xline_add_number(maker, key, slength(key), __u2b(n));
+    return xl_append_number(kv, key, slength(key), __u2b(n));
 }
 
-static inline xline_t xline_parser(xbyte_ptr byte)
+static inline xlkv_t xl_parser(xl_ptr xl)
 {
-    xline_t parser = {0};
-    if (__typeis_tree(byte) || __typeis_list(byte)){
-        parser.rpos = 0;
-        parser.wpos = __sizeof_data(byte);
-        parser.size = parser.wpos;
-        parser.head = byte->h + XLINE_HEAD_SIZE;
-    }else {
-        parser.byte = byte;
+    xlkv_t kv = {0};
+    if (__typeis_tree(xl) || __typeis_list(xl)){
+        kv.rpos = XLINE_HEAD_SIZE;
+        kv.wpos = __sizeof_data(xl);
+        kv.size = kv.wpos;
+        kv.head = xl->h;
     }
-    return parser;
+    return kv;
 }
 
-static inline xbyte_ptr xline_next(xline_ptr parser)
+static inline xl_ptr xl_next(xlkv_ptr kv)
 {
-    if (parser->rpos < parser->wpos){
-        parser->key = parser->head + parser->rpos;
-        parser->rpos += 1 + parser->key[0];
-        parser->key++;
-        parser->val = (xbyte_ptr)(parser->head + parser->rpos);
-        parser->rpos += __sizeof_line(parser->val);
-        return parser->val;
+    if (kv->rpos < kv->wpos){
+        kv->key = kv->head + kv->rpos;
+        kv->rpos += 1 + kv->key[0];
+        kv->key++;
+        kv->val = (xl_ptr)(kv->head + kv->rpos);
+        kv->rpos += __sizeof_line(kv->val);
+        return kv->val;
     }
     return NULL;
 }
 
-static inline xbyte_ptr xline_find(xline_ptr parser, const char *key)
+static inline xl_ptr xl_find(xlkv_ptr kv, const char *key)
 {
-    uint64_t rpos = parser->rpos;
+    uint64_t rpos = kv->rpos;
 
-    while (parser->rpos < parser->wpos) {
-        parser->key = parser->head + parser->rpos;
-        parser->rpos += 1 + parser->key[0];
-        parser->val = (xbyte_ptr)(parser->head + parser->rpos);
-        parser->rpos += __sizeof_line(parser->val);
-        if (slength(key) + 1 == parser->key[0]
-            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
-            parser->key++;
-            return parser->val;
+    while (kv->rpos < kv->wpos) {
+        kv->key = kv->head + kv->rpos;
+        kv->rpos += 1 + kv->key[0];
+        kv->val = (xl_ptr)(kv->head + kv->rpos);
+        kv->rpos += __sizeof_line(kv->val);
+        if (slength(key) + 1 == kv->key[0]
+            && mcompare(key, kv->key + 1, kv->key[0]) == 0){
+            kv->key++;
+            return kv->val;
         }
     }
 
-    parser->rpos = 0;
+    kv->rpos = XLINE_HEAD_SIZE;
 
-    while (parser->rpos < rpos) {
-        parser->key = parser->head + parser->rpos;
-        parser->rpos += 1 + parser->key[0];
-        parser->val = (xbyte_ptr)(parser->head + parser->rpos);
-        parser->rpos += __sizeof_line(parser->val);
-        if (slength(key) + 1 == parser->key[0]
-            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
-            parser->key++;
-            return parser->val;
+    while (kv->rpos < rpos) {
+        kv->key = kv->head + kv->rpos;
+        kv->rpos += 1 + kv->key[0];
+        kv->val = (xl_ptr)(kv->head + kv->rpos);
+        kv->rpos += __sizeof_line(kv->val);
+        if (slength(key) + 1 == kv->key[0]
+            && mcompare(key, kv->key + 1, kv->key[0]) == 0){
+            kv->key++;
+            return kv->val;
         }
     }
 
-    parser->rpos = 0;
+    kv->rpos = XLINE_HEAD_SIZE;
 
     return NULL;
 }
 
-static inline int64_t xline_find_integer(xline_ptr parser, const char *key)
+static inline int64_t xl_find_integer(xlkv_ptr kv, const char *key)
 {
-    xbyte_ptr val = xline_find(parser, key);
+    xl_ptr val = xl_find(kv, key);
     if (val){
         return __b2i(val);
     }
     return EENDED;
 }
 
-static inline uint64_t xline_find_uint64(xline_ptr parser, const char *key)
+static inline uint64_t xl_find_number(xlkv_ptr kv, const char *key)
 {
-    xbyte_ptr val = xline_find(parser, key);
+    xl_ptr val = xl_find(kv, key);
     if (val){
         return __b2u(val);
     }
     return EENDED;
 }
 
-static inline double xline_find_float(xline_ptr parser, const char *key)
+static inline double xl_find_float(xlkv_ptr kv, const char *key)
 {
-    xbyte_ptr val = xline_find(parser, key);
+    xl_ptr val = xl_find(kv, key);
     if (val){
         return __b2f(val);
     }
     return (double)EENDED;
 }
 
-static inline const char* xline_find_word(xline_ptr parser, const char *key)
+static inline const char* xl_find_word(xlkv_ptr kv, const char *key)
 {
-    xbyte_ptr val = xline_find(parser, key);
+    xl_ptr val = xl_find(kv, key);
     if (val){
         return (const char*)__b2d(val);
     }
     return NULL;
 }
 
-static inline void* xline_find_pointer(xline_ptr parser, const char *key)
+static inline void* xl_find_ptr(xlkv_ptr kv, const char *key)
 {
-    xbyte_ptr val = xline_find(parser, key);
+    xl_ptr val = xl_find(kv, key);
     if (val){
         return (void *)(__b2u(val));
     }
     return NULL;
 }
 
-static inline uint64_t xline_list_append(xline_ptr maker, xbyte_ptr ptr)
+static inline uint64_t xl_list_append(xlkv_ptr kv, xl_ptr ptr)
 {
-    maker->rpos = __sizeof_line(ptr);
-    if ((int64_t)(maker->size - maker->wpos) < maker->rpos){
-        maker->size += (maker->size + maker->rpos);
-        maker->key = (uint8_t*)malloc(maker->size);
-        if(maker->key == NULL){
+    kv->rpos = __sizeof_line(ptr);
+    if ((int64_t)(kv->size - kv->wpos) < kv->rpos){
+        kv->size += (kv->size + kv->rpos);
+        kv->key = (uint8_t*)malloc(kv->size);
+        if(kv->key == NULL){
             return EENDED;
         }        
-        mcopy(maker->key, maker->head, maker->wpos);
-        free(maker->head);
-        maker->head = maker->key;
+        mcopy(kv->key, kv->head, kv->wpos);
+        free(kv->head);
+        kv->head = kv->key;
     }
     
-    mcopy(maker->head + maker->wpos, ptr->h, maker->rpos);
-    maker->wpos += maker->rpos;
-    maker->rpos = maker->wpos - XLINE_HEAD_SIZE;
-    *((xbyte_ptr)(maker->head)) = __o2b(maker->rpos, XLINE_TYPE_TREE);
-    return maker->wpos;
+    mcopy(kv->head + kv->wpos, ptr->h, kv->rpos);
+    kv->wpos += kv->rpos;
+    kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
+    *((xl_ptr)(kv->head)) = __o2b(kv->rpos, XLINE_TYPE_TREE);
+    return kv->wpos;
 }
 
-static inline xbyte_ptr xline_list_next(xline_ptr parser)
+static inline xl_ptr xl_list_next(xlkv_ptr kv)
 {
-    if (parser->rpos < parser->wpos){
-        xbyte_ptr ptr = (xbyte_ptr)(parser->head + parser->rpos);
-        parser->rpos += __sizeof_line(ptr);
+    if (kv->rpos < kv->wpos){
+        xl_ptr ptr = (xl_ptr)(kv->head + kv->rpos);
+        kv->rpos += __sizeof_line(ptr);
         return ptr;
     }
     return NULL;
 }
 
-static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
+static inline void __xl_printf(xl_ptr xptr, const char *key, int depth)
 {
-    xline_t parser = xline_parser(xptr);
+    xlkv_t parser = xl_parser(xptr);
 
     int len = slength(key);
 
@@ -473,7 +468,7 @@ static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
         }
     }
 
-    while ((xptr = xline_next(&parser)) != NULL)
+    while ((xptr = xl_next(&parser)) != NULL)
     {
         if (__typeis_int(xptr)){
 
@@ -493,15 +488,15 @@ static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
 
         }else if (__typeis_tree(xptr)){
 
-            __xline_printf(xptr, (const char*)parser.key, depth + 1);
+            __xl_printf(xptr, (const char*)parser.key, depth + 1);
 
         }else if (__typeis_list(xptr)){
 
             __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
 
-            xline_t plist = xline_parser(xptr);
+            xlkv_t plist = xl_parser(xptr);
 
-            while ((xptr = xline_list_next(&plist)) != NULL)
+            while ((xptr = xl_list_next(&plist)) != NULL)
             {
                 if (__typeis_int(xptr)){
 
@@ -509,14 +504,14 @@ static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
 
                 }else if (__typeis_tree(xptr)){
                     
-                    __xline_printf(xptr, "", depth + 1);
+                    __xl_printf(xptr, "", depth + 1);
                 }
             }
 
             __xlogi("  %*s},\n", depth * 4, "");
 
         }else {
-            __xloge("__xline_printf >>>>--------> type error\n");
+            __xloge("__xl_printf >>>>--------> type error\n");
         }
     }
 
@@ -532,9 +527,9 @@ static inline void __xline_printf(xbyte_ptr xptr, const char *key, int depth)
 }
 
 
-static inline void xline_printf(void *xptr)
+static inline void xl_printf(void *xptr)
 {
-    __xline_printf((xbyte_ptr)xptr, "root", 1);
+    __xl_printf((xl_ptr)xptr, "root", 1);
 }
 
 #endif //__XLINE_H__
