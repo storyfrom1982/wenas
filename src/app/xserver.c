@@ -521,7 +521,7 @@ static void api_chord_join(xpeer_ctx_ptr pctx)
 {
     xpeer_ptr server = pctx->server;
     __xlogd("api_chord_join enter\n");
-    uint64_t tid = xline_find_word(&pctx->parser, "tid");
+    uint64_t tid = xline_find_uint64(&pctx->parser, "tid");
     char *ip = xline_find_word(&pctx->parser, "ip");
     __xlogd("add ip=%s\n", ip);
     unsigned port = xline_find_uint64(&pctx->parser, "port");
