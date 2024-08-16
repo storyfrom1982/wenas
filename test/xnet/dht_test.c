@@ -2,75 +2,103 @@
 #include <xlib/xxhash.h>
 #include <xlib/xsha256.h>
 #include <xnet/xtable.h>
+#include <xnet/uuid.h>
 
 #include <stdio.h>
 
 #define TEST_INTERVAL   256
 
 
+uuid_node_t* uuid_node_create(uint64_t hash_key, uint64_t *uuid)
+{
+    uuid_node_t *node = (uuid_node_t*)calloc(1, sizeof(uuid_node_t));
+    node->hash_key = hash_key;
+    for (size_t i = 0; i < 4; i++){
+        node->uuid[i] = uuid[i];
+    }
+    node->next = node;
+    node->prev = node;
+    return node;
+}
+
 static void test_hash_tree()
 {
-    char text[1024] = {0};
 
-    uint8_t sha256[32];
-    SHA256_CTX shactx;
+    char uuid_bin1[32];
+    char uuid_bin2[32];
+    char uuid_str1[65];
+    char uuid_str2[65];
 
-    xhtnode_t *node;
-    xhash_tree_t tree;
-    xhash_tree_init(&tree);
+    uuid_node_t *node;
+    uuid_list_t tree;
+    uuid_list_init(&tree);
 
-    xhtnode_t *nodes[TEST_INTERVAL];
+    uuid_node_t *nodes[TEST_INTERVAL];
 
     for (int i = 0; i < TEST_INTERVAL; ++i){
-        uint64_t millisecond = __xapi->time();
-        // __xlogi("c time %lu\n", millisecond);
-        __xapi->strftime(text, 1024, millisecond / NANO_SECONDS);
-        // __xlogi("c time %s\n", text);
 
-        millisecond = __xapi->clock();
-        // __xlogi("c clock %lu\n", millisecond);
-        __xapi->strftime(text, 1024, millisecond / NANO_SECONDS);
-        // __xlogi("c clock %s\n", text);
+        uuid_generate(uuid_bin1, "HELLO");
 
-        int n = snprintf(text, 1024, "%lu%lu%s", __xapi->time(), __xapi->clock(), "Hello");
+        uint64_t h64 = xxhash64(uuid_bin1, 32, 0);
 
-        sha256_init(&shactx);
-        sha256_update(&shactx, text, n);
-        sha256_finish(&shactx, sha256);
+        __xlogd("dth test add node key=%lu %s\n", h64 % 16, uuid2str(uuid_bin1, uuid_str1));
+        str2uuid(uuid_str1, uuid_bin2);
+        if (mcompare(uuid_bin2, uuid_bin1, 32) != 0){
+            __xlogd("uuid to str failed\n");
+            exit(0);
+        }        
 
-        uint64_t h64 = xxhash64(sha256, 32, 0);
+        nodes[i] = uuid_node_create(h64 % 16, uuid_bin1);        
 
-        nodes[i] = xhtnode_create(h64 % 16, sha256, 32);
-
-        __xlogd("dth test add node\n");
-        xhash_tree_add(&tree, nodes[i]);
+        uuid_list_add(&tree, nodes[i]);
         __xlogd("table count %lu hash tree count %lu origin tree count %lu\n",
                 tree.count, tree.hash_tree.count, tree.uuid_tree.count);
     }
 
     for (int i = TEST_INTERVAL-1; i >= 0; --i){
-        node = xhash_tree_find(&tree, nodes[i]->key, nodes[i]->uuid, nodes[i]->uuid_len);
-        // __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
-        if (mcompare(node->uuid, nodes[i]->uuid, node->uuid_len) != 0){
-            __xlogd("find %lu->(%s) %lu->(%s)\n", nodes[i]->key, nodes[i]->uuid, node->key, node->uuid);
+        node = uuid_list_find(&tree, nodes[i]->hash_key, nodes[i]->uuid);
+        __xlogd("find node=%p\n", node);
+        __xlogd("find key=%lu uuid=%s\n", nodes[i]->hash_key, uuid2str(nodes[i]->uuid, uuid_str1));
+        // if (node == NULL){
+        //     node = uuid_list_find_by_hash(&tree, nodes[i]->hash_key);
+        //     if (node->list_len > 0){
+        //         uuid_node_t *head = node;
+        //         do {
+        //             __xlogd("find head %lu->(%s)\n", head->hash_key, uuid2str(head->uuid, uuid_str2));
+        //             head = head->next;
+        //         }while (head != node);
+        //     }
+
+        //     node = avl_tree_first(&tree.uuid_tree);
+        //     for (uuid_node_t *last = avl_tree_last(&tree.uuid_tree);;node = avl_tree_next(&tree.uuid_tree, node)) {
+        //         __xlogd("uuid======%s\n", uuid2str(node->uuid, uuid_str2));
+        //         if (node == last){
+        //             break;
+        //         }
+        //     }            
+        //     exit(0);
+        // }
+        __xlogd("find key=%lu ret= %s\n", node->hash_key, uuid2str(node->uuid, uuid_str2));
+        if (mcompare(&node->uuid[0], &nodes[i]->uuid[0], 32) != 0){
+            __xlogd("find uuid=%s ret=%s\n", uuid2str(nodes[i]->uuid, uuid_str1), uuid2str(node->uuid, uuid_str2));
             exit(0);
         }
     }    
 
 
-    node = xhash_tree_first(&tree);
-    for (xhtnode_t *last = xhash_tree_last(&tree);;node = xhash_tree_next(&tree, node)) {
-        xhtnode_t *ret = xhash_tree_find(&tree, node->key, node->uuid, node->uuid_len);
-        __xlogd("fond %lu->(%s)=%lu->(%s)\n", node->key, node->uuid, ret->key, ret->uuid);
+    node = uuid_list_first(&tree);
+    for (uuid_node_t *last = uuid_list_last(&tree);;node = uuid_list_next(&tree, node)) {
+        uuid_node_t *ret = uuid_list_find(&tree, node->hash_key, node->uuid);
+        __xlogd("find uuid=%s ret=%s\n", uuid2str(node->uuid, uuid_str1), uuid2str(ret->uuid, uuid_str2));
         __xlogd("list len %lu\n", ret->list_len);
-        if (mcompare(node->uuid, ret->uuid, node->uuid_len) != 0){
-            __xlogd("find %lu->(%s) %lu->(%s)\n", ret->key, ret->uuid, node->key, node->uuid);
+        if (mcompare(node->uuid, ret->uuid, 32) != 0){
+            __xlogd("find uuid=%s ret=%s\n", uuid2str(node->uuid, uuid_str1), uuid2str(ret->uuid, uuid_str2));
             exit(0);
         }             
         if (ret->list_len > 0){
-            xhtnode_t *head = ret;
+            uuid_node_t *head = ret;
             do {
-                __xlogd("head %lu->(%s)\n", head->key, head->uuid);
+                __xlogd("head %lu->(%s)\n", head->hash_key, uuid2str(head->uuid, uuid_str1));
                 head = head->next;
             }while (head != ret);
         }
@@ -81,16 +109,15 @@ static void test_hash_tree()
     
 
     for (int i = TEST_INTERVAL-1; i >= 0; --i){
-        node = xhash_tree_del(&tree, nodes[i]);
+        node = uuid_list_del(&tree, nodes[i]);
         // __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->hash, nodes[i]->key, node->hash, node->key);
         __xlogd("table count %lu hash tree count %lu origin tree count %lu\n",
                 tree.count, tree.hash_tree.count, tree.uuid_tree.count);
-        if (mcompare(node->uuid, nodes[i]->uuid, node->uuid_len) != 0){
-            __xlogd("remove %lu->(%s) %lu->(%s)\n", nodes[i]->key, nodes[i]->uuid, node->key, node->uuid);
+        if (mcompare(node->uuid, nodes[i]->uuid, 32) != 0){
+            __xlogd("remove uuid=%s ret=%s\n", uuid2str(nodes[i]->uuid, uuid_str1), uuid2str(node->uuid, uuid_str2));
             exit(0);
         }
         // node = nodes[i];
-        free(node->uuid);
         free(node);
     }
 }
@@ -173,7 +200,7 @@ int main(int argc, char *argv[])
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     test_hash_tree();
-    test_hash_table();
+    // test_hash_table();
 
     xlog_recorder_close();
 

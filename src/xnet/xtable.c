@@ -27,7 +27,7 @@ static inline int bytes_compare(const void *a, const void *b)
     return len;
 }
 
-static inline int memory_compare(const void *a, const void *b)
+static inline int uuid_compare(const void *a, const void *b)
 {
     xhtnode_t *na = (xhtnode_t*)a;
 	xhtnode_t *nb = (xhtnode_t*)b;
@@ -210,7 +210,7 @@ void xhash_tree_init(xhash_tree_t *ht)
 {
     ht->count = 0;
     avl_tree_init(&ht->hash_tree, number_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
-    avl_tree_init(&ht->uuid_tree, memory_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
+    avl_tree_init(&ht->uuid_tree, uuid_compare, sizeof(xhtnode_t), AVL_OFFSET(xhtnode_t, node));
 }
 
 void xhash_tree_clear(xhash_tree_t *ht)
@@ -290,7 +290,7 @@ xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32
     head = avl_tree_find(&ht->hash_tree, &node);
     if (head){
         // 找到哈希值
-        if (memory_compare(&node, head) == 0){
+        if (uuid_compare(&node, head) == 0){
             // uuid 一致
             return head;
         }else if (head->list_len > 0){

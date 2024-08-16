@@ -4,6 +4,7 @@
 #include <xnet/xmsger.h>
 #include <xnet/xbuf.h>
 #include <xnet/xtable.h>
+#include <xnet/uuid_tree.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -297,7 +298,7 @@ typedef struct xtask {
 }xtask_t;
 
 typedef struct xpeer_ctx {
-    xhtnode_t node;
+    uuid_node_t node;
     xchannel_ptr channel;
     struct xpeer *server;
     xlkv_t parser;
@@ -316,7 +317,7 @@ typedef struct xpeer{
     __xprocess_ptr task_pid;
     struct xmsgercb listener;
     xhash_table_t api_tabel;
-    xhash_tree_t uuid_table;
+    uuid_list_t uuid_table;
     uint64_t task_count;
     xtask_t *task_table[256];
     struct avl_tree task_tree;
@@ -382,7 +383,7 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ctx_ptr ctx = (xpeer_ctx_ptr)calloc(1, sizeof(struct xpeer_ctx));
-    ctx->node.value = ctx;
+    // ctx->node.value = ctx;
     ctx->channel = channel;
     ctx->server = listener->ctx;
     ctx->task_list.next = &ctx->task_list;
@@ -673,14 +674,14 @@ static void api_messaging(xpeer_ctx_ptr pctx)
 static void api_login(xpeer_ctx_ptr pctx)
 {
     uint64_t tid = xl_find_number(&pctx->parser, "tid");
-    pctx->node.key = xl_find_number(&pctx->parser, "key");
-    pctx->node.uuid_len = xl_find_number(&pctx->parser, "len");
+    pctx->node.hash_key = xl_find_number(&pctx->parser, "key");
     xl_ptr xb = xl_find(&pctx->parser, "uuid");
-    uint8_t *uuid = __xl2o(xb);
-    pctx->node.uuid = (uint8_t*)malloc(pctx->node.uuid_len);
-    mcopy(pctx->node.uuid, uuid, pctx->node.uuid_len);
-    xhash_tree_add(&pctx->server->uuid_table, &pctx->node);
-    __xlogd("xhash_tree_add tree count=%lu\n", pctx->server->uuid_table.count);
+    uint64_t *uuid = __xl2o(xb);
+    for (int i = 0; i < 4; i++){
+        pctx->node.uuid[i] = uuid[i];
+    }
+    uuid_list_add(&pctx->server->uuid_table, &pctx->node);
+    __xlogd("uuid_tree_add tree count=%lu\n", pctx->server->uuid_table.count);
 
     xlkv_t res = xl_maker(1024);
     xl_add_word(&res, "api", "res");
@@ -692,10 +693,9 @@ static void api_login(xpeer_ctx_ptr pctx)
 
 static void api_logout(xpeer_ctx_ptr pctx)
 {
-    xhtnode_t *node = xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
+    uuid_node_t *node = uuid_list_del(&pctx->server->uuid_table, &pctx->node);
     uint64_t tid = xl_find_number(&pctx->parser, "tid");
-    __xlogd("node key=%lu tid=%lu\n", node->key, tid);
-    free(pctx->node.uuid);
+    __xlogd("node key=%lu tid=%lu\n", node->hash_key, tid);
     xlkv_t res = xl_maker(1024);
     xl_add_word(&res, "api", "res");
     xl_add_word(&res, "req", "logout");
@@ -708,10 +708,8 @@ static void api_break(xpeer_ctx_ptr pctx)
 {
     xpeer_ptr server = pctx->server;
     xmsger_disconnect(server->msger, pctx->channel);
-    __xlogd("task_loop >>>>---------------------------> free peer ctx node %lu\n", pctx->node.key);
-    if (pctx->node.uuid_len != 0){
-        xhash_tree_del(&pctx->server->uuid_table, &pctx->node);
-    }
+    __xlogd("task_loop >>>>---------------------------> free peer ctx node %lu\n", pctx->node.hash_key);
+    uuid_list_del(&pctx->server->uuid_table, &pctx->node);
     __xlogd("task_loop >>>>---------------------------> uuid tree count %lu\n", pctx->server->uuid_table.count);
     // if (pctx->task_list.next != &pctx->task_list){
     //     xtask_t *next = pctx->task_list.next;
@@ -823,7 +821,7 @@ int main(int argc, char *argv[])
     // uint16_t port = 9256;
 
     avl_tree_init(&server->task_tree, number_compare, sizeof(xtask_t), AVL_OFFSET(xtask_t, node));
-    xhash_tree_init(&server->uuid_table);
+    uuid_list_init(&server->uuid_table);
     xhash_table_init(&server->api_tabel, 256);
 
     xhash_table_add(&server->api_tabel, "res", api_response);
@@ -889,7 +887,7 @@ int main(int argc, char *argv[])
     }
 
     xhash_table_clear(&server->api_tabel);
-    xhash_tree_clear(&server->uuid_table);
+    uuid_list_clear(&server->uuid_table);
     
     free(server);
 
