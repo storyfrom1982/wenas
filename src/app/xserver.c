@@ -568,7 +568,7 @@ static void api_chord_add(xpeer_ctx_ptr pctx)
 
     xlkv_t xl = xl_maker(0);
     xl_add_word(&xl, "api", "res");
-    xl_add_word(&xl, "tid", tid);
+    xl_add_number(&xl, "tid", tid);
     xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
 
     node_print_all(pctx->server->ring);
