@@ -290,7 +290,6 @@ void node_remove(XChord_Ptr ring, uint32_t key)
 
 typedef struct xtask {
     index_node_t node;
-    uint64_t tid;
     xlkv_t tctx;
     void (*enter)(struct xtask*, struct xpeer_ctx*);
     struct xpeer_ctx *pctx;
@@ -410,8 +409,7 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
     __xlogd("add_task enter\n");
     xtask_t *task = (xtask_t*)malloc(sizeof(xtask_t));
     task->pctx = pctx;
-    task->tid = pctx->server->task_count++;
-    __xlogd("add_task tid=%lu\n", task->tid);
+    task->node.index = pctx->server->task_count++;
     task->enter = enter;
     task->next = pctx->task_list.next;
     task->prev = &pctx->task_list;
@@ -419,9 +417,6 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
     task->next->prev = task;
     task->tctx = xl_maker(1024);
     index_table_add(&pctx->server->task_table, &task->node);
-
-    xtask_t *tmp = index_table_find(&pctx->server->task_table, task->tid);
-    __xlogd("add_task find task = %p\n", tmp);
     __xlogd("add_task exit\n");
     return task;
 }
@@ -429,7 +424,7 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
 inline static xtask_t* remove_task(xtask_t *task)
 {
     xpeer_ptr server = task->pctx->server;
-    __xlogd("remove_task tid=%lu\n", task->tid);
+    __xlogd("remove_task tid=%lu\n", task->node.index);
     index_table_del(&server->task_table, task);
     task->prev->next = task->next;
     task->next->prev = task->prev;
@@ -512,7 +507,7 @@ static void req_chord_add(xpeer_ctx_ptr pctx)
     xtask_t *task = add_task(pctx, task_chord_add);
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "chord_add");
-    xl_add_number(&xl, "tid", task->tid);
+    xl_add_number(&xl, "tid", task->node.index);
     xl_add_number(&xl, "key", pctx->server->ring->key);
     xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
     __xlogd("req_chord_add exit\n");
@@ -647,7 +642,7 @@ static void api_chord_join(xpeer_ctx_ptr pctx)
 
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "req_chord_invite");
-    xl_add_number(&xl, "tid", task->tid);
+    xl_add_number(&xl, "tid", task->node.index);
     xl_add_number(&xl, "key", key);
 
     __xlogd("api_chord_join 3\n");
