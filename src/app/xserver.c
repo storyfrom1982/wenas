@@ -458,7 +458,7 @@ static void task_chord_join(xtask_t *task, xpeer_ctx_ptr pctx)
     uint64_t key = xl_find_number(&parser, "key");
 
     if (res_code == 200){
-        __xlogd("res_chord_join_invite 1\n");
+        __xlogd("res_chord_join_invite ip=%s\n", ip);
         XChord_Ptr node = node_create(key);
         __xapi->udp_make_ipaddr(ip, port, &node->ip);
         node->channel = task->pctx->channel;
@@ -534,6 +534,7 @@ static void req_chord_invite(xpeer_ctx_ptr pctx)
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &addr->ip, ip, sizeof(ip));
         uint16_t port = ntohs(addr->port);
+        __xlogd("req_chord_invite ip=%s\n", ip);
         xl_add_word(&maker, "ip", ip);
         xl_add_number(&maker, "port", port);
         xl_add_number(&maker, "key", n->key);
@@ -542,6 +543,7 @@ static void req_chord_invite(xpeer_ctx_ptr pctx)
     }
 
     uint64_t tpos = xl_list_hold_kv(&maker);
+    __xlogd("req_chord_invite server ip=%s\n", pctx->server->ip);
     xl_add_word(&maker, "ip", pctx->server->ip);
     xl_add_number(&maker, "port",pctx->server->port);
     xl_add_number(&maker, "key", pctx->server->ring->key);
