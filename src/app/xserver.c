@@ -427,7 +427,7 @@ inline static xtask_t* remove_task(xtask_t *task)
 {
     xpeer_ptr server = task->pctx->server;
     __xlogd("remove_task tid=%lu\n", task->tid);
-    index_table_del(&server->task_table, task->tid);
+    index_table_del(&server->task_table, task);
     task->prev->next = task->next;
     task->next->prev = task->prev;
     free(task->tctx.head);
