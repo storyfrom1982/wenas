@@ -727,11 +727,15 @@ static void api_break(xpeer_ctx_ptr pctx)
 
 static void api_response(xpeer_ctx_ptr pctx)
 {
+    __xlogd("api_response enter\n");
     uint64_t tid = xl_find_number(&pctx->parser, "tid");
     xtask_t *task = (xtask_t *)index_table_find(&pctx->server->task_table, tid);
+    __xlogd("api_response 1\n");
     if (task){
+        __xlogd("api_response 2\n");
         task->enter(task, pctx);
     }
+    __xlogd("api_response exit\n");
 }
 
 typedef void(*api_task_enter)(xpeer_ctx_ptr *pctx);
