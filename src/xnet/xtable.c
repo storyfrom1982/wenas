@@ -208,9 +208,13 @@ void index_table_clear(index_table_t *it)
 
 void index_table_add(index_table_t *it, index_node_t *node)
 {
+    __xlogd("index_table_add enter %lu\n", node->index);
     uint32_t pos = node->index & it->mask;
 
+    __xlogd("index_table_add pos %u\n", pos);
+
     if (it->table[pos] == NULL){
+        __xlogd("index_table_add 1\n");
         it->table[pos] = node;
         node->prev = &it->head;
         node->next = it->head.next;
@@ -221,6 +225,7 @@ void index_table_add(index_table_t *it, index_node_t *node)
 
     }else if ((node->index != it->table[pos]->index) 
                 && avl_tree_add(&it->tree, node) == NULL){
+        __xlogd("index_table_add 2\n");
         index_node_t *head = it->table[pos];
         node->prev = head;
         node->next = head->next;
@@ -229,6 +234,8 @@ void index_table_add(index_table_t *it, index_node_t *node)
         head->list_len++;
         it->count++;
     }
+
+    __xlogd("index_table_add exit\n");
 }
 
 void* index_table_del(index_table_t *it, index_node_t *node)
@@ -272,8 +279,9 @@ void* index_table_del(index_table_t *it, index_node_t *node)
 
 void* index_table_find(index_table_t *it, uint64_t index)
 {
-    __xlogd("index_table_find enter\n");
+    __xlogd("index_table_find enter %lu\n", index);
     uint32_t pos = index & it->mask;
+    __xlogd("index_table_find pos %u\n", pos);
     if (it->table[pos] != NULL){
         if (index == it->table[pos]->index){
             __xlogd("index_table_find exit %p\n", it->table[pos]);
