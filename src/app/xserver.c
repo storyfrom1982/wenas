@@ -720,9 +720,9 @@ static void api_break(xpeer_ctx_ptr peerctx)
 {
     xpeer_ptr server = peerctx->server;
     xmsger_disconnect(server->msger, peerctx->channel);
-    __xlogd("task_loop >>>>---------------------------> free peer ctx node %lu\n", peerctx->node.hash_key);
+    __xlogd("api_break >>>>---------------------------> free peer ctx node %lu\n", peerctx->node.hash_key);
     uuid_list_del(&peerctx->server->uuid_table, &peerctx->node);
-    __xlogd("task_loop >>>>---------------------------> uuid tree count %lu\n", peerctx->server->uuid_table.count);
+    __xlogd("api_break >>>>---------------------------> uuid tree count %lu\n", peerctx->server->uuid_table.count);
     if (peerctx->tasklist.next != &peerctx->tasklist){
         xpeer_task_ptr next = peerctx->tasklist.next;
         while (next != &peerctx->tasklist){
@@ -731,7 +731,9 @@ static void api_break(xpeer_ctx_ptr peerctx)
             next = next_task;
         }
     }
+    __xlogd("api_break >>>>---------------------------> peerctx->release=%p\n", peerctx->release);
     if (peerctx->release){
+        __xlogd("api_break >>>>---------------------------> peerctx->release\n");
         peerctx->release(peerctx);
     }
     free(peerctx);
