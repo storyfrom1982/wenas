@@ -509,7 +509,7 @@ static void req_chord_add(xpeer_ctx_ptr pctx)
     xtask_t *task = add_task(pctx, task_chord_add);
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "chord_add");
-    xl_add_word(&xl, "tid", task->tid);
+    xl_add_number(&xl, "tid", task->tid);
     xl_add_number(&xl, "key", pctx->server->ring->key);
     xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
     __xlogd("req_chord_add exit\n");
