@@ -761,9 +761,13 @@ static void* task_loop(void *ptr)
             const char *api = xl_find_word(&pctx->parser, "api");
             api_task_enter enter = search_table_find(&pctx->server->api_tabel, api);
             if (enter){
+                __xlogd("task_loop 1\n");
                 enter(pctx);
+                __xlogd("task_loop 2\n");
             }
+            __xlogd("task_loop 3\n");
             free(mctx.msg);
+            __xlogd("task_loop 4\n");
         }
     }
 

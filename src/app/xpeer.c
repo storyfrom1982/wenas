@@ -326,6 +326,7 @@ int main(int argc, char *argv[])
     // xmsger_connect(server->msger, "192.168.43.173", 9256, task);
     // make_connect_task(server, "47.92.77.19", 9256);
     // make_connect_task(server, "120.78.155.213", 9256);
+    // make_connect_task(server, "18.138.128.58", 9256);
 
     char str[1024];
     char input[256];
@@ -384,7 +385,7 @@ int main(int argc, char *argv[])
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
 
             // handle_join(ip, port, key);
-        }else if (strcmp(command, "turn") == 0) {
+        }else if (strcmp(command, "messaging") == 0) {
             __xlogi("输入键值: ");
             if (fgets(input, sizeof(input), stdin) != NULL) {
                 input[strcspn(input, "\n")] = 0;
@@ -395,8 +396,7 @@ int main(int argc, char *argv[])
             }
 
             struct xlkv maker = xl_maker(1024);
-            xl_add_word(&maker, "msg", "req");
-            xl_add_word(&maker, "task", "turn");
+            xl_add_word(&maker, "api", "messaging");
             xl_add_number(&maker, "key", key);
             xl_add_word(&maker, "text", "Hello World");
             xmsger_send_message(server->msger, server->channel, maker.head, maker.wpos);
