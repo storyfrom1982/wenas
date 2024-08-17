@@ -151,8 +151,8 @@ static void test_hash_table()
     uint8_t sha256[32];
     SHA256_CTX shactx;
 
-    xhash_table_t tree;
-    xhash_table_init(&tree, 16);
+    search_table_t tree;
+    search_table_init(&tree, 16);
 
     char *nodes[TEST_INTERVAL];
 
@@ -163,12 +163,12 @@ static void test_hash_table()
         nodes[i] = rand_str(str_len);
 
         // __xlogd("dth test add str=%s\n", nodes[i]);
-        xhash_table_add(&tree, nodes[i], nodes[i]);
+        search_table_add(&tree, nodes[i], nodes[i]);
         // __xlogd("table count %lu origin tree count %lu\n", tree.count, tree.tree.count);
     }
 
     for (int i = 0; i < TEST_INTERVAL; ++i){
-        char *str = xhash_table_find(&tree, nodes[i]);
+        char *str = search_table_find(&tree, nodes[i]);
         // __xlogd("dth test find str:  >>>>------------------>   (%s)    =   (%s)\n", nodes[i], str);
         if (mcompare(str, nodes[i], slength(str)) != 0){
             __xlogd("dth test find str:  >>>>------------------>   (%s)    =   (%s)\n", nodes[i], str);
@@ -177,7 +177,7 @@ static void test_hash_table()
     }
 
     for (int i = 0; i < TEST_INTERVAL; ++i){
-        char *str = xhash_table_del(&tree, nodes[i]);
+        char *str = search_table_del(&tree, nodes[i]);
         __xlogd("dth test delete str:  >>>>------------------>   (%s)    =   (%s)\n", nodes[i], str);
         __xlogd("table count %lu origin tree count %lu\n", tree.count, tree.tree.count);
         if (str != NULL){
@@ -192,7 +192,47 @@ static void test_hash_table()
         free(nodes[i]);
     }    
 
-    xhash_table_clear(&tree);
+    search_table_clear(&tree);
+}
+
+static void test_index_table()
+{
+    index_table_t tree;
+    index_table_init(&tree, 16);
+
+    index_node_t nodes[TEST_INTERVAL];
+
+    for (int i = 0; i < TEST_INTERVAL; ++i){
+        nodes[i].index = rand();
+        nodes[i].next = &nodes[i];
+        nodes[i].prev = &nodes[i];
+        __xlogd("dth test add index:  >>>>------------------>(%lu)\n", nodes[i].index);
+        index_table_add(&tree, &nodes[i]);
+    }
+
+    for (int i = 0; i < TEST_INTERVAL; ++i){
+        index_node_t *node = index_table_find(&tree, nodes[i].index);
+        __xlogd("dth test find node = %p\n", node);
+        __xlogd("dth test find index:  >>>>------------------>   (%lu)    =   (%lu)\n", nodes[i].index, node->index);
+        if (node->index != nodes[i].index){
+            __xlogd("dth test find index:  >>>>------------------>   (%lu)    =   (%lu)\n", nodes[i].index, node->index);
+            exit(0);
+        }
+    }
+
+    for (int i = 0; i < TEST_INTERVAL; ++i){
+        index_node_t *node = index_table_del(&tree, &nodes[i]);
+        __xlogd("table count %lu origin tree count %lu\n", tree.count, tree.tree.count);
+        if (node != NULL){
+            __xlogd("dth test delete index:  >>>>------------------>   (%lu)    =   (%lu)\n", nodes[i].index, node->index);
+            if (node->index != nodes[i].index){
+                __xlogd("dth test find index:  >>>>------------------>   (%lu)    =   (%lu)\n", nodes[i].index, node->index);
+                exit(0);
+            }
+        }
+    }  
+
+    index_table_clear(&tree);
 }
 
 int main(int argc, char *argv[])
@@ -200,7 +240,8 @@ int main(int argc, char *argv[])
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     test_hash_tree();
-    // test_hash_table();
+    test_hash_table();
+    test_index_table();
 
     xlog_recorder_close();
 

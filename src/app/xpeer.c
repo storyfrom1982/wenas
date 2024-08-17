@@ -14,9 +14,9 @@
 typedef struct xtask {
     uint8_t tid;
     void (*req)(struct xtask*);
-    void (*res)(struct xtask*);
+    void (*enter)(struct xtask*);
     uint64_t len, pos;
-    struct xpeer_ctx *ctx;
+    struct xpeer_ctx *pctx;
     struct xtask *prev, *next;
 }xtask_t;
 
@@ -140,9 +140,9 @@ static void* task_loop(void *ptr)
             __xlogd("task_loop tid=%u\n", tid);
             xtask_t *task = server->task_table[tid];
             __xlogd("task_loop task=%p\n", task);
-            if (task && task->res){
-                __xlogd("task_loop res=%p\n", task->res);
-                task->res(task);
+            if (task && task->enter){
+                __xlogd("task_loop res=%p\n", task->enter);
+                task->enter(task);
             }
         }
     }
@@ -156,13 +156,13 @@ Clean:
 
 static void res_login(xtask_t *task)
 {
-    xl_printf(task->ctx->msg);
+    xl_printf(task->pctx->msg);
 }
 
 static void req_login(xtask_t *task)
 {
     __xlogd("req_login ----------------------- enter\n");
-    xpeer_ptr peer = task->ctx->peer;
+    xpeer_ptr peer = task->pctx->peer;
     char text[1024] = {0};
     uint8_t sha256[32];
     SHA256_CTX shactx;
@@ -185,7 +185,7 @@ static void req_login(xtask_t *task)
     peer->task_table[peer->task_index] = task;
     task->tid = peer->task_index;
     peer->task_index++;
-    task->res = res_login;
+    task->enter = res_login;
 
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "login");
@@ -200,19 +200,19 @@ static void req_login(xtask_t *task)
 
 static void res_logout(xtask_t *task)
 {
-    xl_printf(task->ctx->msg);
+    xl_printf(task->pctx->msg);
 }
 
 static void req_logout(xtask_t *task)
 {
-    xpeer_ptr peer = task->ctx->peer;
+    xpeer_ptr peer = task->pctx->peer;
     while (peer->task_table[peer->task_index] != NULL){
         peer->task_index++;
     }
     peer->task_table[peer->task_index] = task;
     task->tid = peer->task_index;
     peer->task_index++;
-    task->res = res_logout;
+    task->enter = res_logout;
 
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "logout");
@@ -224,7 +224,7 @@ void create_task(xpeer_ptr peer, void(*api)(xtask_t*))
 {
     xpeer_ctx_ptr ctx = xmsger_get_channel_ctx(peer->channel);
     xtask_t *task = (xtask_t*)malloc(sizeof(xtask_t));
-    task->ctx = ctx;
+    task->pctx = ctx;
     if (peer->task_count == 256){
         task->req = api;
         task->next = ctx->head.next;
@@ -372,8 +372,8 @@ int main(int argc, char *argv[])
 
             xtask_t *task = (xtask_t *)malloc(sizeof(xtask_t));
             server->task_table[0] = task;
-            task->res = res_logout;
-            task->ctx = xmsger_get_channel_ctx(server->channel);
+            task->enter = res_logout;
+            task->pctx = xmsger_get_channel_ctx(server->channel);
 
             struct xlkv maker = xl_maker(1024);
             xl_add_word(&maker, "api", "chord_join");

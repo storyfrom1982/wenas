@@ -6,54 +6,54 @@
 #include "xlib/avlmini.h"
 
 
-typedef struct xhtnode {
+typedef struct search_node {
     struct avl_node node;
+    struct search_node *next, *prev;
     uint64_t key;
     uint8_t *uuid;
     uint32_t uuid_len;
     uint32_t list_len;
-    struct xhtnode *next, *prev;
     void *value;
-}xhtnode_t;
+}search_node_t;
 
-xhtnode_t* xhtnode_create(uint64_t hash_key, uint8_t *uuid, uint8_t uuid_len);
-
-
-
-typedef struct xhash_table {
+typedef struct search_table {
     uint64_t count;
     uint32_t size; //must be the power of 2
     uint32_t mask;
-    xhtnode_t head;
-    xhtnode_t **table;
+    search_node_t head;
+    search_node_t **table;
     struct avl_tree tree;
-}xhash_table_t;
+}search_table_t;
 
-void xhash_table_init(xhash_table_t *ht, uint32_t size /*must be the power of 2*/);
-void xhash_table_clear(xhash_table_t *ht);
-void xhash_table_add(xhash_table_t *ht, const char *key, void *value);
-void* xhash_table_del(xhash_table_t *ht, const char *key);
-void* xhash_table_find(xhash_table_t *ht, const char *key);
+void search_table_init(search_table_t *st, uint32_t size /*must be the power of 2*/);
+void search_table_clear(search_table_t *st);
+void search_table_add(search_table_t *st, const char *key, void *value);
+void* search_table_del(search_table_t *st, const char *key);
+void* search_table_find(search_table_t *st, const char *key);
 
 
+typedef struct index_node {
+    struct avl_node node;
+    struct index_node *next, *prev;
+    uint64_t index;
+    uint32_t list_len;
+}index_node_t;
 
-typedef struct xhash_tree {
+typedef struct index_table {
     uint64_t count;
-    struct avl_tree hash_tree;
-    struct avl_tree uuid_tree;
-}xhash_tree_t;
+    uint32_t size; //must be the power of 2
+    uint32_t mask;
+    index_node_t head;
+    index_node_t **table;
+    struct avl_tree tree;
+}index_table_t;
 
-void xhash_tree_init(xhash_tree_t *ht);
-void xhash_tree_clear(xhash_tree_t *ht);
-void xhash_tree_add(xhash_tree_t *ht, xhtnode_t *node);
-xhtnode_t* xhash_tree_del(xhash_tree_t *ht, xhtnode_t *node);
-xhtnode_t* xhash_tree_find(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len);
-xhtnode_t* xhash_tree_find_by_key(xhash_tree_t *ht, uint64_t key);
-xhtnode_t* xhash_tree_del_by_key(xhash_tree_t *ht, uint64_t key, uint8_t *uuid, uint32_t len);
+void index_table_init(index_table_t *it, uint32_t size /*must be the power of 2*/);
+void index_table_clear(index_table_t *it);
+void index_table_add(index_table_t *it, index_node_t *node);
+void* index_table_del(index_table_t *it, index_node_t *node);
+void* index_table_find(index_table_t *it, uint64_t index);
 
-xhtnode_t *xhash_tree_first(xhash_tree_t *ht);
-xhtnode_t *xhash_tree_last(xhash_tree_t *ht);
-xhtnode_t *xhash_tree_next(xhash_tree_t *ht, xhtnode_t *node);
-xhtnode_t *xhash_tree_prev(xhash_tree_t *ht, xhtnode_t *node);
+
 
 #endif
