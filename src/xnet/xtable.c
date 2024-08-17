@@ -272,15 +272,19 @@ void* index_table_del(index_table_t *it, index_node_t *node)
 
 void* index_table_find(index_table_t *it, uint64_t index)
 {
+    __xlogd("index_table_find enter\n");
     uint32_t pos = index & it->mask;
     if (it->table[pos] != NULL){
         if (index == it->table[pos]->index){
+            __xlogd("index_table_find exit %p\n", it->table[pos]);
             return it->table[pos];
         }else {
             index_node_t node;
             node.index = index;
+            __xlogd("index_table_find exit\n");
             return avl_tree_find(&it->tree, &node);
         }
     }
+    __xlogd("index_table_find exit NULL\n");
     return NULL;
 }

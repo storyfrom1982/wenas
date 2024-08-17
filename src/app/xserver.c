@@ -729,6 +729,7 @@ static void api_response(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_response enter\n");
     uint64_t tid = xl_find_number(&pctx->parser, "tid");
+    __xlogd("api_response tid=%lu\n", tid);
     xtask_t *task = (xtask_t *)index_table_find(&pctx->server->task_table, tid);
     __xlogd("api_response 1\n");
     if (task){
