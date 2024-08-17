@@ -530,10 +530,10 @@ static void req_chord_invite(xpeer_ctx_ptr pctx)
     XChord_Ptr n = pctx->server->ring->predecessor;
     while (n != pctx->server->ring) {
         uint64_t tpos = xl_list_hold_kv(&maker);
-        __xipaddr_ptr addr = xmsger_get_channel_ipaddr(n->channel);
+        // __xipaddr_ptr addr = xmsger_get_channel_ipaddr(n->channel);
         char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr->ip, ip, sizeof(ip));
-        uint16_t port = ntohs(addr->port);
+        inet_ntop(AF_INET, &n->ip.ip, ip, sizeof(ip));
+        uint16_t port = ntohs(n->ip.port);
         __xlogd("req_chord_invite ip=%s\n", ip);
         xl_add_word(&maker, "ip", ip);
         xl_add_number(&maker, "port", port);
