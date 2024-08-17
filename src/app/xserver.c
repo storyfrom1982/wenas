@@ -419,6 +419,9 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
     task->next->prev = task;
     task->tctx = xl_maker(1024);
     index_table_add(&pctx->server->task_table, &task->node);
+
+    xtask_t *tmp = index_table_find(&pctx->server->task_table, task->tid);
+    __xlogd("add_task find task = %p\n", tmp);
     __xlogd("add_task exit\n");
     return task;
 }
