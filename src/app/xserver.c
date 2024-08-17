@@ -453,11 +453,14 @@ static void task_chord_join(xtask_t *task, xpeer_ctx_ptr pctx)
     __xlogd("res_chord_join_invite res code %lu\n", res_code);
     xlkv_t parser = xl_parser(task->tctx.head);
     uint64_t tid = xl_find_number(&parser, "tid");
+    const char* ip = xl_find_word(&parser, "ip");
+    uint64_t port = xl_find_number(&parser, "port");
     uint64_t key = xl_find_number(&parser, "key");
 
     if (res_code == 200){
         __xlogd("res_chord_join_invite 1\n");
         XChord_Ptr node = node_create(key);
+        __xapi->udp_make_ipaddr(ip, port, &node->ip);
         node->channel = task->pctx->channel;
         int ret = node_join(server->ring, node);
         node_print_all(server->ring);
@@ -514,7 +517,7 @@ static void req_chord_add(xpeer_ctx_ptr pctx)
 
 static void req_chord_invite(xpeer_ctx_ptr pctx)
 {
-    __xlogd("api_chord_join_invite enter\n");
+    __xlogd("req_chord_invite enter\n");
     xpeer_ptr server = pctx->server;
     uint64_t tid = xl_find_number(&pctx->parser, "tid");
     uint32_t key = xl_find_number(&pctx->parser, "key");
@@ -545,7 +548,11 @@ static void req_chord_invite(xpeer_ctx_ptr pctx)
     xl_list_save_kv(&maker, tpos);
     xl_save_list(&maker, pos);
 
+    xl_printf(maker.head);
+
     xmsger_send_message(pctx->server->msger, pctx->channel, maker.head, maker.wpos);
+
+    __xlogd("req_chord_invite exit\n");
 }
 
 static void api_chord_add(xpeer_ctx_ptr pctx)
@@ -627,6 +634,8 @@ static void api_chord_join(xpeer_ctx_ptr pctx)
     __xlogd("api_chord_join 1\n");
     xtask_t *task = add_task(pctx, task_chord_join);
     xl_add_number(&task->tctx, "tid", tid);
+    xl_add_word(&task->tctx, "ip", ip);
+    xl_add_number(&task->tctx, "port", port);
     xl_add_number(&task->tctx, "key", key);
 
     __xlogd("api_chord_join 2\n");
