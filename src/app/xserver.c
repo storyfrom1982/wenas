@@ -513,6 +513,8 @@ static void req_chord_add(xpeer_ctx_ptr pctx)
     XChord_Ptr node = node_create(key);
     node->channel = pctx->channel;
     node_join(pctx->server->ring, node);
+    pctx->xchord = node;
+    pctx->release = release_chord_node;
     node_print_all(pctx->server->ring);
     xpeer_task_ptr task = add_task(pctx, task_chord_add);
     xlkv_t xl = xl_maker(1024);
