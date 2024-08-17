@@ -411,6 +411,7 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
     xtask_t *task = (xtask_t*)malloc(sizeof(xtask_t));
     task->pctx = pctx;
     task->tid = pctx->server->task_count++;
+    __xlogd("add_task tid=%lu\n", task->tid);
     task->enter = enter;
     task->next = pctx->task_list.next;
     task->prev = &pctx->task_list;
@@ -425,6 +426,7 @@ inline static xtask_t* add_task(xpeer_ctx_ptr pctx, void(*enter)(xtask_t*, xpeer
 inline static xtask_t* remove_task(xtask_t *task)
 {
     xpeer_ptr server = task->pctx->server;
+    __xlogd("remove_task tid=%lu\n", task->tid);
     index_table_del(&server->task_table, task->tid);
     task->prev->next = task->next;
     task->next->prev = task->prev;
@@ -449,8 +451,9 @@ static void task_chord_join(xtask_t *task, xpeer_ctx_ptr pctx)
 
     uint64_t res_code = xl_find_number(&pctx->parser, "code");
     __xlogd("res_chord_join_invite res code %lu\n", res_code);
-    uint64_t tid = xl_find_number(&task->tctx, "tid");
-    uint64_t key = xl_find_number(&task->tctx, "key");
+    xlkv_t parser = xl_parser(task->tctx.head);
+    uint64_t tid = xl_find_number(&parser, "tid");
+    uint64_t key = xl_find_number(&parser, "key");
 
     if (res_code == 200){
         __xlogd("res_chord_join_invite 1\n");

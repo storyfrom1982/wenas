@@ -322,8 +322,8 @@ int main(int argc, char *argv[])
 
     xpeer_ctx_ptr task = (xpeer_ctx_ptr)malloc(sizeof(struct xpeer_ctx));
     task->peer = server;
-    // xmsger_connect(server->msger, "47.99.146.226", 9256, task);
-    xmsger_connect(server->msger, "192.168.43.173", 9256, task);
+    xmsger_connect(server->msger, "47.99.146.226", 9256, task);
+    // xmsger_connect(server->msger, "192.168.43.173", 9256, task);
     // make_connect_task(server, "47.92.77.19", 9256);
     // make_connect_task(server, "120.78.155.213", 9256);
 
