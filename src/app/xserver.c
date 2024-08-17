@@ -459,7 +459,7 @@ static void task_chord_join(xtask_t *task, xpeer_ctx_ptr pctx)
         __xlogd("res_chord_join_invite ip=%s\n", ip);
         XChord_Ptr node = node_create(key);
         __xapi->udp_make_ipaddr(ip, port, &node->ip);
-        node->channel = task->pctx->channel;
+        node->channel = pctx->channel;
         int ret = node_join(server->ring, node);
         node_print_all(server->ring);
         
