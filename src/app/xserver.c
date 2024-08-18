@@ -592,10 +592,14 @@ static void api_chord_add(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_chord_add enter\n");
     uint64_t tid = xl_find_number(&pctx->msgparser, "tid");
+    const char* ip = xl_find_word(&pctx->msgparser, "ip");
+    uint64_t port = xl_find_number(&pctx->msgparser, "port");    
     uint32_t key = xl_find_number(&pctx->msgparser, "key");
     XChord_Ptr node = node_create(key);
     node->channel = pctx->channel;
+    __xapi->udp_make_ipaddr(ip, port, &node->ip);
     node_join(pctx->server->ring, node);
+    pctx->release = release_chord_node;
 
     xlkv_t xl = xl_maker(0);
     xl_add_word(&xl, "api", "res");
