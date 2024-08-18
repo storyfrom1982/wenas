@@ -362,7 +362,13 @@ static int udp_listen(int sock)
     return select(sock + 1, &fds, NULL, NULL, NULL);
 }
 
-bool udp_make_ipaddr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
+bool udp_ipaddr_to_host(const __xipaddr_ptr addr, char* ip_str, size_t ip_str_len, uint16_t* port) {
+    // 将网络字节序的端口号转换为主机字节序
+    *port = ntohs(addr->port);
+    return inet_ntop(AF_INET, &(addr->ip), ip_str, ip_str_len) != NULL;
+}
+
+bool udp_host_to_ipaddr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
 {
     ipaddr->keylen = 6;
     ipaddr->addrlen = sizeof(struct sockaddr_in);
@@ -468,7 +474,8 @@ struct __xapi_enter posix_api_enter = {
     .udp_sendto = udp_sendto,
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
-    .udp_make_ipaddr = udp_make_ipaddr,
+    .udp_host_to_ipaddr = udp_host_to_ipaddr,
+    .udp_ipaddr_to_host = udp_ipaddr_to_host,
 
     .make_path = __ex_make_path,
     .check_path = __ex_check_path,

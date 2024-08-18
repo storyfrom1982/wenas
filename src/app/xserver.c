@@ -297,6 +297,7 @@ typedef struct xpeer_task {
 }*xpeer_task_ptr;
 
 typedef struct xpeer_ctx {
+    uint16_t reconnect_count;
     uuid_node_t node;
     xchannel_ptr channel;
     struct xpeer *server;
@@ -347,6 +348,24 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+{
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    xpeer_ctx_ptr pctx = xmsger_get_channel_ctx(channel);
+    if (pctx->msgparser.head){
+        free(pctx->msgparser.head);
+        pctx->msgparser.head = NULL;
+    }
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
+    xlkv_t xl = xl_maker(1024);
+    xl_add_word(&xl, "api", "timeout");
+    xmsg_ctx_t mctx;
+    mctx.peerctx = pctx;
+    mctx.msg = xl.head;
+    xpipe_write(server->task_pipe, &mctx, sizeof(xmsg_ctx_t));
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+}
+
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void* msg, size_t len)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
@@ -387,7 +406,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
         xmsg_ctx_t mctx;
         mctx.msg = pctx->msgparser.head;
         pctx->msgparser.head = NULL;
-        mctx.peerctx = xpeer_ctx_create(server, channel);        
+        mctx.peerctx = pctx;
         xpipe_write(server->task_pipe, &mctx, sizeof(xmsg_ctx_t));
     }
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -464,7 +483,7 @@ static void task_chord_add(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
     if (res_code == 200){
         __xlogd("res_chord_join_invite ip=%s\n", ip);
         XChord_Ptr node = node_create(key);
-        __xapi->udp_make_ipaddr(ip, port, &node->ip);
+        __xapi->udp_host_to_ipaddr(ip, port, &node->ip);
         node->channel = pctx->channel;
         int ret = node_join(pctx->server->ring, node);
         pctx->xchord = node;
@@ -494,7 +513,7 @@ static void task_chord_join(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
     if (res_code == 200){
         __xlogd("res_chord_join_invite ip=%s\n", ip);
         XChord_Ptr node = node_create(key);
-        __xapi->udp_make_ipaddr(ip, port, &node->ip);
+        __xapi->udp_host_to_ipaddr(ip, port, &node->ip);
         node->channel = pctx->channel;
         int ret = node_join(server->ring, node);
         pctx->xchord = node;
@@ -597,7 +616,7 @@ static void api_chord_add(xpeer_ctx_ptr pctx)
     uint32_t key = xl_find_number(&pctx->msgparser, "key");
     XChord_Ptr node = node_create(key);
     node->channel = pctx->channel;
-    __xapi->udp_make_ipaddr(ip, port, &node->ip);
+    __xapi->udp_host_to_ipaddr(ip, port, &node->ip);
     node_join(pctx->server->ring, node);
     pctx->xchord = node;
     pctx->release = release_chord_node;
@@ -633,7 +652,7 @@ static void api_chord_invite(xpeer_ctx_ptr pctx)
         uint32_t key = xl_find_number(&parser, "key");
 
         struct __xipaddr node_addr;
-        __xapi->udp_make_ipaddr(ip, port, &node_addr);
+        __xapi->udp_host_to_ipaddr(ip, port, &node_addr);
         
         if (node_addr.ip == addr->ip){
             XChord_Ptr node = node_create(key);
@@ -778,6 +797,16 @@ static void api_break(xpeer_ctx_ptr peerctx)
     free(peerctx);
 }
 
+static void api_timeout(xpeer_ctx_ptr peerctx)
+{
+    if (peerctx->xchord != NULL && peerctx->reconnect_count < 3){
+        peerctx->reconnect_count++;
+        xmsger_reconnect(peerctx->server->msger, &peerctx->xchord->ip, peerctx);
+    }else {
+        api_break(peerctx);
+    }
+}
+
 static void api_response(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_response enter\n");
@@ -885,12 +914,13 @@ int main(int argc, char *argv[])
     listener->on_channel_to_peer = on_connection_to_peer;
     listener->on_channel_from_peer = on_connection_from_peer;
     listener->on_channel_break = on_channel_break;
+    listener->on_channel_timeout = on_channel_timeout;
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
 
     server->sock = __xapi->udp_open();
     __xbreak(server->sock < 0);
-    __xbreak(!__xapi->udp_make_ipaddr(NULL, 9256, &server->addr));
+    __xbreak(!__xapi->udp_host_to_ipaddr(NULL, 9256, &server->addr));
     __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
     // struct sockaddr_in server_addr; 
     // socklen_t addr_len = sizeof(server_addr);

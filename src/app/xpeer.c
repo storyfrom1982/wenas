@@ -20,6 +20,7 @@ typedef struct xpeer_task {
 }*xpeer_task_ptr;
 
 typedef struct xpeer_ctx {
+    uint16_t reconnect_count;
     uuid_node_t node;
     xchannel_ptr channel;
     struct xpeer *server;
@@ -58,6 +59,26 @@ typedef struct xmsg_ctx {
     void *msg;
     xpeer_ctx_ptr peerctx;
 }xmsg_ctx_t;
+
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+{
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    xpeer_ctx_ptr pctx = xmsger_get_channel_ctx(channel);
+    xpeer_ptr server = (xpeer_ptr)listener->ctx;
+    __xipaddr_ptr addr = xmsger_get_channel_ipaddr(channel);
+    char ip[17] = {0};
+    uint16_t port = 0;
+    __xapi->udp_ipaddr_to_host(addr, ip, 16, port);
+    xlkv_t xl = xl_maker(1024);
+    xl_add_word(&xl, "api", "timeout");
+    xl_add_word(&xl, "ip", ip);
+    xl_add_number(&xl, "port", port);
+    xmsg_ctx_t mctx;
+    mctx.peerctx = pctx;
+    mctx.msg = xl.head;
+    xpipe_write(server->task_pipe, &mctx, sizeof(xmsg_ctx_t));
+    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+}
 
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
@@ -285,6 +306,18 @@ static void req_logout(xpeer_ctx_ptr pctx)
     xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
 }
 
+static void api_timeout(xpeer_ctx_ptr pctx)
+{
+    __xlogd("api_timeout enter\n");
+    if (pctx->reconnect_count < 3){
+        pctx->reconnect_count++;
+        char *ip = xl_find_word(&pctx->msgparser, "ip");
+        uint16_t port = xl_find_number(&pctx->msgparser, "port");
+        xmsger_connect(pctx->server->msger, ip, port, pctx);
+    }
+    __xlogd("api_timeout exit\n");
+}
+
 static void api_response(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_response enter\n");
@@ -342,6 +375,7 @@ int main(int argc, char *argv[])
     search_table_add(&server->api_tabel, "login", req_login);
     search_table_add(&server->api_tabel, "logout", req_logout);
     search_table_add(&server->api_tabel, "res", api_response);
+    search_table_add(&server->api_tabel, "timeout", api_timeout);
 
     if (argc == 3){
         host = strdup(argv[1]);
@@ -360,18 +394,19 @@ int main(int argc, char *argv[])
     listener->on_channel_to_peer = on_connection_to_peer;
     listener->on_channel_from_peer = on_connection_from_peer;
     listener->on_channel_break = on_channel_break;
+    listener->on_channel_timeout = on_channel_timeout;
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
 
     server->sock = __xapi->udp_open();
     __xbreak(server->sock < 0);
-    __xbreak(!__xapi->udp_make_ipaddr(NULL, 0, &server->addr));
+    __xbreak(!__xapi->udp_host_to_ipaddr(NULL, 0, &server->addr));
     __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
     struct sockaddr_in server_addr; 
     socklen_t addr_len = sizeof(server_addr);
     __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
     __xlogd("自动分配的端口号: %d\n", ntohs(server_addr.sin_port));
-    __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
+    __xbreak(!__xapi->udp_host_to_ipaddr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
 
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xbreak(server->task_pipe == NULL);
@@ -444,10 +479,10 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             xpeer_ctx_ptr pctx = xpeer_ctx_create(server, NULL);
+            xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
             // xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
-            // xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
             // xmsger_connect(server->msger, "47.92.77.19", 9256, pctx);
-            xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
+            // xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
             // xmsger_connect(server->msger, "18.138.128.58", 9256, pctx);            
 
         } else if (strcmp(command, "discon") == 0) {

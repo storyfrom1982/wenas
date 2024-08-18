@@ -73,7 +73,8 @@ typedef struct __xapi_enter {
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock);
-    bool (*udp_make_ipaddr)(const char *ip, uint16_t port, __xipaddr_ptr addr);
+    bool (*udp_host_to_ipaddr)(const char *ip, uint16_t port, __xipaddr_ptr addr);
+    bool (*udp_ipaddr_to_host)(const __xipaddr_ptr addr, char* ip_str, size_t ip_str_len, uint16_t* port);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储
