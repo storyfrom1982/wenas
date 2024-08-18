@@ -313,7 +313,7 @@ static inline xlkv_t xl_parser(xl_ptr xl)
     xlkv_t kv = {0};
     if (__typeis_lkv(xl) || __typeis_list(xl)){
         kv.rpos = XLINE_HEAD_SIZE;
-        kv.wpos = __sizeof_data(xl);
+        kv.wpos = __sizeof_line(xl);
         kv.size = kv.wpos;
         kv.head = xl->h;
     }

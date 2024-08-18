@@ -81,6 +81,7 @@ void search_table_clear(search_table_t *st)
             free(node);
         }
         free(st->table);
+        avl_tree_clear(&st->tree, NULL);
         mclear(st, sizeof(search_table_t));
     }
 }
@@ -202,8 +203,9 @@ void index_table_init(index_table_t *it, uint32_t size /*must be the power of 2*
 
 void index_table_clear(index_table_t *it)
 {
-    it->count = 0;
+    free(it->table);
     avl_tree_clear(&it->tree, NULL);
+    mclear(&it, sizeof(it));
 }
 
 void index_table_add(index_table_t *it, index_node_t *node)
