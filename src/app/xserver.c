@@ -639,6 +639,9 @@ static void api_chord_invite(xpeer_ctx_ptr pctx)
             XChord_Ptr node = node_create(key);
             node->channel = pctx->channel;
             node_join(pctx->server->ring, node);
+            node->ip = node_addr;
+            pctx->xchord = node;
+            pctx->release = release_chord_node;
         }else {
             xlkv_t xl = xl_maker(1024);
             xl_add_word(&xl, "api", "req_chord_add");

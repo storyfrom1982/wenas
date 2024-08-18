@@ -444,10 +444,10 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             xpeer_ctx_ptr pctx = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
+            // xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
             // xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
             // xmsger_connect(server->msger, "47.92.77.19", 9256, pctx);
-            // xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
+            xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
             // xmsger_connect(server->msger, "18.138.128.58", 9256, pctx);            
 
         } else if (strcmp(command, "discon") == 0) {
