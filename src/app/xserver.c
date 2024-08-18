@@ -599,6 +599,7 @@ static void api_chord_add(xpeer_ctx_ptr pctx)
     node->channel = pctx->channel;
     __xapi->udp_make_ipaddr(ip, port, &node->ip);
     node_join(pctx->server->ring, node);
+    pctx->xchord = node;
     pctx->release = release_chord_node;
 
     xlkv_t xl = xl_maker(0);
