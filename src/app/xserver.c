@@ -453,6 +453,25 @@ void release_chord_node(xpeer_ctx_ptr pctx)
 static void task_chord_add(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
     __xlogd("task_chord_add enter\n");
+
+    uint64_t res_code = xl_find_number(&pctx->msgparser, "code");
+    __xlogd("task_chord_add res code %lu\n", res_code);
+    uint64_t tid = xl_find_number(&pctx->msgparser, "tid");
+    const char* ip = xl_find_word(&pctx->msgparser, "ip");
+    uint64_t port = xl_find_number(&pctx->msgparser, "port");
+    uint64_t key = xl_find_number(&pctx->msgparser, "key");
+
+    if (res_code == 200){
+        __xlogd("res_chord_join_invite ip=%s\n", ip);
+        XChord_Ptr node = node_create(key);
+        __xapi->udp_make_ipaddr(ip, port, &node->ip);
+        node->channel = pctx->channel;
+        int ret = node_join(pctx->server->ring, node);
+        pctx->xchord = node;
+        pctx->release = release_chord_node;
+        node_print_all(pctx->server->ring);
+    }
+
     remove_task(task);
     __xlogd("task_chord_add exit\n");
 }
@@ -518,13 +537,6 @@ static void task_chord_join(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 static void req_chord_add(xpeer_ctx_ptr pctx)
 {
     __xlogd("req_chord_add enter\n");
-    uint64_t key = xl_find_number(&pctx->msgparser, "key");
-    XChord_Ptr node = node_create(key);
-    node->channel = pctx->channel;
-    node_join(pctx->server->ring, node);
-    pctx->xchord = node;
-    pctx->release = release_chord_node;
-    node_print_all(pctx->server->ring);
     xpeer_task_ptr task = add_task(pctx, task_chord_add);
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "chord_add");
@@ -587,10 +599,13 @@ static void api_chord_add(xpeer_ctx_ptr pctx)
 
     xlkv_t xl = xl_maker(0);
     xl_add_word(&xl, "api", "res");
+    xl_add_number(&xl, "code", 200);
     xl_add_number(&xl, "tid", tid);
+    xl_add_word(&xl, "ip", pctx->server->ip);
+    xl_add_number(&xl, "port", pctx->server->port);
+    xl_add_number(&xl, "key", pctx->server->ring->key);
     xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
 
-    node_print_all(pctx->server->ring);
     __xlogd("api_chord_add exit\n");
 }
 
