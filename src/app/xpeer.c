@@ -62,22 +62,28 @@ typedef struct xmsg_ctx {
 
 static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ctx_ptr pctx = xmsger_get_channel_ctx(channel);
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 1\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 2\n");
     __xipaddr_ptr addr = xmsger_get_channel_ipaddr(channel);
-    char ip[17] = {0};
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 3\n");
+    char ip[16] = {0};
     uint16_t port = 0;
-    __xapi->udp_ipaddr_to_host(addr, ip, 16, port);
+    __xapi->udp_ipaddr_to_host(addr, ip, 16, &port);
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 4\n");
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "timeout");
     xl_add_word(&xl, "ip", ip);
     xl_add_number(&xl, "port", port);
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 5\n");
     xmsg_ctx_t mctx;
     mctx.peerctx = pctx;
     mctx.msg = xl.head;
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 6\n");
     xpipe_write(server->task_pipe, &mctx, sizeof(xmsg_ctx_t));
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
@@ -132,6 +138,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     server->channel = channel;
     xpeer_ctx_ptr pctx = xmsger_get_channel_ctx(channel);
+    pctx->reconnect_count = 0;
     pctx->channel = channel;
     if (pctx->msgparser.head){
         xmsg_ctx_t mctx;
@@ -479,8 +486,8 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             xpeer_ctx_ptr pctx = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
-            // xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
+            // xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
+            xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
             // xmsger_connect(server->msger, "47.92.77.19", 9256, pctx);
             // xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
             // xmsger_connect(server->msger, "18.138.128.58", 9256, pctx);            

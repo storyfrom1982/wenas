@@ -362,10 +362,12 @@ static int udp_listen(int sock)
     return select(sock + 1, &fds, NULL, NULL, NULL);
 }
 
+// #define INET_ADDRSTRLEN 16
+// #define INET6_ADDRSTRLEN 46
 bool udp_ipaddr_to_host(const __xipaddr_ptr addr, char* ip_str, size_t ip_str_len, uint16_t* port) {
     // 将网络字节序的端口号转换为主机字节序
     *port = ntohs(addr->port);
-    return inet_ntop(AF_INET, &(addr->ip), ip_str, ip_str_len) != NULL;
+    return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip_str, ip_str_len) != NULL;
 }
 
 bool udp_host_to_ipaddr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
