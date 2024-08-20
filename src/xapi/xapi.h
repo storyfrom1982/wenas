@@ -153,8 +153,13 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
         } \
     } while (0)
 
-// TODO
-// #define __xcheck(condition)     assert((condition))
+#define __xcheck(condition) \
+    do { \
+        if ((condition)) { \
+            __xloge("ERROR: %s\n", #condition); \
+            goto XClean; \
+        } \
+    } while (0)
 
 
 

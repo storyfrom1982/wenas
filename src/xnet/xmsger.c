@@ -40,18 +40,6 @@ typedef struct xhead {
     uint32_t cid; // 连接通道 ID
 }*xhead_ptr;
 
-#define XMSG_CMD_SIZE       64
-
-typedef struct xmessage {
-    uint32_t type;
-    uint32_t sid;
-    size_t wpos, rpos, len, range;
-    void *data;
-    xchannel_ptr channel;
-    struct xmessage *next;
-    uint8_t cmd[XMSG_CMD_SIZE];
-}*xmessage_ptr;
-
 typedef struct xpack {
     bool is_flushing;
     uint64_t timer;
@@ -989,13 +977,18 @@ static void* main_loop(void *ptr)
                             void *userctx = channel->userctx;
                             __xlogd("reconnnected >>>>---------------------> channel %p\n", channel);
                             // msger->callback->on_channel_reconnected(msger->callback, channel);
+                            // 创建连接
+                            xchannel_ptr new_channel = xchannel_create(msger, &addr, serial_range);
+                            __xbreak(new_channel == NULL);
+                            new_channel->userctx = userctx;
+                            new_channel->send_ptr = channel->send_ptr;
+                            new_channel->msglist_tail = channel->msglist_tail;
+                            new_channel->streamlist_tail = channel->streamlist_tail;
                             // // 移除超时的连接
                             xtree_take(msger->peers, &channel->addr.port, 6);
                             xchannel_free(channel);
-                            // 创建连接
-                            channel = xchannel_create(msger, &addr, serial_range);
-                            __xbreak(channel == NULL);
-                            channel->userctx = userctx;
+                            channel = new_channel;
+                            xtree_save(msger->peers, &channel->addr.port, 6, channel);
                         }
 
                         channel->connected = true;
@@ -1087,11 +1080,21 @@ static void* main_loop(void *ptr)
 
                 if (msg->type == XMSG_PACK_PING){
 
-                    channel = xchannel_create(msger, (__xipaddr_ptr)msg->data, PACK_SERIAL_RANGE);
+                    xlkv_t params = xl_parser(msg->data);
+                    xl_ptr addr = xl_find(&params, "addr");
+                    void *ctx = xl_find_ptr(&params, "ctx");
+                    xmessage_ptr resendmsg = xl_find_ptr(&params, "resendmsg");
+                    free(params.head);
+
+                    channel = xchannel_create(msger, (__xipaddr_ptr)(__xl2o(addr)), PACK_SERIAL_RANGE);
                     __xbreak(channel == NULL);
                     channel->keepalive = true;
                     __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
-                    channel->userctx = (void*)(*(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))));
+                    channel->userctx = ctx;
+                    while (resendmsg != NULL){
+                        xchannel_input_message(msg->channel, resendmsg);
+                        resendmsg = resendmsg->next;
+                    }
                     // 建立连接时，先用对方的 IP&PORT&local_cid 三元组作为本地索引，在收到回复的 HELLO 时，换成 local_cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, 6, channel);
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1147,7 +1150,10 @@ static void* main_loop(void *ptr)
 
                             if (spack->head.resend > XCHANNEL_RESEND_LIMIT){
                                 __xlogd("on_channel_break %p\n", channel);
-                                msger->callback->on_channel_timeout(msger->callback, channel);
+                                if (channel->send_ptr){
+                                    channel->send_ptr->wpos = channel->send_ptr->rpos = 0;
+                                }
+                                msger->callback->on_channel_timeout(msger->callback, channel, channel->send_ptr);
                                 // // 移除超时的连接
                                 xtree_take(msger->peers, &channel->addr.port, 6);
                                 xchannel_free(channel);
@@ -1327,11 +1333,11 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
 
     xmessage_ptr msg = new_message(channel, XMSG_PACK_BYE, 0, NULL, 0);
 
-    __xbreak(msg == NULL);
+    __xcheck(msg == NULL);
 
     *(uint64_t*)msg->data = __xapi->clock();
 
-    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
     // 确保主线程一定会被唤醒
     __xapi->mutex_lock(msger->mtx);
@@ -1343,7 +1349,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
 
     return true;
 
-Clean:
+XClean:
 
     __xlogd("xmsger_disconnect channel 0x%X failed", channel);
 
@@ -1355,19 +1361,20 @@ Clean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port, void *user_context)
+bool xmsger_connect(xmsger_ptr msger, __xipaddr_ptr addr, void *peerctx)
 {
     __xlogd("xmsger_connect enter\n");
 
-    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, NULL, 0);
+    xlkv_t params = xl_maker(1024);
+    __xcheck(params.head == NULL);
 
-    __xbreak(msg == NULL);
+    xl_add_bin(&params, "addr", addr, sizeof(struct __xipaddr));
+    xl_add_ptr(&params, "ctx", peerctx);
 
-    __xbreak(!__xapi->udp_host_to_ipaddr(host, port, (__xipaddr_ptr)msg->data));
-
-    *(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))) = (uint64_t)user_context;
+    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.head, params.wpos);
+    __xcheck(msg == NULL);
     
-    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
     // 确保主线程一定会被唤醒
     __xapi->mutex_lock(msger->mtx);
@@ -1379,7 +1386,7 @@ bool xmsger_connect(xmsger_ptr msger, const char *host, uint16_t port, void *use
 
     return true;
 
-Clean:
+XClean:
 
     __xlogd("xmsger_connect failed\n");
 
@@ -1389,19 +1396,21 @@ Clean:
     return false;
 }
 
-extern bool xmsger_reconnect(xmsger_ptr msger, __xipaddr_ptr addr, void *user_context)
+extern bool xmsger_reconnect(xmsger_ptr msger, __xipaddr_ptr addr, void *peerctx, xmessage_ptr resendmsg)
 {
     __xlogd("xmsger_connect enter\n");
 
-    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, NULL, 0);
+    xlkv_t params = xl_maker(1024);
+    __xcheck(params.head == NULL);
 
-    __xbreak(msg == NULL);
+    xl_add_bin(&params, "addr", addr, sizeof(struct __xipaddr));
+    xl_add_ptr(&params, "ctx", peerctx);
+    xl_add_ptr(&params, "resendmsg", resendmsg);
 
-    *((__xipaddr_ptr)msg->data) = *addr;
-
-    *(uint64_t*)(((uint8_t*)(msg->data) + sizeof(struct __xipaddr))) = (uint64_t)user_context;
+    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.head, params.wpos);
+    __xcheck(msg == NULL);
     
-    __xbreak(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
     // 确保主线程一定会被唤醒
     __xapi->mutex_lock(msger->mtx);
@@ -1413,9 +1422,13 @@ extern bool xmsger_reconnect(xmsger_ptr msger, __xipaddr_ptr addr, void *user_co
 
     return true;
 
-Clean:
+XClean:
 
     __xlogd("xmsger_connect failed\n");
+
+    if (params.head){
+        free(params.head);
+    }
 
     if (msg){
         free(msg);

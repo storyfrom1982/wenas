@@ -60,7 +60,7 @@ typedef struct xmsg_ctx {
     xpeer_ctx_ptr peerctx;
 }xmsg_ctx_t;
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmessage_ptr delay_msg_list)
 {
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ctx_ptr pctx = xmsger_get_channel_ctx(channel);
@@ -320,7 +320,9 @@ static void api_timeout(xpeer_ctx_ptr pctx)
         pctx->reconnect_count++;
         char *ip = xl_find_word(&pctx->msgparser, "ip");
         uint16_t port = xl_find_number(&pctx->msgparser, "port");
-        xmsger_connect(pctx->server->msger, ip, port, pctx);
+        struct __xipaddr addr;
+        __xapi->udp_host_to_ipaddr(ip, port, &addr);
+        xmsger_connect(pctx->server->msger, &addr, pctx);
     }
     __xlogd("api_timeout exit\n");
 }
@@ -485,12 +487,14 @@ int main(int argc, char *argv[])
 
         } else if (strcmp(command, "con") == 0) {
 
+            struct __xipaddr addr;
+            __xapi->udp_host_to_ipaddr("192.168.43.173", 9256, &addr);
+            // __xapi->udp_host_to_ipaddr("47.99.146.226", 9256, &addr);
+            // __xapi->udp_host_to_ipaddr("47.92.77.19", 9256, &addr);
+            // __xapi->udp_host_to_ipaddr("120.78.155.213", 9256, &addr);
+            // __xapi->udp_host_to_ipaddr("18.138.128.58", 9256, &addr);
             xpeer_ctx_ptr pctx = xpeer_ctx_create(server, NULL);
-            // xmsger_connect(server->msger, "192.168.43.173", 9256, pctx);
-            xmsger_connect(server->msger, "47.99.146.226", 9256, pctx);
-            // xmsger_connect(server->msger, "47.92.77.19", 9256, pctx);
-            // xmsger_connect(server->msger, "120.78.155.213", 9256, pctx);
-            // xmsger_connect(server->msger, "18.138.128.58", 9256, pctx);            
+            xmsger_connect(server->msger, &addr, pctx);
 
         } else if (strcmp(command, "discon") == 0) {
 
