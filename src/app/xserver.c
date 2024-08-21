@@ -689,11 +689,11 @@ static void command(xpeer_ctx_ptr pctx)
 
         XChord_Ptr node = pctx->server->ring->predecessor;
         while (node != pctx->server->ring) {
-            uint64_t kvpos = xl_list_hold_kv(&res);
             char ip[16];
             uint16_t port;
             __xipaddr_ptr addr = xmsger_get_channel_ipaddr(node->channel);
             __xapi->udp_ipaddr_to_host(addr, ip, 16, &port);
+            uint64_t kvpos = xl_list_hold_kv(&res);
             xl_add_word(&res, "ip", ip);
             xl_add_number(&res, "port", port);
             xl_add_number(&res, "key", node->key);
@@ -701,7 +701,7 @@ static void command(xpeer_ctx_ptr pctx)
             node = node->predecessor;
         }
 
-        uint64_t tpos = xl_list_hold_kv(&res);
+        xl_save_list(&res, lpos);
 
         xl_add_number(&res, "code", 200);
 
