@@ -687,8 +687,8 @@ static void command(xpeer_ctx_ptr pctx)
 
         uint64_t lpos = xl_hold_list(&res, "nodes");
 
-        XChord_Ptr node = pctx->server->ring->predecessor;
-        while (node != pctx->server->ring) {
+        XChord_Ptr node = pctx->server->ring;
+        do {
             char ip[16];
             uint16_t port;
             __xipaddr_ptr addr = xmsger_get_channel_ipaddr(node->channel);
@@ -699,7 +699,7 @@ static void command(xpeer_ctx_ptr pctx)
             xl_add_number(&res, "key", node->key);
             xl_list_save_kv(&res, kvpos);
             node = node->predecessor;
-        }
+        }while (node != pctx->server->ring);
 
         xl_save_list(&res, lpos);
 
