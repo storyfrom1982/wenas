@@ -284,13 +284,12 @@ static void res_chord_list(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 static void chord_list(xpeer_ctx_ptr pctx)
 {
     __xlogd("chord_list ----------------------- enter\n");
-    xpeer_ptr peer = pctx->server;
     xpeer_task_ptr task = add_task(pctx, res_chord_list);
     xlkv_t maker = xl_maker(1024);
     xl_add_word(&maker, "api", "command");
     xl_add_word(&maker, "cmd", "chord_list");
     xl_add_number(&maker, "tid", task->node.index);
-    xmsger_send_message(peer->msger, pctx->channel, maker.head, maker.wpos);
+    xmsger_send_message(pctx->server->msger, pctx->channel, maker.head, maker.wpos);
     __xlogd("chord_list ----------------------- exit\n");
 }
 
@@ -303,15 +302,13 @@ static void res_chord_invite(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 static void chord_invite(xpeer_ctx_ptr pctx)
 {
     __xlogd("chord_invite ----------------------- enter\n");
-    xpeer_ptr peer = pctx->server;
     xpeer_task_ptr task = add_task(pctx, res_chord_invite);
     xlkv_t req = xl_maker(1024);
     xl_add_word(&req, "api", "command");
     xl_add_word(&req, "cmd", "chord_invite");
     xl_add_number(&req, "tid", task->node.index);
-    xlkv_t nodes = xl_parser(peer->chord_list);
-    xl_add_list(&req, "nodes", &nodes);
-    xmsger_send_message(peer->msger, peer->channel, req.head, req.wpos);
+    xl_add_list(&req, "nodes", pctx->server->chord_list);
+    xmsger_send_message(pctx->server->msger, pctx->channel, req.head, req.wpos);
     __xlogd("chord_invite ----------------------- exit\n");
 }
 
@@ -330,21 +327,19 @@ static void hello(xpeer_ctx_ptr pctx)
     xl_add_word(&xl, "api", "hello");
     xl_add_number(&xl, "tid", task->node.index);
     xl_add_word(&xl, "password", "123456");
-    xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
+    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
     __xlogd("hello ----------------------- exit\n");
 }
 
 static void bye(xpeer_ctx_ptr pctx)
 {
     __xlogd("bye ----------------------- enter\n");
-    xpeer_ptr peer = pctx->server;
-
     xpeer_task_ptr task = add_task(pctx, res_login);
     xlkv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "bye");
     xl_add_number(&xl, "tid", task->node.index);
     xl_add_word(&xl, "password", "123456");
-    xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
+    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
     __xlogd("bye ----------------------- exit\n");
 }
 

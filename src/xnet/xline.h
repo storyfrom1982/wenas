@@ -9,7 +9,7 @@ enum {
     XLINE_TYPE_FLOAT = 0x04, //实数
     XLINE_TYPE_STR = 0x08, //字符串
     XLINE_TYPE_BIN = 0x10, //二进制数据
-    XLINE_TYPE_LKV = 0x20, //键值对
+    XLINE_TYPE_XLKV = 0x20, //键值对
     XLINE_TYPE_LIST = 0x40 //列表
 };
 
@@ -117,7 +117,7 @@ static inline double __xl2float(xl_ptr l)
 #define __typeis_object(l)      ((l)->h[0] > XLINE_TYPE_FLOAT)
 #define __typeis_str(l)         ((l)->h[0] == XLINE_TYPE_STR)
 #define __typeis_bin(l)         ((l)->h[0] == XLINE_TYPE_BIN)
-#define __typeis_lkv(l)         ((l)->h[0] == XLINE_TYPE_LKV)
+#define __typeis_xlkv(l)        ((l)->h[0] == XLINE_TYPE_XLKV)
 #define __typeis_list(l)        ((l)->h[0] == XLINE_TYPE_LIST)
 
 #define __sizeof_head(l)        __typeis_object(l) ? XLINE_HEAD_SIZE : 1
@@ -161,7 +161,7 @@ static inline uint64_t xl_hold_kv(xlkv_ptr kv, const char *key)
 static inline void xl_save_kv(xlkv_ptr kv, uint64_t pos)
 {
     uint64_t len = kv->wpos - pos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head + pos)) = __n2xl(len, XLINE_TYPE_LKV);
+    *((xl_ptr)(kv->head + pos)) = __n2xl(len, XLINE_TYPE_XLKV);
 }
 
 static inline uint64_t xl_hold_list(xlkv_ptr kv, const char *key)
@@ -221,7 +221,7 @@ static inline uint64_t xl_append_object(xlkv_ptr kv, const char *key, size_t key
     mcopy(&(kv->val->h[XLINE_HEAD_SIZE]), val, size);
     kv->wpos += (XLINE_HEAD_SIZE + size);
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_XLKV);
     return kv->wpos;
 }
 
@@ -240,14 +240,14 @@ static inline uint64_t xl_add_bin(xlkv_ptr kv, const char *key, const void *val,
     return xl_append_object(kv, key, slength(key), val, size, XLINE_TYPE_BIN);
 }
 
-static inline uint64_t xl_add_kv(xlkv_ptr kv, const char *key, xlkv_ptr subkv)
+static inline uint64_t xl_add_kv(xlkv_ptr kv, const char *key, xl_ptr xl)
 {
-    return xl_append_object(kv, key, slength(key), subkv->head, subkv->wpos, XLINE_TYPE_LKV);
+    return xl_append_object(kv, key, slength(key), xl->h + XLINE_HEAD_SIZE, __sizeof_data(xl), XLINE_TYPE_XLKV);
 }
 
-static inline uint64_t xl_add_list(xlkv_ptr kv, const char *key, xlkv_ptr sublist)
+static inline uint64_t xl_add_list(xlkv_ptr kv, const char *key, xl_ptr xl)
 {
-    return xl_append_object(kv, key, slength(key), sublist->head, sublist->wpos, XLINE_TYPE_LIST);
+    return xl_append_object(kv, key, slength(key), xl->h + XLINE_HEAD_SIZE, __sizeof_data(xl), XLINE_TYPE_LIST);
 }
 
 static inline uint64_t xl_append_number(xlkv_ptr kv, const char *key, size_t keylen, struct xl val)
@@ -283,7 +283,7 @@ static inline uint64_t xl_append_number(xlkv_ptr kv, const char *key, size_t key
     *(kv->val) = val;
     kv->wpos += __sizeof_line(kv->val);
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_XLKV);
     return kv->wpos;
 }
 
@@ -311,7 +311,7 @@ static inline uint64_t xl_add_ptr(xlkv_ptr kv, const char *key, void *p)
 static inline xlkv_t xl_parser(xl_ptr xl)
 {
     xlkv_t kv = {0};
-    if (__typeis_lkv(xl) || __typeis_list(xl)){
+    if (__typeis_xlkv(xl) || __typeis_list(xl)){
         kv.rpos = XLINE_HEAD_SIZE;
         kv.wpos = __sizeof_line(xl);
         kv.size = kv.wpos;
@@ -430,7 +430,7 @@ static inline uint64_t xl_list_append(xlkv_ptr kv, xl_ptr ptr)
     mcopy(kv->head + kv->wpos, ptr->h, kv->rpos);
     kv->wpos += kv->rpos;
     kv->rpos = kv->wpos - XLINE_HEAD_SIZE;
-    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_LKV);
+    *((xl_ptr)(kv->head)) = __n2xl(kv->rpos, XLINE_TYPE_XLKV);
     return kv->wpos;
 }
 
@@ -460,51 +460,75 @@ static inline void __xl_printf(xl_ptr xl, const char *key, int depth)
         }
     }
 
-    while ((xl = xl_next(&parser)) != NULL)
-    {
-        if (__typeis_int(xl)){
+    if (__typeis_xlkv(xl)){
 
-            __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
+        while ((xl = xl_next(&parser)) != NULL)
+        {
+            if (__typeis_int(xl)){
 
-        }else if (__typeis_uint(xl)){
+                __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
 
-            __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
+            }else if (__typeis_uint(xl)){
 
-        }else if (__typeis_float(xl)){
+                __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __xl2i(xl));
 
-            __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl2f(xl));
+            }else if (__typeis_float(xl)){
 
-        }else if (__typeis_str(xl)){
+                __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl2f(xl));
 
-            __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __xl2o(xl));
+            }else if (__typeis_str(xl)){
 
-        }else if (__typeis_lkv(xl)){
+                __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __xl2o(xl));
 
-            __xl_printf(xl, (const char*)parser.key, depth + 1);
+            }else if (__typeis_xlkv(xl)){
 
-        }else if (__typeis_list(xl)){
+                __xl_printf(xl, (const char*)parser.key, depth + 1);
 
-            __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
+            }else if (__typeis_list(xl)){
 
-            xlkv_t plist = xl_parser(xl);
+                __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
 
-            while ((xl = xl_list_next(&plist)) != NULL)
-            {
-                if (__typeis_int(xl)){
+                xlkv_t plist = xl_parser(xl);
 
-                    __xlogi("    %*d,\n", depth * 4, __xl2i(xl));
+                while ((xl = xl_list_next(&plist)) != NULL)
+                {
+                    if (__typeis_int(xl)){
 
-                }else if (__typeis_lkv(xl)){
-                    
-                    __xl_printf(xl, "", depth + 1);
+                        __xlogi("    %*d,\n", depth * 4, __xl2i(xl));
+
+                    }else if (__typeis_xlkv(xl)){
+                        
+                        __xl_printf(xl, "", depth + 1);
+                    }
                 }
+
+                __xlogi("  %*s},\n", depth * 4, "");
+
+            }else {
+                __xloge("__xl_printf >>>>--------> type (0x%X)\n", xl->h[0]);
             }
-
-            __xlogi("  %*s},\n", depth * 4, "");
-
-        }else {
-            __xloge("__xl_printf >>>>--------> type (0x%X)\n", xl->h[0]);
         }
+
+    }else if (__typeis_list(xl)){
+
+        __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
+
+        xlkv_t plist = xl_parser(xl);
+
+        while ((xl = xl_list_next(&plist)) != NULL)
+        {
+            if (__typeis_int(xl)){
+
+                __xlogi("    %*d,\n", depth * 4, __xl2i(xl));
+
+            }else if (__typeis_xlkv(xl)){
+                
+                __xl_printf(xl, "", depth + 1);
+            }
+        }
+
+        __xlogi("  %*s},\n", depth * 4, "");
+
     }
 
     if (depth == 1){
