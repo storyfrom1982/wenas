@@ -327,7 +327,7 @@ static void hello(xpeer_ctx_ptr pctx)
     xpeer_ptr peer = pctx->server;
     xpeer_task_ptr task = add_task(pctx, res_login);
     xlkv_t xl = xl_maker(1024);
-    xl_add_word(&xl, "api", "commander_login");
+    xl_add_word(&xl, "api", "hello");
     xl_add_number(&xl, "tid", task->node.index);
     xl_add_word(&xl, "password", "123456");
     xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);
@@ -341,7 +341,7 @@ static void bye(xpeer_ctx_ptr pctx)
 
     xpeer_task_ptr task = add_task(pctx, res_login);
     xlkv_t xl = xl_maker(1024);
-    xl_add_word(&xl, "api", "commander_logout");
+    xl_add_word(&xl, "api", "bye");
     xl_add_number(&xl, "tid", task->node.index);
     xl_add_word(&xl, "password", "123456");
     xmsger_send_message(peer->msger, peer->channel, xl.head, xl.wpos);

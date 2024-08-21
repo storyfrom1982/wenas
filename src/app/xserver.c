@@ -763,7 +763,7 @@ static void hello(xpeer_ctx_ptr pctx)
     xl_add_number(&res, "tid", tid);
     const char *password = xl_find_word(&pctx->xlparser, "password");
     if (mcompare(pctx->server->password, password, slength(password)) == 0){
-        pctx->server->commander = pctx->channel;
+        pctx->server->commander = pctx;
         xl_add_number(&res, "code", 200);
     }else {
         xl_add_number(&res, "code", 400);
