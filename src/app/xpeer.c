@@ -290,7 +290,7 @@ static void chord_list(xpeer_ctx_ptr pctx)
     xl_add_word(&maker, "api", "command");
     xl_add_word(&maker, "cmd", "chord_list");
     xl_add_number(&maker, "tid", task->node.index);
-    xmsger_send_message(peer->msger, peer->channel, maker.head, maker.wpos);
+    xmsger_send_message(peer->msger, pctx->channel, maker.head, maker.wpos);
     __xlogd("chord_list ----------------------- exit\n");
 }
 
@@ -497,7 +497,7 @@ int main(int argc, char *argv[])
     __xbreak(server->listen_pid == NULL);
 
     struct __xipaddr addr;
-    const char *hosts[] = {"47.99.146.226", "47.92.77.19", "120.78.155.213", "18.138.128.58"};
+    const char *hosts[] = {"47.99.146.226", "120.78.155.213", "18.138.128.58", "47.92.77.19"};
     for (int i = 0; i < 4; ++i){
         __xapi->udp_host_to_ipaddr(hosts[i], 9256, &addr);
         server->pctx_list[i] = xpeer_ctx_create(server, NULL);

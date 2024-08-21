@@ -700,7 +700,7 @@ static void command(xpeer_ctx_ptr pctx)
             xl_list_save_kv(&res, kvpos);
             node = node->predecessor;
         }
-        
+
         uint64_t kvpos = xl_list_hold_kv(&res);
         xl_add_word(&res, "ip", pctx->server->ip);
         xl_add_number(&res, "port", pctx->server->port);
@@ -765,7 +765,7 @@ static void hello(xpeer_ctx_ptr pctx)
     uint64_t tid = xl_find_number(&pctx->xlparser, "tid");
     xlkv_t res = xl_maker(1024);
     xl_add_word(&res, "api", "res");
-    xl_add_word(&res, "req", "commander_login");
+    xl_add_word(&res, "req", "hello");
     xl_add_number(&res, "tid", tid);
     const char *password = xl_find_word(&pctx->xlparser, "password");
     if (mcompare(pctx->server->password, password, slength(password)) == 0){
@@ -782,7 +782,7 @@ static void bye(xpeer_ctx_ptr pctx)
     uint64_t tid = xl_find_number(&pctx->xlparser, "tid");
     xlkv_t res = xl_maker(1024);
     xl_add_word(&res, "api", "res");
-    xl_add_word(&res, "req", "commander_logout");
+    xl_add_word(&res, "req", "bye");
     xl_add_number(&res, "tid", tid);
     const char *password = xl_find_word(&pctx->xlparser, "password");
     if (mcompare(pctx->server->password, password, slength(password)) == 0){
@@ -808,7 +808,7 @@ static void* task_loop(void *ptr)
     while (xpipe_read(server->task_pipe, &mctx, sizeof(xmsg_ctx_t)) == sizeof(xmsg_ctx_t))
     {
         pctx = mctx.pctx;
-        // xl_printf(mctx.msg);
+        xl_printf(mctx.msg);
         pctx->xlparser = xl_parser((xl_ptr)mctx.msg);
         const char *api = xl_find_word(&pctx->xlparser, "api");
         api_task_enter enter = search_table_find(&pctx->server->api_tabel, api);
