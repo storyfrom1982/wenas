@@ -828,11 +828,13 @@ int main(int argc, char *argv[])
 
     xserver_ptr server = (xserver_ptr)calloc(1, sizeof(struct xserver));
     mcopy(server->password, "123456", slength("123456"));
-    mcopy(server->ip, argv[1], slength(argv[1]));
-    server->port = atoi(argv[2]);
-    server->ring = node_create(atoi(argv[3]));
 
-    __xlogi("ip=%s port=%u key=%u\n", server->ip, server->port, server->ring->key);
+	__xlogd("argc=%d\n", argc);
+
+//    mcopy(server->ip, argv[1], slength(argv[1]));
+//    server->port = atoi(argv[2]);
+//    server->ring = node_create(atoi(argv[3]));
+//    __xlogi("ip=%s port=%u key=%u\n", server->ip, server->port, server->ring->key);
 
     __set_true(server->runnig);
     g_server = server;
