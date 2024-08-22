@@ -1,0 +1,14 @@
+[Unit]
+Description=xltp daemon program
+
+[Service]
+Type=simple
+ExecStart=/root/Kangzixin/build/xserver
+WorkingDirectory=/root/Kangzixin/tmp
+TimeoutStopSec=1
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

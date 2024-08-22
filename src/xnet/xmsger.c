@@ -1251,13 +1251,13 @@ static void* main_loop(void *ptr)
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
             if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
+                // __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
                 if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
                     __xapi->mutex_notify(msger->mtx);
                     __xapi->mutex_timedwait(msger->mtx, timer);
                     timer = 10000000000UL; // 10 秒
                 }
-                __xlogd("main_loop >>>>-----> start working\n");
+                // __xlogd("main_loop >>>>-----> start working\n");
                 __xapi->mutex_unlock(msger->mtx);
             }
         }

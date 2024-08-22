@@ -301,7 +301,10 @@ static bool __ex_make_path(const char* path)
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <sys/types.h>
 #include <arpa/inet.h>
+#include <netdb.h> //struct hostent
+
 
 static int udp_open()
 {
@@ -362,10 +365,39 @@ static int udp_listen(int sock)
     return select(sock + 1, &fds, NULL, NULL, NULL);
 }
 
+bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
+
+    int status;
+    struct addrinfo hints, *res, *p;
+    mclear(&hints, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    __xcheck((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0);
+
+    if (res) {
+        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+        inet_ntop(res->ai_family, &(ipv4->sin_addr), ip_str, ip_str_len);
+    }
+
+    freeaddrinfo(res);
+
+XClean:
+
+    return false;
+}
+
+bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
+    struct hostent *host_info = gethostbyname(name);
+    if (host_info != NULL && host_info->h_addr_list[0] != NULL) {
+        return inet_ntop(AF_INET, host_info->h_addr_list[0], ip_str, ip_str_len) != NULL;
+    }
+    return false;
+}
+
 // #define INET_ADDRSTRLEN 16
 // #define INET6_ADDRSTRLEN 46
 bool udp_ipaddr_to_host(const __xipaddr_ptr addr, char* ip_str, size_t ip_str_len, uint16_t* port) {
-    // 将网络字节序的端口号转换为主机字节序
     *port = ntohs(addr->port);
     return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip_str, ip_str_len) != NULL;
 }
@@ -478,6 +510,8 @@ struct __xapi_enter posix_api_enter = {
     .udp_listen = udp_listen,
     .udp_host_to_ipaddr = udp_host_to_ipaddr,
     .udp_ipaddr_to_host = udp_ipaddr_to_host,
+    .udp_hostbyname = udp_hostbyname,
+    .udp_addrinfo = udp_addrinfo,
 
     .make_path = __ex_make_path,
     .check_path = __ex_check_path,

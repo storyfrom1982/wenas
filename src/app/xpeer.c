@@ -58,6 +58,8 @@ typedef struct xpeer{
     uint64_t task_count;
     index_table_t task_table;
     search_table_t api_tabel;
+
+    char password[16];
     // 通信录，好友ID列表，一个好友ID可以对应多个设备地址，但是只与主设备建立一个 channel，设备地址是动态更新的，不需要存盘。好友列表需要写数据库
     // 设备列表，用户自己的所有设备，每个设备建立一个 channel，channel 的消息实时共享，设备地址是动态更新的，设备 ID 需要存盘
     // 任务树，每个请求（发起的请求或接收的请求）都是一个任务，每个任务都有开始，执行和结束。请求是任务的开始，之后可能有多次消息传递，数据传输完成，双方各自结束任务，释放资源。
@@ -285,11 +287,12 @@ static void chord_list(xpeer_ctx_ptr pctx)
 {
     __xlogd("chord_list ----------------------- enter\n");
     xpeer_task_ptr task = add_task(pctx, res_chord_list);
-    xlkv_t maker = xl_maker(1024);
-    xl_add_word(&maker, "api", "command");
-    xl_add_word(&maker, "cmd", "chord_list");
-    xl_add_number(&maker, "tid", task->node.index);
-    xmsger_send_message(pctx->server->msger, pctx->channel, maker.head, maker.wpos);
+    xlkv_t req = xl_maker(1024);
+    xl_add_word(&req, "api", "command");
+    xl_add_word(&req, "cmd", "chord_list");
+    xl_add_number(&req, "tid", task->node.index);
+    xl_add_word(&req, "password", pctx->server->password);
+    xmsger_send_message(pctx->server->msger, pctx->channel, req.head, req.wpos);
     __xlogd("chord_list ----------------------- exit\n");
 }
 
@@ -307,6 +310,7 @@ static void chord_invite(xpeer_ctx_ptr pctx)
     xl_add_word(&req, "api", "command");
     xl_add_word(&req, "cmd", "chord_invite");
     xl_add_number(&req, "tid", task->node.index);
+    xl_add_word(&req, "password", pctx->server->password);
     xl_add_list(&req, "nodes", pctx->server->chord_list);
     xmsger_send_message(pctx->server->msger, pctx->channel, req.head, req.wpos);
     __xlogd("chord_invite ----------------------- exit\n");
@@ -316,31 +320,6 @@ static void res_login(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
     xl_printf(pctx->xlparser.head);
     remove_task(task);
-}
-
-static void hello(xpeer_ctx_ptr pctx)
-{
-    __xlogd("hello ----------------------- enter\n");
-    xpeer_ptr peer = pctx->server;
-    xpeer_task_ptr task = add_task(pctx, res_login);
-    xlkv_t xl = xl_maker(1024);
-    xl_add_word(&xl, "api", "hello");
-    xl_add_number(&xl, "tid", task->node.index);
-    xl_add_word(&xl, "password", "123456");
-    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
-    __xlogd("hello ----------------------- exit\n");
-}
-
-static void bye(xpeer_ctx_ptr pctx)
-{
-    __xlogd("bye ----------------------- enter\n");
-    xpeer_task_ptr task = add_task(pctx, res_login);
-    xlkv_t xl = xl_maker(1024);
-    xl_add_word(&xl, "api", "bye");
-    xl_add_number(&xl, "tid", task->node.index);
-    xl_add_word(&xl, "password", "123456");
-    xmsger_send_message(pctx->server->msger, pctx->channel, xl.head, xl.wpos);
-    __xlogd("bye ----------------------- exit\n");
 }
 
 static void req_login(xpeer_ctx_ptr pctx)
@@ -425,8 +404,9 @@ extern void sigint_setup(void (*handler)());
 #include <arpa/inet.h>
 int main(int argc, char *argv[])
 {
-    char *host = NULL;
-    uint16_t port = 0;
+    const char *hostname = "pindanci.com";
+    char hostip[16] = {0};
+    uint16_t port = 9256;
 
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
@@ -437,6 +417,7 @@ int main(int argc, char *argv[])
     g_server = server;
     sigint_setup(__sigint_handler);
 
+    mcopy(server->password, "123456", slength("123456"));
     uuid_generate(server->uuid, "PEER1");
     server->key = xxhash64(server->uuid, 32, 0);
 
@@ -448,17 +429,6 @@ int main(int argc, char *argv[])
     search_table_add(&server->api_tabel, "logout", req_logout);
     search_table_add(&server->api_tabel, "res", api_response);
     search_table_add(&server->api_tabel, "timeout", api_timeout);
-
-    if (argc == 3){
-        host = strdup(argv[1]);
-        port = atoi(argv[2]);
-    }
-
-    // const char *host = "127.0.0.1";
-    // const char *host = "47.99.146.226";
-    // const char *host = "18.138.128.58";
-    // uint16_t port = atoi(argv[1]);
-    // uint16_t port = 9256;
 
     xmsgercb_ptr listener = &server->listener;
 
@@ -491,13 +461,14 @@ int main(int argc, char *argv[])
     server->listen_pid = __xapi->process_create(listen_loop, server);
     __xbreak(server->listen_pid == NULL);
 
+    // __xapi->udp_addrinfo(hostip, 16, hostname);
+    __xapi->udp_hostbyname(hostip, 16, hostname);
+    __xlogd("host ip = %s\n", hostip);
     struct __xipaddr addr;
-    const char *hosts[] = {"47.99.146.226", "120.78.155.213", "18.138.128.58", "47.92.77.19"};
-    for (int i = 0; i < 4; ++i){
-        __xapi->udp_host_to_ipaddr(hosts[i], 9256, &addr);
-        server->pctx_list[i] = xpeer_ctx_create(server, NULL);
-        xmsger_connect(server->msger, &addr, server->pctx_list[i]);
-    }
+    // __xapi->udp_host_to_ipaddr("192.168.43.173", 9256, &addr);
+    __xapi->udp_host_to_ipaddr(hostip, 9256, &addr);
+    server->pctx_list[0] = xpeer_ctx_create(server, NULL);
+    xmsger_connect(server->msger, &addr, server->pctx_list[0]);
 
     server->cid = 0;
     server->channel = server->pctx_list[server->cid]->channel;
@@ -522,15 +493,9 @@ int main(int argc, char *argv[])
 
         if (strcmp(command, "login") == 0) {
 
-            for (int i = 0; i < 4; ++i){
-                hello(server->pctx_list[i]);
-            }
 
         } else if (strcmp(command, "logout") == 0) {
 
-            for (int i = 0; i < 4; ++i){
-                bye(server->pctx_list[i]);
-            }
 
         } else if (strcmp(command, "list") == 0) {
             
@@ -583,7 +548,7 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             struct __xipaddr addr;
-            __xapi->udp_host_to_ipaddr(hosts[server->cid], 9256, &addr);
+            __xapi->udp_host_to_ipaddr("192.168.43.173", 9256, &addr);
             server->pctx_list[server->cid] = xpeer_ctx_create(server, NULL);
             xmsger_connect(server->msger, &addr, server->pctx_list[server->cid]);
 
@@ -631,10 +596,6 @@ int main(int argc, char *argv[])
     }
     
     free(server);
-
-    if (host){
-        free(host);
-    }
 
     xlog_recorder_close();
 
