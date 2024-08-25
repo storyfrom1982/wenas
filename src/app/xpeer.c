@@ -90,7 +90,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmes
     xlinekv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "timeout");
     xl_add_word(&xl, "ip", ip);
-    xl_add_num(&xl, "port", port);
+    xl_add_uint(&xl, "port", port);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 5\n");
     xmsg_ctx_t mctx;
     mctx.pctx = pctx;
@@ -260,8 +260,8 @@ static void req_forward(xpeer_ctx_ptr pctx, uint64_t key)
     xpeer_task_ptr task = add_task(pctx, res_forward);
     struct xlinekv maker = xl_maker(1024);
     xl_add_word(&maker, "api", "forward");
-    xl_add_num(&maker, "tid", task->node.index);
-    xl_add_num(&maker, "key", key);
+    xl_add_uint(&maker, "tid", task->node.index);
+    xl_add_uint(&maker, "key", key);
     xl_add_word(&maker, "text", "Hello World");
     xmsger_send_message(peer->msger, peer->channel, maker.body, maker.wpos);
     __xlogd("req_messaging ----------------------- exit\n");
@@ -290,7 +290,7 @@ static void chord_list(xpeer_ctx_ptr pctx)
     xlinekv_t req = xl_maker(1024);
     xl_add_word(&req, "api", "command");
     xl_add_word(&req, "cmd", "chord_list");
-    xl_add_num(&req, "tid", task->node.index);
+    xl_add_uint(&req, "tid", task->node.index);
     xl_add_word(&req, "password", pctx->server->password);
     xmsger_send_message(pctx->server->msger, pctx->channel, req.body, req.wpos);
     __xlogd("chord_list ----------------------- exit\n");
@@ -309,7 +309,7 @@ static void chord_invite(xpeer_ctx_ptr pctx)
     xlinekv_t req = xl_maker(1024);
     xl_add_word(&req, "api", "command");
     xl_add_word(&req, "cmd", "chord_invite");
-    xl_add_num(&req, "tid", task->node.index);
+    xl_add_uint(&req, "tid", task->node.index);
     xl_add_word(&req, "password", pctx->server->password);
     xl_add_list(&req, "nodes", pctx->server->chord_list);
     xmsger_send_message(pctx->server->msger, pctx->channel, req.body, req.wpos);
@@ -330,8 +330,8 @@ static void req_login(xpeer_ctx_ptr pctx)
     xpeer_task_ptr task = add_task(pctx, res_login);
     xlinekv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "login");
-    xl_add_num(&xl, "tid", task->node.index);
-    xl_add_num(&xl, "key", peer->key);
+    xl_add_uint(&xl, "tid", task->node.index);
+    xl_add_uint(&xl, "key", peer->key);
     xl_add_bin(&xl, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
     xmsger_send_message(peer->msger, peer->channel, xl.body, xl.wpos);
     __xlogd("req_login ----------------------- exit\n");
@@ -349,8 +349,8 @@ static void req_logout(xpeer_ctx_ptr pctx)
     xpeer_task_ptr task = add_task(pctx, res_logout);
     xlinekv_t xl = xl_maker(1024);
     xl_add_word(&xl, "api", "logout");
-    xl_add_num(&xl, "tid", task->node.index);
-    xl_add_num(&xl, "key", peer->key);
+    xl_add_uint(&xl, "tid", task->node.index);
+    xl_add_uint(&xl, "key", peer->key);
     xl_add_bin(&xl, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
     xmsger_send_message(peer->msger, peer->channel, xl.body, xl.wpos);
 }
@@ -361,7 +361,7 @@ static void api_timeout(xpeer_ctx_ptr pctx)
     if (pctx->reconnected < 3){
         pctx->reconnected++;
         char *ip = xl_find_word(&pctx->xlparser, "ip");
-        uint16_t port = xl_find_num(&pctx->xlparser, "port");
+        uint16_t port = xl_find_uint(&pctx->xlparser, "port");
         struct __xipaddr addr;
         __xapi->udp_host_to_ipaddr(ip, port, &addr);
         xmsger_connect(pctx->server->msger, &addr, pctx);
@@ -372,7 +372,7 @@ static void api_timeout(xpeer_ctx_ptr pctx)
 static void api_response(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_response enter\n");
-    uint64_t tid = xl_find_num(&pctx->xlparser, "tid");
+    uint64_t tid = xl_find_uint(&pctx->xlparser, "tid");
     __xlogd("api_response tid=%lu\n", tid);
     xpeer_task_ptr task = (xpeer_task_ptr )index_table_find(&pctx->server->task_table, tid);
     __xlogd("api_response 1\n");

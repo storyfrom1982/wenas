@@ -117,6 +117,8 @@ static inline double __xl_b2float(xl_ptr l)
 #define __xl_sizeof_line(l)         __xl_typeis_obj(l) ? __xl_b2u((l)) + XLINE_SIZE : XLINE_SIZE
 
 
+#define XLINEKV_SIZE                (1024 * 8)
+
 typedef struct xlinekv {
     uint64_t wpos, rpos, size;
     uint8_t *key;
@@ -125,9 +127,6 @@ typedef struct xlinekv {
 }xlinekv_t;
 
 typedef xlinekv_t* xlinekv_ptr;
-
-
-#define XLKV_DEFAULT_SIZE       (1024 * 8)
 
 
 static inline xlinekv_ptr xl_create(uint64_t size)
@@ -144,15 +143,15 @@ static inline xlinekv_ptr xl_create(uint64_t size)
 
 static inline xlinekv_ptr xl_maker()
 {
-    return xl_create(XLKV_DEFAULT_SIZE);    
+    return xl_create(XLINEKV_SIZE);
 }
 
-static inline void xl_final(xlinekv_ptr lkv)
+static inline void xl_update(xlinekv_ptr lkv)
 {
-    return lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
 }
 
-static inline void xmsg_free(xlinekv_ptr lkv)
+static inline void xl_free(xlinekv_ptr lkv)
 {
     if (lkv){
         free(lkv);
@@ -279,7 +278,7 @@ XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_num(xlinekv_ptr lkv, const char *key, uint64_t u64)
+static inline uint64_t xl_add_uint(xlinekv_ptr lkv, const char *key, uint64_t u64)
 {
     uint64_t keylen = slength(key);
     __xcheck((int64_t)(lkv->size - lkv->wpos) < (keylen + 2 + XLINE_SIZE));
@@ -372,7 +371,7 @@ static inline int64_t xl_find_int(xlinekv_ptr lkv, const char *key)
     return EENDED;
 }
 
-static inline uint64_t xl_find_num(xlinekv_ptr lkv, const char *key)
+static inline uint64_t xl_find_uint(xlinekv_ptr lkv, const char *key)
 {
     xline_ptr val = xl_find(lkv, key);
     if (val){
@@ -440,108 +439,97 @@ static xlinekv_t xl_parser(xline_ptr xl)
     return parser;
 }
 
-static inline void __xl_printf(xline_ptr xl, const char *key, int depth)
+static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
 {
     xlinekv_t parser = xl_parser(xl);
 
     int len = slength(key);
 
     if (depth == 1){
-        __xlogi("%*s: {\n", (depth) * 4, key);
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth) * 4, key);
     }else {
         if (len == 0){
-            __xlogi("%*s{\n", (depth) * 4, "");
+            *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s{\n", (depth) * 4, "");
         }else {
-            __xlogi("%*s: {\n", (depth) * 4, key);
+            *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth) * 4, key);
         }
     }
 
     if (__xl_typeis_xlkv(xl)){
 
-        while ((xl = xl_next(&parser)) != NULL)
-        {
-            if (__xl_typeis_int(xl)){
+        while ((xl = xl_next(&parser)) != NULL){
 
-                __xlogi("%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl_b2i(xl));
+            if (__xl_typeis_int(xl)){
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl_b2i(xl));
 
             }else if (__xl_typeis_uint(xl)){
-
-                __xlogi("%*s: %lu,\n", (depth + 1) * 4, parser.key, __xl_b2i(xl));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %lu,\n", (depth + 1) * 4, parser.key, __xl_b2i(xl));
 
             }else if (__xl_typeis_float(xl)){
-
-                __xlogi("%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl_b2f(xl));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl_b2f(xl));
 
             }else if (__xl_typeis_str(xl)){
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_b2o(xl));
 
-                __xlogi("%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_b2o(xl));
+            }else if (__xl_typeis_bin(xl)){
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, "__xl_typeis_bin");
 
             }else if (__xl_typeis_xlkv(xl)){
-
-                __xl_printf(xl, (const char*)parser.key, depth + 1);
+                xl_format(xl, (const char*)parser.key, depth + 1, buf, pos, size);
 
             }else if (__xl_typeis_list(xl)){
 
-                __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
+                xlinekv_t xllist = xl_parser(xl);
 
-                xlinekv_t plist = xl_parser(xl);
-
-                while ((xl = xl_list_next(&plist)) != NULL)
-                {
+                while ((xl = xl_list_next(&xllist)) != NULL){
                     if (__xl_typeis_int(xl)){
-
-                        __xlogi("    %*d,\n", depth * 4, __xl_b2i(xl));
-
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*d,\n", depth * 4, __xl_b2i(xl));
                     }else if (__xl_typeis_xlkv(xl)){
-                        
-                        __xl_printf(xl, "", depth + 1);
+                        xl_format(xl, "", depth + 1, buf, pos, size);
                     }
                 }
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s},\n", depth * 4, "");
 
-                __xlogi("  %*s},\n", depth * 4, "");
-
-            }else {
-                __xloge("__xl_printf >>>>--------> type (0x%X)\n", xl->b[0]);
             }
         }
 
     }else if (__xl_typeis_list(xl)){
 
-        __xlogi("%*s: {\n", (depth + 1) * 4, parser.key);
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
+        xlinekv_t xllist = xl_parser(xl);
 
-        xlinekv_t plist = xl_parser(xl);
-
-        while ((xl = xl_list_next(&plist)) != NULL)
-        {
+        while ((xl = xl_list_next(&xllist)) != NULL){
             if (__xl_typeis_int(xl)){
-
-                __xlogi("    %*d,\n", depth * 4, __xl_b2i(xl));
-
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*d,\n", depth * 4, __xl_b2i(xl));
             }else if (__xl_typeis_xlkv(xl)){
-                
-                __xl_printf(xl, "", depth + 1);
+                xl_format(xl, "", depth + 1, buf, pos, size);
             }
         }
-
-        __xlogi("  %*s},\n", depth * 4, "");
-
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s},\n", depth * 4, "");
     }
 
     if (depth == 1){
-        __xlogi("%*s}\n", (depth - 1) * 4, "");
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s}\n", (depth - 1) * 4, "");
     }else {
         if (len == 0){
-            __xlogi("%*s},\n", (depth) * 4, "");
+            *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s},\n", (depth) * 4, "");
         }else {
-            __xlogi("%*s},\n", (depth) * 4, "");
+            *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s},\n", (depth) * 4, "");
         }   
     }
 }
 
 
-static inline void xl_printf(void *xptr)
-{
-    __xl_printf((xline_ptr)xptr, "root", 1);
-}
+#define xl_printf(xl) \
+    do { \
+        char buf[XLINEKV_SIZE] = {0}; \
+        uint64_t pos = 0; \
+        xl_format((xl), "root", 1, buf, &pos, XLINEKV_SIZE); \
+        __xlogd("len=%lu\n%s\n", pos, buf); \
+    }while(0)
+
+
+
 
 #endif //__XLINE_H__

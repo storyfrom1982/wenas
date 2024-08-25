@@ -368,8 +368,7 @@ static int udp_listen(int sock)
 bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
 
     int status;
-    struct addrinfo hints, *res, *p;
-    mclear(&hints, sizeof hints);
+    struct addrinfo hints = {0}, *res, *p;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
@@ -377,12 +376,18 @@ bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
 
     if (res) {
         struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
-        inet_ntop(res->ai_family, &(ipv4->sin_addr), ip_str, ip_str_len);
+        __xcheck(inet_ntop(res->ai_family, &(ipv4->sin_addr), ip_str, ip_str_len) != NULL);
     }
 
     freeaddrinfo(res);
 
+    return true;
+
 XClean:
+
+    if (res){
+        freeaddrinfo(res);
+    }
 
     return false;
 }
@@ -487,6 +492,7 @@ struct __xapi_enter posix_api_enter = {
     .time = __unix_time,
     .clock = __unix_clock,
     .strftime = __unix_strftime,
+    .snprintf = snprintf,
 
     .process_create = __posix_thread_create,
     .process_free = __posix_thread_free,

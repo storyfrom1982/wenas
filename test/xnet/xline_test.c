@@ -85,19 +85,20 @@ static void test_byte_order()
 
 static void build_msg(xlinekv_ptr lkv)
 {
-    xl_add_word(lkv, "msg", "REQ");
-    xl_add_word(lkv, "api", "PUT");
+    xl_add_word(lkv, "api", "cmd");
+    xl_add_word(lkv, "cmd", "join");
+    xl_add_bin(lkv, "bin", "bin", slength("bin"));
     uint64_t ipos = xl_hold_kv(lkv, "int");
     xl_add_int(lkv, "int8", 8);
     xl_add_int(lkv, "int16", 16);
-    xl_add_num(lkv, "uint32", 32);
-    xl_add_num(lkv, "uint64", 64);
+    xl_add_uint(lkv, "uint32", 32);
+    xl_add_uint(lkv, "uint64", 64);
     uint64_t fpos = xl_hold_kv(lkv, "float");
     xl_add_float(lkv, "real32", 32.3232);
     xl_add_float(lkv, "real64", 64.6464);
     xl_save_kv(lkv, fpos);
     xl_save_kv(lkv, ipos);
-    xl_add_num(lkv, "uint64", 64);
+    xl_add_uint(lkv, "uint64", 64);
     xl_add_float(lkv, "real64", 64.6464);
 
     uint64_t lpos = xl_hold_list(lkv, "list");
@@ -121,6 +122,8 @@ static void build_msg(xlinekv_ptr lkv)
 
 int main(int argc, char *argv[])
 {
+    xlog_recorder_open("./tmp/xpeer/log", NULL);
+
     // test_byte_order();
 
     // __xlogd("strlen=%d\n", strlen("1\n"));
@@ -132,7 +135,7 @@ int main(int argc, char *argv[])
 
     xlinekv_ptr lkv = xl_maker();
     build_msg(lkv);
-    xl_final(lkv);
+    xl_update(lkv);
 
     xlinekv_t parser = xl_parser(&lkv->line);
 
@@ -141,9 +144,11 @@ int main(int argc, char *argv[])
 
     xl_add_obj(lkv, "int_kv", int_kv);
     xl_add_obj(lkv, "list_kv", list_kv);
-    xl_final(lkv);
+    xl_update(lkv);
 
     xl_printf(&lkv->line);
+
+    xl_free(lkv);
 
     return 0;
 }
