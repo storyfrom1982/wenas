@@ -1080,13 +1080,13 @@ static void* main_loop(void *ptr)
 
                 if (msg->type == XMSG_PACK_PING){
 
-                    xlkv_t params = xl_parser(msg->data);
-                    xl_ptr addr = xl_find(&params, "addr");
+                    xlinekv_t params = xl_parser(msg->data);
+                    xline_ptr addr = xl_find(&params, "addr");
                     void *ctx = xl_find_ptr(&params, "ctx");
                     xmessage_ptr resendmsg = xl_find_ptr(&params, "resendmsg");
-                    free(params.head);
+                    free(params.body);
 
-                    channel = xchannel_create(msger, (__xipaddr_ptr)(__xl2o(addr)), PACK_SERIAL_RANGE);
+                    channel = xchannel_create(msger, (__xipaddr_ptr)(__xl_b2o(addr)), PACK_SERIAL_RANGE);
                     __xbreak(channel == NULL);
                     channel->keepalive = true;
                     __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
@@ -1365,13 +1365,13 @@ bool xmsger_connect(xmsger_ptr msger, __xipaddr_ptr addr, void *peerctx)
 {
     __xlogd("xmsger_connect enter\n");
 
-    xlkv_t params = xl_maker(1024);
-    __xcheck(params.head == NULL);
+    xlinekv_t params = xl_maker(1024);
+    __xcheck(params.body == NULL);
 
     xl_add_bin(&params, "addr", addr, sizeof(struct __xipaddr));
     xl_add_ptr(&params, "ctx", peerctx);
 
-    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.head, params.wpos);
+    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.body, params.wpos);
     __xcheck(msg == NULL);
     
     __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
@@ -1400,14 +1400,14 @@ extern bool xmsger_reconnect(xmsger_ptr msger, __xipaddr_ptr addr, void *peerctx
 {
     __xlogd("xmsger_connect enter\n");
 
-    xlkv_t params = xl_maker(1024);
-    __xcheck(params.head == NULL);
+    xlinekv_t params = xl_maker(1024);
+    __xcheck(params.body == NULL);
 
     xl_add_bin(&params, "addr", addr, sizeof(struct __xipaddr));
     xl_add_ptr(&params, "ctx", peerctx);
     xl_add_ptr(&params, "resendmsg", resendmsg);
 
-    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.head, params.wpos);
+    xmessage_ptr msg = new_message(NULL, XMSG_PACK_PING, 0, params.body, params.wpos);
     __xcheck(msg == NULL);
     
     __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
@@ -1426,8 +1426,8 @@ XClean:
 
     __xlogd("xmsger_connect failed\n");
 
-    if (params.head){
-        free(params.head);
+    if (params.body){
+        free(params.body);
     }
 
     if (msg){

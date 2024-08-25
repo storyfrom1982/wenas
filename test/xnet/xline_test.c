@@ -83,39 +83,39 @@ static void test_byte_order()
 }
 
 
-static void build_msg(xline_ptr maker)
+static void build_msg(xlinekv_ptr lkv)
 {
-    xline_add_word(maker, "msg", "REQ");
-    xline_add_word(maker, "api", "PUT");
-    uint64_t ipos = xline_hold_tree(maker, "int");
-    xline_add_integer(maker, "int8", 8);
-    xline_add_integer(maker, "int16", 16);
-    xline_add_unsigned(maker, "uint32", 32);
-    xline_add_unsigned(maker, "uint64", 64);
-    uint64_t fpos = xline_hold_tree(maker, "float");
-    xline_add_real(maker, "real32", 32.3232);
-    xline_add_real(maker, "real64", 64.6464);
-    xline_save_tree(maker, fpos);
-    xline_save_tree(maker, ipos);
-    xline_add_unsigned(maker, "uint64", 64);
-    xline_add_real(maker, "real64", 64.6464);
+    xl_add_word(lkv, "msg", "REQ");
+    xl_add_word(lkv, "api", "PUT");
+    uint64_t ipos = xl_hold_kv(lkv, "int");
+    xl_add_int(lkv, "int8", 8);
+    xl_add_int(lkv, "int16", 16);
+    xl_add_num(lkv, "uint32", 32);
+    xl_add_num(lkv, "uint64", 64);
+    uint64_t fpos = xl_hold_kv(lkv, "float");
+    xl_add_float(lkv, "real32", 32.3232);
+    xl_add_float(lkv, "real64", 64.6464);
+    xl_save_kv(lkv, fpos);
+    xl_save_kv(lkv, ipos);
+    xl_add_num(lkv, "uint64", 64);
+    xl_add_float(lkv, "real64", 64.6464);
 
-    uint64_t lpos = xline_hold_list(maker, "list");
+    uint64_t lpos = xl_hold_list(lkv, "list");
     for (int i = 0; i < 10; ++i){
-        struct xbyte line = __n2b(i);
-        xline_list_append(maker, &line);
+        struct xline line = __xl_i2b(i);
+        xl_list_append(lkv, &line);
     }
-    xline_save_list(maker, lpos);
+    xl_save_list(lkv, lpos);
 
-    lpos = xline_hold_list(maker, "list-tree");
+    lpos = xl_hold_list(lkv, "list-tree");
     for (int i = 0; i < 10; ++i){
-        ipos = xline_list_hold_tree(maker);
-        xline_add_word(maker, "key", "tree");
-        xline_add_integer(maker, "real32", i);
-        xline_add_real(maker, "real64", 64.6464 * i);
-        xline_list_save_tree(maker, ipos);
+        ipos = xl_list_hold_kv(lkv);
+        xl_add_word(lkv, "key", "tree");
+        xl_add_int(lkv, "real32", i);
+        xl_add_float(lkv, "real64", 64.6464 * i);
+        xl_list_save_kv(lkv, ipos);
     }
-    xline_save_list(maker, lpos);
+    xl_save_list(lkv, lpos);
     
 }
 
@@ -130,10 +130,20 @@ int main(int argc, char *argv[])
     // memcpy(dst, src, 11);
     // __xlogd("memcpy dst = %s\n", dst);
 
-    xline_t xline = xline_maker(0);
-    build_msg(&xline);
+    xlinekv_ptr lkv = xl_maker();
+    build_msg(lkv);
+    xl_final(lkv);
 
-    xline_printf(xline.byte);
+    xlinekv_t parser = xl_parser(&lkv->line);
+
+    xline_ptr int_kv = xl_find(&parser, "int");
+    xline_ptr list_kv = xl_find(&parser, "list-tree");
+
+    xl_add_obj(lkv, "int_kv", int_kv);
+    xl_add_obj(lkv, "list_kv", list_kv);
+    xl_final(lkv);
+
+    xl_printf(&lkv->line);
 
     return 0;
 }
