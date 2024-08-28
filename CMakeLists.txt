@@ -61,7 +61,7 @@ set(kzx_sources
     src/xapi/xlog.c
     src/xapi/xapi.c
     src/xnet/xmalloc.c
-    # src/xnet/xmsger.c
+    src/xnet/xmsger.c
     src/xnet/xtable.c
     src/xlib/avlmini.c
     src/xlib/xxhash.c
@@ -130,10 +130,10 @@ function(build_library LIBRARY_NAME LIBRARY_SOURCES)
 endfunction(build_library)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
-    # build_executable(xltpd src/app/xserver.c)
-    # build_executable(xpeer src/app/xpeer.c)
+    build_executable(xltpd src/app/xserver.c)
+    build_executable(xpeer src/app/xpeer.c)
     # build_executable(xserver test/xnet/dht_test.c)
-    build_executable(xserver test/xnet/xline_test.c)
+    # build_executable(xserver test/xnet/xline_test.c)
     # build_executable(xchord src/app/xchord.c)
 else()
     build_library(xuser src/app/xpeer.c)

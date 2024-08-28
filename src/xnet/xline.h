@@ -216,6 +216,7 @@ static inline uint64_t xl_add_word(xlinekv_ptr lkv, const char *key, const char 
     lkv->wpos += XLINE_SIZE;
     mcopy(lkv->body + lkv->wpos, word, wordlen);
     lkv->wpos += wordlen;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -230,6 +231,7 @@ static inline uint64_t xl_add_str(xlinekv_ptr lkv, const char *key, const char *
     lkv->wpos += XLINE_SIZE;
     mcopy(lkv->body + lkv->wpos, str, len);
     lkv->wpos += len;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -246,6 +248,7 @@ static inline uint64_t xl_add_bin(xlinekv_ptr lkv, const char *key, const void *
         mcopy(lkv->body + lkv->wpos, bin, size);
     }
     lkv->wpos += size;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -261,6 +264,7 @@ static inline uint64_t xl_add_obj(xlinekv_ptr lkv, const char *key, xline_ptr ob
         mcopy(lkv->body + lkv->wpos, obj->b, size);
     }
     lkv->wpos += size;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -273,6 +277,7 @@ static inline uint64_t xl_add_int(xlinekv_ptr lkv, const char *key, int64_t i64)
     __xl_fill_key(lkv, key, keylen);
     *((xline_ptr)(lkv->body + lkv->wpos)) = __xl_i2b(i64);
     lkv->wpos += XLINE_SIZE;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -285,6 +290,7 @@ static inline uint64_t xl_add_uint(xlinekv_ptr lkv, const char *key, uint64_t u6
     __xl_fill_key(lkv, key, keylen);
     *((xline_ptr)(lkv->body + lkv->wpos)) = __xl_u2b(u64);
     lkv->wpos += XLINE_SIZE;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -297,6 +303,7 @@ static inline uint64_t xl_add_float(xlinekv_ptr lkv, const char *key, double f64
     __xl_fill_key(lkv, key, keylen);
     *((xline_ptr)(lkv->body + lkv->wpos)) = __xl_f2b(f64);
     lkv->wpos += XLINE_SIZE;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -310,6 +317,7 @@ static inline uint64_t xl_add_ptr(xlinekv_ptr lkv, const char *key, void *ptr)
     __xl_fill_key(lkv, key, keylen);
     *((xline_ptr)(lkv->body + lkv->wpos)) = __xl_u2b(u64);
     lkv->wpos += XLINE_SIZE;
+    lkv->line = __xl_n2b(lkv->wpos, XLINE_TYPE_XLKV);
     return lkv->wpos;
 XClean:
     return EENDED;
@@ -432,10 +440,14 @@ static inline xline_ptr xl_list_next(xlinekv_ptr kv)
 
 static xlinekv_t xl_parser(xline_ptr xl)
 {
+    __xlogd("xl_parser enter\n");
     xlinekv_t parser = {0};
     parser.rpos = 0;
+    __xlogd("xl_parser 1\n");
     parser.wpos = __xl_sizeof_body(xl);
+    __xlogd("xl_parser 2\n");
     parser.body = __xl_b2o(xl);
+    __xlogd("xl_parser exit\n");
     return parser;
 }
 

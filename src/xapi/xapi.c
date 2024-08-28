@@ -402,12 +402,12 @@ bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
 
 // #define INET_ADDRSTRLEN 16
 // #define INET6_ADDRSTRLEN 46
-bool udp_ipaddr_to_host(const __xipaddr_ptr addr, char* ip_str, size_t ip_str_len, uint16_t* port) {
+bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
     *port = ntohs(addr->port);
-    return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip_str, ip_str_len) != NULL;
+    return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip, __XAPI_IP_STR_LEN) != NULL;
 }
 
-bool udp_host_to_ipaddr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
+bool udp_host_to_addr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
 {
     ipaddr->keylen = 6;
     ipaddr->addrlen = sizeof(struct sockaddr_in);
@@ -514,8 +514,8 @@ struct __xapi_enter posix_api_enter = {
     .udp_sendto = udp_sendto,
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
-    .udp_host_to_ipaddr = udp_host_to_ipaddr,
-    .udp_ipaddr_to_host = udp_ipaddr_to_host,
+    .udp_host_to_addr = udp_host_to_addr,
+    .udp_addr_to_host = udp_addr_to_host,
     .udp_hostbyname = udp_hostbyname,
     .udp_addrinfo = udp_addrinfo,
 
