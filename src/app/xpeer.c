@@ -316,6 +316,8 @@ static void req_login(xpeer_ctx_ptr ctx)
     xl_add_uint(&req->lkv, "tid", task->node.index);
     xl_add_uint(&req->lkv, "key", peer->key);
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
+    __xlogd("req_logout req->lkv.wpos=%lu\n", req->lkv.wpos);
+    xl_printf(&req->lkv.line);
     xmsger_send_message(peer->msger, ctx->channel, req);
     __xlogd("req_login ----------------------- exit\n");
 }
@@ -335,7 +337,7 @@ static void req_logout(xpeer_ctx_ptr pctx)
     xl_add_uint(&req->lkv, "tid", task->node.index);
     xl_add_uint(&req->lkv, "key", peer->key);
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
-    xmsger_send_message(peer->msger, peer->channel, req);
+    xmsger_send_message(peer->msger, pctx->channel, req);
 }
 
 static void api_timeout(xpeer_ctx_ptr pctx)
@@ -446,6 +448,9 @@ int main(int argc, char *argv[])
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
     mcopy(hostip, "192.168.43.173", slength("192.168.43.173"));
+    // mcopy(hostip, "120.78.155.213", slength("120.78.155.213"));
+    // mcopy(hostip, "47.99.146.226", slength("47.99.146.226"));
+    
     server->pctx_list[0] = xpeer_ctx_create(server, NULL);
     xmsger_connect(server->msger, hostip, port, server->pctx_list[0], NULL);
 
@@ -474,7 +479,7 @@ int main(int argc, char *argv[])
             req_login(server->pctx_list[0]);
 
         } else if (strcmp(command, "logout") == 0) {
-
+            req_logout(server->pctx_list[0]);
 
         } else if (strcmp(command, "list") == 0) {
             

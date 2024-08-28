@@ -101,7 +101,7 @@ static inline double __xl_b2float(xl_ptr l)
 #define __xl_b2i(l)                 __xl_b2n(l, int64_t)
 #define __xl_b2u(l)                 __xl_b2n(l, uint64_t)
 #define __xl_b2f(l)                 __xl_b2float(l)
-#define __xl_b2o(l)                 (&(l)->b[XLINE_SIZE])
+#define __xl_b2o(l)                 ((void*)&(l)->b[XLINE_SIZE])
 
 #define __xl_typeis_int(l)          ((l)->b[0] == XLINE_TYPE_INT)
 #define __xl_typeis_uint(l)         ((l)->b[0] == XLINE_TYPE_UINT)
