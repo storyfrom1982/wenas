@@ -440,14 +440,10 @@ static inline xline_ptr xl_list_next(xlinekv_ptr kv)
 
 static xlinekv_t xl_parser(xline_ptr xl)
 {
-    __xlogd("xl_parser enter\n");
     xlinekv_t parser = {0};
     parser.rpos = 0;
-    __xlogd("xl_parser 1\n");
     parser.wpos = __xl_sizeof_body(xl);
-    __xlogd("xl_parser 2\n");
     parser.body = __xl_b2o(xl);
-    __xlogd("xl_parser exit\n");
     return parser;
 }
 

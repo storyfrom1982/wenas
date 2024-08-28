@@ -161,9 +161,9 @@ static void* listen_loop(void *ptr)
     xpeer_ptr server = (xpeer_ptr)ptr;
     while (__is_true(server->runnig))
     {
-        __xlogd("recv_loop >>>>-----> listen enter\n");
+        // __xlogd("recv_loop >>>>-----> listen enter\n");
         __xapi->udp_listen(server->sock);
-        __xlogd("recv_loop >>>>-----> listen exit\n");
+        // __xlogd("recv_loop >>>>-----> listen exit\n");
         xmsger_notify(server->msger, 5000000000);
     }
     return NULL;
@@ -184,12 +184,9 @@ static void* task_loop(void *ptr)
         ctx = msg->ctx;
         // ctx->xlparser = xmsg_parser(msg);
         xl_printf(&msg->lkv.line);
-        __xlogd("task_loop 1\n");
         ctx->xlparser = xl_parser(&msg->lkv.line);
-        __xlogd("task_loop 2\n");
         // xmsg_printf(msg);
         const char *api = xl_find_word(&ctx->xlparser, "api");
-        __xlogd("task_loop api=%s\n", api);
         api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
         if (enter){
             enter(ctx);
@@ -301,7 +298,6 @@ static void chord_invite(xpeer_ctx_ptr pctx)
 
 static void res_login(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    xl_printf(pctx->xlparser.body);
     remove_task(task);
 }
 
@@ -316,15 +312,12 @@ static void req_login(xpeer_ctx_ptr ctx)
     xl_add_uint(&req->lkv, "tid", task->node.index);
     xl_add_uint(&req->lkv, "key", peer->key);
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
-    __xlogd("req_logout req->lkv.wpos=%lu\n", req->lkv.wpos);
-    xl_printf(&req->lkv.line);
     xmsger_send_message(peer->msger, ctx->channel, req);
     __xlogd("req_login ----------------------- exit\n");
 }
 
 static void res_logout(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    xl_printf(pctx->xlparser.body);
     remove_task(task);
 }
 
@@ -356,11 +349,8 @@ static void api_response(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_response enter\n");
     uint64_t tid = xl_find_uint(&pctx->xlparser, "tid");
-    __xlogd("api_response tid=%lu\n", tid);
     xpeer_task_ptr task = (xpeer_task_ptr )index_table_find(&pctx->server->task_table, tid);
-    __xlogd("api_response 1\n");
     if (task){
-        __xlogd("api_response 2\n");
         task->enter(task, pctx);
     }
     __xlogd("api_response exit\n");
@@ -450,6 +440,7 @@ int main(int argc, char *argv[])
     mcopy(hostip, "192.168.43.173", slength("192.168.43.173"));
     // mcopy(hostip, "120.78.155.213", slength("120.78.155.213"));
     // mcopy(hostip, "47.99.146.226", slength("47.99.146.226"));
+    // mcopy(hostip, "47.92.77.19", slength("47.92.77.19"));
     
     server->pctx_list[0] = xpeer_ctx_create(server, NULL);
     xmsger_connect(server->msger, hostip, port, server->pctx_list[0], NULL);

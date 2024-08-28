@@ -233,39 +233,6 @@ void xmsg_free(xmsg_ptr msg)
     }
 }
 
-// static inline xmsg_ptr new_message(xchannel_ptr channel, uint8_t type, uint8_t sid, void *data, uint64_t len)
-// {
-//     xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
-//     if (msg == NULL){
-//         return NULL;
-//     }
-
-//     msg->rpos = 0;
-//     msg->wpos = 0;
-//     msg->flag = type;
-//     msg->streamid = sid;
-//     msg->channel = channel;
-//     msg->next = NULL;
-
-//     if (data == NULL){
-//         msg->len = XMSG_CMD_SIZE;
-//         msg->data = msg->cmd;
-//     }else {
-//         msg->len = len;
-//         msg->data = data;
-//     }
-
-//     msg->range = (msg->len / PACK_BODY_SIZE);
-//     if (msg->range * PACK_BODY_SIZE < msg->len){
-//         // 有余数，增加一个包
-//         msg->range ++;
-//     }
-
-//     __xlogd("new_message >>>>-------------------> range: %u\n", msg->range);
-
-//     return msg;
-// }
-
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_range)
 {
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
@@ -426,23 +393,16 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
 
 static inline void xchannel_serial_msg(xchannel_ptr channel)
 {
-    __xlogd("xchannel_serial_msg enter\n");
     xmsg_ptr msg = channel->msglist_head;
-
-    __xlogd("xchannel_serial_msg msg=%p\n", msg);
 
     // 每次只缓冲一个包，尽量使发送速度均匀
     if (msg != NULL && __serialbuf_writable(channel->sendbuf) > 0){
 
-        __xlogd("xchannel_serial_msg renge=%u\n", msg->range);
-
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
         pack->msg = msg;
         if (msg->lkv.wpos - msg->sendpos < PACK_BODY_SIZE){
-            __xlogd("xchannel_serial_msg 1\n");
             pack->head.len = msg->lkv.wpos - msg->sendpos;
         }else{
-            __xlogd("xchannel_serial_msg 2\n");
             pack->head.len = PACK_BODY_SIZE;
         }
 
@@ -451,7 +411,6 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.range = msg->range;
         mcopy(pack->body, msg->lkv.body + msg->sendpos, pack->head.len);
         msg->sendpos += pack->head.len;
-        // msg->lkv.wpos = msg->sendpos;
         msg->range --;
 
         pack->channel = channel;
@@ -462,8 +421,6 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.sn = channel->sendbuf->wpos;
         __atom_add(channel->sendbuf->wpos, 1);
         channel->msger->sendable++;
-
-        __xlogd("xchannel_serial_msg sendpos=%lu wpos=%lu\n", msg->sendpos, msg->lkv.wpos);
         // 判断消息是否全部写入缓冲区
         if (msg->sendpos == msg->lkv.wpos){
             // 更新当前消息
@@ -471,10 +428,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
             msg = channel->msglist_head;
             channel->msger->msglistlen--;
         }
-
-        __xlogd("xchannel_serial_msg msg = %p len=%lu\n", msg, channel->msger->msglistlen);
     }
-    __xlogd("xchannel_serial_msg exit\n");
 }
 
 static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
@@ -574,14 +528,14 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
         if (channel->ack.flag != 0){
-            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
+            // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
             // 携带 ACK
             pack->head.flag = channel->ack.flag;
             pack->head.ack = channel->ack.ack;
             pack->head.acks = channel->ack.acks;
 
         }else {
-            __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK\n");
+            // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK\n");
         }
 
         // 判断发送是否成功
@@ -616,7 +570,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("xchannel_send_pack >>>>---------------------------------> SEND ACK\n");
+    // __xlogd("xchannel_send_pack >>>>---------------------------------> SEND ACK\n");
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
@@ -644,7 +598,6 @@ static inline void xchannel_send_final(xmsger_ptr msger, __xipaddr_ptr addr, xpa
 
 static inline void xchannel_recv_msg(xchannel_ptr channel)
 {
-    __xlogd("xchannel_recv_msg enter\n");
     if (__serialbuf_readable(channel->recvbuf) > 0){
 
         xmsg_ptr msg;
@@ -652,41 +605,28 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
         xpack_ptr pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
 
         do {
-            __xlogd("xchannel_recv_msg 1\n");
             if (pack->head.type == XMSG_PACK_MSG){
-                __xlogd("xchannel_recv_msg sid=%u\n", pack->head.sid);
                 // 索引对应的消息
                 msg = channel->streams[pack->head.sid];
-                __xlogd("xchannel_recv_msg msg=%p\n", msg);
                 // 如果当前消息的数据为空，证明这个包是新消息的第一个包
                 if (msg == NULL){
-                    __xlogd("xchannel_recv_msg 4\n");
                     msg = xmsg_create(pack->head.range * PACK_BODY_SIZE);
+                    channel->streams[pack->head.sid] = msg;
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
-                    __xlogd("xchannel_recv_msg pack->head.range=%u\n", pack->head.range);
                     msg->range = pack->head.range;
                     msg->channel = channel;
                     msg->ctx = channel->ctx;
-                    channel->streams[pack->head.sid] = msg;
                 }
-                __xlogd("xchannel_recv_msg wpos=%lu\n", msg->lkv.wpos);
                 mcopy(msg->lkv.body + msg->lkv.wpos, pack->body, pack->head.len);
-                __xlogd("xchannel_recv_msg 7\n");
                 msg->lkv.wpos += pack->head.len;
-                __xlogd("xchannel_recv_msg wpos=%lu\n", msg->lkv.wpos);
-                __xlogd("xchannel_recv_msg 8\n");
                 msg->range--;
-                __xlogd("xchannel_recv_msg 9\n");
                 if (msg->range == 0){
-                    __xlogd("xchannel_recv_msg 10\n");
                     channel->streams[pack->head.sid] = NULL;
                     // 更新消息长度
                     xl_update(&msg->lkv);
-                    xl_printf(&msg->lkv.line);
+                    // xl_printf(&msg->lkv.line);
                     // 通知用户已收到一个完整的消息
-                    __xlogd("xchannel_recv_msg 11\n");
                     channel->msger->callback->on_msg_from_peer(channel->msger->callback, channel, msg);
-                    __xlogd("xchannel_recv_msg 12\n");
                 }
             }
 
@@ -711,7 +651,6 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
 
         }while (pack != NULL); // 所用已接收包被处理完之后，接收缓冲区为空
     }
-    __xlogd("xchannel_recv_msg exit\n");
 }
 
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
@@ -978,8 +917,8 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            __xlogd("main_loop (IP:%X) >>>>>---------------------------------> RECV: TYPE(%u) FLAG[%u:%u:%u] SN: %u\n", 
-                    *(uint64_t*)(&addr.port), rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
+            // __xlogd("main_loop (IP:%X) >>>>>---------------------------------> RECV: TYPE(%u) FLAG[%u:%u:%u] SN: %u\n", 
+            //         *(uint64_t*)(&addr.port), rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
 
             channel = (xchannel_ptr)xtree_find(msger->peers, &addr.port, 6);
 

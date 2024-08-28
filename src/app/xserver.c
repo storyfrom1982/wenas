@@ -410,9 +410,9 @@ static void* listen_loop(void *ptr)
     xserver_ptr server = (xserver_ptr)ptr;
     while (__is_true(server->runnig))
     {
-        __xlogd("recv_loop >>>>-----> listen enter\n");
+        // __xlogd("recv_loop >>>>-----> listen enter\n");
         __xapi->udp_listen(server->sock);
-        __xlogd("recv_loop >>>>-----> listen exit\n");
+        // __xlogd("recv_loop >>>>-----> listen exit\n");
         xmsger_notify(server->msger, 5000000000);
     }
     return NULL;
@@ -730,23 +730,18 @@ static void* task_loop(void *ptr)
     __xlogd("task_loop enter\n");
 
     xmsg_ptr msg;
-    xpeer_ctx_ptr pctx;
+    xpeer_ctx_ptr ctx;
     xserver_ptr server = (xserver_ptr)ptr;
 
     while (xpipe_read(server->task_pipe, &msg, __sizeof_ptr) == __sizeof_ptr)
     {
-        pctx = msg->ctx;
+        ctx = msg->ctx;
         xl_printf(&msg->lkv.line);
-        __xlogd("task_loop ctx=%p\n", pctx);
-        pctx->xlparser = xl_parser(&msg->lkv.line);
-        __xlogd("task_loop 2\n");
-        const char *api = xl_find_word(&pctx->xlparser, "api");
-        __xlogd("task_loop 3\n");
-        api_task_enter enter = search_table_find(&pctx->server->api_tabel, api);
-        __xlogd("task_loop 4\n");
+        ctx->xlparser = xl_parser(&msg->lkv.line);
+        const char *api = xl_find_word(&ctx->xlparser, "api");
+        api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
         if (enter){
-            __xlogd("task_loop 5\n");
-            enter(pctx);
+            enter(ctx);
         }
         xmsg_free(msg);
     }
