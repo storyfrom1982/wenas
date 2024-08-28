@@ -337,7 +337,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xserver_ptr server = listener->ctx;
@@ -348,6 +348,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
     xl_add_word(&msg->lkv, "api", "timeout");
     xl_add_word(&msg->lkv, "ip", ip);
     xl_add_uint(&msg->lkv, "port", port);
+    xl_add_ptr(&msg->lkv, "msg", msg);
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -596,7 +597,7 @@ static void api_timeout(xpeer_ctx_ptr pctx)
 {
     const char *ip = xl_find_word(&pctx->xlparser, "ip");
     uint16_t port = xl_find_uint(&pctx->xlparser, "port");
-    xline_ptr req = xl_find_ptr(&pctx->xlparser, "req");
+    xmsg_ptr msg = xl_find_ptr(&pctx->xlparser, "msg");
 
     // 只有服务器与服务器之间尝试重连
     if (pctx->xchord != NULL){
@@ -606,10 +607,13 @@ static void api_timeout(xpeer_ctx_ptr pctx)
             struct __xipaddr addr;
             __xapi->udp_host_to_addr(ip, port, &addr);
             // TODO 找到未完成的任务
-            xmsger_connect(pctx->server->msger, ip, port, pctx, NULL);
+            xmsger_connect(pctx->server->msger, ip, port, pctx, msg);
 
         }else {
 
+            if (msg){
+                xl_printf(&msg->lkv.line);
+            }
             // 记录未完成任务
             api_break(pctx);
         }

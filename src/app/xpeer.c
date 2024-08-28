@@ -74,7 +74,7 @@ typedef struct xmsg_ctx {
     xpeer_ctx_ptr pctx;
 }xmsg_ctx_t;
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr resendmsg)
 {
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
@@ -88,6 +88,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
     xl_add_word(&msg->lkv, "api", "timeout");
     xl_add_word(&msg->lkv, "ip", ip);
     xl_add_uint(&msg->lkv, "port", port);
+    xl_add_ptr(&msg->lkv, "msg", resendmsg);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 5\n");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -336,11 +337,14 @@ static void req_logout(xpeer_ctx_ptr pctx)
 static void api_timeout(xpeer_ctx_ptr pctx)
 {
     __xlogd("api_timeout enter\n");
+    char *ip = xl_find_word(&pctx->xlparser, "ip");
+    uint16_t port = xl_find_uint(&pctx->xlparser, "port");
+    xmsg_ptr msg = xl_find_ptr(&pctx->xlparser, "msg");
     if (pctx->reconnected < 3){
         pctx->reconnected++;
-        char *ip = xl_find_word(&pctx->xlparser, "ip");
-        uint16_t port = xl_find_uint(&pctx->xlparser, "port");
-        xmsger_connect(pctx->server->msger, ip, port, pctx, NULL);
+        xmsger_connect(pctx->server->msger, ip, port, pctx, msg);
+    }else {
+        xl_printf(&msg->lkv.line);
     }
     __xlogd("api_timeout exit\n");
 }
@@ -441,9 +445,12 @@ int main(int argc, char *argv[])
     // mcopy(hostip, "120.78.155.213", slength("120.78.155.213"));
     // mcopy(hostip, "47.99.146.226", slength("47.99.146.226"));
     // mcopy(hostip, "47.92.77.19", slength("47.92.77.19"));
+
+    xmsg_ptr msg = xmsg_maker();
+    xl_add_word(&msg->lkv, "api", "testreconnect");
     
     server->pctx_list[0] = xpeer_ctx_create(server, NULL);
-    xmsger_connect(server->msger, hostip, port, server->pctx_list[0], NULL);
+    xmsger_connect(server->msger, hostip, port, server->pctx_list[0], msg);
 
     server->cid = 0;
     server->channel = server->pctx_list[server->cid]->channel;
