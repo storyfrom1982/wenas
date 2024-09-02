@@ -337,7 +337,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr resendmsg)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xserver_ptr server = listener->ctx;
@@ -348,7 +348,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg
     xl_add_word(&msg->lkv, "api", "timeout");
     xl_add_word(&msg->lkv, "ip", ip);
     xl_add_uint(&msg->lkv, "port", port);
-    xl_add_ptr(&msg->lkv, "msg", msg);
+    xl_add_ptr(&msg->lkv, "msg", resendmsg);
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -742,11 +742,16 @@ static void* task_loop(void *ptr)
         ctx = msg->ctx;
         xl_printf(&msg->lkv.line);
         ctx->xlparser = xl_parser(&msg->lkv.line);
+        __xlogd("task_loop 1\n");
         const char *api = xl_find_word(&ctx->xlparser, "api");
+        __xlogd("task_loop 2\n");
         api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
+        __xlogd("task_loop 3\n");
         if (enter){
+            __xlogd("task_loop 4\n");
             enter(ctx);
         }
+        __xlogd("task_loop 5\n");
         xmsg_free(msg);
     }
 

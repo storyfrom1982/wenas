@@ -16,7 +16,7 @@ typedef struct xpeer_task {
     xlinekv_t taskctx;
     struct xchannel_ctx *pctx;
     struct xpeer_task *prev, *next;
-    void (*enter)(struct xpeer_task*, struct xpeer_ctx*);
+    void (*enter)(struct xpeer_task*, struct xchannel_ctx*);
 }*xpeer_task_ptr;
 
 typedef struct xchannel_ctx {
@@ -26,7 +26,7 @@ typedef struct xchannel_ctx {
     struct xpeer *server;
     xlinekv_t xlparser;
     struct xpeer_task tasklist;
-    void (*release)(struct xpeer_ctx*);
+    void (*release)(struct xchannel_ctx*);
 }*xpeer_ctx_ptr;
 
 
@@ -79,7 +79,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 3\n");
-    char *ip = xchannel_get_ip(channel);
+    const char *ip = xchannel_get_ip(channel);
     uint16_t port = xchannel_get_port(channel);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> port=%u\n", port);
     xmsg_ptr msg = xmsg_maker();
@@ -98,13 +98,13 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    xmsg_ptr msg = xl_maker();
+    xmsg_ptr msg = xmsg_maker();
     xl_add_word(&msg->lkv, "api", "break");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, void* msg, size_t len)
+static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xmsg_free(msg);
@@ -170,7 +170,7 @@ static void* listen_loop(void *ptr)
     return NULL;
 }
 
-typedef void(*api_task_enter)(xpeer_ctx_ptr *pctx);
+typedef void(*api_task_enter)(xpeer_ctx_ptr pctx);
 
 static void* task_loop(void *ptr)
 {
@@ -222,7 +222,7 @@ inline static xpeer_task_ptr remove_task(xpeer_task_ptr task)
 {
     xpeer_ptr server = task->pctx->server;
     __xlogd("remove_task tid=%lu\n", task->node.index);
-    index_table_del(&server->task_table, task);
+    index_table_del(&server->task_table, (index_node_t*)task);
     task->prev->next = task->next;
     task->next->prev = task->prev;
     free(task);
@@ -230,7 +230,7 @@ inline static xpeer_task_ptr remove_task(xpeer_task_ptr task)
 
 static void res_forward(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    xl_printf(pctx->xlparser.body);
+    // xl_printf(pctx->xlparser.body);
     remove_task(task);
 }
 
@@ -251,7 +251,7 @@ static void req_forward(xpeer_ctx_ptr pctx, uint64_t key)
 static void res_chord_list(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
     xpeer_ptr server = pctx->server;
-    xl_printf(pctx->xlparser.body);
+    // xl_printf(pctx->xlparser.body);
 
     xline_ptr xlnoes = xl_find(&pctx->xlparser, "nodes");
     if (server->chord_list != NULL){
@@ -279,7 +279,6 @@ static void chord_list(xpeer_ctx_ptr pctx)
 
 static void res_chord_invite(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    xl_printf(pctx->xlparser.body);
     remove_task(task);
 }
 
@@ -379,6 +378,7 @@ static void __sigint_handler()
 extern void sigint_setup(void (*handler)());
 
 #include <arpa/inet.h>
+#include <string.h>
 int main(int argc, char *argv[])
 {
     const char *hostname = "pindanci.com";
@@ -441,7 +441,7 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    mcopy(hostip, "192.168.43.173", slength("192.168.43.173"));
+    mcopy(hostip, "192.168.1.112", slength("192.168.1.112"));
     // mcopy(hostip, "120.78.155.213", slength("120.78.155.213"));
     // mcopy(hostip, "47.99.146.226", slength("47.99.146.226"));
     // mcopy(hostip, "47.92.77.19", slength("47.92.77.19"));
@@ -530,7 +530,7 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             server->pctx_list[server->cid] = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, "192.168.43.173", 9256, server->pctx_list[server->cid], NULL);
+            xmsger_connect(server->msger, "192.168.1.112", 9256, server->pctx_list[server->cid], NULL);
 
         } else if (strcmp(command, "discon") == 0) {
 
