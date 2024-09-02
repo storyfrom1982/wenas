@@ -343,7 +343,9 @@ static void api_timeout(xpeer_ctx_ptr pctx)
         pctx->reconnected++;
         xmsger_connect(pctx->server->msger, ip, port, pctx, msg);
     }else {
-        xl_printf(&msg->lkv.line);
+        if (msg){
+            xl_printf(&msg->lkv.line);
+        }
     }
     __xlogd("api_timeout exit\n");
 }

@@ -404,7 +404,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
     xmsg_ptr msg = channel->send_list_head;
 
     // 每次只缓冲一个包，尽量使发送速度均匀
-    if (msg != NULL && __serialbuf_writable(channel->sendbuf) > 0){
+    if (channel->connected && msg != NULL && __serialbuf_writable(channel->sendbuf) > 0){
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
         pack->msg = msg;
@@ -987,6 +987,10 @@ static void* main_loop(void *ptr)
                             xchannel_send_ack(channel);
                         }
 
+                        if (channel->send_list_head){
+                            xchannel_serial_msg(channel);
+                        }
+
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("on_channel_break %p\n", channel);
                         msger->callback->on_channel_break(msger->callback, channel);
@@ -1102,28 +1106,23 @@ static void* main_loop(void *ptr)
                     channel->ctx = xl_find_ptr(&parser, "ctx");
                     xmsg_ptr firstmsg = xl_find_ptr(&parser, "msg");
 
-                    xl_printf(&firstmsg->lkv.line);
-
                     mcopy(channel->ip, ip, slength(ip));
                     channel->port = port;
                     __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
                     channel->keepalive = true;
-                    __xlogd("connect enter\n");
-                    while (firstmsg != NULL){
-                        __xlogd("msg->next=%p\n", firstmsg->next);
-                        __xlogd("connect 1\n");
-                        xchannel_send_msg(channel, firstmsg);
-                        __xlogd("connect 2\n");
-                        firstmsg = firstmsg->next;
-                    }
-                    __xlogd("connect exit\n");
 
                     // 建立连接时，先用对方的 IP&PORT&local_cid 三元组作为本地索引，在收到回复的 HELLO 时，换成 local_cid 做为索引
                     xtree_save(msger->peers, &channel->addr.port, 6, channel);
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
                     xchannel_serial_pack(channel, XMSG_PACK_PING);
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
+                    while (firstmsg != NULL){
+                        xl_printf(&firstmsg->lkv.line);
+                        xchannel_send_msg(channel, firstmsg);
+                        firstmsg = firstmsg->next;
+                    }
+
+                    // __xlogd("xmsger_loop >>>>-------------> create channel to peer SN(%u) KEY(%u)\n", channel->serial_number, channel->local_key);
 
                 }else if (msg->flag == XMSG_FLAG_DISCONNECT){
 
@@ -1381,9 +1380,7 @@ bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, struct xcha
     __xcheck(msg == NULL);
 
     if (firstmsg){
-        __xlogd("firstmsg enter\n");
         xmsg_final(firstmsg);
-        __xlogd("firstmsg exit\n");
     }
 
     msg->flag = XMSG_FLAG_CONNECT; 
