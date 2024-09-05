@@ -572,11 +572,8 @@ static void api_logout(xpeer_ctx_ptr pctx)
 
 static void api_break(xpeer_ctx_ptr pctx)
 {
-    __xlogd("api_break >>>>---------------------------> enter\n");
     xserver_ptr server = pctx->server;
-    __xlogd("api_break >>>>---------------------------> free peer ctx node %lu\n", pctx->node.hash_key);
     uuid_list_del(&pctx->server->uuid_table, &pctx->node);
-    __xlogd("api_break >>>>---------------------------> uuid tree count %lu\n", pctx->server->uuid_table.count);
     if (pctx->tasklist.next != &pctx->tasklist){
         xpeer_task_ptr next = pctx->tasklist.next;
         while (next != &pctx->tasklist){
@@ -585,9 +582,7 @@ static void api_break(xpeer_ctx_ptr pctx)
             next = next_task;
         }
     }
-    __xlogd("api_break >>>>---------------------------> peerctx->release=%p\n", pctx->release);
     if (pctx->release){
-        __xlogd("api_break >>>>---------------------------> peerctx->release\n");
         pctx->release(pctx);
     }
     free(pctx);
@@ -741,17 +736,13 @@ static void* task_loop(void *ptr)
     {
         ctx = msg->ctx;
         xl_printf(&msg->lkv.line);
+        __xlogd("task_loop ctx=%p\n", ctx);
         ctx->xlparser = xl_parser(&msg->lkv.line);
-        __xlogd("task_loop 1\n");
         const char *api = xl_find_word(&ctx->xlparser, "api");
-        __xlogd("task_loop 2\n");
         api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
-        __xlogd("task_loop 3\n");
         if (enter){
-            __xlogd("task_loop 4\n");
             enter(ctx);
         }
-        __xlogd("task_loop 5\n");
         xmsg_free(msg);
     }
 
