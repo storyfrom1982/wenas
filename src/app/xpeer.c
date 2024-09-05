@@ -443,11 +443,13 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    mcopy(hostip, "192.168.1.112", slength("192.168.1.112"));
-    hostip[slength("192.168.1.112")] = '\0';
-    // mcopy(hostip, "120.78.155.213", slength("120.78.155.213"));
-    // mcopy(hostip, "47.99.146.226", slength("47.99.146.226"));
-    // mcopy(hostip, "47.92.77.19", slength("47.92.77.19"));
+    // const char *cip = "192.168.1.112";
+    // const char *cip = "120.78.155.213";
+    // const char *cip = "47.92.77.19";
+    const char *cip = "47.99.146.226";
+
+    mcopy(hostip, cip, slength(cip));
+    hostip[slength(cip)] = '\0';
 
     xmsg_ptr msg = xmsg_maker();
     xl_add_word(&msg->lkv, "api", "testreconnect");

@@ -24,6 +24,7 @@ enum {
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_RESEND_LIMIT       10
+#define XCHANNEL_RESEND_STEPPING    1.2
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
@@ -251,7 +252,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->breaker = false;
 
     channel->remote_key = XMSG_KEY;
-    channel->back_delay = 50000000UL;
+    channel->back_delay = 30000000UL;
     channel->ack.key = (XMSG_VAL ^ XMSG_KEY);
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -383,6 +384,7 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.range = 1;
     pack->channel = channel;
     pack->delay = channel->back_delay;
+    __xlogd("xchannel_serial_pack >>>>------------------------> delay=%lu\n", pack->delay);
     pack->is_flushing = false;
     pack->head.resend = 0;
     pack->head.flag = 0;
@@ -423,6 +425,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
         pack->channel = channel;
         pack->delay = channel->back_delay;
+        __xlogd("xchannel_serial_msg >>>>------------------------> delay=%lu\n", pack->delay);
         pack->is_flushing = false;
         pack->head.resend = 0;
         pack->head.flag = 0;
@@ -570,7 +573,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->timestamp = __xapi->clock();
             pack->timer = pack->timestamp + pack->delay;
-            pack->delay *= 1.5;
+            __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
+            pack->delay *= XCHANNEL_RESEND_STEPPING;
             channel->timestamp = pack->timestamp;
             __ring_list_put_into_end(&channel->flushinglist, pack);
 
@@ -791,7 +795,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         __xlogd("xchannel_recv_ack >>>>>>>>>>-----------------------------------------> RESEND PACK: %u\n", pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                             pack->timer += pack->delay;
-                            pack->delay *= 1.5;
+                            pack->delay *= XCHANNEL_RESEND_STEPPING;
+                            __xlogd("xchannel_recv_ack >>>>------------------------> delay=%lu\n", pack->delay);
                             
                         }else {
                             __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
@@ -1209,7 +1214,8 @@ static void* main_loop(void *ptr)
                                     // 记录重传次数
                                     spack->head.resend++;
                                     spack->timer += spack->delay;
-                                    spack->delay *= 1.5;
+                                    __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
+                                    spack->delay *= XCHANNEL_RESEND_STEPPING;
                                     // 列表中如果只有一个成员，就不能更新包的位置
                                     if (channel->flushinglist.len > 1){
                                         // 重传之后的包放入队尾
