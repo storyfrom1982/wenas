@@ -339,13 +339,18 @@ static void api_timeout(xpeer_ctx_ptr pctx)
     char *ip = xl_find_word(&pctx->xlparser, "ip");
     uint16_t port = xl_find_uint(&pctx->xlparser, "port");
     xmsg_ptr msg = xl_find_ptr(&pctx->xlparser, "msg");
-    if (pctx->reconnected < 3){
-        pctx->reconnected++;
-        xmsger_connect(pctx->server->msger, ip, port, pctx, msg);
-    }else {
-        if (msg){
-            xl_printf(&msg->lkv.line);
+
+    if (xchannel_get_keepalive(pctx->channel)){
+        if (pctx->reconnected < 3){
+            pctx->reconnected++;
+            xmsger_connect(pctx->server->msger, ip, port, pctx, msg);
+        }else {
+            if (msg){
+                xl_printf(&msg->lkv.line);
+            }
         }
+    }else {
+
     }
     __xlogd("api_timeout exit\n");
 }
@@ -443,10 +448,10 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    // const char *cip = "192.168.1.112";
+    const char *cip = "192.168.1.112";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
-    const char *cip = "47.99.146.226";
+    // const char *cip = "47.99.146.226";
 
     mcopy(hostip, cip, slength(cip));
     hostip[slength(cip)] = '\0';

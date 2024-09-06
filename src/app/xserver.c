@@ -590,13 +590,13 @@ static void api_break(xpeer_ctx_ptr pctx)
 
 static void api_timeout(xpeer_ctx_ptr pctx)
 {
+    __xlogd("api_timeout enter\n");
+
     const char *ip = xl_find_word(&pctx->xlparser, "ip");
     uint16_t port = xl_find_uint(&pctx->xlparser, "port");
     xmsg_ptr msg = xl_find_ptr(&pctx->xlparser, "msg");
 
-    // 只有服务器与服务器之间尝试重连
-    if (pctx->xchord != NULL){
-
+    if (xchannel_get_keepalive(pctx->channel)){
         if (pctx->reconnected < 3){
             pctx->reconnected++;
             struct __xipaddr addr;
@@ -614,10 +614,10 @@ static void api_timeout(xpeer_ctx_ptr pctx)
         }
 
     }else {
-
         // 记录未完成任务
         api_break(pctx);
     }
+    __xlogd("api_timeout exit\n");
 }
 
 static void api_response(xpeer_ctx_ptr pctx)
@@ -738,11 +738,14 @@ static void* task_loop(void *ptr)
         xl_printf(&msg->lkv.line);
         __xlogd("task_loop ctx=%p\n", ctx);
         ctx->xlparser = xl_parser(&msg->lkv.line);
+        __xlogd("task_loop 1\n");
         const char *api = xl_find_word(&ctx->xlparser, "api");
         api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
         if (enter){
+            __xlogd("task_loop 2\n");
             enter(ctx);
         }
+        __xlogd("task_loop 3\n");
         xmsg_free(msg);
     }
 

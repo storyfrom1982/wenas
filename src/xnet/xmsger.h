@@ -59,6 +59,7 @@ extern bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr
 extern bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, struct xchannel_ctx *ctx, xmsg_ptr firstmsg);
 extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel);
 
+extern bool xchannel_get_keepalive(xchannel_ptr channel);
 extern const char* xchannel_get_ip(xchannel_ptr channel);
 extern uint16_t xchannel_get_port(xchannel_ptr channel);
 extern struct xchannel_ctx* xchannel_get_ctx(xchannel_ptr channel);

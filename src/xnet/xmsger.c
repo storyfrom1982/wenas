@@ -732,13 +732,17 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     // 把已经传送到对端的 msg 交给发送线程处理
                     channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg);
                 }
-            }else if (rpack->head.flag == XMSG_PACK_PONG){
-                // 有能会重复收到这个 ACK
-                if (!channel->connected){
-                    channel->connected = true;
-                    channel->msger->callback->on_channel_from_peer(channel->msger->callback, channel);
-                }
             }
+            // else if (rpack->head.flag == XMSG_PACK_PONG){
+            //     // 有能会重复收到这个 ACK
+            //     if (!channel->connected){
+            //         channel->connected = true;
+            //         channel->msger->callback->on_channel_from_peer(channel->msger->callback, channel);
+            //         if (channel->send_list_head){
+            //             xchannel_serial_msg(channel);
+            //         }
+            //     }
+            // }
 
             __atom_add(channel->sendbuf->rpos, 1);
 
@@ -1029,6 +1033,48 @@ static void* main_loop(void *ptr)
 
                         // 无法实现无感知自动重连，因为这里无法区分是重连发送的 PING 还是超时重传的 PING
                         __xlogd("main_loop RECV XMSG_PACK_PING\n");
+                        if (rpack->head.resend > 0){
+                            xchannel_recv_pack(channel, &rpack);
+
+                        }else {
+
+                            // 取出同步参数
+                            uint8_t remote_key = *((uint8_t*)(rpack->body));
+                            uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
+                            uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                            // 创建连接
+                            xchannel_ptr ch = xchannel_create(msger, serial_range);
+                            __xbreak(ch == NULL);
+                            ch->addr = addr;
+                            // 同步序列号
+                            ch->recvbuf->rpos = ch->recvbuf->spos = ch->recvbuf->wpos = serial_number;
+                            // 设置校验码
+                            ch->remote_key = remote_key;
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: SN(%u) REMOTE KEY(%u) LOCAL KEY(%u) ts(%lu)\n", serial_number, ch->remote_key, ch->local_key, ch->timestamp);
+                            // 生成 ack 的校验码
+                            ch->ack.key = (XMSG_VAL ^ ch->remote_key);
+                            // 更新接收缓冲区和 ACK
+                            xchannel_recv_pack(ch, &rpack);
+                            // 生成 PONG
+                            xchannel_serial_pack(ch, XMSG_PACK_PONG);
+                            // 发送 PONG 和更新的 ACK
+                            xchannel_send_pack(ch);
+
+                            if (channel->confirm_list_head != NULL){
+                                msger->callback->on_channel_timeout(msger->callback, channel, channel->confirm_list_head);
+                            }else {
+                                msger->callback->on_channel_timeout(msger->callback, channel, channel->send_list_head);
+                            }
+
+                            channel->confirm_list_head = channel->send_list_head = NULL;
+                            xtree_take(msger->peers, &addr.port, 6);
+                            xchannel_free(channel);
+
+                            // 建立索引
+                            xtree_save(msger->peers, &addr.port, 6, ch);
+                            ch->connected = true;
+                            msger->callback->on_channel_from_peer(msger->callback, ch);
+                        }
 
                     }else if (rpack->head.type == XMSG_PACK_ACK && rpack->head.flag == XMSG_PACK_BYE){
                         msger->callback->on_channel_break(msger->callback, channel);
@@ -1070,6 +1116,9 @@ static void* main_loop(void *ptr)
                         xchannel_serial_pack(channel, XMSG_PACK_PONG);
                         // 发送 PONG 和更新的 ACK
                         xchannel_send_pack(channel);
+
+                        channel->connected = true;
+                        msger->callback->on_channel_from_peer(msger->callback, channel);
 
                     }else {}
 
@@ -1538,6 +1587,11 @@ void xmsger_free(xmsger_ptr *pptr)
     }
 
     __xlogd("xmsger_free exit\n");
+}
+
+bool xchannel_get_keepalive(xchannel_ptr channel)
+{
+    return channel->keepalive;
 }
 
 const char* xchannel_get_ip(xchannel_ptr channel)
