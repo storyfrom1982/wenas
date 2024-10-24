@@ -74,7 +74,7 @@ typedef struct xmsg_ctx {
     xpeer_ctx_ptr pctx;
 }xmsg_ctx_t;
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr resendmsg)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
@@ -82,15 +82,6 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg
     const char *ip = xchannel_get_ip(channel);
     uint16_t port = xchannel_get_port(channel);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> port=%u\n", port);
-    xmsg_ptr msg = xmsg_maker();
-    msg->channel = channel;
-    msg->ctx = xchannel_get_ctx(channel);
-    xl_add_word(&msg->lkv, "api", "timeout");
-    xl_add_word(&msg->lkv, "ip", ip);
-    xl_add_uint(&msg->lkv, "port", port);
-    xl_add_ptr(&msg->lkv, "msg", resendmsg);
-    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 5\n");
-    xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -448,7 +439,7 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    const char *cip = "192.168.1.112";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
@@ -585,6 +576,7 @@ int main(int argc, char *argv[])
         __xapi->udp_close(server->sock);
     }
     
+    free(server->pctx_list[0]);
     free(server);
 
     xlog_recorder_close();

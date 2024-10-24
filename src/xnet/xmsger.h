@@ -44,7 +44,7 @@ typedef struct xmsgercb {
     void (*on_channel_to_peer)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_channel_from_peer)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_channel_break)(struct xmsgercb*, xchannel_ptr channel);
-    void (*on_channel_timeout)(struct xmsgercb*, xchannel_ptr channel, xmsg_ptr msg);
+    void (*on_channel_timeout)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_msg_from_peer)(struct xmsgercb*, xchannel_ptr channel, xmsg_ptr msg);
     void (*on_msg_to_peer)(struct xmsgercb*, xchannel_ptr channel, xmsg_ptr msg);
 }*xmsgercb_ptr;

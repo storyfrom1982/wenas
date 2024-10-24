@@ -1060,13 +1060,8 @@ static void* main_loop(void *ptr)
                             // 发送 PONG 和更新的 ACK
                             xchannel_send_pack(ch);
 
-                            if (channel->confirm_list_head != NULL){
-                                msger->callback->on_channel_timeout(msger->callback, channel, channel->confirm_list_head);
-                            }else {
-                                msger->callback->on_channel_timeout(msger->callback, channel, channel->send_list_head);
-                            }
+                            msger->callback->on_channel_timeout(msger->callback, channel);
 
-                            channel->confirm_list_head = channel->send_list_head = NULL;
                             xtree_take(msger->peers, &addr.port, 6);
                             xchannel_free(channel);
 
@@ -1233,15 +1228,7 @@ static void* main_loop(void *ptr)
                             // if (spack->head.resend > XCHANNEL_RESEND_LIMIT)
                             if (spack->timer - spack->timestamp > NANO_SECONDS)
                             {
-                                xmsg_ptr msg;
-                                if (channel->confirm_list_head != NULL){
-                                    msg = channel->confirm_list_head;
-                                }else {
-                                    msg = channel->send_list_head;
-                                }
-                                __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_channel_timeout mg=%p\n", *(uint64_t*)(&channel->addr.port), msg);
-                                channel->confirm_list_head = channel->send_list_head = NULL;
-                                msger->callback->on_channel_timeout(msger->callback, channel, msg);
+                                msger->callback->on_channel_timeout(msger->callback, channel);
                                 // // 移除超时的连接
                                 xtree_take(msger->peers, &channel->addr.port, 6);
                                 xchannel_free(channel);

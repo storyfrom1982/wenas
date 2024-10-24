@@ -337,7 +337,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr resendmsg)
+static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xserver_ptr server = listener->ctx;
@@ -345,11 +345,6 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel, xmsg
     uint16_t port = xchannel_get_port(channel);
     xmsg_ptr msg = xmsg_maker();
     msg->ctx = xchannel_get_ctx(channel);
-    xl_add_word(&msg->lkv, "api", "timeout");
-    xl_add_word(&msg->lkv, "ip", ip);
-    xl_add_uint(&msg->lkv, "port", port);
-    xl_add_ptr(&msg->lkv, "msg", resendmsg);
-    xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
