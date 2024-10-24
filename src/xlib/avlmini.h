@@ -115,6 +115,7 @@ struct avl_tree
 	size_t count;				/* node count */
 	/* returns 0 for equal, -1 for n1 < n2, 1 for n1 > n2 */
 	int (*compare)(const void *n1, const void *n2);
+	int (*find_compare)(const void *n1, const void *n2);
 };
 
 
@@ -125,7 +126,9 @@ struct avl_tree
  *          AVL_OFFSET(struct mystruct_t, node));
  */
 void avl_tree_init(struct avl_tree *tree,
-		int (*compare)(const void*, const void*), size_t size, size_t offset);
+		int (*compare)(const void*, const void*),
+		int (*find_compare)(const void*, const void*),
+		 size_t size, size_t offset);
 
 void *avl_tree_first(struct avl_tree *tree);
 void *avl_tree_last(struct avl_tree *tree);

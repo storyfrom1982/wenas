@@ -69,7 +69,7 @@ void search_table_init(search_table_t *st, uint32_t size)
     st->head.next = &(st->head);
     st->head.prev = &(st->head);
     st->table = (search_node_t**)calloc(size, sizeof(void*));
-    avl_tree_init(&st->tree, bytes_compare, sizeof(search_node_t), AVL_OFFSET(search_node_t, node));
+    avl_tree_init(&st->tree, bytes_compare, bytes_compare, sizeof(search_node_t), AVL_OFFSET(search_node_t, node));
 }
 
 
@@ -198,7 +198,7 @@ void index_table_init(index_table_t *it, uint32_t size /*must be the power of 2*
     it->head.next = &(it->head);
     it->head.prev = &(it->head);
     it->table = (index_node_t**)calloc(size, sizeof(void*));
-    avl_tree_init(&it->tree, number_compare, sizeof(index_node_t), AVL_OFFSET(index_node_t, node));
+    avl_tree_init(&it->tree, number_compare, number_compare, sizeof(index_node_t), AVL_OFFSET(index_node_t, node));
 }
 
 void index_table_clear(index_table_t *it)

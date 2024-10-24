@@ -43,8 +43,8 @@ static inline int uuid_compare(const void *a, const void *b)
 void uuid_list_init(uuid_list_t *ul)
 {
     ul->count = 0;
-    avl_tree_init(&ul->hash_tree, number_compare, sizeof(uuid_node_t), AVL_OFFSET(uuid_node_t, node));
-    avl_tree_init(&ul->uuid_tree, uuid_compare, sizeof(uuid_node_t), AVL_OFFSET(uuid_node_t, node));
+    avl_tree_init(&ul->hash_tree, number_compare, number_compare, sizeof(uuid_node_t), AVL_OFFSET(uuid_node_t, node));
+    avl_tree_init(&ul->uuid_tree, uuid_compare, uuid_compare, sizeof(uuid_node_t), AVL_OFFSET(uuid_node_t, node));
 }
 
 void uuid_list_clear(uuid_list_t *ul)

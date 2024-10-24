@@ -314,13 +314,16 @@ struct avl_node* avl_node_tear(struct avl_root *root, struct avl_node **next)
 /*====================================================================*/
 
 void avl_tree_init(struct avl_tree *tree,
-	int (*compare)(const void*, const void*), size_t size, size_t offset)
+	int (*compare)(const void*, const void*),
+	int (*find_compare)(const void*, const void*),
+	 size_t size, size_t offset)
 {
 	tree->root.node = NULL;
 	tree->offset = offset;
 	tree->size = size;
 	tree->count = 0;
 	tree->compare = compare;
+	tree->find_compare = compare;
 }
 
 
@@ -363,7 +366,7 @@ void *avl_tree_prev(struct avl_tree *tree, void *data)
 void *avl_tree_find(struct avl_tree *tree, const void *data)
 {
 	struct avl_node *n = tree->root.node;
-	int (*compare)(const void*, const void*) = tree->compare;
+	int (*compare)(const void*, const void*) = tree->find_compare;
 	int offset = tree->offset;
 	while (n) {
 		void *nd = AVL_NODE2DATA(n, offset);
