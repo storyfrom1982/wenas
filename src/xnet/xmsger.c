@@ -1022,6 +1022,7 @@ static void* main_loop(void *ptr)
                             __xlogd("xmsger_loop >>>>-------------> RECV PONG: SN(%u) KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, remote_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                            channel->ack.cid = channel->rcid;
                             // 通知用户建立连接
                             msger->callback->on_channel_to_peer(msger->callback, channel);                            
                         }
@@ -1086,6 +1087,7 @@ static void* main_loop(void *ptr)
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: SN(%u) REMOTE KEY(%u) LOCAL KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, channel->local_key, channel->timestamp);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                            channel->ack.cid = rcid;
 
                             channel->connected = true;
                             msger->callback->on_channel_from_peer(msger->callback, channel);
