@@ -72,7 +72,7 @@ typedef struct sserialbuf {
 
 typedef struct {
     union{
-        uint64_t id;
+        uint64_t index;
         struct {
             uint16_t cid;
             uint16_t port;
@@ -763,7 +763,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 cid.port = channel->port;
                 cid.ip = channel->ip;
                 // 移除正在建立连接标志
-                xtree_take(channel->msger->chcache, &cid.id, 8);
+                xtree_take(channel->msger->chcache, &cid.index, 8);
             }
 
             __atom_add(channel->sendbuf->rpos, 1);
@@ -977,9 +977,9 @@ static void* main_loop(void *ptr)
             cid.ip = addr.ip;
 
             // channel = (xchannel_ptr)xtree_find(msger->chcache, &addr.port, 6);
-            channel = avl_tree_find(&msger->peers, &cid.id);
+            channel = avl_tree_find(&msger->peers, &cid.index);
 
-            __xlogd("main_loop channel=%p cid=0x%X\n", channel, cid.id);
+            __xlogd("main_loop channel=%p cid=0x%X\n", channel, cid.index);
 
             if (channel){
 
@@ -1059,7 +1059,14 @@ static void* main_loop(void *ptr)
                 if (rpack->head.type == XMSG_PACK_PING){
                     // 收到对方发起的 PING
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
-                        channel = xtree_find(msger->chcache, &cid.id, 8);
+                        channel = xtree_find(msger->chcache, &cid.index, 8);
+                        // 检测是否在正在建立连接的过程中又发起了同样 cid 的新连接
+                        if (rpack->head.resend == 0 && channel != NULL){
+                            // 如果 PING 第一次到达，需要释放之前相同 cid 的正在建立连接的 channel
+                            xtree_take(msger->chcache, &cid.index, 8);
+                            xchannel_free(channel);
+                            channel = NULL;
+                        }
                         if (!channel){
                             // 取出同步参数
                             uint8_t remote_key = *((uint8_t*)(rpack->body));
@@ -1070,7 +1077,7 @@ static void* main_loop(void *ptr)
                             channel = xchannel_create(msger, serial_range);
                             __xbreak(channel == NULL);
                             // 暂存连接，收到 PONG 的 ACK 时清除，以免收到重复的 PING 导致重复创建连接
-                            xtree_save(msger->chcache, &cid.id, 8, channel);
+                            xtree_save(msger->chcache, &cid.index, 8, channel);
                             channel->addr = addr;
                             channel->lcid.port = addr.port;
                             channel->lcid.ip = addr.ip;
@@ -1118,10 +1125,10 @@ static void* main_loop(void *ptr)
                     
                     if (rpack->head.flag == XMSG_PACK_BYE){
                         // 主动端收到 BYE 的 ACK，移除索引
-                        channel = xtree_find(msger->chcache, &cid.id, 8);
+                        channel = xtree_find(msger->chcache, &cid.index, 8);
                         if (channel){
                             msger->callback->on_channel_break(msger->callback, channel);
-                            xtree_take(msger->chcache, &cid.id, 8);
+                            xtree_take(msger->chcache, &cid.index, 8);
                             xchannel_free(channel);
                         }
                     }
@@ -1174,7 +1181,7 @@ static void* main_loop(void *ptr)
 
                     channel->rcid = channel->lcid.cid;
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr (0x%X) ip=%s port=%u\n", channel->lcid.id, ip, port);
+                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr (0x%X) ip=%s port=%u\n", channel->lcid.index, ip, port);
                     channel->keepalive = true;
 
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1200,7 +1207,7 @@ static void* main_loop(void *ptr)
                         // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
                         channel->lcid.cid = channel->rcid;
                         // 加入暂存链接池
-                        xtree_save(msger->chcache, &channel->lcid.id, 8, channel);
+                        xtree_save(msger->chcache, &channel->lcid.index, 8, channel);
                     }
                 }
 
@@ -1491,16 +1498,16 @@ void xmsger_notify(xmsger_ptr msger, uint64_t timing)
 
 static inline int compare_channel(const void *a, const void *b)
 {
-    __xlogd("---------------------compare_channel a=%lu b=%lu\n", ((xchannel_ptr)a)->lcid.id, ((xchannel_ptr)b)->lcid.id);
-    __xlogd("---------------------compare_channel %d\n", ((xchannel_ptr)a)->lcid.id - ((xchannel_ptr)b)->lcid.id);
-	return ((xchannel_ptr)a)->lcid.id - ((xchannel_ptr)b)->lcid.id;
+    __xlogd("---------------------compare_channel a=%lu b=%lu\n", ((xchannel_ptr)a)->lcid.index, ((xchannel_ptr)b)->lcid.index);
+    __xlogd("---------------------compare_channel %d\n", ((xchannel_ptr)a)->lcid.index - ((xchannel_ptr)b)->lcid.index);
+	return ((xchannel_ptr)a)->lcid.index - ((xchannel_ptr)b)->lcid.index;
 }
 
 static inline int compare_find_channel(const void *a, const void *b)
 {
-    __xlogd("---------------------compare_find_channel a=%lu b=%lu\n", (*((uint64_t*)(a))), (((xchannel_ptr)b)->lcid.id));
-    __xlogd("---------------------compare_find_channel %d\n", (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.id));
-	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.id);
+    __xlogd("---------------------compare_find_channel a=%lu b=%lu\n", (*((uint64_t*)(a))), (((xchannel_ptr)b)->lcid.index));
+    __xlogd("---------------------compare_find_channel %d\n", (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index));
+	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index);
 }
 
 xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
