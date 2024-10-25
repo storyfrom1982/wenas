@@ -755,7 +755,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     // 把已经传送到对端的 msg 交给发送线程处理
                     channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg);
                 }
-            }else if (rpack->head.flag == XMSG_PACK_PONG){
+            }else if (rpack->head.type == XMSG_PACK_PONG){
+                __xlogd("xchannel_recv_ack >>>>-----------> (%u) PONG ACK: %u\n", channel->rcid, rpack->head.ack);
                 // 拼装临时 cid
                 channelid_t cid;
                 cid.cid = channel->rcid;
@@ -1018,7 +1019,7 @@ static void* main_loop(void *ptr)
                             channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
                             // 设置校验码
                             channel->remote_key = remote_key;
-                            // __xlogd("xmsger_loop >>>>-------------> RECV PONG: SN(%u) KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, remote_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: SN(%u) KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, remote_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
                             // 通知用户建立连接
@@ -1512,6 +1513,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
     msger->running = true;
     msger->callback = callback;
     msger->sendable = 0;
+    msger->cid = __xapi->clock() % UINT16_MAX;
 
     msger->send_list.len = 0;
     msger->send_list.head.prev = &msger->send_list.head;
