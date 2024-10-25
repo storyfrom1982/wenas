@@ -1071,7 +1071,7 @@ static void* main_loop(void *ptr)
                             xtree_save(msger->chcache, &cid.id, 8, channel);
                             channel->addr = addr;
                             channel->lcid.port = addr.port;
-                            channel->lcid.id = addr.ip;
+                            channel->lcid.ip = addr.ip;
                             // 建立索引
                             do {
                                 channel->lcid.cid = msger->cid++;
