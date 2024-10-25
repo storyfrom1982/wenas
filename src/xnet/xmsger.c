@@ -1087,14 +1087,22 @@ static void* main_loop(void *ptr)
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
 
                             channel->connected = true;
-                            msger->callback->on_channel_from_peer(msger->callback, channel);                            
+                            msger->callback->on_channel_from_peer(msger->callback, channel);
+
+                            // 更新接收缓冲区和 ACK
+                            xchannel_recv_pack(channel, &rpack);
+                            // 生成 PONG
+                            xchannel_serial_pack(channel, XMSG_PACK_PONG);
+                            // 发送 PONG 和更新的 ACK
+                            xchannel_send_pack(channel);
+
+                        }else {
+                            
+                            xchannel_recv_pack(channel, &rpack);
+                            if (channel->ack.flag != 0){
+                                xchannel_send_ack(channel);
+                            }
                         }
-                        // 更新接收缓冲区和 ACK
-                        xchannel_recv_pack(channel, &rpack);
-                        // 生成 PONG
-                        xchannel_serial_pack(channel, XMSG_PACK_PONG);
-                        // 发送 PONG 和更新的 ACK
-                        xchannel_send_pack(channel);
 
                     }else {}
 
