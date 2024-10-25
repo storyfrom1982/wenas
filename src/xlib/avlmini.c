@@ -323,7 +323,7 @@ void avl_tree_init(struct avl_tree *tree,
 	tree->size = size;
 	tree->count = 0;
 	tree->compare = compare;
-	tree->find_compare = compare;
+	tree->find_compare = find_compare;
 }
 
 

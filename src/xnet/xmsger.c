@@ -978,7 +978,7 @@ static void* main_loop(void *ptr)
             // channel = (xchannel_ptr)xtree_find(msger->chcache, &addr.port, 6);
             channel = avl_tree_find(&msger->peers, &cid.id);
 
-            __xlogd("main_loop channel=%p\n", channel);
+            __xlogd("main_loop channel=%p cid=0x%X\n", channel, cid.id);
 
             if (channel){
 
@@ -1097,7 +1097,7 @@ static void* main_loop(void *ptr)
                             xchannel_send_pack(channel);
 
                         }else {
-                            
+
                             xchannel_recv_pack(channel, &rpack);
                             if (channel->ack.flag != 0){
                                 xchannel_send_ack(channel);
@@ -1171,7 +1171,7 @@ static void* main_loop(void *ptr)
 
                     channel->rcid = channel->lcid.cid;
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr (0x%X) ip=%s port=%u\n", *(uint64_t*)(&channel->addr.port), ip, port);
+                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr (0x%X) ip=%s port=%u\n", channel->lcid.id, ip, port);
                     channel->keepalive = true;
 
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1488,11 +1488,15 @@ void xmsger_notify(xmsger_ptr msger, uint64_t timing)
 
 static inline int compare_channel(const void *a, const void *b)
 {
+    __xlogd("---------------------compare_channel a=%lu b=%lu\n", ((xchannel_ptr)a)->lcid.id, ((xchannel_ptr)b)->lcid.id);
+    __xlogd("---------------------compare_channel %d\n", ((xchannel_ptr)a)->lcid.id - ((xchannel_ptr)b)->lcid.id);
 	return ((xchannel_ptr)a)->lcid.id - ((xchannel_ptr)b)->lcid.id;
 }
 
 static inline int compare_find_channel(const void *a, const void *b)
 {
+    __xlogd("---------------------compare_find_channel a=%lu b=%lu\n", (*((uint64_t*)(a))), (((xchannel_ptr)b)->lcid.id));
+    __xlogd("---------------------compare_find_channel %d\n", (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.id));
 	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.id);
 }
 
