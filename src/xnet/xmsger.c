@@ -40,7 +40,8 @@ typedef struct xhead {
     uint8_t sid; // 多路复用的流 ID
     uint16_t range; // 一个消息的分包数量，从 1 到 range
     uint16_t len; // 当前分包装载的数据长度
-    uint32_t cid; // 连接通道 ID
+    uint16_t lcid; // 本端 CID
+    uint16_t rcid; // 对端 CID
 }*xhead_ptr;
 
 typedef struct xpack {
@@ -411,7 +412,8 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.flag = 0;
     pack->head.key = (XMSG_VAL ^ channel->remote_key);
     pack->head.sn = channel->sendbuf->wpos;
-    pack->head.cid = channel->rcid;
+    pack->head.lcid = channel->lcid.cid;
+    pack->head.rcid = channel->rcid;
     __atom_add(channel->sendbuf->wpos, 1);
     channel->len += pack->head.len;
     channel->msger->len += pack->head.len;
@@ -453,7 +455,8 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.flag = 0;
         pack->head.key = (XMSG_VAL ^ channel->remote_key);
         pack->head.sn = channel->sendbuf->wpos;
-        pack->head.cid = channel->rcid;
+        pack->head.lcid = channel->lcid.cid;
+        pack->head.rcid = channel->rcid;
         __atom_add(channel->sendbuf->wpos, 1);
         channel->msger->sendable++;
         // 判断消息是否全部写入缓冲区
@@ -969,24 +972,19 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            __xlogd("main_loop (IP:%X)(KEY:%u) >>>>>---------------------------------> RECV: TYPE(%u) FLAG[%u:%u:%u] SN: %u\n", 
-                    *(uint64_t*)(&addr.port), rpack->head.key, rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
-
-            cid.cid = rpack->head.cid;
+            cid.cid = rpack->head.rcid;
             cid.port = addr.port;
             cid.ip = addr.ip;
 
-            // channel = (xchannel_ptr)xtree_find(msger->chcache, &addr.port, 6);
-            channel = avl_tree_find(&msger->peers, &cid.index);
+            __xlogd("main_loop RECV: IP(%X) CID[%u->%u] KEY(%u) SN(%u) >>>>>--------> TYPE(%u) FLAG[%u:%u:%u]\n", 
+                    cid.index, rpack->head.lcid, rpack->head.rcid, rpack->head.key, rpack->head.sn, rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks);
 
-            __xlogd("main_loop channel=%p cid=0x%X\n", channel, cid.index);
+            channel = avl_tree_find(&msger->peers, &cid);
 
             if (channel){
 
                 // 协议层验证
                 if ((rpack->head.key ^ channel->local_key) == XMSG_VAL){
-
-                    __xlogd("main_loop key ok\n");
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         xchannel_recv_pack(channel, &rpack);
@@ -1013,16 +1011,18 @@ static void* main_loop(void *ptr)
                             uint8_t remote_key = *((uint8_t*)(rpack->body));
                             uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
                             uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                            uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
                             // 更新 rcid
-                            channel->rcid = *((uint16_t*)(rpack->body + 3));
+                            channel->rcid = rcid;
                             // 同步序列号
                             channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
                             // 设置校验码
                             channel->remote_key = remote_key;
-                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: SN(%u) KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, remote_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.cid = channel->rcid;
+                            channel->ack.rcid = channel->rcid;
                             // 通知用户建立连接
                             msger->callback->on_channel_to_peer(msger->callback, channel);                            
                         }
@@ -1091,12 +1091,11 @@ static void* main_loop(void *ptr)
                             channel->remote_key = remote_key;
                             // 设置对端 cid
                             channel->rcid = rcid;
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.cid = rcid;
-
+                            channel->ack.rcid = rcid;
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
                             channel->connected = true;
                             msger->callback->on_channel_from_peer(msger->callback, channel);
 
@@ -1180,8 +1179,6 @@ static void* main_loop(void *ptr)
 
                     channel->rcid = channel->lcid.cid;
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr cid(%u) serialnumber(%u) key(%u) ip=%s port=%u\n", 
-                                                channel->lcid.cid, channel->serial_number, channel->local_key, ip, port);
                     channel->keepalive = true;
 
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
@@ -1193,7 +1190,8 @@ static void* main_loop(void *ptr)
                         firstmsg = firstmsg->next;
                     }
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel (%u) to peer SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
+                    __xlogd("xmsger_loop >>>>-------------> create channel ip=%s port=%u CID(%u) KEY(%u) SN(%u)\n", 
+                                                ip, port, channel->lcid.cid, channel->local_key, channel->serial_number);
 
                 }else if (msg->flag == XMSG_FLAG_DISCONNECT){
 
@@ -1498,15 +1496,15 @@ void xmsger_notify(xmsger_ptr msger, uint64_t timing)
 
 static inline int compare_channel(const void *a, const void *b)
 {
-    __xlogd("---------------------compare_channel a=%lu b=%lu\n", ((xchannel_ptr)a)->lcid.index, ((xchannel_ptr)b)->lcid.index);
-    __xlogd("---------------------compare_channel %d\n", ((xchannel_ptr)a)->lcid.index - ((xchannel_ptr)b)->lcid.index);
+    // __xlogd("---------------------compare_channel a=%lu b=%lu\n", ((xchannel_ptr)a)->lcid.index, ((xchannel_ptr)b)->lcid.index);
+    // __xlogd("---------------------compare_channel %d\n", ((xchannel_ptr)a)->lcid.index - ((xchannel_ptr)b)->lcid.index);
 	return ((xchannel_ptr)a)->lcid.index - ((xchannel_ptr)b)->lcid.index;
 }
 
 static inline int compare_find_channel(const void *a, const void *b)
 {
-    __xlogd("---------------------compare_find_channel a=%lu b=%lu\n", (*((uint64_t*)(a))), (((xchannel_ptr)b)->lcid.index));
-    __xlogd("---------------------compare_find_channel %d\n", (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index));
+    __xlogd("---------------------compare_find_channel a=%X b=%X\n", ((channelid_t*)(a))->index, (((xchannel_ptr)b)->lcid.index));
+    __xlogd("---------------------compare_find_channel %d\n", (((channelid_t*)(a))->index) - (((xchannel_ptr)b)->lcid.index));
 	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index);
 }
 
