@@ -1092,6 +1092,7 @@ static void* main_loop(void *ptr)
                             // 设置对端 cid
                             channel->rcid = rcid;
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: SN(%u) REMOTE KEY(%u) LOCAL KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, channel->local_key, channel->timestamp);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: create channel (%u) to peer SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
                             channel->ack.cid = rcid;
@@ -1193,7 +1194,7 @@ static void* main_loop(void *ptr)
                         firstmsg = firstmsg->next;
                     }
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel (0x%X) to peer SN(%u) KEY(%u)\n", *(uint64_t*)(&channel->addr.port), channel->serial_number, channel->local_key);
+                    __xlogd("xmsger_loop >>>>-------------> create channel (%u) to peer SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
 
                 }else if (msg->flag == XMSG_FLAG_DISCONNECT){
 

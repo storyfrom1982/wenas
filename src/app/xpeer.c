@@ -90,6 +90,7 @@ static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xmsg_ptr msg = xmsg_maker();
+    msg->ctx = xchannel_get_ctx(channel);
     xl_add_word(&msg->lkv, "api", "break");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -531,11 +532,11 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             server->pctx_list[server->cid] = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, "192.168.1.112", 9256, server->pctx_list[server->cid], NULL);
+            xmsger_connect(server->msger, "192.168.1.6", 9256, server->pctx_list[server->cid], NULL);
 
         } else if (strcmp(command, "discon") == 0) {
 
-            xmsger_disconnect(server->msger, server->channel);
+            xmsger_disconnect(server->msger, server->pctx_list[server->cid]->channel);
             
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
