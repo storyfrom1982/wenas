@@ -458,9 +458,6 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         channel->msger->sendable++;
         // 判断消息是否全部写入缓冲区
         if (msg->sendpos == msg->lkv.wpos){
-            if (channel->sendmsg == NULL){
-                channel->sendmsg = channel->msglist_head;
-            }
             // 更新当前消息
             channel->msglist_head = channel->msglist_head->next;
             if (channel->msglist_head == NULL){
@@ -491,6 +488,7 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
 
         // 设置新消息为当前正在发送的消息
         channel->msglist_head = msg;
+        channel->sendmsg = channel->msglist_head;
     }
 
     // 加入发送队列，并且从待回收队列中移除
@@ -693,7 +691,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 pack->msg->recvpos += pack->head.len;
                 if (pack->msg->recvpos == pack->msg->lkv.wpos){
                     // 更新待确认队列
-                    channel->sendmsg = channel->sendmsg->next;
+                    channel->sendmsg = pack->msg->next;
                     // 把已经传送到对端的 msg 交给发送线程处理
                     channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg);
                 }
