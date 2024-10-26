@@ -1091,8 +1091,8 @@ static void* main_loop(void *ptr)
                             channel->remote_key = remote_key;
                             // 设置对端 cid
                             channel->rcid = rcid;
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: SN(%u) REMOTE KEY(%u) LOCAL KEY(%u) ts(%lu)\n", serial_number, channel->remote_key, channel->local_key, channel->timestamp);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: create channel (%u) to peer SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
                             channel->ack.cid = rcid;
@@ -1168,8 +1168,6 @@ static void* main_loop(void *ptr)
                     channel->ctx = xl_find_ptr(&parser, "ctx");
                     xmsg_ptr firstmsg = xl_find_ptr(&parser, "msg");
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel (0x%X) ip=%s port=%u\n", *(uint64_t*)(&channel->addr.port), ip, port);
-
                     mcopy(channel->ip, ip, slength(ip));
                     channel->port = port;
                     __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
@@ -1182,7 +1180,8 @@ static void* main_loop(void *ptr)
 
                     channel->rcid = channel->lcid.cid;
 
-                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr (0x%X) ip=%s port=%u\n", channel->lcid.index, ip, port);
+                    __xlogd("xmsger_loop >>>>-------------> create channel host to addr cid(%u) serialnumber(%u) key(%u) ip=%s port=%u\n", 
+                                                channel->lcid.cid, channel->serial_number, channel->local_key, ip, port);
                     channel->keepalive = true;
 
                     // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
