@@ -288,8 +288,30 @@ static void chord_invite(xpeer_ctx_ptr pctx)
     __xlogd("chord_invite ----------------------- exit\n");
 }
 
+static void req_login(xpeer_ctx_ptr ctx);
+
+static void res_logout(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
+{
+    // xmsger_disconnect(task->pctx->server->msger, task->pctx->channel);
+    req_login(pctx);
+    remove_task(task);
+}
+
+static void req_logout(xpeer_ctx_ptr pctx)
+{
+    xpeer_ptr peer = pctx->server;
+    xpeer_task_ptr task = add_task(pctx, res_logout);
+    xmsg_ptr req = xmsg_maker();
+    xl_add_word(&req->lkv, "api", "logout");
+    xl_add_uint(&req->lkv, "tid", task->node.index);
+    xl_add_uint(&req->lkv, "key", peer->key);
+    xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
+    xmsger_send_message(peer->msger, pctx->channel, req);
+}
+
 static void res_login(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
+    req_logout(pctx);
     remove_task(task);
 }
 
@@ -306,23 +328,6 @@ static void req_login(xpeer_ctx_ptr ctx)
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
     xmsger_send_message(peer->msger, ctx->channel, req);
     __xlogd("req_login ----------------------- exit\n");
-}
-
-static void res_logout(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
-{
-    remove_task(task);
-}
-
-static void req_logout(xpeer_ctx_ptr pctx)
-{
-    xpeer_ptr peer = pctx->server;
-    xpeer_task_ptr task = add_task(pctx, res_logout);
-    xmsg_ptr req = xmsg_maker();
-    xl_add_word(&req->lkv, "api", "logout");
-    xl_add_uint(&req->lkv, "tid", task->node.index);
-    xl_add_uint(&req->lkv, "key", peer->key);
-    xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
-    xmsger_send_message(peer->msger, pctx->channel, req);
 }
 
 static void api_timeout(xpeer_ctx_ptr pctx)
