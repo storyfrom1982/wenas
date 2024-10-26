@@ -1012,8 +1012,8 @@ static void* main_loop(void *ptr)
                             uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
                             uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
                             uint16_t rcid = *((uint16_t*)(rpack->body + 3));
-                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
                             // 更新 rcid
                             channel->rcid = rcid;
                             // 同步序列号
@@ -1094,8 +1094,8 @@ static void* main_loop(void *ptr)
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
                             channel->ack.rcid = rcid;
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) SN(%u) KEY(%u)\n", rcid, serial_number, remote_key);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) SN(%u) KEY(%u)\n", channel->lcid.cid, channel->serial_number, channel->local_key);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
                             channel->connected = true;
                             msger->callback->on_channel_from_peer(msger->callback, channel);
 
