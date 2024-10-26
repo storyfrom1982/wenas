@@ -596,6 +596,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
 
+            // 记录发送次数
+            pack->head.resend = 1;
+
             // 记录当前时间
             pack->timestamp = __xapi->clock();
             pack->timer = pack->timestamp + pack->delay;
@@ -813,8 +816,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 判断这个包是否已经接收过
                 if (pack->timestamp != 0){
                     // 判断是否进行了重传
-                    if (pack->head.resend == 0){
-                        pack->head.resend = 1;
+                    if (pack->head.resend < 2){
+                        pack->head.resend++;
                         // 判断重传的包是否带有 ACK
                         if (pack->head.flag != 0){
                             // 更新 ACKS
