@@ -361,7 +361,9 @@ static int udp_listen(int sock, uint64_t microseconds)
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(sock, &fds);
-    struct timeval timer = {0, microseconds};
+    struct timeval timer;
+    timer.tv_sec = microseconds / 1000000UL;
+    timer.tv_usec = microseconds & 1000000UL;
     return select(sock + 1, &fds, NULL, NULL, &timer);
 }
 

@@ -878,7 +878,8 @@ xpack_ptr next_pack()
 {
     return (xpack_ptr)calloc(1, sizeof(struct xpack));;
 }
-
+#include "errno.h"
+#include "string.h"
 static void* main_loop(void *ptr)
 {
     __xlogd("xmsger_loop enter\n");
@@ -1289,8 +1290,10 @@ static void* main_loop(void *ptr)
             if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
                 // 如果有待重传的包，会设置冲洗定时
                 // 如果需要发送 PING，会设置 PING 定时
-                __xapi->udp_listen(msger->sock, timer / 1000);
-                timer = 10000000000UL; // 10 秒                
+                // __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
+                int ret = __xapi->udp_listen(msger->sock, timer / 1000);
+                timer = 10000000000UL; // 10 秒
+                // __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
             }
             __atom_unlock(msger->listening);
         }
@@ -1325,8 +1328,10 @@ static void* main_loop(void *ptr)
 
 static inline void xmsger_notify(xmsger_ptr msger)
 {
+    // __xlogd("xmsger_notify --------- enter\n");
     static struct xhead head = {.len = UINT16_MAX};
     while (__xapi->udp_sendto(msger->sock, &msger->addr, &head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE);
+    // __xlogd("xmsger_notify --------- exit\n");
 }
 
 bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)
@@ -1458,7 +1463,7 @@ static inline int compare_find_channel(const void *a, const void *b)
 	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index);
 }
 
-xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
+xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 {
     __xlogd("xmsger_create enter\n");
 

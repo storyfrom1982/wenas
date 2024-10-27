@@ -50,7 +50,7 @@ typedef struct xmsgercb {
 }*xmsgercb_ptr;
 
 
-extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock);
+extern xmsger_ptr xmsger_create(xmsgercb_ptr callback);
 extern void xmsger_free(xmsger_ptr *pptr);
 extern bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg);
 // extern bool xmsger_send_stream(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);

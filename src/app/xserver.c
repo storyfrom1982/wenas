@@ -837,7 +837,7 @@ int main(int argc, char *argv[])
     server->task_pid = __xapi->process_create(task_loop, server);
     __xbreak(server->task_pid == NULL);
     
-    server->msger = xmsger_create(&server->listener, server->sock);
+    server->msger = xmsger_create(&server->listener);
 
     char str[1024];
     char input[256];
