@@ -643,6 +643,10 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
 
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
+    __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n", 
+            rpack->head.ack, rpack->head.acks, channel->sendbuf->rpos, channel->sendbuf->spos, 
+            (uint8_t)(rpack->head.ack - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
+
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 && ((uint8_t)(rpack->head.ack - channel->sendbuf->rpos) <= (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos))){
 
@@ -659,7 +663,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
         // 这里曾经使用 do while 方式，造成了收到重复的 ACK，导致 rpos 越界的 BUG
         // 连续的 acks 必须至少比 rpos 大 1
-        while (channel->sendbuf->rpos != rpack->head.acks) {
+        while ((uint8_t)(rpack->head.acks - channel->sendbuf->rpos) 
+                <= (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos) // 防止后到的 acks 比之前的 acks 和 rpos 小，导致 rpos 越界
+                && channel->sendbuf->rpos != rpack->head.acks) {
 
             pack = &channel->sendbuf->buf[index];
 
@@ -803,6 +809,7 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
         if (pack->head.flag != 0){
             // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+            __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
             xchannel_recv_ack(channel, pack);
         }
         // 保存 PACK
@@ -850,6 +857,7 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
                 // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
                 if (pack->head.flag != 0){
                     // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
+                    __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
                     xchannel_recv_ack(channel, pack);
                 }
                 // 这个 PACK 首次到达，保存 PACK
@@ -941,6 +949,7 @@ static void* main_loop(void *ptr)
                             }
                         }
                     }else if (rpack->head.type == XMSG_PACK_ACK){
+                        __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
                         xchannel_recv_ack(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_ONL){
