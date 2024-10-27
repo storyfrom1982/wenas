@@ -510,7 +510,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
 
-        __xlogd("xchannel_send_pack >>>>-------------------> SN(%u) TYPE(%u) FLAG[%u:%u:%u]\n", 
+        __xlogd("xchannel_send_pack PACK >>>>-------------------> SN(%u) TYPE(%u) FLAG[%u:%u:%u]\n", 
             pack->head.sn, pack->head.type, pack->head.flag, pack->head.ack, pack->head.acks);
 
         if (channel->ack.flag != 0){
@@ -561,11 +561,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    // __xlogd("xchannel_send_pack >>>>---------------------------------> SEND ACK\n");
+    __xlogd("xchannel_send_ack ACK >>>>---------------------------------> SN(%u) TYPE(%u)\n", channel->ack.sn, channel->ack.flag);
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
-        __xlogd("xchannel_recv_pack >>>>------------------------> failed\n");
+        __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
     }
 }
 
