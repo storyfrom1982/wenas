@@ -561,7 +561,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("xchannel_send_ack ACK >>>>---------------------------------> SN(%u) TYPE(%u)\n", channel->ack.sn, channel->ack.flag);
+    __xlogd("xchannel_send_ack ACK >>>>---------------------------------> SN[%u:%u] TYPE(%u)\n", channel->ack.ack, channel->ack.acks, channel->ack.flag);
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
