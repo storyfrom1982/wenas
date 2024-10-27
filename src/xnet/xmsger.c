@@ -695,13 +695,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 更新已经到达对端的数据计数
                 pack->msg->recvpos += pack->head.len;
                 if (pack->msg->recvpos == pack->msg->lkv.wpos){
+                    __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
                     // 更新待确认队列
                     channel->sendmsg = pack->msg->next;
                     // 把已经传送到对端的 msg 交给发送线程处理
                     channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg);
                 }
             }else if (rpack->head.type == XMSG_PACK_PONG){
-                __xlogd("xchannel_recv_ack >>>>-----------> (%u) PONG ACK: %u\n", channel->rcid, rpack->head.ack);
+                __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
                 // 拼装临时 cid
                 channelid_t cid;
                 cid.cid = channel->rcid;
