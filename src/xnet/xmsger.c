@@ -26,7 +26,7 @@ enum {
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_RESEND_LIMIT       10
-#define XCHANNEL_RESEND_STEPPING    1.2
+#define XCHANNEL_RESEND_STEPPING    1.5
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
@@ -509,6 +509,10 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
     if (__serialbuf_sendable(channel->sendbuf) > 0){
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
+
+        __xlogd("xchannel_send_pack >>>>-------------------> SN(%u) TYPE(%u) FLAG[%u:%u:%u]\n", 
+            pack->head.sn, pack->head.type, pack->head.flag, pack->head.ack, pack->head.acks);
+
         if (channel->ack.flag != 0){
             // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
             // 携带 ACK
@@ -1295,10 +1299,10 @@ static void* main_loop(void *ptr)
             if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
                 // 如果有待重传的包，会设置冲洗定时
                 // 如果需要发送 PING，会设置 PING 定时
-                __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
+                // __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
                 int ret = __xapi->udp_listen(msger->sock, timer / 1000);
                 timer = 10000000000UL; // 10 秒
-                __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
+                // __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
             }
             __atom_unlock(msger->listening);
         }
@@ -1333,7 +1337,7 @@ static void* main_loop(void *ptr)
 
 static inline void xmsger_notify(xmsger_ptr msger)
 {
-    __xlogd("xmsger_notify --------- enter\n");
+    // __xlogd("xmsger_notify --------- enter\n");
     static uint16_t cid = 0;
     static struct xhead head = {.len = UINT16_MAX};
     head.rcid = cid;
@@ -1342,7 +1346,7 @@ static inline void xmsger_notify(xmsger_ptr msger)
     }while (!__atom_try_lock(msger->listening));
     __atom_unlock(msger->listening);
     cid ++;
-    __xlogd("xmsger_notify --------- exit\n");
+    // __xlogd("xmsger_notify --------- exit\n");
 }
 
 bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)

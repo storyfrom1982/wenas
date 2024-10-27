@@ -288,6 +288,7 @@ static void chord_invite(xpeer_ctx_ptr pctx)
     __xlogd("chord_invite ----------------------- exit\n");
 }
 
+#include <string.h>
 static void req_login(xpeer_ctx_ptr ctx);
 
 static void res_logout(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
@@ -306,6 +307,10 @@ static void req_logout(xpeer_ctx_ptr pctx)
     xl_add_uint(&req->lkv, "tid", task->node.index);
     xl_add_uint(&req->lkv, "key", peer->key);
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
+    uint8_t buf[2048];
+    memset(buf, 'l', 2047);
+    buf[2047] = '\0';
+    xl_add_str(&req->lkv, "str", buf, 2048);
     xmsger_send_message(peer->msger, pctx->channel, req);
 }
 
@@ -326,6 +331,10 @@ static void req_login(xpeer_ctx_ptr ctx)
     xl_add_uint(&req->lkv, "tid", task->node.index);
     xl_add_uint(&req->lkv, "key", peer->key);
     xl_add_bin(&req->lkv, "uuid", peer->uuid, UUID_BIN_BUF_LEN);
+    uint8_t buf[2048];
+    memset(buf, 'l', 2047);
+    buf[2047] = '\0';
+    xl_add_str(&req->lkv, "str", buf, 2048);
     xmsger_send_message(peer->msger, ctx->channel, req);
     __xlogd("req_login ----------------------- exit\n");
 }
