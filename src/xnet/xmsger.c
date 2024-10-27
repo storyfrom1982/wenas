@@ -129,8 +129,8 @@ typedef struct xchannellist {
 }*xchannellist_ptr;
 
 struct xmsger {
-    int sock;
-    struct __xipaddr addr;
+    int sock, notify_sock;
+    struct __xipaddr addr, notify_addr;
     uint16_t cid;
     xtree chcache;
     struct avl_tree peers;
@@ -903,13 +903,14 @@ static void* main_loop(void *ptr)
     rpack->head.len = 0;
 
     channelid_t cid;
+    int recvret = 0;
 
     while (__is_true(msger->running))
     {
         // __xlogd("main_loop >>>>-----> recvfrom\n");
         // readable 是 true 的时候，接收线程一定会阻塞到接收管道上
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
-        while (__xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
+        while ((recvret = __xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE)) == (rpack->head.len + PACK_HEAD_SIZE)){
 
             cid.cid = rpack->head.rcid;
             cid.port = addr.port;
@@ -1084,6 +1085,10 @@ static void* main_loop(void *ptr)
             rpack->head.len = 0;
         }
 
+        if (recvret == 16){
+            __xlogd("main_loop head.len ========== %u cid=%u\n", rpack->head.len, rpack->head.rcid);
+        }
+        
         if (xpipe_readable(msger->mpipe) > 0){
             // 连接的发起和开始发送消息，都必须经过这个管道
             __xbreak(xpipe_read(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
@@ -1290,10 +1295,10 @@ static void* main_loop(void *ptr)
             if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
                 // 如果有待重传的包，会设置冲洗定时
                 // 如果需要发送 PING，会设置 PING 定时
-                // __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
+                __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
                 int ret = __xapi->udp_listen(msger->sock, timer / 1000);
                 timer = 10000000000UL; // 10 秒
-                // __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
+                __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
             }
             __atom_unlock(msger->listening);
         }
@@ -1328,10 +1333,16 @@ static void* main_loop(void *ptr)
 
 static inline void xmsger_notify(xmsger_ptr msger)
 {
-    // __xlogd("xmsger_notify --------- enter\n");
+    __xlogd("xmsger_notify --------- enter\n");
+    static uint16_t cid = 0;
     static struct xhead head = {.len = UINT16_MAX};
-    while (__xapi->udp_sendto(msger->sock, &msger->addr, &head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE);
-    // __xlogd("xmsger_notify --------- exit\n");
+    head.rcid = cid;
+    do {
+        __xapi->udp_sendto(msger->notify_sock, &msger->notify_addr, &head, PACK_HEAD_SIZE);
+    }while (!__atom_try_lock(msger->listening));
+    __atom_unlock(msger->listening);
+    cid ++;
+    __xlogd("xmsger_notify --------- exit\n");
 }
 
 bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)
@@ -1476,6 +1487,10 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     __xbreak(!__xapi->udp_host_to_addr(NULL, 9256, &msger->addr));
     __xbreak(__xapi->udp_bind(msger->sock, &msger->addr) == -1);
 
+    msger->notify_sock = __xapi->udp_open();
+    __xbreak(msger->notify_sock < 0);
+    __xbreak(!__xapi->udp_host_to_addr("127.0.0.1", 9256, &msger->notify_addr));
+
     msger->running = true;
     msger->callback = callback;
     msger->sendable = 0;
@@ -1511,7 +1526,9 @@ Clean:
     if (msger->sock >= 0){
         __xapi->udp_close(msger->sock);
     }
-
+    if (msger->notify_sock >= 0){
+        __xapi->udp_close(msger->notify_sock);
+    }
     xmsger_free(&msger);
     __xlogd("xmsger_create failed\n");
     return NULL;
