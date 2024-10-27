@@ -52,7 +52,6 @@ typedef struct xmsgercb {
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock);
 extern void xmsger_free(xmsger_ptr *pptr);
-extern void xmsger_notify(xmsger_ptr msger, uint64_t timing);
 extern bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg);
 // extern bool xmsger_send_stream(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);
 // extern bool xmsger_send_file(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);

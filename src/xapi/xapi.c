@@ -356,13 +356,13 @@ static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
     return recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, (socklen_t*)&ipaddr->addrlen);
 }
 
-static int udp_listen(int sock)
+static int udp_listen(int sock, uint64_t microseconds)
 {
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(sock, &fds);
-    struct timeval timeout;
-    return select(sock + 1, &fds, NULL, NULL, NULL);
+    struct timeval timer = {0, microseconds};
+    return select(sock + 1, &fds, NULL, NULL, &timer);
 }
 
 bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {

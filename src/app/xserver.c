@@ -407,9 +407,9 @@ static void* listen_loop(void *ptr)
     while (__is_true(server->runnig))
     {
         // __xlogd("recv_loop >>>>-----> listen enter\n");
-        __xapi->udp_listen(server->sock);
+        __xapi->udp_listen(server->sock, 0);
         // __xlogd("recv_loop >>>>-----> listen exit\n");
-        xmsger_notify(server->msger, 5000000000);
+        // xmsger_notify(server->msger, 5000000000);
     }
     return NULL;
 }
@@ -751,24 +751,25 @@ Clean:
     return NULL;
 }
 
-static xserver_ptr g_server = NULL;
+// static xserver_ptr g_server = NULL;
 
-static void __sigint_handler()
-{
-    if(g_server){
-        __set_false(g_server->runnig);
-        if (g_server->sock > 0){
-            int sock = __xapi->udp_open();
-            for (int i = 0; i < 10; ++i){
-                __xapi->udp_sendto(sock, &g_server->addr, &i, sizeof(int));
-            }
-            __xapi->udp_close(sock);
-        }
-    }
-}
+// static void __sigint_handler()
+// {
+//     if(g_server){
+//         __set_false(g_server->runnig);
+//         if (g_server->sock > 0){
+//             int sock = __xapi->udp_open();
+//             for (int i = 0; i < 10; ++i){
+//                 __xapi->udp_sendto(sock, &g_server->addr, &i, sizeof(int));
+//             }
+//             __xapi->udp_close(sock);
+//         }
+//     }
+// }
 
-extern void sigint_setup(void (*handler)());
+// extern void sigint_setup(void (*handler)());
 #include <arpa/inet.h>
+#include <string.h>
 int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/server/log", NULL);
@@ -784,8 +785,8 @@ int main(int argc, char *argv[])
 //    __xlogi("ip=%s port=%u key=%u\n", server->ip, server->port, server->ring->key);
 
     __set_true(server->runnig);
-    g_server = server;
-    sigint_setup(__sigint_handler);
+    // g_server = server;
+    // sigint_setup(__sigint_handler);
 
     // const char *host = "127.0.0.1";
     // const char *host = "47.99.146.226";
@@ -818,10 +819,11 @@ int main(int argc, char *argv[])
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
 
-    server->sock = __xapi->udp_open();
-    __xbreak(server->sock < 0);
-    __xbreak(!__xapi->udp_host_to_addr(NULL, 9256, &server->addr));
-    __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
+    // server->sock = __xapi->udp_open();
+    // __xbreak(server->sock < 0);
+    // __xbreak(!__xapi->udp_host_to_addr(NULL, 9256, &server->addr));
+    // __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
+
     // struct sockaddr_in server_addr; 
     // socklen_t addr_len = sizeof(server_addr);
     // __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
@@ -837,7 +839,35 @@ int main(int argc, char *argv[])
     
     server->msger = xmsger_create(&server->listener, server->sock);
 
-    listen_loop(server);
+    char str[1024];
+    char input[256];
+    char command[256];
+    char ip[256] = {0};
+    uint64_t cid, key;
+    while (server->runnig)
+    {
+        printf("> "); // 命令提示符
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            break; // 读取失败，退出循环
+        }
+
+        // 去掉输入字符串末尾的换行符
+        input[strcspn(input, "\n")] = 0;
+
+        // 分割命令和参数
+        sscanf(input, "%s", command);
+
+        if (strcmp(command, "exit") == 0) {
+            __xlogi("再见！\n");
+            break;
+        } else {
+            __xlogi("未知命令: %s\n", command);
+        }
+
+        mclear(command, 256);
+    }
+
+    xmsger_free(&server->msger);
 
     if (server->task_pipe){
         xpipe_break(server->task_pipe);
@@ -852,12 +882,6 @@ int main(int argc, char *argv[])
             // TODO 清理管道
         }
         xpipe_free(&server->task_pipe);
-    }
-    
-    xmsger_free(&server->msger);
-
-    if (server->sock > 0){
-        __xapi->udp_close(server->sock);
     }
 
     search_table_clear(&server->api_tabel);

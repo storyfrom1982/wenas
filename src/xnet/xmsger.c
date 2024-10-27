@@ -130,6 +130,7 @@ typedef struct xchannellist {
 
 struct xmsger {
     int sock;
+    struct __xipaddr addr;
     uint16_t cid;
     xtree chcache;
     struct avl_tree peers;
@@ -403,7 +404,7 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.range = 1;
     pack->channel = channel;
     pack->delay = channel->back_delay;
-    __xlogd("xchannel_serial_pack >>>>------------------------> delay=%lu\n", pack->delay);
+    // __xlogd("xchannel_serial_pack >>>>------------------------> delay=%lu\n", pack->delay);
     pack->is_flushing = false;
     pack->head.resend = 0;
     pack->head.flag = 0;
@@ -446,7 +447,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
         pack->channel = channel;
         pack->delay = channel->back_delay;
-        __xlogd("xchannel_serial_msg >>>>------------------------> delay=%lu\n", pack->delay);
+        // __xlogd("xchannel_serial_msg >>>>------------------------> delay=%lu\n", pack->delay);
         pack->is_flushing = false;
         pack->head.resend = 0;
         pack->head.flag = 0;
@@ -539,7 +540,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->timestamp = __xapi->clock();
             pack->timer = pack->timestamp + pack->delay;
-            __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
+            // __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
             pack->delay *= XCHANNEL_RESEND_STEPPING;
             channel->timestamp = pack->timestamp;
             __ring_list_put_into_end(&channel->flushinglist, pack);
@@ -762,7 +763,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                             pack->timer += pack->delay;
                             pack->delay *= XCHANNEL_RESEND_STEPPING;
-                            __xlogd("xchannel_recv_ack >>>>------------------------> delay=%lu\n", pack->delay);
+                            // __xlogd("xchannel_recv_ack >>>>------------------------> delay=%lu\n", pack->delay);
                             
                         }else {
                             __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
@@ -1209,7 +1210,7 @@ static void* main_loop(void *ptr)
                                     // 记录重传次数
                                     spack->head.resend++;
                                     spack->timer += spack->delay;
-                                    __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
+                                    // __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
                                     spack->delay *= XCHANNEL_RESEND_STEPPING;
                                     // 列表中如果只有一个成员，就不能更新包的位置
                                     if (channel->flushinglist.len > 1){
@@ -1284,20 +1285,29 @@ static void* main_loop(void *ptr)
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
-            // 如果有待重传的包，会设置冲洗定时
-            // 如果需要发送 PING，会设置 PING 定时
-            if (__xapi->mutex_trylock(msger->mtx)){
-                // __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
-                if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
-                    __xapi->mutex_notify(msger->mtx);
-                    __xapi->mutex_timedwait(msger->mtx, timer);
-                    timer = 10000000000UL; // 10 秒
-                }
-                // __xlogd("main_loop >>>>-----> start working\n");
-                __xapi->mutex_unlock(msger->mtx);
+        if (__atom_try_lock(msger->listening)){
+            if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
+                // 如果有待重传的包，会设置冲洗定时
+                // 如果需要发送 PING，会设置 PING 定时
+                __xapi->udp_listen(msger->sock, timer / 1000);
+                timer = 10000000000UL; // 10 秒                
             }
+            __atom_unlock(msger->listening);
         }
+        // if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
+        //     // 如果有待重传的包，会设置冲洗定时
+        //     // 如果需要发送 PING，会设置 PING 定时
+        //     // if (__xapi->mutex_trylock(msger->mtx)){
+        //     //     // __xlogd("main_loop >>>>-----> nothig to do sendable: %lu\n", msger->sendable);
+        //     //     if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
+        //     //         __xapi->mutex_notify(msger->mtx);
+        //     //         __xapi->mutex_timedwait(msger->mtx, timer);
+        //     //         timer = 10000000000UL; // 10 秒
+        //     //     }
+        //     //     // __xlogd("main_loop >>>>-----> start working\n");
+        //     //     __xapi->mutex_unlock(msger->mtx);
+        //     // }
+        // }
     }
 
 
@@ -1313,6 +1323,12 @@ static void* main_loop(void *ptr)
     return NULL;
 }
 
+static inline void xmsger_notify(xmsger_ptr msger)
+{
+    static struct xhead head = {.len = UINT16_MAX};
+    while (__xapi->udp_sendto(msger->sock, &msger->addr, &head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE);
+}
+
 bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)
 {
     __xcheck(channel == NULL || msg == NULL);
@@ -1320,14 +1336,20 @@ bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)
     msg->channel = channel;
     msg->ctx = channel->ctx;
     xmsg_final(msg);
-    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
-    __xapi->mutex_notify(msger->mtx);
+    if (__atom_try_lock(msger->listening)){
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        __atom_unlock(msger->listening);
+    }else {
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        xmsger_notify(msger);
+    }
 
     return true;
 
 XClean:
 
+    __atom_unlock(msger->listening);
     return false;
 }
 
@@ -1357,13 +1379,13 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
     msg->channel = channel;
     msg->flag = XMSG_FLAG_DISCONNECT; 
 
-    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-
-    // 确保主线程一定会被唤醒
-    __xapi->mutex_lock(msger->mtx);
-    __set_true(msger->readable);
-    __xapi->mutex_notify(msger->mtx);
-    __xapi->mutex_unlock(msger->mtx);
+    if (__atom_try_lock(msger->listening)){
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        __atom_unlock(msger->listening);
+    }else {
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        xmsger_notify(msger);
+    }
 
     __xlogd("xmsger_disconnect channel 0x%X exit\n", channel);
 
@@ -1372,11 +1394,10 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
 XClean:
 
     __xlogd("xmsger_disconnect channel 0x%X failed", channel);
-
+    __atom_unlock(msger->listening);
     if (msg){
         free(msg);
     }
-
     return false;
 
 }
@@ -1400,14 +1421,14 @@ bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, struct xcha
     xl_add_uint(&msg->lkv, "port", port);
     xl_add_ptr(&msg->lkv, "ctx", ctx);
     xl_add_ptr(&msg->lkv, "msg", firstmsg);
-    
-    __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
-    // 确保主线程一定会被唤醒
-    __xapi->mutex_lock(msger->mtx);
-    __set_true(msger->readable);
-    __xapi->mutex_notify(msger->mtx);
-    __xapi->mutex_unlock(msger->mtx);
+    if (__atom_try_lock(msger->listening)){
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        __atom_unlock(msger->listening);
+    }else {
+        __xcheck(xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        xmsger_notify(msger);
+    }
 
     __xlogd("xmsger_connect exit\n");
 
@@ -1416,19 +1437,11 @@ bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, struct xcha
 XClean:
 
     __xlogd("xmsger_connect failed\n");
-
+    __atom_unlock(msger->listening);
     if (msg){
         free(msg);
     }
     return false;    
-}
-
-void xmsger_notify(xmsger_ptr msger, uint64_t timing)
-{
-    __xapi->mutex_lock(msger->mtx);
-    __xapi->mutex_notify(msger->mtx);
-    __xapi->mutex_timedwait(msger->mtx, timing);
-    __xapi->mutex_unlock(msger->mtx);
 }
 
 static inline int compare_channel(const void *a, const void *b)
@@ -1440,8 +1453,8 @@ static inline int compare_channel(const void *a, const void *b)
 
 static inline int compare_find_channel(const void *a, const void *b)
 {
-    __xlogd("---------------------compare_find_channel a=%X b=%X\n", ((channelid_t*)(a))->index, (((xchannel_ptr)b)->lcid.index));
-    __xlogd("---------------------compare_find_channel %d\n", (((channelid_t*)(a))->index) - (((xchannel_ptr)b)->lcid.index));
+    // __xlogd("---------------------compare_find_channel a=%X b=%X\n", ((channelid_t*)(a))->index, (((xchannel_ptr)b)->lcid.index));
+    // __xlogd("---------------------compare_find_channel %d\n", (((channelid_t*)(a))->index) - (((xchannel_ptr)b)->lcid.index));
 	return (*((uint64_t*)(a)) - ((xchannel_ptr)b)->lcid.index);
 }
 
@@ -1453,7 +1466,11 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->sock = sock;
+    msger->sock = __xapi->udp_open();
+    __xbreak(msger->sock < 0);
+    __xbreak(!__xapi->udp_host_to_addr(NULL, 9256, &msger->addr));
+    __xbreak(__xapi->udp_bind(msger->sock, &msger->addr) == -1);
+
     msger->running = true;
     msger->callback = callback;
     msger->sendable = 0;
@@ -1486,6 +1503,10 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int sock)
 
 Clean:
 
+    if (msger->sock >= 0){
+        __xapi->udp_close(msger->sock);
+    }
+
     xmsger_free(&msger);
     __xlogd("xmsger_create failed\n");
     return NULL;
@@ -1507,9 +1528,10 @@ void xmsger_free(xmsger_ptr *pptr)
 
         __set_false(msger->running);
 
-        if (msger->mtx){
-            __xapi->mutex_broadcast(msger->mtx);
-        }
+        xmsger_notify(msger);
+        // if (msger->mtx){
+        //     __xapi->mutex_broadcast(msger->mtx);
+        // }
 
         if (msger->mpipe){
             __xlogd("xmsger_free break mpipe\n");
@@ -1545,6 +1567,10 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->mtx){
             __xlogd("xmsger_free mutex\n");
             __xapi->mutex_free(msger->mtx);
+        }
+
+        if (msger->sock >= 0){
+            __xapi->udp_close(msger->sock);
         }
 
         free(msger);

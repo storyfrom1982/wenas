@@ -155,9 +155,9 @@ static void* listen_loop(void *ptr)
     while (__is_true(server->runnig))
     {
         // __xlogd("recv_loop >>>>-----> listen enter\n");
-        __xapi->udp_listen(server->sock);
+        __xapi->udp_listen(server->sock, 0);
         // __xlogd("recv_loop >>>>-----> listen exit\n");
-        xmsger_notify(server->msger, 5000000000);
+        // xmsger_notify(server->msger, 5000000000);
     }
     return NULL;
 }
@@ -363,21 +363,21 @@ static void api_response(xpeer_ctx_ptr pctx)
     __xlogd("api_response exit\n");
 }
 
-static xpeer_ptr g_server = NULL;
+// static xpeer_ptr g_server = NULL;
 
-static void __sigint_handler()
-{
-    if(g_server){
-        __set_false(g_server->runnig);
-        if (g_server->sock > 0){
-            int sock = __xapi->udp_open();
-            for (int i = 0; i < 10; ++i){
-                __xapi->udp_sendto(sock, &g_server->addr, &i, sizeof(int));
-            }
-            __xapi->udp_close(sock);
-        }
-    }
-}
+// static void __sigint_handler()
+// {
+//     if(g_server){
+//         __set_false(g_server->runnig);
+//         if (g_server->sock > 0){
+//             int sock = __xapi->udp_open();
+//             for (int i = 0; i < 10; ++i){
+//                 __xapi->udp_sendto(sock, &g_server->addr, &i, sizeof(int));
+//             }
+//             __xapi->udp_close(sock);
+//         }
+//     }
+// }
 
 extern void sigint_setup(void (*handler)());
 
@@ -395,8 +395,8 @@ int main(int argc, char *argv[])
     __xlogi("server: 0x%X\n", server);
 
     __set_true(server->runnig);
-    g_server = server;
-    sigint_setup(__sigint_handler);
+    // g_server = server;
+    // sigint_setup(__sigint_handler);
 
     mcopy(server->password, "123456", slength("123456"));
     uuid_generate(server->uuid, "PEER1");
@@ -421,15 +421,15 @@ int main(int argc, char *argv[])
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
 
-    server->sock = __xapi->udp_open();
-    __xbreak(server->sock < 0);
-    __xbreak(!__xapi->udp_host_to_addr(NULL, 0, &server->addr));
-    __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
-    struct sockaddr_in server_addr; 
-    socklen_t addr_len = sizeof(server_addr);
-    __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
-    __xlogd("自动分配的端口号: %d\n", ntohs(server_addr.sin_port));
-    __xbreak(!__xapi->udp_host_to_addr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
+    // server->sock = __xapi->udp_open();
+    // __xbreak(server->sock < 0);
+    // __xbreak(!__xapi->udp_host_to_addr(NULL, 0, &server->addr));
+    // __xbreak(__xapi->udp_bind(server->sock, &server->addr) == -1);
+    // struct sockaddr_in server_addr; 
+    // socklen_t addr_len = sizeof(server_addr);
+    // __xbreak(getsockname(server->sock, (struct sockaddr*)&server_addr, &addr_len) == -1);
+    // __xlogd("自动分配的端口号: %d\n", ntohs(server_addr.sin_port));
+    // __xbreak(!__xapi->udp_host_to_addr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
 
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xbreak(server->task_pipe == NULL);
@@ -439,8 +439,8 @@ int main(int argc, char *argv[])
     
     server->msger = xmsger_create(&server->listener, server->sock);
 
-    server->listen_pid = __xapi->process_create(listen_loop, server);
-    __xbreak(server->listen_pid == NULL);
+    // server->listen_pid = __xapi->process_create(listen_loop, server);
+    // __xbreak(server->listen_pid == NULL);
 
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
@@ -467,7 +467,7 @@ int main(int argc, char *argv[])
     char command[256];
     char ip[256] = {0};
     uint64_t cid, key;
-    while (g_server->runnig)
+    while (server->runnig)
     {
         printf("> "); // 命令提示符
         if (fgets(input, sizeof(input), stdin) == NULL) {
@@ -553,6 +553,8 @@ int main(int argc, char *argv[])
         mclear(command, 256);
     }
 
+    xmsger_free(&server->msger);
+
     if (server->task_pipe){
         xpipe_break(server->task_pipe);
     }
@@ -575,12 +577,6 @@ int main(int argc, char *argv[])
     search_table_clear(&server->api_tabel);
     index_table_clear(&server->task_table);
     uuid_list_clear(&server->uuid_table);
-    
-    xmsger_free(&server->msger);
-
-    if (server->sock > 0){
-        __xapi->udp_close(server->sock);
-    }
     
     free(server->pctx_list[0]);
     free(server);
