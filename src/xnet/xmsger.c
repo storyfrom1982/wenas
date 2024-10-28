@@ -26,7 +26,7 @@ enum {
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_RESEND_LIMIT       10
-#define XCHANNEL_RESEND_STEPPING    1.5
+#define XCHANNEL_RESEND_STEPPING    2.0
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
@@ -1496,12 +1496,12 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->sock = __xapi->udp_open();
+    msger->sock = __xapi->udp_open(PACK_ONLINE_SIZE);
     __xbreak(msger->sock < 0);
     __xbreak(!__xapi->udp_host_to_addr(NULL, 9256, &msger->addr));
     __xbreak(__xapi->udp_bind(msger->sock, &msger->addr) == -1);
 
-    msger->notify_sock = __xapi->udp_open();
+    msger->notify_sock = __xapi->udp_open(PACK_HEAD_SIZE);
     __xbreak(msger->notify_sock < 0);
     __xbreak(!__xapi->udp_host_to_addr("127.0.0.1", 9256, &msger->notify_addr));
 
