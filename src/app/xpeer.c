@@ -454,8 +454,8 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    const char *cip = "192.168.1.6";
-    // const char *cip = "120.78.155.213";
+    // const char *cip = "192.168.1.6";
+    const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
 
@@ -546,7 +546,7 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "con") == 0) {
 
             server->pctx_list[server->cid] = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, "192.168.1.6", 9256, server->pctx_list[server->cid], NULL);
+            xmsger_connect(server->msger, hostip, 9256, server->pctx_list[server->cid], NULL);
 
         } else if (strcmp(command, "discon") == 0) {
 

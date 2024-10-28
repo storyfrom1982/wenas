@@ -751,25 +751,19 @@ Clean:
     return NULL;
 }
 
-// static xserver_ptr g_server = NULL;
+static xserver_ptr g_server = NULL;
 
-// static void __sigint_handler()
-// {
-//     if(g_server){
-//         __set_false(g_server->runnig);
-//         if (g_server->sock > 0){
-//             int sock = __xapi->udp_open();
-//             for (int i = 0; i < 10; ++i){
-//                 __xapi->udp_sendto(sock, &g_server->addr, &i, sizeof(int));
-//             }
-//             __xapi->udp_close(sock);
-//         }
-//     }
-// }
+static void __sigint_handler()
+{
+    if(g_server){
+        __set_false(g_server->runnig);
+    }
+}
 
-// extern void sigint_setup(void (*handler)());
+extern void sigint_setup(void (*handler)());
 #include <arpa/inet.h>
 #include <string.h>
+#include <unistd.h>
 int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/server/log", NULL);
@@ -785,8 +779,8 @@ int main(int argc, char *argv[])
 //    __xlogi("ip=%s port=%u key=%u\n", server->ip, server->port, server->ring->key);
 
     __set_true(server->runnig);
-    // g_server = server;
-    // sigint_setup(__sigint_handler);
+    g_server = server;
+    sigint_setup(__sigint_handler);
 
     // const char *host = "127.0.0.1";
     // const char *host = "47.99.146.226";
@@ -846,25 +840,7 @@ int main(int argc, char *argv[])
     uint64_t cid, key;
     while (server->runnig)
     {
-        printf("> "); // 命令提示符
-        if (fgets(input, sizeof(input), stdin) == NULL) {
-            break; // 读取失败，退出循环
-        }
-
-        // 去掉输入字符串末尾的换行符
-        input[strcspn(input, "\n")] = 0;
-
-        // 分割命令和参数
-        sscanf(input, "%s", command);
-
-        if (strcmp(command, "exit") == 0) {
-            __xlogi("再见！\n");
-            break;
-        } else {
-            __xlogi("未知命令: %s\n", command);
-        }
-
-        mclear(command, 256);
+        sleep(1);
     }
 
     xmsger_free(&server->msger);

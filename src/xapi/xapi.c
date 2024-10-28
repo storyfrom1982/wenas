@@ -312,17 +312,17 @@ static int udp_open(int buf_size)
     int opt;
     int flags;
     __xbreak((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0);
-    opt = 1;
-    __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVLOWAT, &opt, sizeof(opt)) != 0);
+    // opt = 1;
+    // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVLOWAT, &opt, sizeof(opt)) != 0);
     opt = 1;
     __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0);
     __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0);
-    if (buf_size > 0){
-        opt = buf_size;
-        __xbreak(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) != 0);
-        // opt = buf_size * 5;
-        // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) != 0);
-    }
+    // if (buf_size > 0){
+    //     opt = buf_size;
+    //     __xbreak(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) != 0);
+    //     // opt = buf_size * 5;
+    //     // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) != 0);
+    // }
     flags = fcntl(sock, F_GETFL, 0);
     __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
     return sock;

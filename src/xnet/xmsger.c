@@ -136,7 +136,6 @@ struct xmsger {
     struct avl_tree peers;
     __atom_size pos, len;
     __atom_size msglistlen;
-    __atom_size sendable;
     __xmutex_ptr mtx;
     __atom_bool running;
     //socket可读或者有数据待发送时为true
@@ -415,7 +414,6 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     __atom_add(channel->sendbuf->wpos, 1);
     channel->len += pack->head.len;
     channel->msger->len += pack->head.len;
-    channel->msger->sendable++;
     // 加入发送队列，并且从待回收队列中移除
     if(channel->worklist != &channel->msger->send_list) {
         __xchannel_take_out_list(channel);
@@ -456,7 +454,6 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.lcid = channel->lcid.cid;
         pack->head.rcid = channel->rcid;
         __atom_add(channel->sendbuf->wpos, 1);
-        channel->msger->sendable++;
         // 判断消息是否全部写入缓冲区
         if (msg->sendpos == msg->lkv.wpos){
             // 更新当前消息
@@ -533,7 +530,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 数据已发送，从待发送数据中减掉这部分长度
             __atom_add(channel->pos, pack->head.len);
             __atom_add(channel->msger->pos, pack->head.len);
-            channel->msger->sendable--;
 
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
@@ -1299,22 +1295,26 @@ static void* main_loop(void *ptr)
         //     // 通知接受线程开始监听 socket
         //     __xbreak(xpipe_write(msger->rpipe, &readable, __sizeof_ptr) != __sizeof_ptr);
         // }
-
+        // __xlogd("main_loop >>>>-----> running\n"); 
         // 判断休眠条件
         // 没有待发送的包
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
         if (__atom_try_lock(msger->listening)){
-            if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
+            if (xpipe_readable(msger->mpipe) == 0){
                 // 如果有待重传的包，会设置冲洗定时
                 // 如果需要发送 PING，会设置 PING 定时
-                // __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
+                __xlogd("main_loop >>>>-----> nothig to do : %lu\n", timer / 1000);
                 int ret = __xapi->udp_listen(msger->sock, timer / 1000);
                 timer = 10000000000UL; // 10 秒
                 // __xlogd("main_loop >>>>-----> start working %s\n", strerror(errno)); 
+            }else {
+                // __xlogd("main_loop >>>>-----> readable=%lu\n", xpipe_readable(msger->mpipe));
             }
             __atom_unlock(msger->listening);
+        }else {
+            // __xlogd("main_loop >>>>-----> running try lock\n"); 
         }
         // if (msger->sendable == 0 && xpipe_readable(msger->mpipe) == 0){
         //     // 如果有待重传的包，会设置冲洗定时
@@ -1507,7 +1507,6 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 
     msger->running = true;
     msger->callback = callback;
-    msger->sendable = 0;
     msger->cid = __xapi->clock() % UINT16_MAX;
 
     msger->send_list.len = 0;
