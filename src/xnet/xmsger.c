@@ -1223,12 +1223,12 @@ static void* main_loop(void *ptr)
                                 timer = delay;
                             }
 
-                            __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu\n", timer);
+                            // __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu\n", timer);
 
                         }else {
 
                             // if (spack->head.resend > XCHANNEL_RESEND_LIMIT)
-                            if (spack->timer - spack->timestamp > NANO_SECONDS * 10)
+                            if (spack->timer - spack->timestamp > NANO_SECONDS)
                             {
                                 msger->callback->on_channel_timeout(msger->callback, channel);
                                 // // 移除超时的连接
