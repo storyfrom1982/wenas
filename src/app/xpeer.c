@@ -454,8 +454,8 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     __xapi->udp_hostbyname(hostip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", hostip, port);
-    // const char *cip = "192.168.1.6";
-    const char *cip = "120.78.155.213";
+    const char *cip = "192.168.1.6";
+    // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
 
