@@ -78,7 +78,7 @@ static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
-    __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 3\n");
+    // __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 3\n");
     const char *ip = xchannel_get_ip(channel);
     uint16_t port = xchannel_get_port(channel);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> port=%u\n", port);
@@ -127,7 +127,7 @@ static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xpeer_ctx_ptr ctx = xchannel_get_ctx(channel);
     if (ctx){
-        __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> 1\n");
+        // __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> 1\n");
         ctx->reconnected = 0;
         ctx->channel = channel;
     }else {

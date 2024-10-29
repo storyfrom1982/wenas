@@ -883,24 +883,23 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 static void* listening_loop(void *ptr)
 {
     __xlogd("listening_loop enter\n");
-    xmsg_ptr msg = xmsg_create(0);
-    msg->flag = XMSG_FLAG_RECV;
+    // xmsg_ptr msg = xmsg_create(0);
+    // msg->flag = XMSG_FLAG_RECV;
     xmsger_ptr msger = (xmsger_ptr)ptr;
     while (msger->running){
-        __xlogd("listening_loop >>>>-----> listening enter\n");
+        // __xlogd("listening_loop >>>>-----> listening enter\n");
         __xapi->udp_listen(msger->sock, 0);
         __xapi->mutex_lock(msger->mtx);
-        __xlogd("listening_loop >>>>-----> listening notify\n");
+        // __xlogd("listening_loop >>>>-----> listening notify\n");
         __xapi->mutex_notify(msger->mtx);
-        __xlogd("listening_loop >>>>-----> listening waiting\n");
-        __set_false(msger->listening);
+        // __xlogd("listening_loop >>>>-----> listening waiting\n");
+        // __set_false(msger->listening);
         __xapi->mutex_wait(msger->mtx);
-        __set_true(msger->listening);
+        // __set_true(msger->listening);
         __xapi->mutex_unlock(msger->mtx);
     }
 XClean:
-    __xlogd("listening_loop 1\n");
-    xmsg_free(msg);
+    // xmsg_free(msg);
     __xlogd("listening_loop exit\n");
 }
 
