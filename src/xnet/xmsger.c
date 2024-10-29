@@ -686,7 +686,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 判断是否有未发送的消息
                 if (channel->msglist_head == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
-                    if (channel->flushinglist.len == 0 && !channel->keepalive){
+                    if (__serialbuf_sendable(channel->sendbuf) == 0 && channel->flushinglist.len == 0 && !channel->keepalive){
                         __xlogd("xchannel_recv_ack >>>>----------------------------------> add recv list\n");
                         // 不需要保活，加入等待超时队列
                         __xchannel_take_out_list(channel);
