@@ -1376,7 +1376,9 @@ bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg)
     msg->flag = XMSG_FLAG_SEND;
 
     __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr));
+    __xapi->mutex_lock(msger->mtx);
     __xapi->mutex_broadcast(msger->mtx);
+    __xapi->mutex_unlock(msger->mtx);
     __xlogd("xmsger_send_message exit\n");
 
     return true;
