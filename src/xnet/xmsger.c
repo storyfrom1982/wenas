@@ -687,6 +687,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->msglist_head == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
                     if (channel->flushinglist.len == 0 && !channel->keepalive){
+                        __xlogd("xchannel_recv_ack >>>>----------------------------------> add recv list\n");
                         // 不需要保活，加入等待超时队列
                         __xchannel_take_out_list(channel);
                         __xchannel_put_into_list(&channel->msger->recv_list, channel);
@@ -1332,7 +1333,7 @@ static void* main_loop(void *ptr)
             // 如果需要发送 PING，会设置 PING 定时
             // 所以只要没有新消息带发送，就可以阻塞            
             if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do %lu timer=%lu\n", msger->len - msger->pos, timer);
+                __xlogd("main_loop >>>>-----> nothig to do %lu sendlist=%lu timer=%lu\n", msger->len - msger->pos, msger->send_list.len, timer);
                 __xapi->mutex_notify(msger->mtx);
                 __xapi->mutex_timedwait(msger->mtx, timer);
                 __xapi->mutex_unlock(msger->mtx);
