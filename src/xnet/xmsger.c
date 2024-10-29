@@ -25,7 +25,7 @@ enum {
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAXIMUM_LENGTH         ( PACK_BODY_SIZE * XMSG_PACK_RANGE )
 
-#define XCHANNEL_RESEND_LIMIT       10
+#define XCHANNEL_RESEND_LIMIT       3
 #define XCHANNEL_RESEND_STEPPING    1.5
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
@@ -1226,8 +1226,7 @@ static void* main_loop(void *ptr)
 
                         }else {
 
-                            // if (spack->head.resend > XCHANNEL_RESEND_LIMIT)
-                            if (spack->timer - spack->timestamp > NANO_SECONDS)
+                            if (spack->timer - spack->timestamp > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                             {
                                 msger->callback->on_channel_timeout(msger->callback, channel);
                                 // // 移除超时的连接
