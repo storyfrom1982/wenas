@@ -1222,6 +1222,8 @@ static void* main_loop(void *ptr)
                                 timer = delay;
                             }
 
+                            __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu\n", timer);
+
                         }else {
 
                             // if (spack->head.resend > XCHANNEL_RESEND_LIMIT)
@@ -1330,7 +1332,7 @@ static void* main_loop(void *ptr)
             // 如果需要发送 PING，会设置 PING 定时
             // 所以只要没有新消息带发送，就可以阻塞            
             if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do %lu\n", msger->len - msger->pos);
+                __xlogd("main_loop >>>>-----> nothig to do %lu timer=%lu\n", msger->len - msger->pos, timer);
                 __xapi->mutex_notify(msger->mtx);
                 __xapi->mutex_timedwait(msger->mtx, timer);
                 __xapi->mutex_unlock(msger->mtx);
