@@ -1330,12 +1330,16 @@ static void* main_loop(void *ptr)
             // 如果需要发送 PING，会设置 PING 定时
             // 所以只要没有新消息带发送，就可以阻塞            
             if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do\n");
+                __xlogd("main_loop >>>>-----> nothig to do %lu\n", msger->len - msger->pos);
                 __xapi->mutex_notify(msger->mtx);
                 __xapi->mutex_timedwait(msger->mtx, timer);
                 __xapi->mutex_unlock(msger->mtx);
                 __xlogd("main_loop >>>>-----> start working\n");
-                timer = 10000000000UL; // 10 秒
+                if (msger->len - msger->pos > 0){
+                    timer = 1000000UL; // 1 毫秒
+                }else {
+                    timer = 10000000000UL; // 10 秒
+                }
             }
         }
     }
