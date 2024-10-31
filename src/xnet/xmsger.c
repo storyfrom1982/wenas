@@ -45,9 +45,10 @@ typedef struct xhead {
 }*xhead_ptr;
 
 typedef struct xpack {
+    // TODO 可以用时间戳标志冲洗状态
     bool is_flushing;
-    uint64_t timer;
     uint64_t delay;
+    // uint64_t timeout;
     uint64_t timestamp; //计算往返耗时
     xmsg_ptr msg;
     xchannel_ptr channel;
@@ -272,7 +273,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->breaker = false;
 
     channel->remote_key = XMSG_KEY;
-    channel->back_delay = 30000000UL;
+    channel->back_delay = 300000000UL;
     channel->ack.key = (XMSG_VAL ^ XMSG_KEY);
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -462,7 +463,8 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
             if (channel->msglist_head == NULL){
                 channel->msglist_tail = &channel->msglist_head;
             }
-            msg = channel->msglist_head;
+            // msg = channel->msglist_head;
+            // TODO 删除这个计数
             channel->msger->msglistlen--;
         }
     }
@@ -488,6 +490,8 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
         // 设置新消息为当前正在发送的消息
         channel->msglist_head = msg;
         channel->sendmsg = channel->msglist_head;
+        // TODO 在这里调用 xchannel_serial_msg(channel);
+        xchannel_serial_msg(channel);
     }
 
     // 加入发送队列，并且从待回收队列中移除
@@ -496,10 +500,10 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
         __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
 
-    if (__serialbuf_sendable(channel->sendbuf) == 0){
-        // 确保将待发送数据写入了缓冲区
-        xchannel_serial_msg(channel);
-    }
+    // if (__serialbuf_sendable(channel->sendbuf) == 0){
+    //     // 确保将待发送数据写入了缓冲区
+    //     xchannel_serial_msg(channel);
+    // }
 }
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
@@ -540,9 +544,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录当前时间
             pack->timestamp = __xapi->clock();
-            pack->timer = pack->timestamp + pack->delay;
             // __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
-            pack->delay *= XCHANNEL_RESEND_STEPPING;
+            pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING;
             channel->timestamp = pack->timestamp;
             __ring_list_put_into_end(&channel->flushinglist, pack);
 
@@ -753,8 +756,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // 使用临时变量
             uint8_t index = channel->sendbuf->rpos;
-            // 重传 rpos 到 SN 之间的所有尚未确认的 SN
-            while (index != rpack->head.ack) {
+            // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
+            while (index != rpack->head.ack)
+            {
                 // 取出落后的包
                 pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
                 // 判断这个包是否已经接收过
@@ -770,7 +774,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         }
                         __xlogd("xchannel_recv_ack >>>>>>>>>>-----------------------------------------> RESEND PACK: %u\n", pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
-                            pack->timer += pack->delay;
                             pack->delay *= XCHANNEL_RESEND_STEPPING;
                             // __xlogd("xchannel_recv_ack >>>>------------------------> delay=%lu\n", pack->delay);
                             
@@ -1202,9 +1205,14 @@ static void* main_loop(void *ptr)
             {
                 next_channel = channel->next;
 
-                // 留一半缓冲区，给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
+                // readable 是已经写入缓冲区还尚未发送的包
+                // 缓冲的包小于缓冲区的8/1时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
                 if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
                     xchannel_send_pack(channel);
+                    // 发送缓冲区未到达8/1，且有消息未发送完，主线程不休眠
+                    if (channel->msglist_head != NULL){
+                        timer = 0;
+                    }
                 }
 
                 if (channel->flushinglist.len > 0){
@@ -1215,18 +1223,20 @@ static void* main_loop(void *ptr)
                     {
                         xpack_ptr next_pack = spack->next;
 
-                        if ((delay = (spack->timer - __xapi->clock())) > 0) {
+                        if ((delay = ((spack->timestamp + spack->delay) - __xapi->clock())) > 0) {
                             // 未超时
                             if (timer > delay){
                                 // 超时时间更近，更新休息时间
                                 timer = delay;
                             }
 
-                            // __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu\n", timer);
+                            // __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu delay=%lu\n", timer, spack->delay);
+                            // 第一个包未超时，后面的包就都没有超时
+                            break;
 
                         }else {
 
-                            if (spack->timer - spack->timestamp > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
+                            if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                             {
                                 msger->callback->on_channel_timeout(msger->callback, channel);
                                 // // 移除超时的连接
@@ -1237,11 +1247,14 @@ static void* main_loop(void *ptr)
 
                             }else {
 
+                                // 超时重传
+
                                 // 判断重传的包是否带有 ACK
                                 if (spack->head.flag != 0){
                                     // 更新 ACKS
                                     // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                                     spack->head.acks = channel->recvbuf->wpos;
+                                    // TODO ack 也要更新
                                 }
 
                                 __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> RESEND PACK: %u\n", spack->head.sn);
@@ -1250,8 +1263,9 @@ static void* main_loop(void *ptr)
                                 if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
                                     // 记录重传次数
                                     spack->head.resend++;
-                                    spack->timer += spack->delay;
                                     // __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
+                                    // spack->delay *= XCHANNEL_RESEND_STEPPING;
+                                    // 最后一个待确认包的超时时间加上平均往返时长
                                     spack->delay *= XCHANNEL_RESEND_STEPPING;
                                     // 列表中如果只有一个成员，就不能更新包的位置
                                     if (channel->flushinglist.len > 1){
@@ -1262,7 +1276,9 @@ static void* main_loop(void *ptr)
                                     __xlogd("xmsger_loop >>>>------------------------> send failed\n");
                                 }
 
-                                timer = channel->back_delay;
+                                if (timer > channel->back_delay){
+                                    timer = channel->back_delay;
+                                }
                             }
                         }
 
@@ -1326,23 +1342,20 @@ static void* main_loop(void *ptr)
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (xpipe_readable(msger->mpipe) == 0){
+        if (timer > 0 && xpipe_readable(msger->mpipe) == 0){
             // 如果有待重传的包，会设置冲洗定时
             // 如果需要发送 PING，会设置 PING 定时
             // 所以只要没有新消息带发送，就可以阻塞            
             if (__xapi->mutex_trylock(msger->mtx)){
-                // __xlogd("main_loop >>>>-----> nothig to do %lu sendlist=%lu timer=%lu\n", msger->len - msger->pos, msger->send_list.len, timer);
+                __xlogd("main_loop >>>>-----> nothig to do %lu sendlist=%lu timer=%lu\n", msger->len - msger->pos, msger->send_list.len, timer);
                 __xapi->mutex_notify(msger->mtx);
                 __xapi->mutex_timedwait(msger->mtx, timer);
                 __xapi->mutex_unlock(msger->mtx);
-                // __xlogd("main_loop >>>>-----> start working\n");
-                if (msger->len - msger->pos > 0){
-                    timer = 1000000UL; // 1 毫秒
-                }else {
-                    timer = 10000000000UL; // 10 秒
-                }
+                __xlogd("main_loop >>>>-----> start working\n");
             }
         }
+        
+        timer = 10000000000UL; // 10 秒
     }
 
 
