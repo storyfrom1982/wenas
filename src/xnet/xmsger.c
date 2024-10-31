@@ -135,6 +135,7 @@ struct xmsger {
     uint16_t cid;
     xtree chcache;
     struct avl_tree peers;
+    uint64_t timer;
     __atom_size pos, len;
     __atom_size msglistlen;
     __xmutex_ptr mtx;
@@ -883,6 +884,232 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
     xchannel_recv_msg(channel);
 }
 
+
+static inline bool xmsger_put_msg(xmsger_ptr msger, xmsg_ptr msg)
+{
+    xchannel_ptr channel = msg->channel;
+
+    if (msg->flag == XMSG_FLAG_SEND){
+
+        // __xlogd("main_loop >>>>-----> xchannel_send_msg enter\n"); 
+        xchannel_send_msg(msg->channel, msg);
+        // __xlogd("main_loop >>>>-----> xchannel_send_msg exit\n"); 
+
+    }else if (msg->flag == XMSG_FLAG_CONNECT){
+
+        channel = xchannel_create(msger, PACK_SERIAL_RANGE);
+        if(channel == NULL){
+            return false;
+        }
+
+        xlinekv_t parser = xl_parser(&msg->lkv.line);
+        char *ip = xl_find_word(&parser, "ip");
+        uint64_t port = xl_find_uint(&parser, "port");
+        channel->ctx = xl_find_ptr(&parser, "ctx");
+        xmsg_ptr firstmsg = xl_find_ptr(&parser, "msg");
+
+        mcopy(channel->ip, ip, slength(ip));
+        channel->port = port;
+        __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
+        channel->lcid.port = channel->addr.port;
+        channel->lcid.ip = channel->addr.ip;
+
+        do {
+            channel->lcid.cid = msger->cid++;
+        }while (avl_tree_add(&msger->peers, channel) != NULL);
+
+        channel->rcid = channel->lcid.cid;
+
+        channel->keepalive = true;
+
+        // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
+        xchannel_serial_pack(channel, XMSG_PACK_PING);
+
+        while (firstmsg != NULL){
+            xl_printf(&firstmsg->lkv.line);
+            xchannel_send_msg(channel, firstmsg);
+            firstmsg = firstmsg->next;
+        }
+
+        __xlogd("xmsger_loop >>>>-------------> create channel ip=%s port=%u CID(%u) KEY(%u) SN(%u)\n", 
+                                    ip, port, channel->lcid.cid, channel->local_key, channel->serial_number);
+        free(msg);
+
+    }else if (msg->flag == XMSG_FLAG_DISCONNECT){
+
+        if (msg->channel != NULL){
+            channel = msg->channel;
+            // __xlogd("xmsger_loop (%u) >>>>-------------> break channel(%u)\n", channel->cid, channel->peer_cid);
+            xchannel_clear(channel);
+            xchannel_serial_pack(channel, XMSG_PACK_BYE);
+            // 移除链接池
+            avl_tree_remove(&msger->peers, channel);
+            // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
+            channel->lcid.cid = channel->rcid;
+            // 加入暂存链接池
+            xtree_save(msger->chcache, &channel->lcid.index, 8, channel);
+        }
+
+        free(msg);
+    }
+
+    return true;
+}
+
+static inline void xmsger_send_all(xmsger_ptr msger)
+{
+    // __xlogd("xmsger_send_all >>>>------------------------> enter %lu\n", msger->timer);
+
+    int64_t delay;
+    xpack_ptr spack;
+    xchannel_ptr channel, next_channel;
+
+    // 判断待发送队列中是否有内容
+    if (msger->send_list.len > 0){
+
+        // TODO 如能能更平滑的发送
+        // 从头开始，每个连接发送一个 pack
+        channel = msger->send_list.head.next;
+
+        while (channel != &msger->send_list.head)
+        {
+            next_channel = channel->next;
+
+            // readable 是已经写入缓冲区还尚未发送的包
+            // 缓冲的包小于缓冲区的8/1时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
+            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
+                // __xlogd("xmsger_send_all >>>>------------------------> 1\n");
+                xchannel_send_pack(channel);
+                // 发送缓冲区未到达8/1，且有消息未发送完，主线程不休眠
+                if (channel->msglist_head != NULL){
+                    msger->timer = 0;
+                }
+            }
+
+            if (channel->flushinglist.len > 0){
+                // __xlogd("xmsger_send_all >>>>------------------------> 2\n");
+
+                spack = channel->flushinglist.head.next;
+
+                while (spack != &channel->flushinglist.head)
+                {
+                    xpack_ptr next_pack = spack->next;
+
+                    if ((delay = ((spack->timestamp + spack->delay) - __xapi->clock())) > 0) {
+                        // 未超时
+                        if (msger->timer > delay){
+                            // 超时时间更近，更新休息时间
+                            msger->timer = delay;
+                        }
+
+                        // __xlogd("xmsger_send_all >>>>>>>>>>-------------------------------------------> delay=%lu\n", delay);
+                        // 第一个包未超时，后面的包就都没有超时
+                        break;
+
+                    }else {
+
+                        if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
+                        {
+                            msger->callback->on_channel_timeout(msger->callback, channel);
+                            // // 移除超时的连接
+                            // xtree_take(msger->chcache, &channel->addr.port, 6);
+                            avl_tree_remove(&msger->peers, channel);
+                            xchannel_free(channel);
+                            break;
+
+                        }else {
+
+                            // 超时重传
+
+                            // 判断重传的包是否带有 ACK
+                            if (spack->head.flag != 0){
+                                // 更新 ACKS
+                                // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+                                spack->head.acks = channel->recvbuf->wpos;
+                                // TODO ack 也要更新
+                            }
+
+                            __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> RESEND PACK: %u\n", spack->head.sn);
+
+                            // 判断发送是否成功
+                            if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
+                                // 记录重传次数
+                                spack->head.resend++;
+                                // __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
+                                // spack->delay *= XCHANNEL_RESEND_STEPPING;
+                                // 最后一个待确认包的超时时间加上平均往返时长
+                                spack->delay *= XCHANNEL_RESEND_STEPPING;
+                                // 列表中如果只有一个成员，就不能更新包的位置
+                                if (channel->flushinglist.len > 1){
+                                    // 重传之后的包放入队尾
+                                    __ring_list_move_to_end(&channel->flushinglist, spack);
+                                }
+                            }else {
+                                __xlogd("xmsger_loop >>>>------------------------> send failed\n");
+                            }
+
+                            if (msger->timer > channel->back_delay){
+                                msger->timer = channel->back_delay;
+                            }
+                        }
+                    }
+
+                    spack = next_pack;
+                }
+
+                // __xlogd("xmsger_loop >>>>------------------------> flusing exit\n");
+
+            }else if (channel->keepalive && channel->pos == channel->len && __serialbuf_readable(channel->sendbuf) == 0){
+
+                if ((delay = (NANO_SECONDS * 9) - (__xapi->clock() - channel->timestamp)) > 0) {
+                    // 未超时
+                    if (msger->timer > delay){
+                        // 超时时间更近，更新休息时间
+                        msger->timer = delay;
+                    }
+
+                }else {
+                    xchannel_serial_pack(channel, XMSG_PACK_ONL);
+                    // 更新时间戳
+                    channel->timestamp = __xapi->clock();
+
+                }
+            }
+
+            channel = next_channel;
+        }
+    }
+
+    // __xlogd("xmsger_send_all >>>>------------------------> exit %lu\n", msger->timer);
+}
+
+static inline void xmsger_check_all(xmsger_ptr msger)
+{
+    if (msger->recv_list.len > 0){
+        
+        xchannel_ptr next_channel, channel = msger->recv_list.head.next;
+
+        while (channel != &msger->recv_list.head){
+            next_channel = channel->next;
+            // 10 秒钟超时
+            if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
+                __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_channel_break (%lu)\n", *(uint64_t*)(&channel->addr.port), __xapi->clock() - channel->timestamp);
+                msger->callback->on_channel_break(msger->callback, channel);
+                // // 移除超时的连接
+                // xtree_take(msger->chcache, &channel->addr.port, 6);
+                avl_tree_remove(&msger->peers, channel);
+                xchannel_free(channel);
+            }else {
+                // 队列的第一个连接没有超时，后面的连接就都没有超时
+                break;
+            }
+
+            channel = next_channel;
+        }
+    }
+
+}
+
 static void* listening_loop(void *ptr)
 {
     __xlogd("listening_loop enter\n");
@@ -922,9 +1149,11 @@ static void* main_loop(void *ptr)
     __xlogd("xmsger_loop enter\n");
 
     // int result;
-    int64_t delay;
-    uint64_t timer = UINT32_MAX;
+    // int64_t delay;
+    // uint64_t timer = UINT32_MAX;
     xmsger_ptr msger = (xmsger_ptr)ptr;
+
+    msger->timer = 10000000UL; // 10 毫秒
     
     void *readable = NULL;
     xchannel_ptr channel = NULL, next_channel;
@@ -1121,216 +1350,33 @@ static void* main_loop(void *ptr)
             }
 
             rpack->head.len = 0;
+
+            if (__xpipe_read(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) == __sizeof_ptr){
+                __xpipe_notify(msger->mpipe);
+                __xbreak(!xmsger_put_msg(msger, msg));
+            }            
+
+            // 检查每个连接，如果满足发送条件，就发送一个数据包
+            xmsger_send_all(msger);
+            // 检查超时连接
+            xmsger_check_all(msger);
         }
 
-        if (xpipe_readable(msger->mpipe) > 0){
-
-            __xbreak(xpipe_read(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr);
-
-            if (msg->flag == XMSG_FLAG_SEND){
-
-                __xlogd("main_loop >>>>-----> xchannel_send_msg enter\n"); 
-                xchannel_send_msg(msg->channel, msg);
-                __xlogd("main_loop >>>>-----> xchannel_send_msg exit\n"); 
-
-            }else {
-
-                if (msg->flag == XMSG_FLAG_CONNECT){
-
-                    channel = xchannel_create(msger, PACK_SERIAL_RANGE);
-                    __xbreak(channel == NULL);
-
-                    xlinekv_t parser = xl_parser(&msg->lkv.line);
-                    char *ip = xl_find_word(&parser, "ip");
-                    uint64_t port = xl_find_uint(&parser, "port");
-                    channel->ctx = xl_find_ptr(&parser, "ctx");
-                    xmsg_ptr firstmsg = xl_find_ptr(&parser, "msg");
-
-                    mcopy(channel->ip, ip, slength(ip));
-                    channel->port = port;
-                    __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
-                    channel->lcid.port = channel->addr.port;
-                    channel->lcid.ip = channel->addr.ip;
-
-                    do {
-                        channel->lcid.cid = msger->cid++;
-                    }while (avl_tree_add(&msger->peers, channel) != NULL);
-
-                    channel->rcid = channel->lcid.cid;
-
-                    channel->keepalive = true;
-
-                    // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
-                    xchannel_serial_pack(channel, XMSG_PACK_PING);
-
-                    while (firstmsg != NULL){
-                        xl_printf(&firstmsg->lkv.line);
-                        xchannel_send_msg(channel, firstmsg);
-                        firstmsg = firstmsg->next;
-                    }
-
-                    __xlogd("xmsger_loop >>>>-------------> create channel ip=%s port=%u CID(%u) KEY(%u) SN(%u)\n", 
-                                                ip, port, channel->lcid.cid, channel->local_key, channel->serial_number);
-                    free(msg);
-
-                }else if (msg->flag == XMSG_FLAG_DISCONNECT){
-
-                    if (msg->channel != NULL){
-                        channel = msg->channel;
-                        // __xlogd("xmsger_loop (%u) >>>>-------------> break channel(%u)\n", channel->cid, channel->peer_cid);
-                        xchannel_clear(channel);
-                        xchannel_serial_pack(channel, XMSG_PACK_BYE);
-                        // 移除链接池
-                        avl_tree_remove(&msger->peers, channel);
-                        // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
-                        channel->lcid.cid = channel->rcid;
-                        // 加入暂存链接池
-                        xtree_save(msger->chcache, &channel->lcid.index, 8, channel);
-                    }
-
-                    free(msg);
-                }
-            }
-
+        if (__xpipe_read(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) == __sizeof_ptr){
+            __xpipe_notify(msger->mpipe);
+            __xbreak(!xmsger_put_msg(msger, msg));
+        }else {
+            // __xlogd("main_loop >>>>-----> enter\n");
+            __xapi->udp_listen(msger->sock, msger->timer / 1000);
+            // __xlogd("main_loop >>>>-----> exit\n"); 
         }
         
-        // 判断待发送队列中是否有内容
-        if (msger->send_list.len > 0){
+        msger->timer = 10000000UL; // 10 毫秒
 
-            // TODO 如能能更平滑的发送
-            // 从头开始，每个连接发送一个 pack
-            channel = msger->send_list.head.next;
-
-            while (channel != &msger->send_list.head)
-            {
-                next_channel = channel->next;
-
-                // readable 是已经写入缓冲区还尚未发送的包
-                // 缓冲的包小于缓冲区的8/1时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-                if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
-                    xchannel_send_pack(channel);
-                    // 发送缓冲区未到达8/1，且有消息未发送完，主线程不休眠
-                    if (channel->msglist_head != NULL){
-                        timer = 0;
-                    }
-                }
-
-                if (channel->flushinglist.len > 0){
-
-                    spack = channel->flushinglist.head.next;
-
-                    while (spack != &channel->flushinglist.head)
-                    {
-                        xpack_ptr next_pack = spack->next;
-
-                        if ((delay = ((spack->timestamp + spack->delay) - __xapi->clock())) > 0) {
-                            // 未超时
-                            if (timer > delay){
-                                // 超时时间更近，更新休息时间
-                                timer = delay;
-                            }
-
-                            // __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> flushing timer: %lu delay=%lu\n", timer, spack->delay);
-                            // 第一个包未超时，后面的包就都没有超时
-                            break;
-
-                        }else {
-
-                            if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
-                            {
-                                msger->callback->on_channel_timeout(msger->callback, channel);
-                                // // 移除超时的连接
-                                // xtree_take(msger->chcache, &channel->addr.port, 6);
-                                avl_tree_remove(&msger->peers, channel);
-                                xchannel_free(channel);
-                                break;
-
-                            }else {
-
-                                // 超时重传
-
-                                // 判断重传的包是否带有 ACK
-                                if (spack->head.flag != 0){
-                                    // 更新 ACKS
-                                    // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
-                                    spack->head.acks = channel->recvbuf->wpos;
-                                    // TODO ack 也要更新
-                                }
-
-                                __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> RESEND PACK: %u\n", spack->head.sn);
-
-                                // 判断发送是否成功
-                                if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
-                                    // 记录重传次数
-                                    spack->head.resend++;
-                                    // __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
-                                    // spack->delay *= XCHANNEL_RESEND_STEPPING;
-                                    // 最后一个待确认包的超时时间加上平均往返时长
-                                    spack->delay *= XCHANNEL_RESEND_STEPPING;
-                                    // 列表中如果只有一个成员，就不能更新包的位置
-                                    if (channel->flushinglist.len > 1){
-                                        // 重传之后的包放入队尾
-                                        __ring_list_move_to_end(&channel->flushinglist, spack);
-                                    }
-                                }else {
-                                    __xlogd("xmsger_loop >>>>------------------------> send failed\n");
-                                }
-
-                                if (timer > channel->back_delay){
-                                    timer = channel->back_delay;
-                                }
-                            }
-                        }
-
-                        spack = next_pack;
-                    }
-
-                    // __xlogd("xmsger_loop >>>>------------------------> flusing exit\n");
-
-                }else if (channel->keepalive && channel->pos == channel->len && __serialbuf_readable(channel->sendbuf) == 0){
-
-                    if ((delay = (NANO_SECONDS * 9) - (__xapi->clock() - channel->timestamp)) > 0) {
-                        // 未超时
-                        if (timer > delay){
-                            // 超时时间更近，更新休息时间
-                            timer = delay;
-                        }
-
-                    }else {
-                        xchannel_serial_pack(channel, XMSG_PACK_ONL);
-                        // 更新时间戳
-                        channel->timestamp = __xapi->clock();
-
-                    }
-                }
-
-                channel = next_channel;
-            }
-        }
-
-        // 处理超时
-        if (msger->recv_list.len > 0){
-            
-            channel = msger->recv_list.head.next;
-
-            while (channel != &msger->recv_list.head){
-                next_channel = channel->next;
-                // 10 秒钟超时
-                if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
-                    __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_channel_break (%lu)\n", *(uint64_t*)(&channel->addr.port), __xapi->clock() - channel->timestamp);
-                    msger->callback->on_channel_break(msger->callback, channel);
-                    // // 移除超时的连接
-                    // xtree_take(msger->chcache, &channel->addr.port, 6);
-                    avl_tree_remove(&msger->peers, channel);
-                    xchannel_free(channel);
-                }else {
-                    // 队列的第一个连接没有超时，后面的连接就都没有超时
-                    break;
-                }
-
-                channel = next_channel;
-            }
-        }
+        // 检查每个连接，如果满足发送条件，就发送一个数据包
+        xmsger_send_all(msger);
+        // 检查超时连接
+        xmsger_check_all(msger);
 
         // if (__set_false(msger->readable)){
         //     // 通知接受线程开始监听 socket
@@ -1342,20 +1388,21 @@ static void* main_loop(void *ptr)
         // 没有待发送的消息
         // 网络接口不可读
         // 接收线程已经在监听
-        if (timer > 0 && xpipe_readable(msger->mpipe) == 0){
-            // 如果有待重传的包，会设置冲洗定时
-            // 如果需要发送 PING，会设置 PING 定时
-            // 所以只要没有新消息带发送，就可以阻塞            
-            if (__xapi->mutex_trylock(msger->mtx)){
-                __xlogd("main_loop >>>>-----> nothig to do %lu sendlist=%lu timer=%lu\n", msger->len - msger->pos, msger->send_list.len, timer);
-                __xapi->mutex_notify(msger->mtx);
-                __xapi->mutex_timedwait(msger->mtx, timer);
-                __xapi->mutex_unlock(msger->mtx);
-                __xlogd("main_loop >>>>-----> start working\n");
-            }
-        }
+
+        // if (msger->timer > 0 && xpipe_readable(msger->mpipe) == 0){
+        //     // 如果有待重传的包，会设置冲洗定时
+        //     // 如果需要发送 PING，会设置 PING 定时
+        //     // 所以只要没有新消息带发送，就可以阻塞            
+        //     if (__xapi->mutex_trylock(msger->mtx)){
+        //         __xlogd("main_loop >>>>-----> nothig to do %lu sendlist=%lu timer=%lu\n", msger->len - msger->pos, msger->send_list.len, msger->timer);
+        //         __xapi->mutex_notify(msger->mtx);
+        //         __xapi->mutex_timedwait(msger->mtx, msger->timer);
+        //         __xapi->mutex_unlock(msger->mtx);
+        //         __xlogd("main_loop >>>>-----> start working\n");
+        //     }
+        // }
         
-        timer = 10000000000UL; // 10 秒
+        // msger->timer = 10000000UL; // 10 毫秒
     }
 
 
@@ -1536,8 +1583,8 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     msger->mpid = __xapi->process_create(main_loop, msger);
     __xbreak(msger->mpid == NULL);
 
-    msger->lpid = __xapi->process_create(listening_loop, msger);
-    __xbreak(msger->lpid == NULL);
+    // msger->lpid = __xapi->process_create(listening_loop, msger);
+    // __xbreak(msger->lpid == NULL);
 
     __xlogd("xmsger_create exit\n");
 

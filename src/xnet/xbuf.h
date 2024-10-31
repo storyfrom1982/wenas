@@ -18,8 +18,11 @@ typedef struct xpipe {
     uint8_t *buf;
 }*xpipe_ptr;
 
+static inline void __xpipe_notify(xpipe_ptr pipe){
+    __xapi->mutex_notify(pipe->mutex);
+}
 
-static inline uint64_t __pipe_write(xpipe_ptr pipe, void *data, uint64_t len)
+static inline uint64_t __xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 {
     if(!__atom_try_lock(pipe->wlock)){
         return 0;
@@ -61,10 +64,10 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
     while (__is_false(pipe->breaking) && pos < len) {
 
-        pos += __pipe_write(pipe, (uint8_t*)data + pos, len - pos);
+        pos += __xpipe_write(pipe, (uint8_t*)data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __pipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
+            // __xpipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
             __xapi->mutex_notify(pipe->mutex);
             __xapi->mutex_wait(pipe->mutex);
@@ -77,7 +80,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
     return pos;
 }
 
-static inline uint64_t __pipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
+static inline uint64_t __xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 {
     if(!__atom_try_lock(pipe->rlock)){
         return 0;
@@ -121,11 +124,11 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
     // 长度大于 0 才能进入读循环
     while (pos < len) {
 
-        pos += __pipe_read(pipe, (uint8_t*)buf + pos, len - pos);
+        pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
 
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __pipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
+            // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
             __xapi->mutex_notify(pipe->mutex);
             if (__is_false(pipe->breaking)){
