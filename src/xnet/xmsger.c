@@ -1202,7 +1202,6 @@ static void* main_loop(void *ptr)
                             }
                         }
                     }else if (rpack->head.type == XMSG_PACK_ACK){
-                        __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
                         xchannel_recv_ack(channel, rpack);
 
                     }else if (rpack->head.type == XMSG_PACK_ONL){
@@ -1370,7 +1369,7 @@ static void* main_loop(void *ptr)
             __xapi->udp_listen(msger->sock, msger->timer / 1000);
             // __xlogd("main_loop >>>>-----> exit\n"); 
         }
-        
+
         msger->timer = 10000000UL; // 10 毫秒
 
         // 检查每个连接，如果满足发送条件，就发送一个数据包
