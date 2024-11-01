@@ -16,7 +16,7 @@ enum {
 };
 
 
-#define PACK_HEAD_SIZE              16
+#define PACK_HEAD_SIZE              64
 // #define PACK_BODY_SIZE              1280 // 1024 + 256
 #define PACK_BODY_SIZE              64
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
@@ -30,18 +30,19 @@ enum {
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
-    uint8_t type;
     uint8_t sn; // serial number 包序列号
+    uint8_t type; // 包类型
+    uint8_t flag; // 扩展标志，是否附带了 ACK
     uint8_t ack; // 确认收到了序列号为当前 ACK 的包
     uint8_t acks; // 确认收到了这个 ACK 序列号之前的所有包
     uint8_t key; // 校验码
-    uint8_t flag; // 扩展标志，是否附带了 ACK
     uint8_t resend; // 这个包的重传计数
     uint8_t sid; // 多路复用的流 ID
     uint16_t range; // 一个消息的分包数量，从 1 到 range
     uint16_t len; // 当前分包装载的数据长度
     uint16_t flags; // 本端 CID
     uint16_t cid; // 对端 CID
+    uint8_t byte[48];
 }*xhead_ptr;
 
 typedef struct xpack {
