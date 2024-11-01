@@ -348,10 +348,10 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
     send_number++;
     uint64_t randtime = __unix_clock() / 1000000ULL;
-    if ((send_number & 0x03) == (randtime & 0x03)){
-        __xlogd("lost pack ...........\n");
-        return size;
-    }
+    // if ((send_number & 0x03) == (randtime & 0x03)){
+    //     __xlogd("lost pack ...........\n");
+    //     return size;
+    // }
     return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 

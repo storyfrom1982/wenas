@@ -534,7 +534,7 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
         char buf[XLINEKV_SIZE] = {0}; \
         uint64_t pos = 0; \
         xl_format((xl), "root", 1, buf, &pos, XLINEKV_SIZE); \
-        __xlogd("len=%lu\n%s\n", pos, buf); \
+        __xlogi("len=%lu\n%s\n", pos, buf); \
     }while(0)
 
 
