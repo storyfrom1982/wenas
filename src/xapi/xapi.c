@@ -353,9 +353,8 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
         __xlogd("lost pack ...........\n");
         return size;
     }
-#else    
-    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
 #endif
+    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 
 static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
