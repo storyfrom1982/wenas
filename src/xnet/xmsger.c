@@ -442,7 +442,6 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
 static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
 {
-    __xlogd("xchannel_send_msg enter\n");
     // 更新待发送计数
     __atom_add(channel->len, msg->lkv.wpos);
     __atom_add(channel->msger->len, msg->lkv.wpos);
@@ -459,7 +458,6 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
         // 设置新消息为当前正在发送的消息
         channel->msg_head = msg;
         channel->smsg = channel->msg_head;
-        // TODO 在这里调用 xchannel_serial_msg(channel);
         xchannel_serial_msg(channel);
     }
 
@@ -468,11 +466,6 @@ static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
         __xchannel_take_out_list(channel);
         __xchannel_put_into_list(&channel->msger->send_list, channel);
     }
-
-    // if (__serialbuf_sendable(channel->sendbuf) == 0){
-    //     // 确保将待发送数据写入了缓冲区
-    //     xchannel_serial_msg(channel);
-    // }
 }
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
@@ -485,14 +478,10 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->head.type, channel->lcid.index, channel->lcid.cid, pack->head.flag, pack->head.ack, pack->head.acks, pack->head.sn);
 
         if (channel->ack.flag != 0){
-            // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
             // 携带 ACK
             pack->head.flag = channel->ack.flag;
             pack->head.ack = channel->ack.ack;
             pack->head.acks = channel->ack.acks;
-
-        }else {
-            // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK\n");
         }
 
         // 判断发送是否成功
@@ -513,7 +502,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录当前时间
             pack->ts = __xapi->clock();
-            // __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
             pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING;
             channel->timestamp = pack->ts;
             __ring_list_put_into_end(&channel->flushlist, pack);
@@ -660,7 +648,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->msg_head == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
                     if (!channel->keepalive && __serialbuf_sendable(channel->sendbuf) == 0 && channel->flushlist.len == 0){
-                        __xlogd("xchannel_recv_ack >>>>----------------------------------> add recv list\n");
                         // 不需要保活，加入等待超时队列
                         __xchannel_take_out_list(channel);
                         __xchannel_put_into_list(&channel->msger->recv_list, channel);
@@ -742,11 +729,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                             pack->head.acks = channel->recvbuf->wpos;
                         }
-                        __xlogd("xchannel_recv_ack >>>>>>>>>>-----------------------------------------> RESEND PACK: %u\n", pack->head.sn);
+                        __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", pack->head.sn);
                         if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                             pack->delay *= XCHANNEL_RESEND_STEPPING;
-                            // __xlogd("xchannel_recv_ack >>>>------------------------> delay=%lu\n", pack->delay);
-                            
                         }else {
                             __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
                         }
@@ -780,7 +765,6 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
         if (pack->head.flag != 0){
             // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-            __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
             xchannel_recv_ack(channel, pack);
         }
         // 保存 PACK
@@ -828,7 +812,6 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
                 // 只处理第一次到达的包带 ACK，否则会造成发送缓冲区索引溢出的 BUG
                 if (pack->head.flag != 0){
                     // 如果 PACK 携带了 ACK，就在这里统一回收发送缓冲区
-                    __xlogd("xchannel_recv_pack >>>>-----------> enter\n");
                     xchannel_recv_ack(channel, pack);
                 }
                 // 这个 PACK 首次到达，保存 PACK
@@ -926,16 +909,13 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
 
 static inline void xmsger_send_all(xmsger_ptr msger)
 {
-    // __xlogd("xmsger_send_all >>>>------------------------> enter %lu\n", msger->timer);
-
-    int64_t delay;
-    xpack_ptr spack;
-    xchannel_ptr channel, next_channel;
-
     // 判断待发送队列中是否有内容
     if (msger->send_list.len > 0){
 
-        // TODO 如能能更平滑的发送
+        int64_t delay;
+        xpack_ptr spack;
+        xchannel_ptr channel, next_channel;
+
         // 从头开始，每个连接发送一个 pack
         channel = msger->send_list.head.next;
 
@@ -946,7 +926,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
             // readable 是已经写入缓冲区还尚未发送的包
             // 缓冲的包小于缓冲区的8/1时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
             if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
-                // __xlogd("xmsger_send_all >>>>------------------------> 1\n");
                 xchannel_send_pack(channel);
                 // 发送缓冲区未到达8/1，且有消息未发送完，主线程不休眠
                 if (channel->msg_head != NULL){
@@ -955,7 +934,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
             }
 
             if (channel->flushlist.len > 0){
-                // __xlogd("xmsger_send_all >>>>------------------------> 2\n");
 
                 spack = channel->flushlist.head.next;
 
@@ -969,8 +947,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             // 超时时间更近，更新休息时间
                             msger->timer = delay;
                         }
-
-                        // __xlogd("xmsger_send_all >>>>>>>>>>-------------------------------------------> delay=%lu\n", delay);
                         // 第一个包未超时，后面的包就都没有超时
                         break;
 
@@ -1000,13 +976,12 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 // TODO ack 也要更新
                             }
 
-                            __xlogd("xmsger_loop >>>>>>>>>>-------------------------------------------> RESEND PACK: %u\n", spack->head.sn);
+                            __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", spack->head.sn);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
                                 // 记录重传次数
                                 spack->head.resend++;
-                                // __xlogd("xmsger_loop >>>>------------------------> delay=%lu\n", spack->delay);
                                 // spack->delay *= XCHANNEL_RESEND_STEPPING;
                                 // 最后一个待确认包的超时时间加上平均往返时长
                                 spack->delay *= XCHANNEL_RESEND_STEPPING;
@@ -1016,7 +991,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
                             }else {
-                                __xlogd("xmsger_loop >>>>------------------------> send failed\n");
+                                __xlogd(">>>>------------------------> send failed\n");
                             }
 
                             if (msger->timer > channel->back_delay){
@@ -1027,8 +1002,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                     spack = next_pack;
                 }
-
-                // __xlogd("xmsger_loop >>>>------------------------> flusing exit\n");
 
             }else if (channel->keepalive && channel->pos == channel->len && __serialbuf_readable(channel->sendbuf) == 0){
 
@@ -1050,8 +1023,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
             channel = next_channel;
         }
     }
-
-    // __xlogd("xmsger_send_all >>>>------------------------> exit %lu\n", msger->timer);
 }
 
 static inline void xmsger_check_all(xmsger_ptr msger)
