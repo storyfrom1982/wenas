@@ -40,8 +40,8 @@ typedef struct xhead {
     uint8_t sid; // 多路复用的流 ID
     uint16_t range; // 一个消息的分包数量，从 1 到 range
     uint16_t len; // 当前分包装载的数据长度
-    uint16_t lcid; // 本端 CID
-    uint16_t rcid; // 对端 CID
+    uint16_t flags; // 本端 CID
+    uint16_t cid; // 对端 CID
 }*xhead_ptr;
 
 typedef struct xpack {
@@ -412,8 +412,9 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.flag = 0;
     pack->head.key = (XMSG_VAL ^ channel->remote_key);
     pack->head.sn = channel->sendbuf->wpos;
-    pack->head.lcid = channel->lcid.cid;
-    pack->head.rcid = channel->rcid;
+    // pack->head.lcid = channel->lcid.cid;
+    // __xlogd("xchannel_serial_pack >>>>------------------------> lcid=%u\n", pack->head.lcid);
+    pack->head.cid = channel->rcid;
     __atom_add(channel->sendbuf->wpos, 1);
     channel->len += pack->head.len;
     channel->msger->len += pack->head.len;
@@ -448,14 +449,14 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
         pack->channel = channel;
         pack->delay = channel->back_delay;
-        // __xlogd("xchannel_serial_msg >>>>------------------------> delay=%lu\n", pack->delay);
         pack->is_flushing = false;
         pack->head.resend = 0;
         pack->head.flag = 0;
         pack->head.key = (XMSG_VAL ^ channel->remote_key);
         pack->head.sn = channel->sendbuf->wpos;
-        pack->head.lcid = channel->lcid.cid;
-        pack->head.rcid = channel->rcid;
+        // pack->head.lcid = channel->lcid.cid;
+        // __xlogd("xchannel_serial_msg >>>>------------------------> lcid=%u\n", pack->head.lcid);
+        pack->head.cid = channel->rcid;
         __atom_add(channel->sendbuf->wpos, 1);
         // 判断消息是否全部写入缓冲区
         if (msg->sendpos == msg->lkv.wpos){
@@ -513,8 +514,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
 
-        __xlogd("xchannel_send_pack PACK >>>>-------------------> SN(%u) TYPE(%u) FLAG[%u:%u:%u]\n", 
-            pack->head.sn, pack->head.type, pack->head.flag, pack->head.ack, pack->head.acks);
+        __xlogd("<SEND> TYPE[%u] IP[%X] CID[%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+            pack->head.type, *(uint64_t*)&channel->addr.family, channel->lcid.cid, pack->head.flag, pack->head.ack, pack->head.acks, pack->head.sn);
 
         if (channel->ack.flag != 0){
             // __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND PACK && ACK\n");
@@ -562,7 +563,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("xchannel_send_ack ACK >>>>---------------------------------> SN[%u:%u] TYPE(%u)\n", channel->ack.ack, channel->ack.acks, channel->ack.flag);
+    __xlogd("<SEND> TYPE[%u] IP[%X] CID[%u] FLAG[%u:%u:%u]\n", 
+        channel->ack.type, *(uint64_t*)&channel->addr.family, channel->lcid.cid, channel->ack.flag, channel->ack.ack, channel->ack.acks);
     if ((__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
@@ -572,7 +574,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
 static inline void xchannel_send_final(xmsger_ptr msger, __xipaddr_ptr addr, xpack_ptr rpack)
 {
-    __xlogd("xchannel_send_pack >>>>-----------------------------------------------------------> SEND FINAL ACK\n");
+    __xlogd("xchannel_send_final >>>>-----------------------------------------------------------> SEND FINAL ACK\n");
     rpack->head.type = XMSG_PACK_ACK;
     rpack->head.flag = XMSG_PACK_BYE;
     // 设置 acks，通知发送端已经接收了所有包
@@ -1110,29 +1112,6 @@ static inline void xmsger_check_all(xmsger_ptr msger)
 
 }
 
-static void* listening_loop(void *ptr)
-{
-    __xlogd("listening_loop enter\n");
-    // xmsg_ptr msg = xmsg_create(0);
-    // msg->flag = XMSG_FLAG_RECV;
-    xmsger_ptr msger = (xmsger_ptr)ptr;
-    while (msger->running){
-        // __xlogd("listening_loop >>>>-----> listening enter\n");
-        __xapi->udp_listen(msger->sock, 0);
-        __xapi->mutex_lock(msger->mtx);
-        // __xlogd("listening_loop >>>>-----> listening notify\n");
-        __xapi->mutex_notify(msger->mtx);
-        // __xlogd("listening_loop >>>>-----> listening waiting\n");
-        // __set_false(msger->listening);
-        __xapi->mutex_wait(msger->mtx);
-        // __set_true(msger->listening);
-        __xapi->mutex_unlock(msger->mtx);
-    }
-XClean:
-    // xmsg_free(msg);
-    __xlogd("listening_loop exit\n");
-}
-
 xpack_ptr first_pack()
 {
     return (xpack_ptr)calloc(1, sizeof(struct xpack));;
@@ -1178,12 +1157,12 @@ static void* main_loop(void *ptr)
         // readable 是 false 的时候，接收线程可能在监听 socket，或者正在给 readable 赋值为 true，所以要用原子变量
         while ((recvret = __xapi->udp_recvfrom(msger->sock, &addr, &rpack->head, PACK_ONLINE_SIZE)) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            cid.cid = rpack->head.rcid;
+            cid.cid = rpack->head.cid;
             cid.port = addr.port;
             cid.ip = addr.ip;
 
-            __xlogd("main_loop RECV: IP(%X) CID[%u->%u] KEY(%u) SN(%u) >>>>>--------> TYPE(%u) FLAG[%u:%u:%u]\n", 
-                    cid.index, rpack->head.lcid, rpack->head.rcid, rpack->head.key, rpack->head.sn, rpack->head.type, rpack->head.flag, rpack->head.ack, rpack->head.acks);
+            __xlogd("[RECV] TYPE(%u) IP(%X) CID(%u) FLAG(%u:%u:%u) >>>>--------> SN(%u)\n", 
+                    rpack->head.type, *(uint64_t*)&addr.family, rpack->head.cid, rpack->head.flag, rpack->head.ack, rpack->head.acks, rpack->head.sn);
 
             channel = avl_tree_find(&msger->peers, &cid);
 
@@ -1228,7 +1207,8 @@ static void* main_loop(void *ptr)
                             channel->remote_key = remote_key;
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.rcid = channel->rcid;
+                            channel->ack.cid = channel->rcid;
+                            // channel->ack.lcid = channel->lcid.cid;
                             // 通知用户建立连接
                             msger->callback->on_channel_to_peer(msger->callback, channel);                            
                         }
@@ -1299,7 +1279,7 @@ static void* main_loop(void *ptr)
                             channel->rcid = rcid;
                             // 生成 ack 的校验码
                             channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.rcid = rcid;
+                            channel->ack.cid = rcid;
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
                             channel->connected = true;
