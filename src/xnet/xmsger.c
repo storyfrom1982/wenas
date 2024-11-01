@@ -17,8 +17,8 @@ enum {
 
 
 #define PACK_HEAD_SIZE              64
-// #define PACK_BODY_SIZE              1280 // 1024 + 256
-#define PACK_BODY_SIZE              64
+#define PACK_BODY_SIZE              1280 // 1024 + 256
+// #define PACK_BODY_SIZE              64
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )
 #define PACK_SERIAL_RANGE           64
 
