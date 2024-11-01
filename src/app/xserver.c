@@ -326,26 +326,26 @@ typedef struct xserver{
 }*xserver_ptr;
 
 
-static void on_channel_break(xmsgercb_ptr listener, xchannel_ptr channel)
+static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xserver_ptr server = listener->ctx;
     xmsg_ptr msg = xmsg_maker();
     msg->ctx = xchannel_get_ctx(channel);
     xl_add_word(&msg->lkv, "api", "break");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+    __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static void on_channel_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
+static void on_msg_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
+    __xlogd("on_msg_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xserver_ptr server = listener->ctx;
     const char *ip = xchannel_get_ip(channel);
     uint16_t port = xchannel_get_port(channel);
     xmsg_ptr msg = xmsg_maker();
     msg->ctx = xchannel_get_ctx(channel);
-    __xlogd("on_channel_break >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
+    __xlogd("on_msg_timeout >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xmsg_ptr msg)
@@ -806,12 +806,13 @@ int main(int argc, char *argv[])
     xmsgercb_ptr listener = &server->listener;
 
     listener->ctx = server;
-    listener->on_channel_to_peer = on_connection_to_peer;
-    listener->on_channel_from_peer = on_connection_from_peer;
-    listener->on_channel_break = on_channel_break;
-    listener->on_channel_timeout = on_channel_timeout;
+    listener->on_connect_to_peer = on_connection_to_peer;
+    listener->on_connect_from_peer = on_connection_from_peer;
+    listener->on_connect_timeout = on_msg_timeout;
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
+    listener->on_msg_timeout = on_msg_timeout;
+    listener->on_disconnect = on_disconnect;
 
     // server->sock = __xapi->udp_open();
     // __xbreak(server->sock < 0);

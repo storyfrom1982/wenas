@@ -41,20 +41,19 @@ extern void xmsg_free(xmsg_ptr msg);
 
 typedef struct xmsgercb {
     void *ctx;
-    void (*on_channel_to_peer)(struct xmsgercb*, xchannel_ptr channel);
-    void (*on_channel_from_peer)(struct xmsgercb*, xchannel_ptr channel);
-    void (*on_channel_break)(struct xmsgercb*, xchannel_ptr channel);
-    void (*on_channel_timeout)(struct xmsgercb*, xchannel_ptr channel);
+    void (*on_connect_to_peer)(struct xmsgercb*, xchannel_ptr channel);
+    void (*on_connect_from_peer)(struct xmsgercb*, xchannel_ptr channel);
+    void (*on_connect_timeout)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_msg_from_peer)(struct xmsgercb*, xchannel_ptr channel, xmsg_ptr msg);
     void (*on_msg_to_peer)(struct xmsgercb*, xchannel_ptr channel, xmsg_ptr msg);
+    void (*on_msg_timeout)(struct xmsgercb*, xchannel_ptr channel);
+    void (*on_disconnect)(struct xmsgercb*, xchannel_ptr channel);
 }*xmsgercb_ptr;
 
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback);
 extern void xmsger_free(xmsger_ptr *pptr);
 extern bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xmsg_ptr msg);
-// extern bool xmsger_send_stream(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);
-// extern bool xmsger_send_file(xmsger_ptr msger, xchannel_ptr channel, void *data, size_t size);
 extern bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, struct xchannel_ctx *ctx, xmsg_ptr firstmsg);
 extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel);
 
