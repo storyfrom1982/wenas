@@ -46,8 +46,8 @@ typedef struct xhead {
 }*xhead_ptr;
 
 typedef struct xpack {
-    uint64_t delay;
-    uint64_t timestamp; //计算往返耗时
+    uint64_t ts; // 计算往返耗时
+    uint64_t delay; // 累计超时时长
     xmsg_ptr msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -506,10 +506,10 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->head.resend = 1;
 
             // 记录当前时间
-            pack->timestamp = __xapi->clock();
+            pack->ts = __xapi->clock();
             // __xlogd("xchannel_send_pack >>>>------------------------> delay=%lu\n", pack->delay);
             pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING;
-            channel->timestamp = pack->timestamp;
+            channel->timestamp = pack->ts;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -633,10 +633,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             pack = &channel->sendbuf->buf[index];
 
-            if (pack->timestamp != 0){
+            if (pack->ts != 0){
                 // 累计新的一次往返时长
-                channel->back_range += (__xapi->clock() - pack->timestamp);
-                pack->timestamp = 0;
+                channel->back_range += (__xapi->clock() - pack->ts);
+                pack->ts = 0;
 
                 if (channel->back_times < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
@@ -653,7 +653,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 判断是否有未发送的消息
                 if (channel->msg_head == NULL){
                     // 判断是否有待重传的包，再判断是否需要保活
-                    if (__serialbuf_sendable(channel->sendbuf) == 0 && channel->flushlist.len == 0 && !channel->keepalive){
+                    if (!channel->keepalive && __serialbuf_sendable(channel->sendbuf) == 0 && channel->flushlist.len == 0){
                         __xlogd("xchannel_recv_ack >>>>----------------------------------> add recv list\n");
                         // 不需要保活，加入等待超时队列
                         __xchannel_take_out_list(channel);
@@ -677,8 +677,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 拼装临时 cid
                 struct __xcid cid;
                 cid.cid = channel->rcid;
-                cid.port = channel->port;
-                cid.ip = channel->ip;
+                cid.port = channel->addr.port;
+                cid.ip = channel->addr.ip;
                 // 移除正在建立连接标志
                 xtree_take(channel->msger->chcache, &cid.index, 8);
             }
@@ -701,10 +701,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             pack = &channel->sendbuf->buf[rpack->head.ack & (channel->sendbuf->range - 1)];
 
-            if (pack->timestamp != 0){
+            if (pack->ts != 0){
                 // 累计新的一次往返时长
-                channel->back_range += (__xapi->clock() - pack->timestamp);
-                pack->timestamp = 0;
+                channel->back_range += (__xapi->clock() - pack->ts);
+                pack->ts = 0;
                 if (channel->back_times < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
                     channel->back_times++;
@@ -726,7 +726,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 取出落后的包
                 pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
                 // 判断这个包是否已经接收过
-                if (pack->timestamp != 0){
+                if (pack->ts != 0){
                     // 判断是否进行了重传
                     if (pack->head.resend < 2){
                         pack->head.resend++;
@@ -957,7 +957,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                 {
                     xpack_ptr next_pack = spack->next;
 
-                    if ((delay = ((spack->timestamp + spack->delay) - __xapi->clock())) > 0) {
+                    if ((delay = ((spack->ts + spack->delay) - __xapi->clock())) > 0) {
                         // 未超时
                         if (msger->timer > delay){
                             // 超时时间更近，更新休息时间
