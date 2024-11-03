@@ -120,6 +120,8 @@ static inline double __xl_b2float(xl_ptr l)
 #define XLINEKV_SIZE                (1024 * 8)
 
 typedef struct xlinekv {
+    __atom_size ref;
+    void *ctx;
     uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *body;
@@ -133,6 +135,7 @@ static inline xlinekv_ptr xl_create(uint64_t size)
 {
     xlinekv_ptr lkv = (xlinekv_ptr)malloc(sizeof(xlinekv_t) + size);
     if (lkv){
+        lkv->ref = 1;
         lkv->size = size;
         lkv->wpos = 0;
         lkv->rpos = 0;
@@ -153,7 +156,7 @@ static inline void xl_update(xlinekv_ptr lkv)
 
 static inline void xl_free(xlinekv_ptr lkv)
 {
-    if (lkv){
+    if (__atom_sub(lkv->ref, 1) == 0){
         free(lkv);
     }
 }
