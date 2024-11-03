@@ -727,34 +727,36 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __ring_list_take_out(&channel->flushlist, pack);
             }
 
-            // 使用临时变量
-            uint8_t index = channel->sendbuf->rpos;
-            // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
-            while (index != rpack->head.ack)
-            {
-                // 取出落后的包
-                pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
-                // 判断这个包是否已经接收过
-                if (pack->ts != 0){
-                    // 判断是否进行了重传
-                    if (pack->head.resend < 2){
-                        pack->head.resend++;
-                        // 判断重传的包是否带有 ACK
-                        if (pack->head.flag != 0){
-                            // 更新 ACKS
-                            // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
-                            pack->head.acks = channel->recvbuf->wpos;
-                        }
-                        __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", pack->head.sn);
-                        if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
-                            pack->delay *= XCHANNEL_RESEND_STEPPING;
-                        }else {
-                            __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
+            // ack 与 rpos 的间隔大于一才进行重传
+            if (((rpack->head.ack - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) > 1){
+                // 使用临时变量
+                uint8_t index = channel->sendbuf->rpos;
+                // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
+                while (index != rpack->head.ack){
+                    // 取出落后的包
+                    pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
+                    // 判断这个包是否已经接收过
+                    if (pack->ts != 0){
+                        // 判断是否进行了重传
+                        if (pack->head.resend < 2){
+                            pack->head.resend++;
+                            // 判断重传的包是否带有 ACK
+                            if (pack->head.flag != 0){
+                                // 更新 ACKS
+                                // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+                                pack->head.acks = channel->recvbuf->wpos;
+                            }
+                            __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", pack->head.sn);
+                            if (__xapi->udp_sendto(channel->msger->sock, &channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
+                                pack->delay *= XCHANNEL_RESEND_STEPPING;
+                            }else {
+                                __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
+                            }
                         }
                     }
-                }
 
-                index++;
+                    index++;
+                }
             }
         }
 
