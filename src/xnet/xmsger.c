@@ -122,7 +122,7 @@ struct xchannel {
     struct xpacklist flushlist;
     struct xchannellist *worklist;
 
-    xlinekv_ptr xkv;
+    xlmsg_ptr xkv;
     xmsg_ptr msg_head, *msg_tail;
     xmsg_ptr smsg;
     xchannel_ptr prev, next;
@@ -222,7 +222,7 @@ typedef struct xmsg {
     struct xchannel *channel;
     struct xchannel_ctx *ctx;
     struct xmsg *prev, *next;
-    struct xlinekv *lkv;
+    struct xlmsg *lkv;
 }*xmsg_ptr;
 
 // xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlinekv_ptr xkv);
@@ -240,7 +240,7 @@ static inline void xmsg_fixed(xmsg_ptr msg)
     }
 }
 
-xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlinekv_ptr xkv)
+xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlmsg_ptr xkv)
 {
     xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
     if (msg){
@@ -258,7 +258,7 @@ void xmsg_free(xmsg_ptr msg)
 {
     if (msg){
         if (msg->lkv){
-            xl_free(msg->lkv);
+            xline_free(msg->lkv);
         }
         free(msg);
     }
@@ -338,7 +338,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
         // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 sendpos
         channel->len -= msg->lkv->wpos - msg->sendpos;
         channel->msger->len -= msg->lkv->wpos - msg->sendpos;
-        xl_free(msg->lkv);
+        xline_free(msg->lkv);
         free(msg);
         msg = next;
     }
@@ -364,7 +364,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
     }
     // 释放未完整接收的消息
     if (channel->xkv != NULL){
-        xl_free(channel->xkv);
+        xline_free(channel->xkv);
         channel->xkv = NULL;
     }
     __xlogd("xchannel_clear exit\n");
@@ -568,7 +568,7 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
             if (pack->head.type == XMSG_PACK_MSG){
                 // 如果当前消息的数据为空，证明这个包是新消息的第一个包
                 if (channel->xkv == NULL){
-                    channel->xkv = xl_create(pack->head.range * PACK_BODY_SIZE);
+                    channel->xkv = xline_create(pack->head.range * PACK_BODY_SIZE);
                     __xbreak(channel->xkv == NULL);
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
                     // channel->rmsg->range = pack->head.range;
@@ -578,8 +578,8 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
                 // channel->rmsg->range--;
                 if (channel->xkv->size - channel->xkv->wpos < PACK_BODY_SIZE){
                     // 更新消息长度
-                    xl_update(channel->xkv);
-                    xl_printf(&channel->xkv->line);
+                    xline_fixed(channel->xkv);
+                    xline_printf(&channel->xkv->line);
                     // 通知用户已收到一个完整的消息
                     channel->msger->callback->on_msg_from_peer(channel->msger->callback, channel, channel->xkv);
                     channel->xkv = NULL;
@@ -870,11 +870,11 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
             return false;
         }
 
-        xlinekv_t parser = xl_parser(&msg->lkv->line);
-        char *ip = xl_find_word(&parser, "ip");
-        uint64_t port = xl_find_uint(&parser, "port");
-        channel->ctx = xl_find_ptr(&parser, "ctx");
-        xlinekv_ptr firstmsg = xl_find_ptr(&parser, "msg");
+        xlmsg_t parser = xline_parser(&msg->lkv->line);
+        char *ip = xline_find_word(&parser, "ip");
+        uint64_t port = xline_find_uint(&parser, "port");
+        channel->ctx = xline_find_ptr(&parser, "ctx");
+        xlmsg_ptr firstmsg = xline_find_ptr(&parser, "msg");
 
         mcopy(channel->ip, ip, slength(ip));
         channel->port = port;
@@ -894,7 +894,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
         xchannel_serial_pack(channel, XMSG_PACK_PING);
 
         if (firstmsg != NULL){
-            xl_printf(&firstmsg->line);
+            xline_printf(&firstmsg->line);
             // xchannel_send_msg(channel, firstmsg);
             // firstmsg = firstmsg->next;
         }
@@ -1308,7 +1308,7 @@ static inline bool xmsger_send(xmsger_ptr msger, xmsg_ptr msg)
     return (xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) == __sizeof_ptr);
 }
 
-bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xlinekv_ptr xkv)
+bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xlmsg_ptr xkv)
 {
     __xlogd("xmsger_send_message enter\n");
     __xcheck(channel == NULL || xkv == NULL);
@@ -1352,19 +1352,19 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, void *ctx, xlinekv_ptr firstmsg)
+bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, void *ctx, xlmsg_ptr firstmsg)
 {
     __xlogd("xmsger_connect enter\n");
 
     __xlogd("xmsger_connect ip=%s\n", ip);
 
-    xlinekv_ptr xkv = xl_maker();
+    xlmsg_ptr xkv = xline_maker();
     __xcheck(xkv == NULL);
 
-    xl_add_word(xkv, "ip", ip);
-    xl_add_uint(xkv, "port", port);
-    xl_add_ptr(xkv, "ctx", ctx);
-    xl_add_ptr(xkv, "msg", firstmsg);
+    xline_add_word(xkv, "ip", ip);
+    xline_add_uint(xkv, "port", port);
+    xline_add_ptr(xkv, "ctx", ctx);
+    xline_add_ptr(xkv, "msg", firstmsg);
 
     xmsg_ptr msg = xmsg_maker(XMSG_FLAG_CONNECT, NULL, ctx, xkv);
     __xcheck(msg == NULL);
@@ -1379,7 +1379,7 @@ XClean:
 
     __xlogd("xmsger_connect failed\n");
     if (xkv){
-        xl_free(xkv);
+        xline_free(xkv);
     }
     if (msg){
         msg->lkv = NULL;
