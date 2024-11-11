@@ -874,7 +874,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
         char *ip = xline_find_word(&parser, "ip");
         uint64_t port = xline_find_uint(&parser, "port");
         channel->ctx = xline_find_ptr(&parser, "ctx");
-        xlmsg_ptr firstmsg = xline_find_ptr(&parser, "msg");
+        xlmsg_ptr req = xline_find_ptr(&parser, "msg");
 
         mcopy(channel->ip, ip, slength(ip));
         channel->port = port;
@@ -893,15 +893,19 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
         // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
         xchannel_serial_pack(channel, XMSG_PACK_PING);
 
-        if (firstmsg != NULL){
-            xline_printf(&firstmsg->line);
-            // xchannel_send_msg(channel, firstmsg);
+        if (req != NULL){
+            xline_printf(&req->line);
+            xline_free(msg->lkv);
+            msg->lkv = req;
+            xmsg_fixed(msg);
+            xchannel_send_msg(channel, msg);
             // firstmsg = firstmsg->next;
+        }else {
+            free(msg);
         }
 
         __xlogd("xmsger_process_msg >>>>--------> Create channel IP=[%X] PORT=[%u] CID[%u] KEY[%u] SN[%u]\n", 
                                     channel->lcid.index, port, channel->lcid.cid, channel->local_key, channel->serial_number);
-        free(msg);
 
     }else if (msg->flag == XMSG_FLAG_DISCONNECT){
 

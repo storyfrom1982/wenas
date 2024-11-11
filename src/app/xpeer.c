@@ -49,8 +49,7 @@ typedef struct xchannel_ctx {
     uint8_t reconnected;
     xchannel_ptr channel;
     struct xpeer *server;
-    void *task_ctx;
-    void (*task_enter)(struct xchannel_ctx*);
+    void (*processor)(struct xchannel_ctx*, xlmsg_ptr msg);
 }*xpeer_ctx_ptr;
 
 
@@ -65,18 +64,18 @@ struct chord_node {
 
 typedef struct xpeer{
     int sock;
+    uint16_t port;
+    char ip[__XAPI_IP_STR_LEN];
     uint64_t key;
     uint8_t uuid[32];
     __atom_bool runnig;
     uint64_t task_id;
     struct __xipaddr addr;
     xline_ptr chord_list;
-    int cid;
-    xchannel_ptr channel;
-    xpeer_ctx_ptr pctx_list[4];
     xmsger_ptr msger;
+    struct xchannel_ctx *ctx;
     xpipe_ptr task_pipe;
-    __xprocess_ptr task_pid, listen_pid;
+    __xprocess_ptr task_pid;
     struct xmsgercb listener;
     uuid_list_t uuid_table;
     uint64_t task_count;
@@ -119,7 +118,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_ptr server = (xpeer_ptr)listener->ctx;
     xlmsg_ptr xkv = xline_maker();
     xkv->ctx = xchannel_get_ctx(channel);
-    xline_add_word(xkv, "api", "break");
+    xline_add_word(xkv, "api", "disconnect");
     xpipe_write(server->task_pipe, &xkv, __sizeof_ptr);
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -192,20 +191,15 @@ static void* task_loop(void *ptr)
     {
         ctx = msg->ctx;
 
-        if (ctx->task_enter != NULL){
-            ctx->task_enter(ctx);
+        if (ctx->processor != NULL){
+            ctx->processor(ctx, msg);
         }else {
             xline_printf(&msg->line);
-            parser = xline_parser(&msg->line);
-            const char *req = xline_find_word(&parser, "req");
-            if (mcompare(req, "register", slength("register") == 0)){
-
-            }else if (mcompare(req, "push", slength("push") == 0)){
-
-            }else if (mcompare(req, "pull", slength("pull") == 0)){
-
-            }else if (mcompare(req, "call", slength("call") == 0)){
-
+            ctx->xlparser = xline_parser(&msg->line);
+            const char *api = xline_find_word(&ctx->xlparser, "api");
+            api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
+            if (enter){
+                enter(ctx);
             }
         }
         xline_free(msg);
@@ -260,7 +254,7 @@ static void req_forward(xpeer_ctx_ptr pctx, uint64_t key)
     xline_add_uint(msg, "tid", task->node.index);
     xline_add_uint(msg, "key", key);
     xline_add_word(msg, "text", "Hello World");
-    xmsger_send_message(peer->msger, peer->channel, msg);
+    // xmsger_send_message(peer->msger, peer->channel, msg);
     __xlogd("req_messaging ----------------------- exit\n");
 }
 
@@ -313,12 +307,15 @@ static void chord_invite(xpeer_ctx_ptr pctx)
 }
 
 #include <string.h>
-// static void req_login(xpeer_ctx_ptr ctx);
+static void req_login(xpeer_ptr peer, const char *ip, uint16_t port);
 
 static void res_logout(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    // xmsger_disconnect(task->pctx->server->msger, task->pctx->channel);
-    // req_login(pctx);
+    // char hostip[16] = {0};
+    // uint16_t port = xchannel_get_port(pctx->channel);
+    // const char *ip = xchannel_get_ip(pctx->channel);
+    // mcopy(hostip, ip, slength(ip));
+    xmsger_disconnect(pctx->server->msger, pctx->channel);
     remove_task(task);
 }
 
@@ -338,23 +335,48 @@ static void req_logout(xpeer_ctx_ptr pctx)
     xmsger_send_message(peer->msger, pctx->channel, req);
 }
 
-static void res_login(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
+static void req_echo(xpeer_ctx_ptr pctx, const char *text);
+static void res_echo(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
-    req_logout(pctx);
+    req_echo(pctx, "hello world");
     remove_task(task);
 }
 
-static void api_processor(xpeer_ctx_ptr ctx)
+static void req_echo(xpeer_ctx_ptr pctx, const char *text)
+{
+    xpeer_task_ptr task = add_task(pctx, res_echo);
+    xlmsg_ptr req = xline_maker();
+    xline_add_word(req, "api", "echo");
+    xline_add_uint(req, "tid", task->node.index);
+    xmsger_send_message(pctx->server->msger, pctx->channel, req);
+}
+
+static void res_login(xpeer_task_ptr task, xpeer_ctx_ptr pctx)
 {
 
+    // req_logout(pctx);
+    req_echo(pctx, "Hello......");
+    remove_task(task);
+}
+
+static void api_processor(xpeer_ctx_ptr ctx, xlmsg_ptr msg)
+{
+    xline_printf(&msg->line);
+    ctx->xlparser = xline_parser(&msg->line);
+    __xlogd("task_loop 1\n");
+    const char *api = xline_find_word(&ctx->xlparser, "api");
+    api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
+    if (enter){
+        enter(ctx);
+    }
 }
 
 static void req_login(xpeer_ptr peer, const char *ip, uint16_t port)
 {
     __xlogd("req_login ----------------------- enter\n");
-    xpeer_ctx_ptr ctx = xpeer_ctx_create(peer, NULL);
-    ctx->task_enter = api_processor;
-    xpeer_task_ptr task = add_task(ctx, res_login);
+    peer->ctx = xpeer_ctx_create(peer, NULL);
+    peer->ctx->processor = api_processor;
+    xpeer_task_ptr task = add_task(peer->ctx, res_login);
     xlmsg_ptr req = xline_maker();
     xline_add_word(req, "api", "login");
     xline_add_uint(req, "tid", task->node.index);
@@ -365,8 +387,19 @@ static void req_login(xpeer_ptr peer, const char *ip, uint16_t port)
     // buf[2047] = '\0';
     // xline_add_str(req, "str", buf, 2048);
     // xmsger_send_message(peer->msger, ctx->channel, req);
-    xmsger_connect(peer->msger, ip, port, ctx, req);
+    xmsger_connect(peer->msger, ip, port, peer->ctx, req);
     __xlogd("req_login ----------------------- exit\n");
+}
+
+static void api_disconnect(xpeer_ctx_ptr pctx)
+{
+    __xlogd("api_disconnect ----------------------- enter\n");
+    // if (pctx == pctx->server->ctx){
+    //     xpeer_ptr server = pctx->server;
+    //     req_login(server, server->ip, server->port);
+    // }
+    free(pctx);
+    __xlogd("api_disconnect ----------------------- exit\n");
 }
 
 static void api_timeout(xpeer_ctx_ptr pctx)
@@ -425,8 +458,8 @@ extern void sigint_setup(void (*handler)());
 int main(int argc, char *argv[])
 {
     const char *hostname = "pindanci.com";
-    char hostip[16] = {0};
-    uint16_t port = 9256;
+    // char hostip[16] = {0};
+    // uint16_t port = 9256;
 
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
@@ -448,6 +481,7 @@ int main(int argc, char *argv[])
     search_table_add(&server->api_tabel, "login", req_login);
     search_table_add(&server->api_tabel, "logout", req_logout);
     search_table_add(&server->api_tabel, "res", api_response);
+    search_table_add(&server->api_tabel, "disconnect", api_disconnect);
     search_table_add(&server->api_tabel, "timeout", api_timeout);
 
     xmsgercb_ptr listener = &server->listener;
@@ -483,15 +517,16 @@ int main(int argc, char *argv[])
     // __xbreak(server->listen_pid == NULL);
 
     // __xapi->udp_addrinfo(hostip, 16, hostname);
-    __xapi->udp_hostbyname(hostip, 16, hostname);
-    __xlogd("host ip = %s port=%u\n", hostip, port);
+    server->port = 9256;
+    __xapi->udp_hostbyname(server->ip, 16, hostname);
+    __xlogd("host ip = %s port=%u\n", server->ip, server->port);
     const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
 
-    mcopy(hostip, cip, slength(cip));
-    hostip[slength(cip)] = '\0';
+    mcopy(server->ip, cip, slength(cip));
+    server->ip[slength(cip)] = '\0';
 
     // xlmsg_ptr msg = xline_maker();
     // xline_add_word(msg, "api", "testreconnect");
@@ -521,10 +556,10 @@ int main(int argc, char *argv[])
         sscanf(input, "%s", command);
 
         if (strcmp(command, "login") == 0) {
-            req_login(server, hostip, port);
+            req_login(server, server->ip, server->port);
 
         } else if (strcmp(command, "logout") == 0) {
-            req_logout(server->pctx_list[0]);
+            req_logout(server->ctx);
 
         } else if (strcmp(command, "list") == 0) {
             
@@ -537,7 +572,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            chord_list(server->pctx_list[0]);
+            chord_list(server->ctx);
 
         }  else if (strcmp(command, "invite") == 0) {
 
@@ -550,7 +585,7 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            chord_invite(server->pctx_list[cid]);
+            chord_invite(server->ctx);
 
         }else if (strcmp(command, "msg") == 0) {
 
@@ -572,18 +607,9 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            req_forward(server->pctx_list[cid], key);
+            req_forward(server->ctx, key);
 
-        } else if (strcmp(command, "con") == 0) {
-
-            server->pctx_list[server->cid] = xpeer_ctx_create(server, NULL);
-            xmsger_connect(server->msger, hostip, 9256, server->pctx_list[server->cid], NULL);
-
-        } else if (strcmp(command, "discon") == 0) {
-
-            xmsger_disconnect(server->msger, server->pctx_list[server->cid]->channel);
-            
-        } else if (strcmp(command, "exit") == 0) {
+        }else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
             break;
         } else {
@@ -603,10 +629,6 @@ int main(int argc, char *argv[])
         __xapi->process_free(server->task_pid);
     }
 
-    if (server->listen_pid){
-        __xapi->process_free(server->listen_pid);
-    }
-
     if (server->task_pipe){
         while (xpipe_readable(server->task_pipe) > 0){
             // TODO 清理管道
@@ -618,7 +640,7 @@ int main(int argc, char *argv[])
     index_table_clear(&server->task_table);
     uuid_list_clear(&server->uuid_table);
     
-    free(server->pctx_list[0]);
+    // free(server->ctx);
     free(server);
 
     xlog_recorder_close();

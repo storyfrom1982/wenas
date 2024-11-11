@@ -556,6 +556,18 @@ static void api_logout(xpeer_ctx_ptr pctx)
     xmsger_send_message(pctx->server->msger, pctx->channel, res);
 }
 
+static void api_echo(xpeer_ctx_ptr pctx)
+{
+    uint64_t tid = xline_find_uint(&pctx->xlparser, "tid");
+    uuid_list_del(&pctx->server->uuid_table, &pctx->node);
+    xlmsg_ptr res = xline_maker();
+    xline_add_word(res, "api", "res");
+    xline_add_word(res, "req", "echo");
+    xline_add_uint(res, "tid", tid);
+    xline_add_uint(res, "code", 200);
+    xmsger_send_message(pctx->server->msger, pctx->channel, res);
+}
+
 static void api_break(xpeer_ctx_ptr pctx)
 {
     xserver_ptr server = pctx->server;
@@ -805,6 +817,7 @@ int main(int argc, char *argv[])
     search_table_add(&server->api_tabel, "command", command);
     search_table_add(&server->api_tabel, "break", api_break);
     search_table_add(&server->api_tabel, "timeout", api_timeout);
+    search_table_add(&server->api_tabel, "echo", api_echo);
 
     xmsgercb_ptr listener = &server->listener;
 
