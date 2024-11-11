@@ -305,6 +305,7 @@ typedef struct xchannel_ctx {
     struct xpeer_task tasklist;
     XChord_Ptr xchord;
     void (*release)(struct xchannel_ctx*);
+    void (*processor)(struct xchannel_ctx*, xlmsg_ptr msg);
 }*xpeer_ctx_ptr;
 
 typedef struct xserver{
@@ -510,6 +511,8 @@ static void api_forward(xpeer_ctx_ptr pctx)
     __xlogd("api_forward exit\n");
 }
 
+static void api_processor(xpeer_ctx_ptr ctx, xlmsg_ptr msg);
+
 static void api_login(xpeer_ctx_ptr pctx)
 {
     if (pctx->node.hash_key != 0){
@@ -524,6 +527,8 @@ static void api_login(xpeer_ctx_ptr pctx)
     }
     uuid_list_add(&pctx->server->uuid_table, &pctx->node);
     __xlogd("uuid_tree_add tree count=%lu\n", pctx->server->uuid_table.count);
+
+    pctx->processor = api_processor;
 
     xlmsg_ptr res = xline_maker();
     xline_add_word(res, "api", "res");
@@ -702,32 +707,44 @@ static void command(xpeer_ctx_ptr pctx)
     xmsger_send_message(pctx->server->msger, pctx->channel, res);
 }
 
-
 typedef void(*api_task_enter)(xpeer_ctx_ptr pctx);
+
+static void api_processor(xpeer_ctx_ptr ctx, xlmsg_ptr msg)
+{
+    xline_printf(&msg->line);
+    ctx->xlparser = xline_parser(&msg->line);
+    __xlogd("task_loop 1\n");
+    const char *api = xline_find_word(&ctx->xlparser, "api");
+    api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
+    if (enter){
+        enter(ctx);
+    }
+    __xlogd("task_loop 3\n");    
+}
 
 static void* task_loop(void *ptr)
 {
     __xlogd("task_loop enter\n");
 
-    xlmsg_ptr xkv;
+    xlmsg_ptr msg;
     xpeer_ctx_ptr ctx;
     xserver_ptr server = (xserver_ptr)ptr;
 
-    while (xpipe_read(server->task_pipe, &xkv, __sizeof_ptr) == __sizeof_ptr)
+    while (xpipe_read(server->task_pipe, &msg, __sizeof_ptr) == __sizeof_ptr)
     {
-        ctx = xkv->ctx;
-        xline_printf(&xkv->line);
-        __xlogd("task_loop ctx=%p\n", ctx);
-        ctx->xlparser = xline_parser(&xkv->line);
-        __xlogd("task_loop 1\n");
-        const char *api = xline_find_word(&ctx->xlparser, "api");
-        api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
-        if (enter){
-            __xlogd("task_loop 2\n");
-            enter(ctx);
+        ctx = msg->ctx;
+        if (ctx->processor){
+            ctx->processor(ctx, msg);
+        }else {
+            xline_printf(&msg->line);
+            ctx->xlparser = xline_parser(&msg->line);
+            const char *api = xline_find_word(&ctx->xlparser, "api");
+            api_task_enter enter = search_table_find(&ctx->server->api_tabel, api);
+            if (enter){
+                enter(ctx);
+            }
         }
-        __xlogd("task_loop 3\n");
-        xline_free(xkv);
+        xline_free(msg);
     }
 
     __xlogd("task_loop exit\n");
