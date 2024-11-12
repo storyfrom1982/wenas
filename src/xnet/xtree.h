@@ -46,7 +46,7 @@ static inline void xtree_free(xtree *pptr)
 }
 
 
-static inline void** xtree_save(xtree root, void *key, uint8_t keylen, void *mapping)
+static inline void** xtree_add(xtree root, void *key, uint8_t keylen, void *mapping)
 {
     uint8_t i;
     xtree parent, tree = root;
@@ -133,7 +133,7 @@ static inline void* xtree_find(xtree root, void *key, uint8_t keylen)
 }
 
 
-static inline void* xtree_take(xtree root, void *key, uint8_t keylen)
+static inline void* xtree_del(xtree root, void *key, uint8_t keylen)
 {
     void* mapping = NULL;
     xtree parent, tree = root;
@@ -205,7 +205,7 @@ static inline void* xtree_take(xtree root, void *key, uint8_t keylen)
 }
 
 
-static inline void xtree_clear(xtree root, void(*free_mapping)(void*))
+static inline void xtree_clear(xtree root, void(*clear)(void*))
 {
     uint8_t i = 0;
     xtree tree = root, temp;
@@ -241,9 +241,9 @@ static inline void xtree_clear(xtree root, void(*free_mapping)(void*))
             __tree2node(tree)->branch--;
             if (__tree2node(temp)->mapping){
                 __tree2node(root)->route--;
-                if (free_mapping){
+                if (clear){
                     __xlogd("mapping addr 0x%X\n", &(__tree2node(temp)->mapping));
-                    free_mapping(__tree2node(temp)->mapping);
+                    clear(__tree2node(temp)->mapping);
                 }
             }
             // __logi("xtree_clear %u ", i-1);
