@@ -287,12 +287,12 @@ void node_remove(XChord_Ptr ring, uint32_t key)
 }
 
 
-typedef struct xpeer_task {
+typedef struct xmsg_back {
     index_node_t node;
     xline_ptr req;
-    struct xchannel_ctx *pctx;
-    struct xpeer_task *prev, *next;
-    void (*handle)(struct xpeer_task*, struct xchannel_ctx*);
+    struct xchannel_ctx *channelctx;
+    struct xmsg_back *prev, *next;
+    void (*process)(struct xmsg_back*, struct xchannel_ctx*);
 }*xpeer_task_ptr;
 
 typedef struct xchannel_ctx {
@@ -302,7 +302,7 @@ typedef struct xchannel_ctx {
     struct xserver *server;
     // xmsg_ptr msg;
     xlmsg_t xlparser;
-    struct xpeer_task tasklist;
+    struct xmsg_back tasklist;
     XChord_Ptr xchord;
     void (*release)(struct xchannel_ctx*);
     void (*process)(struct xchannel_ctx*, xlmsg_ptr msg);
@@ -404,10 +404,10 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 inline static xpeer_task_ptr add_task(xchannel_ctx_ptr pctx, void(*enter)(xpeer_task_ptr, xchannel_ctx_ptr))
 {
     __xlogd("add_task enter\n");
-    xpeer_task_ptr task = (xpeer_task_ptr)malloc(sizeof(struct xpeer_task));
-    task->pctx = pctx;
+    xpeer_task_ptr task = (xpeer_task_ptr)malloc(sizeof(struct xmsg_back));
+    task->channelctx = pctx;
     task->node.index = pctx->server->task_count++;
-    task->handle = enter;
+    task->process = enter;
     task->next = pctx->tasklist.next;
     task->prev = &pctx->tasklist;
     task->prev->next = task;
@@ -419,7 +419,7 @@ inline static xpeer_task_ptr add_task(xchannel_ctx_ptr pctx, void(*enter)(xpeer_
 
 inline static xpeer_task_ptr remove_task(xpeer_task_ptr task)
 {
-    xserver_ptr server = task->pctx->server;
+    xserver_ptr server = task->channelctx->server;
     __xlogd("remove_task tid=%lu\n", task->node.index);
     index_table_del(&server->task_table, (index_node_t*)task);
     task->prev->next = task->next;
@@ -627,7 +627,7 @@ static void api_response(xchannel_ctx_ptr pctx)
     __xlogd("api_response 1\n");
     if (task){
         __xlogd("api_response 2\n");
-        task->handle(task, pctx);
+        task->process(task, pctx);
     }
     __xlogd("api_response exit\n");
 }

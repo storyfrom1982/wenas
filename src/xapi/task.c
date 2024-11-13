@@ -14,7 +14,7 @@ extern "C" {
 #define EX_TASK_BUF_SIZE        256
 
 
-struct xpeer_task {
+struct xmsg_back {
     __atom_bool running;
     __xprocess_ptr pid;
     xbuf_ptr buf;
