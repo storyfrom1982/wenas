@@ -130,7 +130,7 @@ function(build_library LIBRARY_NAME LIBRARY_SOURCES)
 endfunction(build_library)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
-    build_executable(xltpd src/app/xserver.c)
+    build_executable(xltpd src/app/xltpd.c)
     build_executable(xpeer src/app/xpeer.c)
     # build_executable(xserver test/xnet/dht_test.c)
     # build_executable(xserver test/xnet/xline_test.c)
