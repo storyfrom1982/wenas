@@ -123,7 +123,7 @@ typedef struct xlmsg {
     uint8_t flag;
     __atom_size ref;
     void *cb;
-    struct xchannel *ctx;
+    struct xchannel_ctx *ctx;
     struct xlmsg *prev, *next;
     uint64_t wpos, rpos, size;
     uint8_t *key;

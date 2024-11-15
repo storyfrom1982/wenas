@@ -68,19 +68,17 @@ struct xpacklist {
     struct xpack head;
 };
 
-#define XMSG_FLAG_RECV          0x01
-#define XMSG_FLAG_SEND          0x02
-#define XMSG_FLAG_CONNECT       0x04
-#define XMSG_FLAG_DISCONNECT    0x08
+#define XMSG_FLAG_RECV          0x00
+#define XMSG_FLAG_SEND          0x01
+#define XMSG_FLAG_CONNECT       0x02
+#define XMSG_FLAG_DISCONNECT    0x04
 
 typedef struct xmsg {
     uint32_t flag;
-    uint32_t streamid;
     uint64_t sendpos, recvpos, range;
     struct xchannel *channel;
-    struct xchannel_ctx *ctx;
     struct xmsg *prev, *next;
-    struct xlmsg *lkv;
+    struct xlmsg *xlmsg;
 }*xmsg_ptr;
 
 struct xlmsglist {
@@ -236,24 +234,23 @@ struct xmsger {
 
 static inline void xmsg_fixed(xmsg_ptr msg)
 {
-    if (msg && msg->lkv){
+    if (msg && msg->xlmsg){
         msg->recvpos = msg->sendpos = 0;
-        msg->range = (msg->lkv->wpos / PACK_BODY_SIZE);
-        if (msg->range * PACK_BODY_SIZE < msg->lkv->wpos){
+        msg->range = (msg->xlmsg->wpos / PACK_BODY_SIZE);
+        if (msg->range * PACK_BODY_SIZE < msg->xlmsg->wpos){
             // 有余数，增加一个包
             msg->range ++;
         }
     }
 }
 
-xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlmsg_ptr xkv)
+xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr *channel, xlmsg_ptr xkv)
 {
     xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
     if (msg){
         msg->flag = flag;
         msg->channel = channel;
-        msg->ctx = ctx;
-        msg->lkv = xkv;
+        msg->xlmsg = xkv;
         msg->prev = msg->next = NULL;
         xmsg_fixed(msg);
     }
@@ -264,8 +261,8 @@ void xmsg_free(xmsg_ptr msg)
 {
     __xlogd("xmsg_free >>>>>>>>>> enter\n");
     if (msg){
-        if (msg->lkv){
-            xl_free(msg->lkv);
+        if (msg->xlmsg){
+            xl_free(msg->xlmsg);
         }
         __xlogd("xmsg_free >>>>>>>>>> free\n");
         free(msg);
@@ -353,9 +350,9 @@ static inline void xchannel_clear(xchannel_ptr channel)
         next = msg->next;
         __ring_list_take_out(&channel->msglist, msg);
         // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 sendpos
-        channel->len -= msg->lkv->wpos - msg->sendpos;
-        channel->msger->len -= msg->lkv->wpos - msg->sendpos;
-        xl_free(msg->lkv);
+        channel->len -= msg->xlmsg->wpos - msg->sendpos;
+        channel->msger->len -= msg->xlmsg->wpos - msg->sendpos;
+        xl_free(msg->xlmsg);
         free(msg);
         msg = next;
     }
@@ -437,16 +434,16 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
         pack->msg = msg;
-        if (msg->lkv->wpos - msg->sendpos < PACK_BODY_SIZE){
-            pack->head.len = msg->lkv->wpos - msg->sendpos;
+        if (msg->xlmsg->wpos - msg->sendpos < PACK_BODY_SIZE){
+            pack->head.len = msg->xlmsg->wpos - msg->sendpos;
         }else{
             pack->head.len = PACK_BODY_SIZE;
         }
 
         pack->head.type = XMSG_PACK_MSG;
-        pack->head.sid = msg->streamid;
+        // pack->head.sid = msg->streamid;
         pack->head.range = msg->range;
-        mcopy(pack->body, msg->lkv->body + msg->sendpos, pack->head.len);
+        mcopy(pack->body, msg->xlmsg->body + msg->sendpos, pack->head.len);
         msg->sendpos += pack->head.len;
         msg->range --;
 
@@ -459,7 +456,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.cid = channel->rcid;
         __atom_add(channel->sendbuf->wpos, 1);
         // 判断消息是否全部写入缓冲区
-        if (msg->sendpos == msg->lkv->wpos){
+        if (msg->sendpos == msg->xlmsg->wpos){
             // 更新当前消息
             channel->sender = channel->sender->next;
             // channel->msg_head = channel->msg_head->next;
@@ -473,8 +470,8 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 static inline void xchannel_send_msg(xchannel_ptr channel, xmsg_ptr msg)
 {
     // 更新待发送计数
-    __atom_add(channel->len, msg->lkv->wpos);
-    __atom_add(channel->msger->len, msg->lkv->wpos);
+    __atom_add(channel->len, msg->xlmsg->wpos);
+    __atom_add(channel->msger->len, msg->xlmsg->wpos);
 
     __ring_list_put_into_end(&channel->msglist, msg);
 
@@ -700,14 +697,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (pack->head.type == XMSG_PACK_MSG){
                 // 更新已经到达对端的数据计数
                 pack->msg->recvpos += pack->head.len;
-                if (pack->msg->recvpos == pack->msg->lkv->wpos){
+                if (pack->msg->recvpos == pack->msg->xlmsg->wpos){
                     __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
                     // 更新待确认队列
                     // channel->smsg = pack->msg->next;
                     __ring_list_take_out(&channel->msglist, pack->msg);
                     // 把已经传送到对端的 msg 交给发送线程处理
-                    channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg->lkv);
-                    pack->msg->lkv = NULL;
+                    channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg->xlmsg);
+                    pack->msg->xlmsg = NULL;
                     xmsg_free(pack->msg);
                 }
             }else if (rpack->head.type == XMSG_PACK_PONG){
@@ -899,12 +896,11 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
             return false;
         }
 
-        xlmsg_t parser = xl_parser(&msg->lkv->line);
-        char *ip = xl_find_word(&parser, "ip");
+        xlmsg_t parser = xl_parser(&msg->xlmsg->line);
+        char *ip = xl_find_word(&parser, "host");
         uint64_t port = xl_find_uint(&parser, "port");
-        channel->ctx = xl_find_ptr(&parser, "ctx");
-        xlmsg_ptr req = xl_find_ptr(&parser, "msg");
 
+        channel->ctx = msg->xlmsg->ctx;
         mcopy(channel->ip, ip, slength(ip));
         channel->port = port;
         __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
@@ -921,17 +917,18 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_ptr msg)
 
         // 先用本端的 cid 作为对端 channel 的索引，重传这个 HELLO 就不会多次创建连接
         xchannel_serial_pack(channel, XMSG_PACK_PING);
+        xchannel_send_msg(channel, msg);
 
-        if (req != NULL){
-            xl_printf(&req->line);
-            xl_free(msg->lkv);
-            msg->lkv = req;
-            xmsg_fixed(msg);
-            xchannel_send_msg(channel, msg);
-            // firstmsg = firstmsg->next;
-        }else {
-            free(msg);
-        }
+        // if (req != NULL){
+        //     xl_printf(&req->line);
+        //     xl_free(msg->lkv);
+        //     msg->lkv = req;
+        //     xmsg_fixed(msg);
+        //     xchannel_send_msg(channel, msg);
+        //     // firstmsg = firstmsg->next;
+        // }else {
+        //     free(msg);
+        // }
 
         __xlogd("xmsger_process_msg >>>>--------> Create channel IP=[%X] PORT=[%u] CID[%u] KEY[%u] SN[%u]\n", 
                                     channel->lcid.index, port, channel->lcid.cid, channel->local_key, channel->serial_number);
@@ -1008,7 +1005,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             if (channel->connected){
                                 msger->callback->on_msg_timeout(msger->callback, channel);
                             }else {
-                                msger->callback->on_connect_timeout(msger->callback, channel);
+                                msger->callback->on_connection_timeout(msger->callback, channel);
                             }
                             // 移除超时的连接
                             avl_tree_remove(&msger->peers, channel);
@@ -1087,7 +1084,7 @@ static inline void xmsger_check_all(xmsger_ptr msger)
             // 10 秒钟超时
             if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                 __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_disconnect (%lu)\n", *(uint64_t*)(&channel->addr.port), __xapi->clock() - channel->timestamp);
-                msger->callback->on_disconnect(msger->callback, channel);
+                msger->callback->on_disconnection(msger->callback, channel);
                 // 移除超时的连接
                 avl_tree_remove(&msger->peers, channel);
                 xchannel_free(channel);
@@ -1178,7 +1175,7 @@ static void* main_loop(void *ptr)
                             channel->ack.cid = channel->rcid;
                             // channel->ack.lcid = channel->lcid.cid;
                             // 通知用户建立连接
-                            msger->callback->on_connect_to_peer(msger->callback, channel);                            
+                            msger->callback->on_connection_to_peer(msger->callback, channel);                            
                         }
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
@@ -1193,7 +1190,7 @@ static void* main_loop(void *ptr)
 
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("on_disconnect %p\n", channel);
-                        msger->callback->on_disconnect(msger->callback, channel);
+                        msger->callback->on_disconnection(msger->callback, channel);
                         // 被动端收到 BYE，删除索引
                         avl_tree_remove(&msger->peers, channel);
                         xchannel_free(channel);
@@ -1251,7 +1248,7 @@ static void* main_loop(void *ptr)
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
                             channel->connected = true;
-                            msger->callback->on_connect_from_peer(msger->callback, channel);
+                            msger->callback->on_connection_from_peer(msger->callback, channel);
 
                             // 更新接收缓冲区和 ACK
                             xchannel_recv_pack(channel, &rpack);
@@ -1281,7 +1278,7 @@ static void* main_loop(void *ptr)
                         // 主动端收到 BYE 的 ACK，移除索引
                         channel = xtree_find(msger->chcache, &cid.index, 8);
                         if (channel){
-                            msger->callback->on_disconnect(msger->callback, channel);
+                            msger->callback->on_disconnection(msger->callback, channel);
                             xtree_del(msger->chcache, &cid.index, 8);
                             xchannel_free(channel);
                         }
@@ -1336,16 +1333,11 @@ static void* main_loop(void *ptr)
     return NULL;
 }
 
-static inline bool xmsger_send(xmsger_ptr msger, xmsg_ptr msg)
-{
-    return (xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) == __sizeof_ptr);
-}
-
-bool xmsger_send_message(xmsger_ptr msger, xchannel_ptr channel, xlmsg_ptr xkv)
+bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xlmsg_ptr xkv)
 {
     __xlogd("xmsger_send_message enter\n");
     __xcheck(channel == NULL || xkv == NULL);
-    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_SEND, channel, channel->ctx, xkv);
+    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_SEND, channel, xkv);
     __xcheck(msg == NULL);
     __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr));
     __xlogd("xmsger_send_message exit\n");
@@ -1367,7 +1359,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel)
         return true;
     }
 
-    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_DISCONNECT, channel, channel->ctx, NULL);
+    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_DISCONNECT, channel, NULL);
     __xcheck(msg == NULL);
     __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr));
 
@@ -1385,21 +1377,11 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, void *ctx, xlmsg_ptr firstmsg)
+bool xmsger_connect(xmsger_ptr msger, xlmsg_ptr firstmsg)
 {
     __xlogd("xmsger_connect enter\n");
 
-    __xlogd("xmsger_connect ip=%s\n", ip);
-
-    xlmsg_ptr xkv = xl_maker();
-    __xcheck(xkv == NULL);
-
-    xl_add_word(xkv, "ip", ip);
-    xl_add_uint(xkv, "port", port);
-    xl_add_ptr(xkv, "ctx", ctx);
-    xl_add_ptr(xkv, "msg", firstmsg);
-
-    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_CONNECT, NULL, ctx, xkv);
+    xmsg_ptr msg = xmsg_maker(XMSG_FLAG_CONNECT, NULL, firstmsg);
     __xcheck(msg == NULL);
 
     __xcheck((xpipe_write(msger->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr));
@@ -1411,11 +1393,9 @@ bool xmsger_connect(xmsger_ptr msger, const char *ip, uint16_t port, void *ctx, 
 XClean:
 
     __xlogd("xmsger_connect failed\n");
-    if (xkv){
-        xl_free(xkv);
-    }
+
     if (msg){
-        msg->lkv = NULL;
+        msg->xlmsg = NULL;
         free(msg);
     }
     return false;    
@@ -1546,7 +1526,7 @@ bool xchannel_get_keepalive(xchannel_ptr channel)
     return channel->keepalive;
 }
 
-const char* xchannel_get_ip(xchannel_ptr channel)
+const char* xchannel_get_host(xchannel_ptr channel)
 {
     if (channel->port == 0){
         __xapi->udp_addr_to_host(&channel->addr, channel->ip, &channel->port);

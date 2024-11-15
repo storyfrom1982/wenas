@@ -46,7 +46,7 @@ typedef struct xmsg_processor {
     void *userctx;
     uint64_t uuid[4];    
     uint16_t port;
-    char ip[__XAPI_IP_STR_LEN];
+    char host[__XAPI_IP_STR_LEN];
     struct xchannel_ctx *ctx;
     struct xmsg_callback callbacklist;
 }xmsg_processor_t;
@@ -206,7 +206,7 @@ static void on_msg_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_t *server = (xpeer_t*)listener->ctx;
     // __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> 3\n");
-    const char *ip = xchannel_get_ip(channel);
+    const char *ip = xchannel_get_host(channel);
     uint16_t port = xchannel_get_port(channel);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> port=%u\n", port);
     __xlogd("on_channel_timeout >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
@@ -226,7 +226,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xlmsg_ptr msg)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    // xl_free(msg);
+    xl_free(msg);
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -313,10 +313,10 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xlmsg_ptr msg)
         msgid = xl_find_uint(&ctx->server->parser, "tid");
         xpeer_add_msg_callback(ctx->handler, msgid, msg->cb);
         if (msg->flag == XLMSG_FLAG_SEND){
-            xmsger_send_message(ctx->server->msger, ctx->channel, msg);
+            xmsger_send(ctx->server->msger, ctx->channel, msg);
         }else if (msg->flag == XLMSG_FLAG_CONNECT){
             processor = (xmsg_processor_t *)ctx->handler;
-            xmsger_connect(ctx->server->msger, processor->ip, processor->port, ctx, msg);
+            xmsger_connect(ctx->server->msger, msg);
         }else if (msg->flag == XLMSG_FLAG_DISCONNECT){
             xmsger_disconnect(ctx->server->msger, ctx->channel);
         }
@@ -426,7 +426,7 @@ static void api_timeout(xchannel_ctx_t *pctx)
     if (xchannel_get_keepalive(pctx->channel)){
         if (pctx->reconnected < 3){
             pctx->reconnected++;
-            xmsger_connect(pctx->server->msger, ip, port, pctx, xkv);
+            xmsger_connect(pctx->server->msger, xkv);
         }else {
             if (xkv){
                 xl_printf(&xkv->line);
@@ -459,8 +459,8 @@ xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
     ctx->handler = mp;
     ctx->process = xapi_processor;
     // __xapi->udp_hostbyname(pctx->ip, __XAPI_IP_STR_LEN, host);
-    mcopy(mp->ip, host, slength(host));
-    mp->ip[slength(host)] = '\0';    
+    mcopy(mp->host, host, slength(host));
+    mp->host[slength(host)] = '\0';    
     mp->port = port;
     xlmsg_ptr msg = xl_maker();
     msg->flag = XLMSG_FLAG_CONNECT;
@@ -468,6 +468,8 @@ xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
     msg->ctx = mp->ctx;
     xl_add_word(msg, "api", "login");
     xl_add_uint(msg, "tid", msgid);
+    xl_add_word(msg, "host", mp->host);
+    xl_add_uint(msg, "port", mp->port);
     xl_add_bin(msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
     xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
     return ctx;
@@ -519,13 +521,13 @@ int main(int argc, char *argv[])
     xmsgercb_ptr listener = &peer->listener;
 
     listener->ctx = peer;
-    listener->on_connect_to_peer = on_connection_to_peer;
-    listener->on_connect_from_peer = on_connection_from_peer;
-    listener->on_connect_timeout = on_msg_timeout;
+    listener->on_connection_to_peer = on_connection_to_peer;
+    listener->on_connection_from_peer = on_connection_from_peer;
+    listener->on_connection_timeout = on_msg_timeout;
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
     listener->on_msg_timeout = on_msg_timeout;
-    listener->on_disconnect = on_disconnect;
+    listener->on_disconnection = on_disconnect;
 
     // server->sock = __xapi->udp_open();
     // __xbreak(server->sock < 0);
