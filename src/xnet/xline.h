@@ -120,8 +120,9 @@ static inline double __xl_b2float(xl_ptr l)
 #define XLINE_DEFAULT_SIZE          (1024 * 8)
 
 typedef struct xlmsg {
+    uint8_t flag;
     __atom_size ref;
-    void *ctx;
+    void *cb, *ctx;
     uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *body;

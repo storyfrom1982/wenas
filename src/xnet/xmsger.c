@@ -256,12 +256,15 @@ xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ct
 
 void xmsg_free(xmsg_ptr msg)
 {
+    __xlogd("xmsg_free >>>>>>>>>> enter\n");
     if (msg){
         if (msg->lkv){
             xl_free(msg->lkv);
         }
+        __xlogd("xmsg_free >>>>>>>>>> free\n");
         free(msg);
     }
+    __xlogd("xmsg_free >>>>>>>>>> exit\n");
 }
 
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_range)
@@ -334,6 +337,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
     channel->msg_tail = &channel->msg_head;
     // 后释放没有发送出去的 msg
     while (msg != NULL){
+        __xlogd("xchannel_clear ------------------------- msg\n");
         next = msg->next;
         // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 sendpos
         channel->len -= msg->lkv->wpos - msg->sendpos;
@@ -1496,7 +1500,7 @@ void xmsger_free(xmsger_ptr *pptr)
                 xmsg_ptr msg;
                 xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
                 if (msg){
-                    free(msg);
+                    xmsg_free(msg);
                 }
             }
             xpipe_free(&msger->mpipe);

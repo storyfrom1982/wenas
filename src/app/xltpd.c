@@ -15,12 +15,12 @@
 #define KEY_SPACE   (1 << KEY_BITS)
 
 
-typedef struct XChord {
+typedef struct xserver {
     uint32_t key;
     xchannel_ptr channel;
-    struct XChord* predecessor;
-    struct XChord* finger_table[KEY_BITS];
-}*XChord_Ptr;
+    struct xserver* predecessor;
+    struct xserver* finger_table[KEY_BITS];
+}*xserver_t;
 
 static inline bool key_in_open_interval(uint64_t key, uint64_t a, uint64_t b)
 {
@@ -63,9 +63,9 @@ static inline bool key_in_right_closed_interval(uint64_t key, uint64_t a, uint64
     return key_in_open_interval(key, a, b);
 }
 
-XChord_Ptr closest_preceding_finger(XChord_Ptr chord, uint32_t key)
+xserver_t closest_preceding_finger(xserver_t chord, uint32_t key)
 {
-    XChord_Ptr finger;
+    xserver_t finger;
     for (int i = KEY_BITS - 1; i >= 0; --i) {
         finger = chord->finger_table[i];
         if (key_in_open_interval(finger->key, chord->key, key)) {
@@ -77,10 +77,10 @@ XChord_Ptr closest_preceding_finger(XChord_Ptr chord, uint32_t key)
     return chord;
 }
 
-XChord_Ptr find_predecessor(XChord_Ptr chord, uint32_t key)
+xserver_t find_predecessor(xserver_t chord, uint32_t key)
 {
-    XChord_Ptr n = chord;
-    XChord_Ptr successor = chord->finger_table[1];
+    xserver_t n = chord;
+    xserver_t successor = chord->finger_table[1];
     // key 大于 n 并且小于等于 n 的后继，所以 n 是 key 的前继
     while (!key_in_right_closed_interval(key, n->key, successor->key)) {
         // n 的后继不是 key 的后继，要继续查找
@@ -93,15 +93,15 @@ XChord_Ptr find_predecessor(XChord_Ptr chord, uint32_t key)
     return n;
 }
 
-XChord_Ptr find_successor(XChord_Ptr chord, uint32_t key) {
+xserver_t find_successor(xserver_t chord, uint32_t key) {
     if (key == chord->key){
         return chord;
     }
-    XChord_Ptr n = find_predecessor(chord, key);
+    xserver_t n = find_predecessor(chord, key);
     return n->finger_table[1];
 }
 
-void print_node(XChord_Ptr node)
+void print_node(xserver_t node)
 {
     __xlogd("node->key >>>>--------------------------> enter %u\n", node->key);
     for (int i = 1; i < KEY_BITS; ++i){
@@ -112,12 +112,12 @@ void print_node(XChord_Ptr node)
     __xlogd("node->key >>>>-----------------------> exit %u\n", node->key);
 }
 
-void node_print_all(XChord_Ptr node)
+void node_print_all(xserver_t node)
 {
     __xlogd("node_print_all >>>>------------------------------------------------> enter\n");
-    XChord_Ptr n = node->predecessor;
+    xserver_t n = node->predecessor;
     while (n != node){
-        XChord_Ptr t = n->predecessor;
+        xserver_t t = n->predecessor;
         print_node(n);
         n = t;
         if (n == node){
@@ -128,12 +128,12 @@ void node_print_all(XChord_Ptr node)
     __xlogd("node_print_all >>>>------------------------------------------------> exit\n"); 
 }
 
-void update_others(XChord_Ptr node)
+void update_others(xserver_t node)
 {
     __xlogd("update_others enter\n");
     node_print_all(node);
     uint32_t start;
-    XChord_Ptr prev, next, finger_node;
+    xserver_t prev, next, finger_node;
     for (int i = 1; i < KEY_BITS; ++i){
         start = (node->key - (1 << (i-1))) % KEY_SPACE;
         __xlogd("update_others start %u\n", start);
@@ -167,11 +167,11 @@ void update_others(XChord_Ptr node)
     __xlogd("update_others exit\n");
 }
 
-XChord_Ptr node_create(uint32_t key)
+xserver_t node_create(uint32_t key)
 {
     __xlogd("node_create enter\n");
 
-    XChord_Ptr node = (XChord_Ptr)calloc(1, sizeof(struct XChord));
+    xserver_t node = (xserver_t)calloc(1, sizeof(struct xserver));
 
     node->key = key;
     node->predecessor = node;
@@ -186,12 +186,12 @@ XChord_Ptr node_create(uint32_t key)
 }
 
 
-int node_join(XChord_Ptr ring, XChord_Ptr node)
+int node_join(xserver_t ring, xserver_t node)
 {
     __xlogd("node_join >>>>--------------------> enter %u\n", node->key);
 
     uint32_t start;
-    XChord_Ptr successor = NULL;
+    xserver_t successor = NULL;
 
     if (node->key == ring->key){
         return -1;
@@ -240,11 +240,11 @@ int node_join(XChord_Ptr ring, XChord_Ptr node)
     return 0;
 }
 
-void node_remove(XChord_Ptr ring, uint32_t key)
+void node_remove(xserver_t ring, uint32_t key)
 {
     __xlogd("node_remove enter %u\n", key);
     uint32_t start;
-    XChord_Ptr node, prev, next, finger_node, successor;
+    xserver_t node, prev, next, finger_node, successor;
     successor = find_successor(ring, key);
     if (successor->key == key){
         node = successor;
@@ -287,34 +287,34 @@ void node_remove(XChord_Ptr ring, uint32_t key)
 }
 
 
-typedef struct xmsg_back {
+typedef struct xmsg_callback {
     index_node_t node;
     xline_ptr req;
     struct xchannel_ctx *channelctx;
-    struct xmsg_back *prev, *next;
-    void (*process)(struct xmsg_back*, struct xchannel_ctx*);
+    struct xmsg_callback *prev, *next;
+    void (*process)(struct xmsg_callback*, struct xchannel_ctx*);
 }*xpeer_task_ptr;
 
 typedef struct xchannel_ctx {
     uuid_node_t node;
     uint16_t reconnected;
     xchannel_ptr channel;
-    struct xserver *server;
+    struct xltpd *server;
     // xmsg_ptr msg;
     xlmsg_t xlparser;
-    struct xmsg_back tasklist;
-    XChord_Ptr xchord;
+    struct xmsg_callback tasklist;
+    xserver_t xchord;
     void (*release)(struct xchannel_ctx*);
     void (*process)(struct xchannel_ctx*, xlmsg_ptr msg);
 }*xchannel_ctx_ptr;
 
-typedef struct xserver{
+typedef struct xltpd{
     int sock;
     __atom_bool runnig;
     struct __xipaddr addr;
     char ip[16];
     uint16_t port;
-    XChord_Ptr ring;
+    xserver_t ring;
     xmsger_ptr msger;
     xpipe_ptr task_pipe;
     __xprocess_ptr task_pid;
@@ -324,13 +324,13 @@ typedef struct xserver{
     index_table_t task_table;
     xtree api;
     char password[16];
-}*xserver_ptr;
+}*xltpd_ptr;
 
 
 static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xserver_ptr server = listener->ctx;
+    xltpd_ptr server = listener->ctx;
     xlmsg_ptr xkv = xl_maker();
     xkv->ctx = xchannel_get_ctx(channel);
     xl_add_word(xkv, "api", "break");
@@ -341,7 +341,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_msg_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_msg_timeout >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xserver_ptr server = listener->ctx;
+    xltpd_ptr server = listener->ctx;
     const char *ip = xchannel_get_ip(channel);
     uint16_t port = xchannel_get_port(channel);
     // xmsg_ptr msg = xmsg_maker(0, channel, xchannel_get_ctx(channel), NULL);
@@ -358,13 +358,13 @@ static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xlms
 static void on_message_from_peer(xmsgercb_ptr listener, xchannel_ptr channel, xlmsg_ptr xkv)
 {
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xserver_ptr server = (xserver_ptr)listener->ctx;
+    xltpd_ptr server = (xltpd_ptr)listener->ctx;
     xkv->ctx = xchannel_get_ctx(channel);
     xpipe_write(server->task_pipe, &xkv, __sizeof_ptr);
     __xlogd("on_message_from_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
-static inline xchannel_ctx_ptr xpeer_ctx_create(xserver_ptr server, xchannel_ptr channel)
+static inline xchannel_ctx_ptr xpeer_ctx_create(xltpd_ptr server, xchannel_ptr channel)
 {
     xchannel_ctx_ptr pctx = (xchannel_ctx_ptr)calloc(1, sizeof(struct xchannel_ctx));
     pctx->server = server;
@@ -379,7 +379,7 @@ static inline xchannel_ctx_ptr xpeer_ctx_create(xserver_ptr server, xchannel_ptr
 static void on_connection_to_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_connection_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xserver_ptr server = (xserver_ptr)listener->ctx;
+    xltpd_ptr server = (xltpd_ptr)listener->ctx;
     xchannel_ctx_ptr ctx = xchannel_get_ctx(channel);
     if (ctx){
         ctx->reconnected = 0;
@@ -404,7 +404,7 @@ static void on_connection_from_peer(xmsgercb_ptr listener, xchannel_ptr channel)
 inline static xpeer_task_ptr add_task(xchannel_ctx_ptr pctx, void(*enter)(xpeer_task_ptr, xchannel_ctx_ptr))
 {
     __xlogd("add_task enter\n");
-    xpeer_task_ptr task = (xpeer_task_ptr)malloc(sizeof(struct xmsg_back));
+    xpeer_task_ptr task = (xpeer_task_ptr)malloc(sizeof(struct xmsg_callback));
     task->channelctx = pctx;
     task->node.index = pctx->server->task_count++;
     task->process = enter;
@@ -419,7 +419,7 @@ inline static xpeer_task_ptr add_task(xchannel_ctx_ptr pctx, void(*enter)(xpeer_
 
 inline static xpeer_task_ptr remove_task(xpeer_task_ptr task)
 {
-    xserver_ptr server = task->channelctx->server;
+    xltpd_ptr server = task->channelctx->server;
     __xlogd("remove_task tid=%lu\n", task->node.index);
     index_table_del(&server->task_table, (index_node_t*)task);
     task->prev->next = task->next;
@@ -441,7 +441,7 @@ static void chord_notify(xchannel_ctx_ptr pctx)
     
     if (mcompare(pctx->server->password, password, slength(password)) == 0){
         uint64_t key = xl_find_uint(&pctx->xlparser, "key");
-        XChord_Ptr node = node_create(key);
+        xserver_t node = node_create(key);
         node_join(pctx->server->ring, node);
         node->channel = pctx->channel;
         pctx->xchord = node;
@@ -475,7 +475,7 @@ static void chord_join(xchannel_ctx_ptr pctx)
     if (mcompare(pctx->server->password, password, slength(password)) == 0){
 
         uint32_t key = xl_find_uint(&pctx->xlparser, "key");
-        XChord_Ptr node = node_create(key);
+        xserver_t node = node_create(key);
         node_join(pctx->server->ring, node);
         node->channel = pctx->channel;
         pctx->xchord = node;
@@ -499,7 +499,7 @@ static void api_forward(xchannel_ctx_ptr pctx)
     __xlogd("api_forward enter\n");
     uint32_t key = xl_find_uint(&pctx->xlparser, "key");
     __xlogd("api_forward find key=%u\n", key);
-    XChord_Ptr node = find_successor(pctx->server->ring, key);
+    xserver_t node = find_successor(pctx->server->ring, key);
     __xlogd("api_forward successor node key=%u\n", node->key);
     if (node == pctx->server->ring){
         char *text = xl_find_word(&pctx->xlparser, "text");
@@ -570,7 +570,7 @@ static void api_echo(xchannel_ctx_ptr pctx)
 
 static void api_break(xchannel_ctx_ptr pctx)
 {
-    xserver_ptr server = pctx->server;
+    xltpd_ptr server = pctx->server;
     uuid_list_del(&pctx->server->uuid_table, &pctx->node);
     if (pctx->tasklist.next != &pctx->tasklist){
         xpeer_task_ptr next = pctx->tasklist.next;
@@ -654,7 +654,7 @@ static void command(xchannel_ctx_ptr pctx)
         const char *ip;
         uint16_t port;
         uint64_t lpos = xl_hold_list(res, "nodes");
-        XChord_Ptr node = pctx->server->ring->predecessor;
+        xserver_t node = pctx->server->ring->predecessor;
 
         while (node != pctx->server->ring) {
             ip = xchannel_get_ip(node->channel);
@@ -703,7 +703,7 @@ static void command(xchannel_ctx_ptr pctx)
 
     }else if (mcompare(cmd, "chord_leave", slength("chord_leave")) == 0){
 
-        XChord_Ptr node = pctx->server->ring->predecessor;
+        xserver_t node = pctx->server->ring->predecessor;
         while (node != pctx->server->ring) {
             xlmsg_ptr req = xl_maker();
             xl_add_word(req, "api", "chord_leave");
@@ -740,7 +740,7 @@ static void* task_loop(void *ptr)
 
     xlmsg_ptr msg;
     xchannel_ctx_ptr ctx;
-    xserver_ptr server = (xserver_ptr)ptr;
+    xltpd_ptr server = (xltpd_ptr)ptr;
 
     while (xpipe_read(server->task_pipe, &msg, __sizeof_ptr) == __sizeof_ptr)
     {
@@ -766,7 +766,7 @@ Clean:
     return NULL;
 }
 
-static xserver_ptr g_server = NULL;
+static xltpd_ptr g_server = NULL;
 
 static void __sigint_handler()
 {
@@ -783,7 +783,7 @@ int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/server/log", NULL);
 
-    xserver_ptr server = (xserver_ptr)calloc(1, sizeof(struct xserver));
+    xltpd_ptr server = (xltpd_ptr)calloc(1, sizeof(struct xltpd));
     mcopy(server->password, "123456", slength("123456"));
 
 	__xlogd("argc=%d\n", argc);
