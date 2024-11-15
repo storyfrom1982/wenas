@@ -226,7 +226,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xlmsg_ptr msg)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xl_free(msg);
+    // xl_free(msg);
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -383,7 +383,7 @@ static int sendnb = 0;
 static void send_echo(xchannel_ctx_t *ctx, const char *text);
 static void res_echo(xmsg_processor_t *th, void *userctx)
 {
-    if (sendnb++ < 10){
+    if (sendnb++ < 100){
         send_echo(th->ctx, "hello world");
     }
 }

@@ -122,7 +122,9 @@ static inline double __xl_b2float(xl_ptr l)
 typedef struct xlmsg {
     uint8_t flag;
     __atom_size ref;
-    void *cb, *ctx;
+    void *cb;
+    struct xchannel *ctx;
+    struct xlmsg *prev, *next;
     uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *body;
@@ -140,6 +142,9 @@ static inline xlmsg_ptr xl_create(uint64_t size)
         obj->size = size;
         obj->wpos = 0;
         obj->rpos = 0;
+        obj->cb = NULL;
+        obj->ctx = NULL;
+        obj->prev = obj->next = NULL;
         obj->body = obj->line.b + XLINE_STATIC_SIZE;
     }
     return obj;
