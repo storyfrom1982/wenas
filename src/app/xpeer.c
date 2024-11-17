@@ -309,6 +309,7 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xlmsg_ptr msg)
         if (handle){
             handle(ctx, msg);
         }
+        xl_free(msg);
     }else {
         msgid = xl_find_uint(&ctx->server->parser, "tid");
         xpeer_add_msg_callback(ctx->handler, msgid, msg->cb);
@@ -333,19 +334,13 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &msg, __sizeof_ptr) == __sizeof_ptr)
     {
-        __xlogd("task_loop 0\n");
         ctx = msg->ctx;
-        __xlogd("task_loop 0.5\n");
         if (ctx->process != NULL){
-            __xlogd("task_loop 1\n");
             ctx->process(ctx, msg);
         }else {
-            __xlogd("task_loop 2\n");
             xapi_processor(ctx, msg);
+            xl_free(msg);
         }
-        __xlogd("task_loop 3\n");
-        xl_free(msg);
-        __xlogd("task_loop 4\n");
     }
 
     __xlogd("task_loop exit\n");
@@ -383,7 +378,8 @@ static int sendnb = 0;
 static void send_echo(xchannel_ctx_t *ctx, const char *text);
 static void res_echo(xmsg_processor_t *th, void *userctx)
 {
-    if (sendnb++ < 100){
+    // if (sendnb++ < 100)
+    {
         send_echo(th->ctx, "hello world");
     }
 }
