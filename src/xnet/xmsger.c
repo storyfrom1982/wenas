@@ -1171,10 +1171,13 @@ static void* main_loop(void *ptr)
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         xchannel_recv_pack(channel, &rpack);
+                        __xlogd("mainloop --------------- ack.flag=%u\n", channel->ack.flag);
                         if (channel->ack.flag != 0){
                             if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+                                __xlogd("mainloop --------------- send packet\n");
                                 xchannel_send_pack(channel);
                             }else {
+                                __xlogd("mainloop --------------- send ack\n");
                                 xchannel_send_ack(channel);
                             }
                         }
