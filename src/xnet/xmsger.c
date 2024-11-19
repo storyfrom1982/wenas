@@ -445,12 +445,12 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
 
 static inline void xchannel_serial_msg(xchannel_ptr channel)
 {
-    __xlogd("xchannel_serial_msg enter connect=%u writable=%u sendable=%u\n", channel->connected,
-            __serialbuf_writable(channel->sendbuf), __serialbuf_sendable(channel->msgbuf));
+    // __xlogd("xchannel_serial_msg enter connect=%u writable=%u sendable=%u\n", channel->connected,
+    //         __serialbuf_writable(channel->sendbuf), __serialbuf_sendable(channel->msgbuf));
     // xmsg_ptr msg = channel->msg_head;
 
     // 每次只缓冲一个包，尽量使发送速度均匀
-    if (__serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0){
+    if (channel->connected && __serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0){
 
         // __xlogd("xchannel_serial_msg sendable=%u\n", __serialbuf_sendable(channel->msgbuf));
         xlmsg_t *msg = channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
@@ -498,19 +498,16 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
             // // }
         }
     }
-    __xlogd("xchannel_serial_msg exit\n");
+    // __xlogd("xchannel_serial_msg exit\n");
 }
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
 {
-    if (channel->connected && __serialbuf_sendable(channel->sendbuf) == 0){
-        __xlogd("xchannel_send_pack ================ 1\n");
+    if (__serialbuf_sendable(channel->sendbuf) == 0){
         xchannel_serial_msg(channel);
     }
     
     if (__serialbuf_sendable(channel->sendbuf) > 0){
-
-        __xlogd("xchannel_send_pack ================ 2\n");
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
 
@@ -723,8 +720,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     __atom_add(channel->msgbuf->rpos, 1);
                     pack->msg = NULL;
                 }
-            }else if (pack->head.type == XMSG_PACK_PING){
+            }else if (pack->head.type == XMSG_PACK_PONG){
                 __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
+                exit(0);
                 // 拼装临时 cid
                 struct __xcid cid;
                 cid.cid = channel->rcid;
@@ -1012,13 +1010,10 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
             if (channel->flushlist.len > 0){
 
-                __xlogd("xmsger_send_all >>>>------------------------> flushlist 1\n");
-
                 spack = channel->flushlist.head.next;
 
                 while (spack != &channel->flushlist.head)
                 {
-                    __xlogd("xmsger_send_all >>>>------------------------> flushlist 2\n");
                     xpack_ptr next_pack = spack->next;
 
                     if ((delay = ((spack->ts + spack->delay) - __xapi->clock())) > 0) {
@@ -1027,7 +1022,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             // 超时时间更近，更新休息时间
                             msger->timer = delay;
                         }
-                        __xlogd("xmsger_send_all >>>>------------------------> flushlist %lu\n", msger->timer);
                         // 第一个包未超时，后面的包就都没有超时
                         break;
 
@@ -1171,13 +1165,10 @@ static void* main_loop(void *ptr)
 
                     if (rpack->head.type == XMSG_PACK_MSG) {
                         xchannel_recv_pack(channel, &rpack);
-                        __xlogd("mainloop --------------- ack.flag=%u\n", channel->ack.flag);
                         if (channel->ack.flag != 0){
                             if (__serialbuf_sendable(channel->sendbuf) > 0 && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
-                                __xlogd("mainloop --------------- send packet\n");
                                 xchannel_send_pack(channel);
                             }else {
-                                __xlogd("mainloop --------------- send ack\n");
                                 xchannel_send_ack(channel);
                             }
                         }
@@ -1219,14 +1210,6 @@ static void* main_loop(void *ptr)
                         if (channel->ack.flag != 0){
                             xchannel_send_ack(channel);
                         }
-                        // 发送创建连接时附带的消息
-                        // if (__serialbuf_sendable(channel->msgbuf) > 0)
-                        {
-                            xchannel_serial_msg(channel);
-                        }
-                        // if (channel->sender != &channel->msglist.head){
-                        //     xchannel_serial_msg(channel);
-                        // }
 
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("on_disconnect %p\n", channel);
@@ -1354,7 +1337,7 @@ static void* main_loop(void *ptr)
             __xapi->udp_listen(msger->sock, msger->timer / 1000);
         }
 
-        msger->timer = 1000000000UL; // 10 毫秒
+        msger->timer = 10000000UL; // 10 毫秒
 
         // __xlogd("xmsger_loop 3\n");
         // 检查每个连接，如果满足发送条件，就发送一个数据包
