@@ -503,7 +503,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
 {
-    if (__serialbuf_sendable(channel->sendbuf) == 0){
+    if (channel->connected && __serialbuf_sendable(channel->sendbuf) == 0){
         __xlogd("xchannel_send_pack ================ 1\n");
         xchannel_serial_msg(channel);
     }
