@@ -515,6 +515,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->head.type, channel->lcid.index, channel->lcid.cid, pack->head.flag, pack->head.ack, pack->head.acks, pack->head.sn);
 
         if (channel->ack.flag != 0){
+            __xlogd("xchannel_send_pack ========= hava ack\n");
             // 携带 ACK
             pack->head.flag = channel->ack.flag;
             pack->head.ack = channel->ack.ack;
@@ -722,7 +723,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 }
             }else if (pack->head.type == XMSG_PACK_PONG){
                 __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
-                exit(0);
+                // exit(0);
                 // 拼装临时 cid
                 struct __xcid cid;
                 cid.cid = channel->rcid;
