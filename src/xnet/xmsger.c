@@ -721,16 +721,29 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     __atom_add(channel->msgbuf->rpos, 1);
                     pack->msg = NULL;
                 }
-            }else if (pack->head.type == XMSG_PACK_PONG){
-                __xlogd("xchannel_recv_ack >>>>-----------> SN[%u] TYPE(%u)\n", pack->head.sn, pack->head.type);
-                // exit(0);
-                // 拼装临时 cid
-                struct __xcid cid;
-                cid.cid = channel->rcid;
-                cid.port = channel->addr.port;
-                cid.ip = channel->addr.ip;
-                // 移除正在建立连接标志
-                xtree_del(channel->msger->chcache, &cid.index, 8);
+            }else if (pack->head.type == XMSG_PACK_PING){
+                if (!channel->connected){
+                    channel->connected = true;
+                    // 取出同步参数
+                    uint8_t remote_key = *((uint8_t*)(rpack->body));
+                    uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
+                    uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                    uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                    __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                    __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
+                    // 更新 rcid
+                    channel->rcid = rcid;
+                    // 同步序列号
+                    channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
+                    // 设置校验码
+                    channel->remote_key = remote_key;
+                    // 生成 ack 的校验码
+                    channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                    channel->ack.cid = channel->rcid;
+                    // channel->ack.lcid = channel->lcid.cid;
+                    // 通知用户建立连接
+                    channel->msger->callback->on_connection_to_peer(channel->msger->callback, channel);                            
+                }
             }
 
             __atom_add(channel->sendbuf->rpos, 1);
@@ -1182,32 +1195,33 @@ static void* main_loop(void *ptr)
                             xchannel_send_ack(channel);
                         }
 
-                    }else if (rpack->head.type == XMSG_PACK_PONG){
-                        if (!channel->connected){
-                            channel->connected = true;
-                            // 取出同步参数
-                            uint8_t remote_key = *((uint8_t*)(rpack->body));
-                            uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
-                            uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
-                            uint16_t rcid = *((uint16_t*)(rpack->body + 3));
-                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
-                            // 更新 rcid
-                            channel->rcid = rcid;
-                            // 同步序列号
-                            channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
-                            // 设置校验码
-                            channel->remote_key = remote_key;
-                            // 生成 ack 的校验码
-                            channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.cid = channel->rcid;
-                            // channel->ack.lcid = channel->lcid.cid;
-                            // 通知用户建立连接
-                            msger->callback->on_connection_to_peer(msger->callback, channel);                            
+                    }else if (rpack->head.type == XMSG_PACK_PING){
+                        // 取出同步参数
+                        uint8_t remote_key = *((uint8_t*)(rpack->body));
+                        uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
+                        uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                        uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                        // 同步序列号
+                        channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
+                        if (serial_range != channel->serial_range){
+                            channel->serial_range = serial_range;
+                            free(channel->recvbuf);
+                            channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
+                            __xbreak(channel->recvbuf == NULL);
+                            channel->recvbuf->range = channel->serial_range;
                         }
+                        // 设置校验码
+                        channel->remote_key = remote_key;
+                        // 设置对端 cid
+                        channel->rcid = rcid;
+                        // 生成 ack 的校验码
+                        channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                        channel->ack.cid = rcid;
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
+
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
-                        // 回复 ACK
                         if (channel->ack.flag != 0){
                             xchannel_send_ack(channel);
                         }
@@ -1226,6 +1240,39 @@ static void* main_loop(void *ptr)
                     }
 
                 }else {
+
+                    if (rpack->head.type == XMSG_PACK_PING){
+                        // 取出同步参数
+                        uint8_t remote_key = *((uint8_t*)(rpack->body));
+                        uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
+                        uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                        uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                        // 同步序列号
+                        channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
+                        if (serial_range != channel->serial_range){
+                            channel->serial_range = serial_range;
+                            free(channel->recvbuf);
+                            channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
+                            __xbreak(channel->recvbuf == NULL);
+                            channel->recvbuf->range = channel->serial_range;
+                        }
+                        // 设置校验码
+                        channel->remote_key = remote_key;
+                        // 设置对端 cid
+                        channel->rcid = rcid;
+                        // 生成 ack 的校验码
+                        channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                        channel->ack.cid = rcid;
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
+
+                        // 更新接收缓冲区和 ACK
+                        xchannel_recv_pack(channel, &rpack);
+                        if (channel->ack.flag != 0){
+                            xchannel_send_ack(channel);
+                        }
+
+                    }                    
                     __xlogd("main_loop pack key error\n");
                 }
 
@@ -1234,59 +1281,41 @@ static void* main_loop(void *ptr)
                 if (rpack->head.type == XMSG_PACK_PING){
                     // 收到对方发起的 PING
                     if ((rpack->head.key ^ XMSG_KEY) == XMSG_VAL){
-                        channel = xtree_find(msger->chcache, &cid.index, 8);
-                        // 检测是否在正在建立连接的过程中又发起了同样 cid 的新连接
-                        if (rpack->head.resend == 0 && channel != NULL){
-                            // 如果 PING 第一次到达，需要释放之前相同 cid 的正在建立连接的 channel
-                            xtree_del(msger->chcache, &cid.index, 8);
-                            xchannel_free(channel);
-                            channel = NULL;
-                        }
-                        if (channel == NULL){
-                            // 取出同步参数
-                            uint8_t remote_key = *((uint8_t*)(rpack->body));
-                            uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
-                            uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
-                            uint16_t rcid = *((uint16_t*)(rpack->body + 3));
-                            // 创建连接
-                            channel = xchannel_create(msger, serial_range);
-                            __xbreak(channel == NULL);
-                            // 暂存连接，收到 PONG 的 ACK 时清除，以免收到重复的 PING 导致重复创建连接
-                            xtree_add(msger->chcache, &cid.index, 8, channel);
-                            channel->addr = addr;
-                            channel->lcid.port = addr.port;
-                            channel->lcid.ip = addr.ip;
-                            // 建立索引
-                            do {
-                                channel->lcid.cid = msger->cid++;
-                            }while (avl_tree_add(&msger->peers, channel) != NULL);
-                            // 同步序列号
-                            channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
-                            // 设置校验码
-                            channel->remote_key = remote_key;
-                            // 设置对端 cid
-                            channel->rcid = rcid;
-                            // 生成 ack 的校验码
-                            channel->ack.key = (XMSG_VAL ^ channel->remote_key);
-                            channel->ack.cid = rcid;
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
-                            __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
-                            channel->connected = true;
-                            msger->callback->on_connection_from_peer(msger->callback, channel);
 
-                            // 更新接收缓冲区和 ACK
-                            xchannel_recv_pack(channel, &rpack);
-                            // 生成 PONG
-                            xchannel_serial_pack(channel, XMSG_PACK_PONG);
-                            // 发送 PONG 和更新的 ACK
-                            xchannel_send_pack(channel);
+                        // 取出同步参数
+                        uint8_t remote_key = *((uint8_t*)(rpack->body));
+                        uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
+                        uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
+                        uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                        // 创建连接
+                        channel = xchannel_create(msger, serial_range);
+                        __xbreak(channel == NULL);
 
-                        }else {
+                        channel->addr = addr;
+                        channel->lcid.port = addr.port;
+                        channel->lcid.ip = addr.ip;
+                        // 建立索引
+                        do {
+                            channel->lcid.cid = msger->cid++;
+                        }while (avl_tree_add(&msger->peers, channel) != NULL);
+                        // 同步序列号
+                        channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
+                        // 设置校验码
+                        channel->remote_key = remote_key;
+                        // 设置对端 cid
+                        channel->rcid = rcid;
+                        // 生成 ack 的校验码
+                        channel->ack.key = (XMSG_VAL ^ channel->remote_key);
+                        channel->ack.cid = rcid;
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
+                        channel->connected = true;
+                        msger->callback->on_connection_from_peer(msger->callback, channel);
 
-                            xchannel_recv_pack(channel, &rpack);
-                            if (channel->ack.flag != 0){
-                                xchannel_send_ack(channel);
-                            }
+                        // 更新接收缓冲区和 ACK
+                        xchannel_recv_pack(channel, &rpack);
+                        if (channel->ack.flag != 0){
+                            xchannel_send_ack(channel);
                         }
 
                     }else {}
