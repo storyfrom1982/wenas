@@ -14,11 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define XLMSG_FLAG_RECV         0x00
-#define XLMSG_FLAG_SEND         0x01
-#define XLMSG_FLAG_CONNECT      0x02
-#define XLMSG_FLAG_DISCONNECT   0x04
-
 
 typedef struct media_stream_task {
 
@@ -319,7 +314,7 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xlmsg_ptr msg)
             processor = (xmsg_processor_t *)ctx->handler;
             xmsger_connect(ctx->server->msger, msg);
         }else if (msg->flag == XLMSG_FLAG_DISCONNECT){
-            xmsger_disconnect(ctx->server->msger, ctx->channel);
+            xmsger_disconnect(ctx->server->msger, ctx->channel, msg);
         }
     }
 }
@@ -364,7 +359,7 @@ static void res_logout(void *userctx)
     // uint16_t port = xchannel_get_port(pctx->channel);
     // const char *ip = xchannel_get_ip(pctx->channel);
     // mcopy(hostip, ip, slength(ip));
-    xmsger_disconnect(peerctx->ctx->server->msger, peerctx->ctx->channel);
+    // xmsger_disconnect(peerctx->ctx->server->msger, peerctx->ctx->channel, );
 }
 
 static void send_logout(xchannel_ctx_t *ctx)

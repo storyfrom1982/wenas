@@ -119,13 +119,19 @@ static inline double __xl_b2float(xl_ptr l)
 
 #define XLINE_DEFAULT_SIZE          (1024 * 8)
 
+#define XLMSG_FLAG_RECV             0x00
+#define XLMSG_FLAG_SEND             0x01
+#define XLMSG_FLAG_CONNECT          0x02
+#define XLMSG_FLAG_DISCONNECT       0x04
+
 typedef struct xlmsg {
     uint8_t flag;
     __atom_size ref;
     void *cb;
+    struct xchanne *channel;
     struct xchannel_ctx *ctx;
     struct xlmsg *prev, *next;
-    uint64_t wpos, rpos, size;
+    uint64_t wpos, spos, rpos, range, size;
     uint8_t *key;
     uint8_t *body;
     xline_t line;

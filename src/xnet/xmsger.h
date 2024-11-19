@@ -27,9 +27,9 @@ typedef struct xmsgercb {
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback);
 extern void xmsger_free(xmsger_ptr *pptr);
-extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xlmsg_ptr msg);
-extern bool xmsger_connect(xmsger_ptr msger, xlmsg_ptr msg);
-extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel);
+extern bool xmsger_connect(xmsger_ptr msger, xlmsg_t *msg);
+extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xlmsg_t *msg);
+extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xlmsg_t *msg);
 
 extern bool xchannel_get_keepalive(xchannel_ptr channel);
 extern const char* xchannel_get_host(xchannel_ptr channel);
