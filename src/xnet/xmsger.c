@@ -725,10 +725,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (!channel->connected){
                     channel->connected = true;
                     // 取出同步参数
-                    uint8_t remote_key = *((uint8_t*)(rpack->body));
-                    uint8_t serial_range = *((uint8_t*)(rpack->body + 1));
-                    uint8_t serial_number = *((uint8_t*)(rpack->body + 2));
-                    uint16_t rcid = *((uint16_t*)(rpack->body + 3));
+                    uint8_t remote_key = rpack->head.sid;
+                    uint8_t serial_range = rpack->head.resend;
+                    uint8_t serial_number = rpack->head.sn;
+                    uint16_t rcid = rpack->head.flags;
                     __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
                     __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid.cid, channel->local_key, channel->serial_number);
                     // 更新 rcid
@@ -1223,6 +1223,10 @@ static void* main_loop(void *ptr)
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
+                            channel->ack.sn = channel->serial_number;
+                            channel->ack.resend = channel->serial_range;
+                            channel->ack.sid = channel->local_key;
+                            channel->ack.flags = channel->lcid.cid;
                             xchannel_send_ack(channel);
                         }
 
@@ -1269,6 +1273,10 @@ static void* main_loop(void *ptr)
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
+                            channel->ack.sn = channel->serial_number;
+                            channel->ack.resend = channel->serial_range;
+                            channel->ack.sid = channel->local_key;
+                            channel->ack.flags = channel->lcid.cid;
                             xchannel_send_ack(channel);
                         }
 
@@ -1315,6 +1323,10 @@ static void* main_loop(void *ptr)
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
+                            channel->ack.sn = channel->serial_number;
+                            channel->ack.resend = channel->serial_range;
+                            channel->ack.sid = channel->local_key;
+                            channel->ack.flags = channel->lcid.cid;
                             xchannel_send_ack(channel);
                         }
 
