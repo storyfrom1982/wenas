@@ -1011,7 +1011,9 @@ static inline void xmsger_send_all(xmsger_ptr msger)
             // readable 是已经写入缓冲区还尚未发送的包
             // 缓冲的包小于缓冲区的8/1时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
             // __xlogd("xmsger_send_all >>>>------------------------> msg sendable = %u\n", channel->msgbuf->spos);
-            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3)){
+            // if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 3))
+            if (__serialbuf_readable(channel->sendbuf) < 3)
+            {
                 // __xlogd("xmsger_send_all >>>>------------------------> send packet %lu\n",
                 //         __serialbuf_sendable(channel->msgbuf));
                 xchannel_send_pack(channel);

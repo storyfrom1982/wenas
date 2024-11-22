@@ -564,6 +564,8 @@ static void api_echo(xchannel_ctx_ptr pctx)
     xl_add_word(res, "api", "res");
     xl_add_word(res, "req", "echo");
     xl_add_uint(res, "tid", tid);
+    xl_add_word(res, "host", xchannel_get_host(pctx->channel));
+    xl_add_uint(res, "port", xchannel_get_port(pctx->channel));
     xl_add_uint(res, "code", 200);
     xmsger_send(pctx->server->msger, pctx->channel, res);
 }
