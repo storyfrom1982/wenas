@@ -131,8 +131,8 @@ struct xchannel {
     uint16_t port;
     uint16_t rcid;
     uint16_t lcid;
-    uint8_t addr_len;
-    uint8_t addr_family;
+    // uint8_t addr_len;
+    uint16_t addr_family;
     struct __xipaddr addr;
     struct xchannel_ctx *ctx;
 
@@ -418,7 +418,7 @@ static inline void xchannel_free(xchannel_ptr channel)
 
 static inline int xchannel_send(xchannel_ptr channel, void *data, uint32_t len)
 {
-    channel->addr.len = channel->addr_len;
+    // channel->addr.len = channel->addr_len;
     channel->addr.family = channel->addr_family;
     return __xapi->udp_sendto(channel->msger->sock, &channel->addr, data, len);
 }
@@ -953,7 +953,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
         mcopy(channel->ip, ip, slength(ip));
         channel->port = port;
         __xapi->udp_host_to_addr(channel->ip, channel->port, &channel->addr);
-        channel->addr_len = channel->addr.len;
+        // channel->addr_len = channel->addr.len;
         channel->addr_family = channel->addr.family;
 
         do {
@@ -1197,7 +1197,7 @@ static void* main_loop(void *ptr)
             // cid.cid = rpack->head.cid;
             // cid.port = addr.port;
             // cid.ip = addr.addr;
-            addr_len = addr.len;
+            // addr_len = addr.len;
             addr_family = addr.family;
             addr.cid = rpack->head.cid;
 
@@ -1206,7 +1206,7 @@ static void* main_loop(void *ptr)
 
             channel = avl_tree_find(&msger->peers, &addr);
 
-            addr.len = addr_len;
+            // addr.len = addr_len;
             addr.family = addr_family;
 
             if (channel){
@@ -1338,7 +1338,7 @@ static void* main_loop(void *ptr)
                         __xbreak(channel == NULL);
 
                         channel->addr = addr;
-                        channel->addr_len = addr.len;
+                        // channel->addr_len = addr.len;
                         channel->addr_family = addr.family;
                         // 建立索引
                         do {

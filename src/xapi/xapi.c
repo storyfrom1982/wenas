@@ -346,6 +346,7 @@ static int udp_close(int sock)
 
 static int udp_bind(int sock, __xipaddr_ptr ipaddr)
 {
+    __xlogd("udp_bind ........... addrlen=%u\n", ipaddr->addrlen);
     // struct sockaddr_in *addr = (struct sockaddr_in *)&ipaddr;
     // ipaddr->addrlen = sizeof(struct sockaddr_in);
     return bind(sock, (const struct sockaddr *)ipaddr, (socklen_t)ipaddr->addrlen);

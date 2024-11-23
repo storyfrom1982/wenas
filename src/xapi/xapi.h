@@ -39,10 +39,7 @@ typedef struct __xipaddr {
         struct {
             union{
                 uint16_t cid;
-                struct {
-                    uint8_t len;
-                    uint8_t family;
-                };
+                uint16_t family;
             };
             uint16_t port;
             uint32_t addr;
