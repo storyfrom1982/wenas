@@ -25,14 +25,33 @@ typedef void* __xmutex_ptr;
 typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
 
+struct ipv6{
+    union {
+        uint8_t   __u6_addr8[16];
+        uint16_t  __u6_addr16[8];
+        uint32_t  __u6_addr32[4];
+        uint64_t  __u6_addr64[2];
+    } __u6_addr;
+};
 
 typedef struct __xipaddr {
-    uint16_t family;
-    uint16_t port;
-    uint32_t ip;
-    uint8_t zero[8];
-    uint32_t keylen;
-    uint32_t addrlen;
+    union {
+        struct {
+            union{
+                uint16_t cid;
+                struct {
+                    uint8_t len;
+                    uint8_t family;
+                };
+            };
+            uint16_t port;
+            uint32_t addr;
+            struct ipv6 sin6_addr;
+            uint32_t reserve;
+            uint32_t addrlen;
+        };
+        uint8_t byte[128];
+    };
 }*__xipaddr_ptr;
 
 

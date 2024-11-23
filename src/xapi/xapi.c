@@ -308,23 +308,31 @@ static bool __ex_make_path(const char* path)
 
 static int udp_open(int buf_size)
 {
+    __xlogd("udp_open ........... enter\n");
     int sock;
     int opt;
     int flags;
     __xbreak((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0);
+    __xlogd("udp_open ........... 1\n");
     // opt = 1;
     // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVLOWAT, &opt, sizeof(opt)) != 0);
     opt = 1;
     __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0);
     __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0);
+    __xlogd("udp_open ........... 2\n");
+    // opt=0;
+    // __xbreak(setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) != 0);
     // if (buf_size > 0){
     //     opt = buf_size;
     //     __xbreak(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) != 0);
     //     // opt = buf_size * 5;
     //     // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) != 0);
     // }
+    __xlogd("udp_open ........... 3\n");
     flags = fcntl(sock, F_GETFL, 0);
     __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
+
+    __xlogd("udp_open ........... exit\n");
     return sock;
 
 Clean:
@@ -354,7 +362,7 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
         return size;
     }
 #endif
-    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, (socklen_t)ipaddr->addrlen);
+    return sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
 
 static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
@@ -365,7 +373,8 @@ static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
     //     ipaddr->port = ((struct sockaddr_in*)ipaddr->addr)->sin_port;
     //     ipaddr->keylen = 6;
     // }
-    return recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, (socklen_t*)&ipaddr->addrlen);
+    socklen_t addr_len = ipaddr->addrlen;
+    return recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, &addr_len);
 }
 
 static int udp_listen(int sock, uint64_t microseconds)
@@ -378,6 +387,68 @@ static int udp_listen(int sock, uint64_t microseconds)
     timer.tv_usec = microseconds & 1000000UL;
     return select(sock + 1, &fds, NULL, NULL, &timer);
     // return select(sock + 1, &fds, NULL, NULL, NULL);
+}
+
+static inline int socket_getaddrinfo(const char *hostname, const char *service, const struct addrinfo *hints, struct addrinfo **result)
+{
+	int r;
+	r = getaddrinfo(hostname, service, hints, result);
+	if (0 != r)
+		return r;
+
+#if defined(OS_RTOS)
+	// fixed lwip return ai_addrlen = sizeof(struct sockaddr_storage)
+	assert(sizeof(struct sockaddr_storage) == (*result)->ai_addrlen);
+	if (AF_INET == (*result)->ai_family)
+		(*result)->ai_addrlen = sizeof(struct sockaddr_in);
+	else if (AF_INET6 == (*result)->ai_family)
+		(*result)->ai_addrlen = sizeof(struct sockaddr_in6);
+#endif
+	return 0;
+}
+
+static inline int socket_addr_setport(struct sockaddr* sa, socklen_t salen, u_short port)
+{
+	if (AF_INET == sa->sa_family)
+	{
+		struct sockaddr_in* in = (struct sockaddr_in*)sa;
+		assert(sizeof(struct sockaddr_in) == salen);
+		in->sin_port = htons(port);
+	}
+	else if (AF_INET6 == sa->sa_family)
+	{
+        __xlogd("socket_addr_setport ............................. family = s6\n");
+		struct sockaddr_in6* in6 = (struct sockaddr_in6*)sa;
+		assert(sizeof(struct sockaddr_in6) == salen);
+		in6->sin6_port = htons(port);
+	}
+	else
+	{
+		assert(0);
+		return -1;
+	}
+
+	(void)salen;
+	return 0;
+}
+
+static inline int socket_addr_from(struct sockaddr_storage* ss, socklen_t* len, const char* ipv4_or_ipv6_or_dns, u_short port)
+{
+	int r;
+	char portstr[16];
+	struct addrinfo *addr;
+	snprintf(portstr, sizeof(portstr), "%hu", port);
+	r = socket_getaddrinfo(ipv4_or_ipv6_or_dns, portstr, NULL, &addr);
+	if (0 != r)
+		return r;
+
+	// fixed ios getaddrinfo don't set port if node is ipv4 address
+	socket_addr_setport(addr->ai_addr, (socklen_t)addr->ai_addrlen, port);
+	assert((size_t)addr->ai_addrlen <= sizeof(struct sockaddr_storage));
+	memcpy(ss, addr->ai_addr, addr->ai_addrlen);
+	if(len) *len = (socklen_t)addr->ai_addrlen;
+	freeaddrinfo(addr);
+	return 0;
 }
 
 bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
@@ -419,20 +490,22 @@ bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
 // #define INET6_ADDRSTRLEN 46
 bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
     *port = ntohs(addr->port);
-    return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip, __XAPI_IP_STR_LEN) != NULL;
+    return inet_ntop(AF_INET, (struct in_addr*)&(addr->addr), ip, __XAPI_IP_STR_LEN) != NULL;
 }
 
 bool udp_host_to_addr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
 {
-    ipaddr->keylen = 6;
     ipaddr->addrlen = sizeof(struct sockaddr_in);
     ipaddr->family = AF_INET;
     ipaddr->port = htons(port);
     if (ip == NULL){
-        ipaddr->ip = INADDR_ANY;
+        ipaddr->addr = INADDR_ANY;
     }else {
-        return (inet_aton(ip, (struct in_addr*)&(ipaddr->ip)) == 1);
+        return (inet_aton(ip, (struct in_addr*)&(ipaddr->addr)) == 1);
     }
+    // ipaddr->addrlen = sizeof(*ipaddr);
+    // socket_addr_from(ipaddr, &ipaddr->addrlen, ip, port);
+    // __xlogd("addr len = %u %u\n", ipaddr->addrlen, sizeof(*ipaddr));
     return true;
 }
 

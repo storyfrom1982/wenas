@@ -59,7 +59,7 @@ typedef struct xchannel_ctx {
 typedef struct xpeer{
     // int sock;
     uint16_t port;
-    char ip[__XAPI_IP_STR_LEN];
+    char ip[__XAPI_IP_STR_LEN + __XAPI_IP_STR_LEN];
     // uint64_t key;
     uint8_t uuid[32];
     __atom_bool runnig;
@@ -585,6 +585,33 @@ int main(int argc, char *argv[])
 
         } else if (strcmp(command, "logout") == 0) {
             send_logout(peer->server);
+
+        } else if (strcmp(command, "con") == 0) {
+            
+            // __xlogi("输入IP地址: ");
+            // if (fgets(input, sizeof(input), stdin) != NULL) {
+            //     input[strcspn(input, "\n")] = 0;
+            //     mcopy(peer->ip, input, slength(input));
+            //     peer->ip[slength(input)] = '\0';
+            // } else {
+            //     __xlogi("读取IP地址失败\n");
+            //     continue;
+            // }
+
+            // __xlogi("输入端口: ");
+            // if (fgets(input, sizeof(input), stdin) != NULL) {
+            //     input[strcspn(input, "\n")] = 0;
+            //     peer->port = atoi(input);
+            // } else {
+            //     __xlogi("读取键值失败\n");
+            //     continue;
+            // }
+
+            mcopy(peer->ip, "223.101.183.131", slength("223.101.183.131"));
+            peer->ip[slength("223.101.183.131")] = '\0';
+            peer->port = 6821;
+
+            peer->xltp = xltp_bootstrap(peer, peer->ip, peer->port);
 
         } else if (strcmp(command, "list") == 0) {
             
