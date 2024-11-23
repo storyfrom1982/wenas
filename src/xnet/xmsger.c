@@ -420,7 +420,9 @@ static inline int xchannel_send(xchannel_ptr channel, void *data, uint32_t len)
 {
     // channel->addr.len = channel->addr_len;
     channel->addr.family = channel->addr_family;
-    return __xapi->udp_sendto(channel->msger->sock, &channel->addr, data, len);
+    int ret = __xapi->udp_sendto(channel->msger->sock, &channel->addr, data, len);
+    channel->addr.cid = channel->lcid;
+    return ret;
 }
 
 // static inline xchannel_ptr xchannel_find(uint16_t cid, __xipaddr_ptr addr)
