@@ -24,32 +24,7 @@
 typedef void* __xmutex_ptr;
 typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
-
-struct ipv6{
-    union {
-        uint8_t   __u6_addr8[16];
-        uint16_t  __u6_addr16[8];
-        uint32_t  __u6_addr32[4];
-        uint64_t  __u6_addr64[2];
-    } __u6_addr;
-};
-
-typedef struct __xipaddr {
-    union {
-        struct {
-            union{
-                uint16_t cid;
-                uint16_t family;
-            };
-            uint16_t port;
-            uint32_t addr;
-            struct ipv6 sin6_addr;
-            uint32_t reserve;
-            uint32_t addrlen;
-        };
-        uint8_t byte[128];
-    };
-}*__xipaddr_ptr;
+typedef void* __xipaddr_ptr;
 
 
 typedef struct __xapi_enter {
@@ -87,13 +62,14 @@ typedef struct __xapi_enter {
 
     int (*udp_open)(int buf_size);
     int (*udp_close)(int sock);
-    int (*udp_bind)(int sock, __xipaddr_ptr ipaddr);
+    int (*udp_bind)(uint16_t port);
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock, uint64_t microseconds);
     bool (*udp_addrinfo)(char* ip_str, size_t ip_str_len, const char *name);
     bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
-    bool (*udp_host_to_addr)(const char *ip, uint16_t port, __xipaddr_ptr addr);
+    __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
+    __xipaddr_ptr (*udp_new_addr)(const __xipaddr_ptr addr);
     bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
 
 ///////////////////////////////////////////////////////
@@ -173,13 +149,13 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
         } \
     } while (0)
 
-#define __xcheck(condition) \
-    do { \
-        if ((condition)) { \
-            __xloge("ERROR: %s\n", #condition); \
-            goto XClean; \
-        } \
-    } while (0)
+// #define __xcheck(condition) \
+//     do { \
+//         if (!(condition)) { \
+//             __xloge("ERROR: %s\n", #condition); \
+//             goto XClean; \
+//         } \
+//     } while (0)
 
 
 

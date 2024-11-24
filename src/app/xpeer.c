@@ -65,7 +65,7 @@ typedef struct xpeer{
     __atom_bool runnig;
     xlmsg_t parser;
     uint64_t task_id;
-    struct __xipaddr addr;
+    // struct __xipaddr addr;
     xline_ptr chord_list;
     xmsger_ptr msger;
 

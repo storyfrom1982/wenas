@@ -92,7 +92,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
     gloger->cb = cb;
 
     if (!__xapi->check_path(path)){
-        __xcheck(!__xapi->make_path(path));
+        __xbreak(__xapi->make_path(path));
     }
 
     int n = snprintf(gloger->log0, __log_path_max_len - 1, "%s/0.log", path);
@@ -101,7 +101,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
     gloger->log0[n] = '\0';
 
     gloger->fp = __xapi->fopen(gloger->log0, "a+t");
-    __xcheck(gloger->fp == NULL);
+    __xbreak(gloger->fp != NULL);
 
     __xlogi(">>>>-------------->\n");
     __xlogi("Log start >>>>--------------> %s\n", gloger->log0);
@@ -109,7 +109,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
 
     return 0;
 
-XClean:
+Clean:
 
     if (gloger->fp){
         __xapi->fclose(gloger->fp);
