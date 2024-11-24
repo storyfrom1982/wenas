@@ -77,7 +77,7 @@ typedef struct __xapi_enter {
     int (*udp_listen)(int sock, uint64_t microseconds);
     bool (*udp_addrinfo)(char* ip_str, size_t ip_str_len, const char *name);
     bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
-    bool (*udp_host_to_addr)(const char *ip, uint16_t port, __xipaddr_ptr addr);
+    __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
     bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
 
 ///////////////////////////////////////////////////////

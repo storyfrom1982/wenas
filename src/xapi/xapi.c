@@ -422,8 +422,10 @@ bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
     return inet_ntop(AF_INET, (struct in_addr*)&(addr->ip), ip, __XAPI_IP_STR_LEN) != NULL;
 }
 
-bool udp_host_to_addr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
+__xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
+    __xipaddr_ptr ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xbreak(ipaddr == NULL);
     ipaddr->keylen = 6;
     ipaddr->addrlen = sizeof(struct sockaddr_in);
     ipaddr->family = AF_INET;
@@ -431,9 +433,16 @@ bool udp_host_to_addr(const char *ip, uint16_t port, __xipaddr_ptr ipaddr)
     if (ip == NULL){
         ipaddr->ip = INADDR_ANY;
     }else {
-        return (inet_aton(ip, (struct in_addr*)&(ipaddr->ip)) == 1);
+        __xbreak(inet_aton(ip, (struct in_addr*)&(ipaddr->ip)) != 1);
     }
-    return true;
+    return ipaddr;
+
+Clean:
+
+    if (ipaddr != NULL){
+        free(ipaddr);
+    }
+    return NULL;
 }
 
 

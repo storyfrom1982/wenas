@@ -311,7 +311,7 @@ typedef struct xchannel_ctx {
 typedef struct xltpd{
     int sock;
     __atom_bool runnig;
-    struct __xipaddr addr;
+    // struct __xipaddr addr;
     char ip[16];
     uint16_t port;
     xserver_t ring;
@@ -596,27 +596,27 @@ static void api_timeout(xchannel_ctx_ptr pctx)
     uint16_t port = xl_find_uint(&pctx->xlparser, "port");
     xlmsg_ptr msg = xl_find_ptr(&pctx->xlparser, "msg");
 
-    if (xchannel_get_keepalive(pctx->channel)){
-        if (pctx->reconnected < 3){
-            pctx->reconnected++;
-            struct __xipaddr addr;
-            __xapi->udp_host_to_addr(ip, port, &addr);
-            // TODO 找到未完成的任务
-            xmsger_connect(pctx->server->msger, msg);
+    // if (xchannel_get_keepalive(pctx->channel)){
+    //     if (pctx->reconnected < 3){
+    //         pctx->reconnected++;
+    //         struct __xipaddr addr;
+    //         __xapi->udp_host_to_addr(ip, port, &addr);
+    //         // TODO 找到未完成的任务
+    //         xmsger_connect(pctx->server->msger, msg);
 
-        }else {
+    //     }else {
 
-            if (msg){
-                xl_printf(&msg->line);
-            }
-            // 记录未完成任务
-            api_break(pctx);
-        }
+    //         if (msg){
+    //             xl_printf(&msg->line);
+    //         }
+    //         // 记录未完成任务
+    //         api_break(pctx);
+    //     }
 
-    }else {
-        // 记录未完成任务
-        api_break(pctx);
-    }
+    // }else {
+    //     // 记录未完成任务
+    //     api_break(pctx);
+    // }
     __xlogd("api_timeout exit\n");
 }
 
