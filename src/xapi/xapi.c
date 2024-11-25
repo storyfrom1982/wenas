@@ -477,6 +477,7 @@ __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
     __xipaddr_ptr ipaddr = NULL;
     __xbreak(ip == NULL);
+    __xlogd("ip===%s port=%u\n", ip, port);
     ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
     __xbreak(ipaddr == NULL);
     __xbreak(socket_addr_from(ipaddr, &ipaddr->addrlen, ip, port) != 0);

@@ -129,7 +129,7 @@ struct xchannel {
     uint64_t back_delay;
     uint64_t back_range;
 
-    char ip[__XAPI_IP_STR_LEN];
+    char ip[46];
     uint16_t port;
     uint16_t rcid;
     uint16_t lcid;

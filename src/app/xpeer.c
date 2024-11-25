@@ -41,7 +41,7 @@ typedef struct xmsg_processor {
     void *userctx;
     uint64_t uuid[4];    
     uint16_t port;
-    char host[__XAPI_IP_STR_LEN];
+    char host[46];
     struct xchannel_ctx *ctx;
     struct xmsg_callback callbacklist;
 }xmsg_processor_t;
@@ -550,6 +550,7 @@ int main(int argc, char *argv[])
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
+    // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
     const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
 
     mcopy(peer->ip, cip, slength(cip));
