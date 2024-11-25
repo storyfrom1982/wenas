@@ -166,7 +166,7 @@ typedef struct xchannellist {
 struct xmsger {
     __atom_bool running;
     int sock;
-    __xipaddr_ptr addr;
+    // __xipaddr_ptr addr;
     uint16_t cid;
     xtree chcache;
     struct avl_tree peers;
@@ -1132,7 +1132,7 @@ static inline void xmsger_check_all(xmsger_ptr msger)
             next_channel = channel->next;
             // 10 秒钟超时
             if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
-                __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_disconnect (%lu)\n", *(uint64_t*)(&channel->addr->port), __xapi->clock() - channel->timestamp);
+                // __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_disconnect (%lu)\n", *(uint64_t*)(&channel->addr->port), __xapi->clock() - channel->timestamp);
                 msger->callback->on_disconnection(msger->callback, channel);
                 // 移除超时的连接
                 avl_tree_remove(&msger->peers, channel);
@@ -1160,7 +1160,7 @@ static void* main_loop(void *ptr)
     uint64_t cid[3] = {0};
 
     // struct __xcid cid;
-    // __xipaddr_ptr addr = __xapi->udp_host_to_addr(NULL, 0);
+    __xipaddr_ptr addr = __xapi->udp_any_to_addr(0, 0);
     // __xbreak(addr == NULL);
 
     xpack_ptr rpack = (xpack_ptr)malloc(sizeof(struct xpack));
@@ -1171,11 +1171,11 @@ static void* main_loop(void *ptr)
 
     while (msger->running)
     {
-        while (__xapi->udp_recvfrom(msger->sock, msger->addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
+        while (__xapi->udp_recvfrom(msger->sock, addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
-            cid[0] = ((uint64_t*)msger->addr)[0];
-            cid[1] = ((uint64_t*)msger->addr)[1];
-            cid[2] = ((uint64_t*)msger->addr)[2];
+            cid[0] = ((uint64_t*)addr)[0];
+            cid[1] = ((uint64_t*)addr)[1];
+            cid[2] = ((uint64_t*)addr)[2];
             *(uint16_t*)&cid[0] = rpack->head.cid;
             // cid.cid = rpack->head.cid;
             // cid.port = msger->addr->port;
@@ -1251,7 +1251,7 @@ static void* main_loop(void *ptr)
                         avl_tree_remove(&msger->peers, channel);
                         xchannel_free(channel);
                         // 回复最后的 ACK
-                        xchannel_send_final(msger, msger->addr, rpack);
+                        xchannel_send_final(msger, addr, rpack);
 
                     }else {
                         __xlogd("main_loop pack type error\n");
@@ -1313,7 +1313,7 @@ static void* main_loop(void *ptr)
                         channel = xchannel_create(msger, serial_range);
                         __xbreak(channel == NULL);
 
-                        __xapi->udp_addr_to_host(msger->addr, channel->ip, &channel->port);
+                        __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
                         channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
                         // channel->lcid.port = msger->addr->port;
                         // channel->lcid.ip = msger->addr->ip;
@@ -1354,7 +1354,7 @@ static void* main_loop(void *ptr)
                 }else if (rpack->head.type == XMSG_PACK_BYE){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
-                    xchannel_send_final(msger, msger->addr, rpack);
+                    xchannel_send_final(msger, addr, rpack);
 
                 }else if (rpack->head.type == XMSG_PACK_ACK){
                     
@@ -1414,6 +1414,10 @@ static void* main_loop(void *ptr)
 
     if (rpack != NULL){
         free(rpack);
+    }
+
+    if (addr){
+        free(addr);
     }
 
     __xlogd("xmsger_loop exit\n");
@@ -1544,11 +1548,11 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->sock = __xapi->udp_open(PACK_ONLINE_SIZE);
+    msger->sock = __xapi->udp_open(0);
     __xbreak(msger->sock < 0);
-    msger->addr = __xapi->udp_host_to_addr(NULL, 9256);
-    __xbreak(msger->addr == NULL);
-    __xbreak(__xapi->udp_bind(msger->sock, msger->addr) == -1);
+    // msger->addr = __xapi->udp_any_addr(0, 9256);
+    // __xbreak(msger->addr == NULL);
+    __xbreak(__xapi->udp_bind(msger->sock, 9256) == -1);
 
     msger->running = true;
     msger->callback = callback;
@@ -1637,7 +1641,7 @@ void xmsger_free(xmsger_ptr *pptr)
             __xapi->udp_close(msger->sock);
         }
 
-        free(msger->addr);
+        // free(msger->addr);
         free(msger);
     }
 

@@ -111,6 +111,8 @@ if(ENV_CHECK_BACKTRACE)
     list(APPEND kzx_sources src/xapi/backtrace.c)
 endif()
 
+list(APPEND kzx_inclides src/xapi/dep)
+
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
     target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ${kzx_defines})

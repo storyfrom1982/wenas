@@ -25,15 +25,7 @@ typedef void* __xmutex_ptr;
 typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
 
-
-typedef struct __xipaddr {
-    uint16_t family;
-    uint16_t port;
-    uint32_t ip;
-    uint8_t zero[8];
-    uint32_t keylen;
-    uint32_t addrlen;
-}*__xipaddr_ptr;
+typedef struct __xipaddr* __xipaddr_ptr;
 
 
 typedef struct __xapi_enter {
@@ -69,16 +61,18 @@ typedef struct __xapi_enter {
 ///// 网络接口
 ///////////////////////////////////////////////////////
 
-    int (*udp_open)(int buf_size);
+    int (*udp_open)(int ipv6);
     int (*udp_close)(int sock);
-    int (*udp_bind)(int sock, __xipaddr_ptr ipaddr);
+    int (*udp_bind)(int sock, uint16_t port);
+    int (*udp_bind_addr)(int sock, __xipaddr_ptr ipaddr);
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock, uint64_t microseconds);
     bool (*udp_addrinfo)(char* ip_str, size_t ip_str_len, const char *name);
     bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
-    __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
     bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
+    __xipaddr_ptr (*udp_any_to_addr)(int ipv6, uint16_t port);
+    __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储

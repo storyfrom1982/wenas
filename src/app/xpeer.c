@@ -65,7 +65,7 @@ typedef struct xpeer{
     __atom_bool runnig;
     xlmsg_t parser;
     uint64_t task_id;
-    struct __xipaddr addr;
+    // struct __xipaddr addr;
     xline_ptr chord_list;
     xmsger_ptr msger;
 
@@ -546,9 +546,11 @@ int main(int argc, char *argv[])
     __xapi->udp_hostbyname(peer->ip, 16, hostname);
     __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
     // const char *cip = "192.168.1.6";
-    const char *cip = "120.78.155.213";
+    // const char *cip = "120.78.155.213";
+    // const char *cip = "::ffff:120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
+    const char *cip = hostname;
 
     mcopy(peer->ip, cip, slength(cip));
     peer->ip[slength(cip)] = '\0';
