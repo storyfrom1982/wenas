@@ -441,6 +441,30 @@ static void api_response(xchannel_ctx_t *ctx)
     __xlogd("api_response exit\n");
 }
 
+static void api_login(xchannel_ctx_t *pctx)
+{
+    uint64_t tid = xl_find_uint(&pctx->server->parser, "tid");
+    xlmsg_ptr res = xl_maker();
+    xl_add_word(res, "api", "res");
+    xl_add_word(res, "req", "login");
+    xl_add_uint(res, "tid", tid);
+    xl_add_uint(res, "code", 200);
+    xmsger_send(pctx->server->msger, pctx->channel, res);
+}
+
+static void api_echo(xchannel_ctx_t *pctx)
+{
+    uint64_t tid = xl_find_uint(&pctx->server->parser, "tid");
+    xlmsg_ptr res = xl_maker();
+    xl_add_word(res, "api", "res");
+    xl_add_word(res, "req", "echo");
+    xl_add_uint(res, "tid", tid);
+    xl_add_word(res, "host", xchannel_get_host(pctx->channel));
+    xl_add_uint(res, "port", xchannel_get_port(pctx->channel));
+    xl_add_uint(res, "code", 200);
+    xmsger_send(pctx->server->msger, pctx->channel, res);
+}
+
 xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
 {
     uint64_t msgid = xserver_get_msgid(peer);
@@ -507,7 +531,8 @@ int main(int argc, char *argv[])
     xpeer_regisger_recv_api(peer, "res", api_response);
     xpeer_regisger_recv_api(peer, "disconnect", api_disconnect);
     xpeer_regisger_recv_api(peer, "timeout", api_timeout);
-    xpeer_regisger_recv_api(peer, "bootstrap", api_timeout);
+    xpeer_regisger_recv_api(peer, "login", api_login);
+    xpeer_regisger_recv_api(peer, "echo", api_echo);
 
     xmsgercb_ptr listener = &peer->listener;
 
@@ -550,8 +575,9 @@ int main(int argc, char *argv[])
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
-    // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
-    const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
+    const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
+    // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
+    // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
     mcopy(peer->ip, cip, slength(cip));
     peer->ip[slength(cip)] = '\0';

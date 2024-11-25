@@ -1324,6 +1324,7 @@ static void* main_loop(void *ptr)
                         __xbreak(channel == NULL);
 
                         __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
+                        __xlogd("xmsger_loop >>>>-------------> RECV PING: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, rcid);
                         channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
                         if (__xapi->udp_addr_is_ipv6(channel->addr)){
                             channel->sock = channel->msger->sock[1];
