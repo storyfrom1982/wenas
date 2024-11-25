@@ -116,6 +116,8 @@ struct xchannel {
 
     struct avl_node node;
 
+    int sock;
+
     uint8_t local_key;
     uint8_t remote_key;
 
@@ -165,7 +167,7 @@ typedef struct xchannellist {
 
 struct xmsger {
     __atom_bool running;
-    int sock;
+    int sock[2];
     // __xipaddr_ptr addr;
     uint16_t cid;
     xtree chcache;
@@ -525,7 +527,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
         }
 
         // 判断发送是否成功
-        if (__xapi->udp_sendto(channel->msger->sock, channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
+        if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
 
             // 发送成功才能清空标志
             channel->ack.flag = 0;
@@ -560,7 +562,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 {
     __xlogd("<SEND> TYPE[%u] IP[%X] CID[%u] FLAG[%u:%u:%u]\n", 
         channel->ack.type, channel->cid[0], channel->lcid, channel->ack.flag, channel->ack.ack, channel->ack.acks);
-    if ((__xapi->udp_sendto(channel->msger->sock, channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
+    if ((__xapi->udp_sendto(channel->sock, channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
     }else {
         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
@@ -580,7 +582,8 @@ static inline void xchannel_send_final(xmsger_ptr msger, __xipaddr_ptr addr, xpa
     // 要设置包长度，对方要校验长度
     rpack->head.len = 0;
     rpack->head.range = 1;
-    if (__xapi->udp_sendto(msger->sock, addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
+    int sock = __xapi->udp_addr_is_ipv6(addr) ? msger->sock[1] : msger->sock[0];
+    if (__xapi->udp_sendto(sock, addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
         __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
     }
 }
@@ -806,7 +809,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                 pack->head.acks = channel->recvbuf->wpos;
                             }
                             __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", pack->head.sn);
-                            if (__xapi->udp_sendto(channel->msger->sock, channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
+                            if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                                 pack->delay *= XCHANNEL_RESEND_STEPPING;
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> send failed\n");
@@ -933,6 +936,11 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
         mcopy(channel->ip, ip, slength(ip));
         channel->port = port;
         channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+        if (__xapi->udp_addr_is_ipv6(channel->addr)){
+            channel->sock = channel->msger->sock[1];
+        }else {
+            channel->sock = channel->msger->sock[0];
+        }
         // channel->lcid.port = channel->addr->port;
         // channel->lcid.ip = channel->addr->ip;
 
@@ -1076,7 +1084,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", spack->head.sn);
 
                             // 判断发送是否成功
-                            if (__xapi->udp_sendto(channel->msger->sock, channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
+                            if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
                                 // 记录重传次数
                                 spack->head.resend++;
                                 // spack->delay *= XCHANNEL_RESEND_STEPPING;
@@ -1168,10 +1176,12 @@ static void* main_loop(void *ptr)
     rpack->head.len = 0;
 
     msger->timer = 10000000UL; // 10 毫秒
-
+    
     while (msger->running)
     {
-        while (__xapi->udp_recvfrom(msger->sock, addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
+    for (size_t i = 0; i < 2; i++)
+    {
+        while (__xapi->udp_recvfrom(msger->sock[i], addr, &rpack->head, PACK_ONLINE_SIZE) == (rpack->head.len + PACK_HEAD_SIZE)){
 
             cid[0] = ((uint64_t*)addr)[0];
             cid[1] = ((uint64_t*)addr)[1];
@@ -1315,6 +1325,11 @@ static void* main_loop(void *ptr)
 
                         __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
                         channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+                        if (__xapi->udp_addr_is_ipv6(channel->addr)){
+                            channel->sock = channel->msger->sock[1];
+                        }else {
+                            channel->sock = channel->msger->sock[0];
+                        }                        
                         // channel->lcid.port = msger->addr->port;
                         // channel->lcid.ip = msger->addr->ip;
                         // 建立索引
@@ -1388,7 +1403,7 @@ static void* main_loop(void *ptr)
             // 检查超时连接
             xmsger_check_all(msger);
         }
-
+    }
         // __xlogd("xmsger_loop 1\n");
         if (__xpipe_read(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) == __sizeof_ptr){
             __xpipe_notify(msger->mpipe);
@@ -1548,11 +1563,13 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->sock = __xapi->udp_open(0);
-    __xbreak(msger->sock < 0);
-    // msger->addr = __xapi->udp_any_addr(0, 9256);
-    // __xbreak(msger->addr == NULL);
-    __xbreak(__xapi->udp_bind(msger->sock, 9256) == -1);
+    msger->sock[0] = __xapi->udp_open(0);
+    __xbreak(msger->sock[0] < 0);
+    __xbreak(__xapi->udp_bind(msger->sock[0], 9256) == -1);
+
+    msger->sock[1] = __xapi->udp_open(1);
+    __xbreak(msger->sock[1] < 0);
+    __xbreak(__xapi->udp_bind(msger->sock[1], 9256) == -1);
 
     msger->running = true;
     msger->callback = callback;
@@ -1637,10 +1654,12 @@ void xmsger_free(xmsger_ptr *pptr)
             xpipe_free(&msger->mpipe);
         }
 
-        if (msger->sock >= 0){
-            __xapi->udp_close(msger->sock);
+        if (msger->sock[0] >= 0){
+            __xapi->udp_close(msger->sock[0]);
         }
-
+        if (msger->sock[1] >= 0){
+            __xapi->udp_close(msger->sock[1]);
+        }
         // free(msger->addr);
         free(msger);
     }

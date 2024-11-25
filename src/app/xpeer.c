@@ -59,7 +59,7 @@ typedef struct xchannel_ctx {
 typedef struct xpeer{
     // int sock;
     uint16_t port;
-    char ip[__XAPI_IP_STR_LEN];
+    char ip[46];
     // uint64_t key;
     uint8_t uuid[32];
     __atom_bool runnig;
@@ -547,10 +547,10 @@ int main(int argc, char *argv[])
     __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
     // const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    // const char *cip = "::ffff:120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
-    const char *cip = hostname;
+    // const char *cip = hostname;
+    const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
 
     mcopy(peer->ip, cip, slength(cip));
     peer->ip[slength(cip)] = '\0';

@@ -392,15 +392,16 @@ static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
     return socket_recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, &ipaddr->addrlen);
 }
 
-static int udp_listen(int sock, uint64_t microseconds)
+static int udp_listen(int sock[2], uint64_t microseconds)
 {
     fd_set fds;
     FD_ZERO(&fds);
-    FD_SET(sock, &fds);
+    FD_SET(sock[0], &fds);
+    FD_SET(sock[1], &fds);
     struct timeval timer;
     timer.tv_sec = microseconds / 1000000UL;
     timer.tv_usec = microseconds & 1000000UL;
-    return socket_select(sock + 1, &fds, NULL, NULL, &timer);
+    return socket_select(sock[1] > sock[0] ? sock[1] + 1 : sock[0] + 1, &fds, NULL, NULL, &timer);
 }
 
 bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
@@ -440,6 +441,11 @@ bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
 
 bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
     return socket_addr_to(addr, addr->addrlen, ip, port);
+}
+
+bool udp_addr_is_ipv6(__xipaddr_ptr addr)
+{
+    return ((struct sockaddr*)addr)->sa_family == AF_INET6;
 }
 
 __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
@@ -599,6 +605,7 @@ struct __xapi_enter posix_api_enter = {
     .udp_any_to_addr = udp_any_to_addr,
     .udp_host_to_addr = udp_host_to_addr,
     .udp_addr_to_host = udp_addr_to_host,
+    .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_hostbyname = udp_hostbyname,
     .udp_addrinfo = udp_addrinfo,
 
