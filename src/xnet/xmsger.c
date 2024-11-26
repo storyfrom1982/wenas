@@ -1215,6 +1215,7 @@ static void* main_loop(void *ptr)
 
                     }else if (rpack->head.type == XMSG_PACK_PONG){
 
+                        __xlogd("xmsger_loop >>>>-------------> RECV PONG: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                         avl_tree_remove(&msger->temp_channels, &cid);
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
@@ -1263,11 +1264,12 @@ static void* main_loop(void *ptr)
                             __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
                             __xlogd("xmsger_loop >>>>-------------> RECV PING: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, rcid);
                             channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
-                            if (__xapi->udp_addr_is_ipv6(channel->addr)){
-                                channel->sock = channel->msger->sock[1];
-                            }else {
-                                channel->sock = channel->msger->sock[0];
-                            }                        
+                            channel->sock = channel->msger->sock[i];
+                            // if (__xapi->udp_addr_is_ipv6(channel->addr)){
+                            //     channel->sock = channel->msger->sock[1];
+                            // }else {
+                            //     channel->sock = channel->msger->sock[0];
+                            // }
                             // channel->lcid.port = msger->addr->port;
                             // channel->lcid.ip = msger->addr->ip;
                             // 建立索引
