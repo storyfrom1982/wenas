@@ -25,7 +25,7 @@ typedef struct xmsgercb {
 }*xmsgercb_ptr;
 
 
-extern xmsger_ptr xmsger_create(xmsgercb_ptr callback);
+extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6);
 extern void xmsger_free(xmsger_ptr *pptr);
 extern bool xmsger_connect(xmsger_ptr msger, xlmsg_t *msg);
 extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xlmsg_t *msg);

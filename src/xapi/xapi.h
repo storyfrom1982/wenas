@@ -18,7 +18,7 @@
 
 #define __XAPI_TIMEDOUT             1
 #define __XAPI_MAP_FAILED           ((void *) -1)
-#define __XAPI_IP_STR_LEN           16
+#define __XAPI_IP_STR_LEN           46
 
 
 typedef void* __xmutex_ptr;
@@ -68,7 +68,7 @@ typedef struct __xapi_enter {
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock[2], uint64_t microseconds);
-    bool (*udp_addrinfo)(char* ip_str, size_t ip_str_len, const char *name);
+    bool (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
     bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
     bool (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
     bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);

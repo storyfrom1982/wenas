@@ -391,9 +391,40 @@ static void send_echo(xchannel_ctx_t *ctx, const char *text)
     xpipe_write(ctx->server->task_pipe, &msg, __sizeof_ptr);
 }
 
+static void res_detect(xmsg_processor_t *th, void *userctx)
+{
+    // send_echo(th->ctx, "Hello......");
+}
+
+static void send_detect(xpeer_t *peer, const char *host, uint16_t port)
+{
+    uint64_t msgid = xserver_get_msgid(peer);
+    xchannel_ctx_t *ctx = xchannel_ctx_create(peer, NULL);
+    xmsg_processor_t *mp = xmsg_processor_create(ctx);
+    mp->userctx = NULL;
+    ctx->handler = mp;
+    ctx->process = xapi_processor;
+    // __xapi->udp_hostbyname(pctx->ip, __XAPI_IP_STR_LEN, host);
+    mcopy(mp->host, host, slength(host));
+    mp->host[slength(host)] = '\0';    
+    mp->port = port;
+    xlmsg_ptr msg = xl_maker();
+    msg->flag = XLMSG_FLAG_CONNECT;
+    msg->cb = res_detect;
+    msg->ctx = mp->ctx;
+    xl_add_word(msg, "api", "detect");
+    xl_add_uint(msg, "tid", msgid);
+    xl_add_word(msg, "host", mp->host);
+    xl_add_uint(msg, "port", mp->port);
+    xl_add_bin(msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
+}
+
 static void res_login(xmsg_processor_t *th, void *userctx)
 {
-    send_echo(th->ctx, "Hello......");
+    // char *host = xl_find_word(&th->ctx->server->parser, "host");
+    // uint16_t port = xl_find_uint(&th->ctx->server->parser, "port");
+    send_detect(th->ctx->server, th->ctx->server->ip, 9257);
 }
 
 static void api_disconnect(xchannel_ctx_t *pctx)
@@ -561,26 +592,26 @@ int main(int argc, char *argv[])
     peer->task_pid = __xapi->process_create(task_loop, peer);
     __xbreak(peer->task_pid == NULL);
     
-    peer->msger = xmsger_create(&peer->listener);
+    peer->msger = xmsger_create(&peer->listener, 1);
 
     // server->listen_pid = __xapi->process_create(listen_loop, server);
     // __xbreak(server->listen_pid == NULL);
 
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     peer->port = 9256;
-    __xapi->udp_hostbyname(peer->ip, 16, hostname);
+    __xapi->udp_addrinfo(peer->ip, hostname);
     __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
     // const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
-    // const char *cip = hostname;
-    const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
+    const char *cip = hostname;
+    // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
     // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    mcopy(peer->ip, cip, slength(cip));
-    peer->ip[slength(cip)] = '\0';
+    // mcopy(peer->ip, cip, slength(cip));
+    // peer->ip[slength(cip)] = '\0';
 
     // xlmsg_ptr msg = xline_maker();
     // xline_add_word(msg, "api", "testreconnect");

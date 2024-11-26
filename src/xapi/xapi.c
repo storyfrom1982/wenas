@@ -404,22 +404,15 @@ static int udp_listen(int sock[2], uint64_t microseconds)
     return socket_select(sock[1] > sock[0] ? sock[1] + 1 : sock[0] + 1, &fds, NULL, NULL, &timer);
 }
 
-bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname) {
+bool udp_addrinfo(char ip[__XAPI_IP_STR_LEN], const char *hostname) {
 
     int status;
-    struct addrinfo hints = {0}, *res, *p;
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
+    struct addrinfo *res = NULL;
 
-    __xcheck((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0);
-
-    if (res) {
-        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
-        __xcheck(inet_ntop(res->ai_family, &(ipv4->sin_addr), ip_str, ip_str_len) != NULL);
-    }
+    __xcheck((status = socket_getaddrinfo(hostname, NULL, NULL, &res)) != 0);
+    __xcheck(socket_addr_to(res->ai_addr, res->ai_addrlen, ip, NULL) != 0);
 
     freeaddrinfo(res);
-
     return true;
 
 XClean:
@@ -427,7 +420,6 @@ XClean:
     if (res){
         freeaddrinfo(res);
     }
-
     return false;
 }
 

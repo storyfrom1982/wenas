@@ -534,6 +534,8 @@ static void api_login(xchannel_ctx_ptr pctx)
     xl_add_word(res, "api", "res");
     xl_add_word(res, "req", "login");
     xl_add_uint(res, "tid", tid);
+    xl_add_word(res, "host", xchannel_get_host(pctx->channel));
+    xl_add_uint(res, "port", xchannel_get_port(pctx->channel));
     xl_add_uint(res, "code", 200);
     xmsger_send(pctx->server->msger, pctx->channel, res);
 }
@@ -820,6 +822,7 @@ int main(int argc, char *argv[])
     xtree_add(server->api, "break", slength("break"), api_break);
     xtree_add(server->api, "timeout", slength("timeout"), api_timeout);
     xtree_add(server->api, "echo", slength("echo"), api_echo);
+    xtree_add(server->api, "detect", slength("detect"), api_echo);
 
     xmsgercb_ptr listener = &server->listener;
 
@@ -850,7 +853,7 @@ int main(int argc, char *argv[])
     server->task_pid = __xapi->process_create(task_loop, server);
     __xbreak(server->task_pid == NULL);
     
-    server->msger = xmsger_create(&server->listener);
+    server->msger = xmsger_create(&server->listener, 0);
 
     char str[1024];
     char input[256];

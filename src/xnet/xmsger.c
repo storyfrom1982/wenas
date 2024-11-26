@@ -1556,7 +1556,7 @@ static inline int compare_find_channel(const void *a, const void *b)
     return 0;
 }
 
-xmsger_ptr xmsger_create(xmsgercb_ptr callback)
+xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
 {
     __xlogd("xmsger_create enter\n");
 
@@ -1568,9 +1568,15 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback)
     __xbreak(msger->sock[0] < 0);
     __xbreak(__xapi->udp_bind(msger->sock[0], 9256) == -1);
 
-    msger->sock[1] = __xapi->udp_open(1);
-    __xbreak(msger->sock[1] < 0);
-    __xbreak(__xapi->udp_bind(msger->sock[1], 9256) == -1);
+    if (ipv6){
+        msger->sock[1] = __xapi->udp_open(1);
+        __xbreak(msger->sock[1] < 0);
+        __xbreak(__xapi->udp_bind(msger->sock[1], 9256) == -1);
+    }else {
+        msger->sock[1] = __xapi->udp_open(0);
+        __xbreak(msger->sock[1] < 0);
+        __xbreak(__xapi->udp_bind(msger->sock[1], 9257) == -1);
+    }
 
     msger->running = true;
     msger->callback = callback;
