@@ -393,7 +393,7 @@ static void send_echo(xchannel_ctx_t *ctx, const char *text)
 
 static void res_detect(xmsg_processor_t *th, void *userctx)
 {
-    // send_echo(th->ctx, "Hello......");
+    send_echo(th->ctx, "Hello......");
 }
 
 static void send_detect(xpeer_t *peer, const char *host, uint16_t port)
@@ -425,6 +425,7 @@ static void res_login(xmsg_processor_t *th, void *userctx)
     // char *host = xl_find_word(&th->ctx->server->parser, "host");
     // uint16_t port = xl_find_uint(&th->ctx->server->parser, "port");
     send_detect(th->ctx->server, th->ctx->server->ip, 9257);
+    send_echo(th->ctx, "Hello......");
 }
 
 static void api_disconnect(xchannel_ctx_t *pctx)
@@ -601,12 +602,12 @@ int main(int argc, char *argv[])
     peer->port = 9256;
     __xapi->udp_addrinfo(peer->ip, hostname);
     __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
-    
-    // const char *cip = "192.168.1.6";
+
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
-    const char *cip = hostname;
+    // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
     // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
