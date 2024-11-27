@@ -311,8 +311,10 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xlmsg_ptr msg)
         }
         xl_free(msg);
     }else {
-        msgid = xl_find_uint(&ctx->server->parser, "tid");
-        xpeer_add_msg_callback(ctx->handler, msgid, msg->cb);
+        if (msg->wpos > 0 && msg->cb != NULL){
+            msgid = xl_find_uint(&ctx->server->parser, "tid");
+            xpeer_add_msg_callback(ctx->handler, msgid, msg->cb);
+        }
         if (msg->flag == XLMSG_FLAG_SEND){
             xmsger_send(ctx->server->msger, ctx->channel, msg);
         }else if (msg->flag == XLMSG_FLAG_CONNECT){
@@ -457,6 +459,9 @@ static void api_disconnect(xchannel_ctx_t *pctx)
     //     xpeer_t *server = pctx->server;
     //     req_login(server, server->ip, server->port);
     // }
+    if (pctx->handler){
+        free(pctx->handler);
+    }
     free(pctx);
     __xlogd("api_disconnect ----------------------- exit\n");
 }

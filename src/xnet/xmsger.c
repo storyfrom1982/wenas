@@ -1244,6 +1244,7 @@ static void* main_loop(void *ptr)
 
                         __xlogd("xmsger_loop >>>>-------------> RECV PONG: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                         avl_tree_remove(&msger->temp_channels, &cid);
+                        __xlogd("recv pong temp channels count =%lu\n", msger->temp_channels.count);
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
                         if (channel->ack.flag != 0){
@@ -1299,6 +1300,7 @@ static void* main_loop(void *ptr)
                                 channel->cid[2] = ((uint64_t*)channel->addr)[2];
                                 *(uint16_t*)&channel->cid[0] = channel->lcid;
                             }while (avl_tree_add(&msger->peers, channel) != NULL);
+                            __xlogd("recv ping temp channels count =%lu\n", msger->temp_channels.count);
                             avl_tree_add(&msger->temp_channels, channel);
 
                             __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
@@ -1447,7 +1449,7 @@ XClean:
 
 bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xlmsg_t *msg)
 {
-    __xlogd("xmsger_disconnect channel 0x%X enter\n", channel);
+    __xcheck(channel == NULL || msg == NULL);
 
     // 避免重复调用
     if (!__set_false(channel->connected)){
@@ -1459,13 +1461,10 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xlmsg_t *msg)
     msg->channel = channel;
     __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr));
 
-    __xlogd("xmsger_disconnect channel 0x%X exit\n", channel);
-
     return true;
 
 XClean:
 
-    __xlogd("xmsger_disconnect channel 0x%X failed", channel);
     if (msg){
         free(msg);
     }
