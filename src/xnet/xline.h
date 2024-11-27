@@ -469,7 +469,7 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
     int len = slength(key);
 
     if (depth == 1){
-        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth) * 4, key);
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "{\n", (depth) * 4, key);
     }else {
         if (len == 0){
             *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s{\n", (depth) * 4, "");
@@ -548,8 +548,8 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
     do { \
         char buf[XLINE_DEFAULT_SIZE] = {0}; \
         uint64_t pos = 0; \
-        xl_format((xl), "root", 1, buf, &pos, XLINE_DEFAULT_SIZE); \
-        __xlogi("len=%lu\n%s\n", pos, buf); \
+        xl_format((xl), "", 1, buf, &pos, XLINE_DEFAULT_SIZE); \
+        __xlogi("len=%lu >>>>----------->\n%s", pos, buf); \
     }while(0)
 
 
