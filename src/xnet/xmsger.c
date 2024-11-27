@@ -1243,7 +1243,7 @@ static void* main_loop(void *ptr)
                     }else if (rpack->head.type == XMSG_PACK_PONG){
 
                         __xlogd("xmsger_loop >>>>-------------> RECV PONG: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
-                        avl_tree_remove(&msger->temp_channels, &cid);
+                        avl_tree_remove(&msger->temp_channels, channel);
                         __xlogd("recv pong temp channels count =%lu\n", msger->temp_channels.count);
                         // 更新接收缓冲区和 ACK
                         xchannel_recv_pack(channel, &rpack);
