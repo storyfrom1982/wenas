@@ -217,6 +217,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_t *server = (xpeer_t*)listener->ctx;
     xlmsg_ptr msg = xl_maker();
+    msg->flag = XLMSG_FLAG_RECV;
     msg->ctx = xchannel_get_ctx(channel);
     xl_add_word(msg, "api", "disconnect");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
