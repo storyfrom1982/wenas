@@ -398,7 +398,7 @@ static int sendnb = 0;
 static void send_echo(xchannel_ctx_t *ctx, const char *text);
 static void res_echo(xmsg_processor_t *th, void *userctx)
 {
-    if (sendnb++ < 10)
+    // if (sendnb++ < 10)
     {
         send_echo(th->ctx, "hello world");
     }
@@ -631,8 +631,8 @@ int main(int argc, char *argv[])
 
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     peer->port = 9256;
-    // __xapi->udp_addrinfo(peer->ip, hostname);
-    // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
+    __xapi->udp_addrinfo(peer->ip, hostname);
+    __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
     const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
@@ -643,8 +643,8 @@ int main(int argc, char *argv[])
     // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    mcopy(peer->ip, cip, slength(cip));
-    peer->ip[slength(cip)] = '\0';
+    // mcopy(peer->ip, cip, slength(cip));
+    // peer->ip[slength(cip)] = '\0';
 
     // xlmsg_ptr msg = xline_maker();
     // xline_add_word(msg, "api", "testreconnect");
