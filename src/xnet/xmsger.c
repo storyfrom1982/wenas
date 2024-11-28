@@ -597,7 +597,7 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
             if (pack->head.type == XMSG_PACK_MSG){
                 // 如果当前消息的数据为空，证明这个包是新消息的第一个包
                 if (channel->xkv == NULL){
-                    channel->xkv = xl_create(pack->head.range * PACK_BODY_SIZE);
+                    channel->xkv = xl_creator(pack->head.range * PACK_BODY_SIZE);
                     __xcheck(channel->xkv == NULL);
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
                     // channel->rmsg->range = pack->head.range;

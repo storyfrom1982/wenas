@@ -117,7 +117,7 @@ static inline double __xl_b2float(xl_ptr l)
 #define __xl_sizeof_line(l)         __xl_typeis_obj(l) ? __xl_b2u((l)) + XLINE_STATIC_SIZE : XLINE_STATIC_SIZE
 
 
-#define XLINE_DEFAULT_SIZE          (1024 * 8)
+#define XLINE_MAKER_SIZE            (1024 * 16)
 
 #define XLMSG_FLAG_RECV             0x00
 #define XLMSG_FLAG_SEND             0x01
@@ -140,25 +140,26 @@ typedef struct xlmsg {
 typedef xlmsg_t* xlmsg_ptr;
 
 
-static inline xlmsg_ptr xl_create(uint64_t size)
+static inline xlmsg_ptr xl_creator(uint64_t size)
 {
     xlmsg_ptr obj = (xlmsg_ptr)malloc(sizeof(xlmsg_t) + size);
-    if (obj){
-        obj->ref = 1;
-        obj->size = size;
-        obj->wpos = 0;
-        obj->rpos = 0;
-        obj->cb = NULL;
-        obj->ctx = NULL;
-        obj->prev = obj->next = NULL;
-        obj->body = obj->line.b + XLINE_STATIC_SIZE;
-    }
+    __xcheck(obj == NULL);
+    obj->ref = 1;
+    obj->size = size;
+    obj->wpos = 0;
+    obj->rpos = 0;
+    obj->cb = NULL;
+    obj->ctx = NULL;
+    obj->prev = obj->next = NULL;
+    obj->body = obj->line.b + XLINE_STATIC_SIZE;
     return obj;
+XClean:
+    return NULL;
 }
 
 static inline xlmsg_ptr xl_maker()
 {
-    return xl_create(XLINE_DEFAULT_SIZE);
+    return xl_creator(XLINE_MAKER_SIZE);
 }
 
 static inline void xl_fixed(xlmsg_ptr msg)
@@ -546,10 +547,10 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
 
 #define xl_printf(xl) \
     do { \
-        char buf[XLINE_DEFAULT_SIZE] = {0}; \
+        char buf[XLINE_MAKER_SIZE] = {0}; \
         uint64_t pos = 0; \
-        xl_format((xl), "", 1, buf, &pos, XLINE_DEFAULT_SIZE); \
-        __xlogi("len=%lu >>>>----------->\n%s", pos, buf); \
+        xl_format((xl), "", 1, buf, &pos, XLINE_MAKER_SIZE); \
+        __xlogi("xline len[%lu] >>>>----------->\n%s", pos, buf); \
     }while(0)
 
 
