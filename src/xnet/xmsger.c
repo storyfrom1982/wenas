@@ -1002,6 +1002,9 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
             // 移除链接池
             avl_tree_remove(&msger->peers, channel);
             // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
+            channel->temp_cid[0] = channel->cid[0];
+            channel->temp_cid[1] = channel->cid[1];
+            channel->temp_cid[2] = channel->cid[2];
             *(uint16_t*)&channel->temp_cid[0] = channel->rcid;
 
             __xlogd("temp channels count = %lu cid=%u cid[%lu] cid[%lu] cid[%lu]\n", 

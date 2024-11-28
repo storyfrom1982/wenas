@@ -59,7 +59,7 @@ static void test(){
 
 static void memory_leak_cb(const char *leak_location, uint64_t pid)
 {
-    __xloge("[0x%X] %s\n", pid, leak_location);
+    __xlogi("[0x%X] %s\n", pid, leak_location);
 }
 
 void xlog_recorder_close()
