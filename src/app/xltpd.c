@@ -765,7 +765,7 @@ static void* task_loop(void *ptr)
 
     __xlogd("task_loop exit\n");
 
-Clean:
+XClean:
 
     return NULL;
 }
@@ -848,10 +848,10 @@ int main(int argc, char *argv[])
     // __xbreak(!__xapi->udp_make_ipaddr("127.0.0.1", 9256, &server->addr));
 
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
-    __xbreak(server->task_pipe == NULL);
+    __xcheck(server->task_pipe == NULL);
 
     server->task_pid = __xapi->process_create(task_loop, server);
-    __xbreak(server->task_pid == NULL);
+    __xcheck(server->task_pid == NULL);
     
     server->msger = xmsger_create(&server->listener, 0);
 
@@ -892,7 +892,7 @@ int main(int argc, char *argv[])
 
     xlog_recorder_close();
 
-Clean:
+XClean:
 
     __xlogi("exit\n");
 

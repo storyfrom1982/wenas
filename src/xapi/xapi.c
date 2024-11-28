@@ -343,18 +343,18 @@ static int udp_open(int ipv6)
     // __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
 
     if (ipv6){
-        __xbreak((sock = socket_udp_ipv6()) < 0);
+        __xcheck((sock = socket_udp_ipv6()) < 0);
     }else {
-        __xbreak((sock = socket_udp()) < 0);
+        __xcheck((sock = socket_udp()) < 0);
     }
-    __xbreak(socket_setreuseport(sock, opt) != 0);
-    __xbreak(socket_setreuseaddr(sock, opt) != 0);
-    __xbreak(socket_setnonblock(sock, opt) != 0);
+    __xcheck(socket_setreuseport(sock, opt) != 0);
+    __xcheck(socket_setreuseaddr(sock, opt) != 0);
+    __xcheck(socket_setnonblock(sock, opt) != 0);
 
 
     return sock;
 
-Clean:
+XClean:
     return -1;
 }
 
@@ -432,7 +432,10 @@ bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
 }
 
 bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
-    return socket_addr_to(addr, addr->addrlen, ip, port);
+    __xcheck(socket_addr_to((const struct socketaddr*)addr, addr->addrlen, ip, port) != 0);
+    return true;
+XClean:
+    return false;
 }
 
 bool udp_addr_is_ipv6(__xipaddr_ptr addr)
@@ -443,7 +446,7 @@ bool udp_addr_is_ipv6(__xipaddr_ptr addr)
 __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
 {
     __xipaddr_ptr ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
-    __xbreak(ipaddr == NULL);
+    __xcheck(ipaddr == NULL);
     if (ipv6){
         ipaddr->v6.sin6_family = AF_INET6;
         ipaddr->v6.sin6_port = htons(port);
@@ -457,7 +460,7 @@ __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
     }
     return ipaddr;
 
-Clean:
+XClean:
 
     if (ipaddr != NULL){
         free(ipaddr);
@@ -468,12 +471,12 @@ Clean:
 __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
     __xipaddr_ptr ipaddr = NULL;
-    __xbreak(ip == NULL);
+    __xcheck(ip == NULL);
     __xlogd("ip===%s port=%u\n", ip, port);
     ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
     memset(ipaddr, 0, sizeof(struct __xipaddr));
-    __xbreak(ipaddr == NULL);
-    __xbreak(socket_addr_from(ipaddr, &ipaddr->addrlen, ip, port) != 0);
+    __xcheck(ipaddr == NULL);
+    __xcheck(socket_addr_from(ipaddr, &ipaddr->addrlen, ip, port) != 0);
 
     char tmp[INET6_ADDRSTRLEN] = {0};
     uint16_t tport;
@@ -494,7 +497,7 @@ __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 
     return ipaddr;
 
-Clean:
+XClean:
 
     if (ipaddr != NULL){
         free(ipaddr);

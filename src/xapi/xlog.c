@@ -142,6 +142,10 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
                     (unsigned int)(millisecond % 1000), __xapi->process_self(), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
+    if (__XLOG_LEVEL_ERROR == level){
+        n += snprintf(text + n, __log_text_size - n, "<%s> ", strerror(errno));
+    }
+
     va_list args;
     va_start (args, fmt);
     n += vsnprintf(text + n, __log_text_size - n, fmt, args);
@@ -173,5 +177,9 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
     }else {
         fprintf(stdout, "%s", text);
         fflush(stdout);
+    }
+
+    if (__XLOG_LEVEL_ERROR == level){
+        exit(0);
     }
 }

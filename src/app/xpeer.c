@@ -348,7 +348,7 @@ static void* task_loop(void *ptr)
 
     __xlogd("task_loop exit\n");
 
-Clean:
+XClean:
 
     return NULL;
 }
@@ -574,8 +574,9 @@ int main(int argc, char *argv[])
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     xpeer_t *peer = (xpeer_t*)calloc(1, sizeof(struct xpeer));
-    __set_true(peer->runnig);
+    __xcheck(peer == NULL);
 
+    __set_true(peer->runnig);
     peer->channels.prev = &peer->channels;
     peer->channels.next = &peer->channels;
 
@@ -619,10 +620,10 @@ int main(int argc, char *argv[])
     // __xbreak(!__xapi->udp_host_to_addr("127.0.0.1", ntohs(server_addr.sin_port), &server->addr));
 
     peer->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
-    __xbreak(peer->task_pipe == NULL);
+    __xcheck(peer->task_pipe == NULL);
 
     peer->task_pid = __xapi->process_create(task_loop, peer);
-    __xbreak(peer->task_pid == NULL);
+    __xcheck(peer->task_pid == NULL);
     
     peer->msger = xmsger_create(&peer->listener, 1);
 
@@ -767,7 +768,7 @@ int main(int argc, char *argv[])
 
     xlog_recorder_close();
 
-Clean:
+XClean:
 
     __xlogi("exit\n");
 

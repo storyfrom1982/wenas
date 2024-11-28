@@ -144,13 +144,6 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
         do {} while(0)
 #endif
 
-#define __xbreak(condition) \
-    do { \
-        if ((condition)) { \
-            __xloge("ERROR: %s\n", #condition); \
-            goto Clean; \
-        } \
-    } while (0)
 
 #define __xcheck(condition) \
     do { \

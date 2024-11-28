@@ -191,7 +191,7 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
-    __xbreak(pipe == NULL);
+    __xcheck(pipe == NULL);
 
     if (slength(name) > 15){
         mcopy(pipe->name, name, 15);
@@ -211,10 +211,10 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
     }
 
     pipe->buf = (uint8_t*)malloc(pipe->len);
-    __xbreak(pipe->buf == NULL);
+    __xcheck(pipe->buf == NULL);
 
     pipe->mutex = __xapi->mutex_create();
-    __xbreak(pipe->mutex == NULL);
+    __xcheck(pipe->mutex == NULL);
 
     pipe->reader = pipe->writer = 0;
     pipe->breaking = false;
@@ -222,7 +222,7 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 
     return pipe;
 
-Clean:
+XClean:
 
     xpipe_free(&pipe);
 
@@ -294,7 +294,7 @@ Clean:
 
 //     return task;
 
-// Clean:
+// XClean:
 
 //     if (task){
 //         free(task);
