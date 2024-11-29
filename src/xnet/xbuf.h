@@ -62,8 +62,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
     // __xlogd("%s xpipe_write >>>>>--------------> enter\n", pipe->name);
 
-    while (__is_false(pipe->breaking) && pos < len) {
-
+    while (!pipe->breaking && pos < len) {
         pos += __xpipe_write(pipe, (uint8_t*)data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
@@ -71,7 +70,9 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             // 所以在阻塞之前，唤醒一次读线程
             __xapi->mutex_notify(pipe->mutex);
             __xapi->mutex_wait(pipe->mutex);
-            __xapi->mutex_unlock(pipe->mutex);
+            if (!pipe->breaking){
+                __xapi->mutex_unlock(pipe->mutex);
+            }
         }
     }
 
@@ -126,16 +127,17 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
         pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
 
-        if (pos != len){
+        if (!pipe->breaking && pos != len){
             __xapi->mutex_lock(pipe->mutex);
             // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
             __xapi->mutex_notify(pipe->mutex);
-            if (__is_false(pipe->breaking)){
+            if (!pipe->breaking){
                 __xapi->mutex_wait(pipe->mutex);
             }
-            __xapi->mutex_unlock(pipe->mutex);
-            if (__is_true(pipe->breaking)){
+            if (!pipe->breaking){
+                __xapi->mutex_unlock(pipe->mutex);
+            }else {
                 break;
             }
         }
@@ -174,8 +176,6 @@ static inline void xpipe_free(xpipe_ptr *pptr)
         if (pipe){
             xpipe_clear(pipe);
             if (pipe->mutex){
-                xpipe_break(pipe);
-                // 断开两次，确保没有其他线程阻塞在管道上
                 xpipe_break(pipe);
                 __xapi->mutex_free(pipe->mutex);
             }

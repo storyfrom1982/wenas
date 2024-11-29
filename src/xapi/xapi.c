@@ -5,34 +5,22 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include "uv.h"
+
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
 static uint64_t __unix_time(void)
 {
-#if defined(CLOCK_REALTIME)
-	struct timespec tp;
-	clock_gettime(CLOCK_REALTIME, &tp);
+	uv_timespec64_t tp;
+	uv_clock_gettime(UV_CLOCK_REALTIME, &tp);
 	return (uint64_t)tp.tv_sec * NANO_SECONDS + tp.tv_nsec;
-#else
-	// POSIX.1-2008 marks gettimeofday() as obsolete, recommending the use of clock_gettime(2) instead.
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (uint64_t)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
-#endif
 }
 
 ///@return nanoseconds(relative time)
 static uint64_t __unix_clock(void)
 {
-#if defined(CLOCK_MONOTONIC)
-	struct timespec tp;
-	clock_gettime(CLOCK_MONOTONIC, &tp);
+	uv_timespec64_t tp;
+	uv_clock_gettime(UV_CLOCK_MONOTONIC, &tp);
 	return (uint64_t)tp.tv_sec * NANO_SECONDS + tp.tv_nsec;
-#else
-	// POSIX.1-2008 marks gettimeofday() as obsolete, recommending the use of clock_gettime(2) instead.
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (uint64_t)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
-#endif
 }
 
 
@@ -51,11 +39,14 @@ static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
 
 static __xprocess_ptr __posix_thread_create(void*(*task_enter)(void*), void *ctx)
 {
-    pthread_t tid;
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    
-    int ret = pthread_create(&tid, &attr, task_enter, ctx);
+    // pthread_t tid;
+    // pthread_attr_t attr;
+    // pthread_attr_init(&attr);
+    // pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    
+    // int ret = pthread_create(&tid, &attr, task_enter, ctx);
+
+    uv_thread_t tid;
+    int ret = uv_thread_create(&tid, task_enter, ctx);
     if (ret == 0){
         return (__xprocess_ptr)tid;
     }
@@ -64,12 +55,14 @@ static __xprocess_ptr __posix_thread_create(void*(*task_enter)(void*), void *ctx
 
 static void __posix_thread_free(__xprocess_ptr pid)
 {
-    pthread_join((pthread_t)pid, NULL);
+    // pthread_join((pthread_t)pid, NULL);
+    uv_thread_join((uv_thread_t)pid);
 }
 
 static __xprocess_ptr __posix_thread_self()
 {
-    return (__xprocess_ptr)pthread_self();
+    // return (__xprocess_ptr)pthread_self();
+    return (__xprocess_ptr)uv_thread_self();
 }
 
 
@@ -78,85 +71,98 @@ static __xprocess_ptr __posix_thread_self()
 //////////////////////////////////////
 
 
-typedef struct posix_mutex {
-    pthread_cond_t cond[1];
-    pthread_mutex_t mutex[1];
-}*__posix_mutex_ptr;
+typedef struct xmutex {
+    // pthread_cond_t cond[1];
+    // pthread_mutex_t mutex[1];
+    uv_cond_t cond[1];
+    uv_mutex_t mutex[1];
+}*__xmutex_ptr;
 
 
 static __xmutex_ptr __posix_mutex_create()
 {
-    __posix_mutex_ptr ptr = (__posix_mutex_ptr)malloc(sizeof(struct posix_mutex));
-    assert(ptr);
-    __xlogd("__posix_mutex_create ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
-    int ret = pthread_mutex_init(ptr->mutex, NULL);
-    __xlogd("create mutex == 0x%X\n", ptr->mutex);
-    assert(ret == 0);
-    ret = pthread_cond_init(ptr->cond, NULL);
-    assert(ret == 0);
-    return (__xmutex_ptr)ptr;
+    __xmutex_ptr ptr = (__xmutex_ptr)malloc(sizeof(struct xmutex));
+    __xcheck(ptr == NULL);
+    int ret = uv_mutex_init(ptr->mutex);
+    __xcheck(ret != 0);
+    ret = uv_cond_init(ptr->cond);
+    __xcheck(ret != 0);
+    return ptr;
+
+XClean:
+    if (ptr){
+        free(ptr);
+    }
+    return NULL;
 }
 
 static void __posix_mutex_free(__xmutex_ptr ptr)
 {
-    int ret;
-    assert(ptr);
-    __xlogd("free mutex == 0x%X\n", ((__posix_mutex_ptr)ptr)->mutex);
-    ret = pthread_mutex_destroy(((__posix_mutex_ptr)ptr)->mutex);
-    assert(ret == 0);
-    ret = pthread_cond_destroy(((__posix_mutex_ptr)ptr)->cond);
-    assert(ret == 0);
-    __xlogd("__posix_mutex_free ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
+    __xcheck(ptr == NULL);
+    uv_mutex_destroy(ptr->mutex);
+    uv_cond_destroy(ptr->cond);
     free(ptr);
+XClean:
+    return;
 }
 
 static void __posix_mutex_lock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_mutex_lock(((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_mutex_lock(ptr->mutex);
+XClean:
+    return;
 }
 
 bool __posix_mutex_trylock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    return pthread_mutex_trylock(((__posix_mutex_ptr)ptr)->mutex) == 0;
+    __xcheck(ptr == NULL);
+    return uv_mutex_trylock(ptr->mutex) == 0;
+XClean:
+    return false;
 }
 
 static void __posix_mutex_notify(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_signal(((__posix_mutex_ptr)ptr)->cond);
+    __xcheck(ptr == NULL);
+    uv_cond_signal(ptr->cond);
+XClean:
+    return;
 }
 
 static void __posix_mutex_broadcast(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_broadcast(((__posix_mutex_ptr)ptr)->cond);
+    __xcheck(ptr == NULL);
+    uv_cond_broadcast(ptr->cond);
+XClean:
+    return;
 }
 
 static void __posix_mutex_wait(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_wait(((__posix_mutex_ptr)ptr)->cond, ((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_cond_wait(ptr->cond, ptr->mutex);
+XClean:
+    return;
 }
 
 static int __posix_mutex_timedwait(__xmutex_ptr ptr, uint64_t delay)
 {
-    assert(ptr);
-    struct timespec ts;
-    delay += __unix_time();
-    ts.tv_sec = delay / NANO_SECONDS;
-    ts.tv_nsec = delay % NANO_SECONDS;
-    if (pthread_cond_timedwait(((__posix_mutex_ptr)ptr)->cond, ((__posix_mutex_ptr)ptr)->mutex, &ts) == ETIMEDOUT){
+    __xcheck(ptr == NULL);
+    if (uv_cond_timedwait(ptr->cond, ptr->mutex, delay) == UV_ETIMEDOUT){
         return __XAPI_TIMEDOUT;
     }
     return 0;
+XClean:
+    return -1;
 }
 
 static void __posix_mutex_unlock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_mutex_unlock(((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_mutex_unlock(ptr->mutex);
+XClean:
+    return;
 }
 
 
@@ -308,17 +314,10 @@ static bool __ex_make_path(const char* path)
 
 
 struct __xipaddr {
-    // uint16_t family;
-    // uint16_t port;
-    // uint32_t ip;
-    // uint8_t zero[8];
-    // uint32_t keylen;
-    union
-    {
+    union{
         struct sockaddr_in v4;
         struct sockaddr_in6 v6;
     };
-    
     socklen_t addrlen;
 };
 
@@ -326,22 +325,6 @@ static int udp_open(int ipv6)
 {
     int sock;
     int opt = 1;
-    // int flags;
-    // __xbreak((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0);
-    // // opt = 1;
-    // // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVLOWAT, &opt, sizeof(opt)) != 0);
-    // opt = 1;
-    // __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0);
-    // __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0);
-    // // if (buf_size > 0){
-    // //     opt = buf_size;
-    // //     __xbreak(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) != 0);
-    // //     // opt = buf_size * 5;
-    // //     // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) != 0);
-    // // }
-    // flags = fcntl(sock, F_GETFL, 0);
-    // __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
-
     if (ipv6){
         __xcheck((sock = socket_udp_ipv6()) < 0);
     }else {
@@ -350,7 +333,6 @@ static int udp_open(int ipv6)
     __xcheck(socket_setreuseport(sock, opt) != 0);
     __xcheck(socket_setreuseaddr(sock, opt) != 0);
     __xcheck(socket_setnonblock(sock, opt) != 0);
-
 
     return sock;
 
@@ -404,38 +386,24 @@ static int udp_listen(int sock[2], uint64_t microseconds)
     return socket_select(sock[1] > sock[0] ? sock[1] + 1 : sock[0] + 1, &fds, NULL, NULL, &timer);
 }
 
-bool udp_addrinfo(char ip[__XAPI_IP_STR_LEN], const char *hostname) {
+int udp_addrinfo(char ip[__XAPI_IP_STR_LEN], const char *hostname) {
 
     int status;
     struct addrinfo *res = NULL;
-
     __xcheck((status = socket_getaddrinfo(hostname, NULL, NULL, &res)) != 0);
     __xcheck(socket_addr_to(res->ai_addr, res->ai_addrlen, ip, NULL) != 0);
-
     freeaddrinfo(res);
-    return true;
+    return 0;
 
 XClean:
-
     if (res){
         freeaddrinfo(res);
     }
-    return false;
+    return -1;
 }
 
-bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name) {
-    struct hostent *host_info = gethostbyname(name);
-    if (host_info != NULL && host_info->h_addr_list[0] != NULL) {
-        return inet_ntop(AF_INET, host_info->h_addr_list[0], ip_str, ip_str_len) != NULL;
-    }
-    return false;
-}
-
-bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
-    __xcheck(socket_addr_to((const struct socketaddr*)addr, addr->addrlen, ip, port) != 0);
-    return true;
-XClean:
-    return false;
+int udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
+    return socket_addr_to((const struct sockaddr*)addr, addr->addrlen, ip, port);
 }
 
 bool udp_addr_is_ipv6(__xipaddr_ptr addr)
@@ -461,7 +429,6 @@ __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
     return ipaddr;
 
 XClean:
-
     if (ipaddr != NULL){
         free(ipaddr);
     }
@@ -472,33 +439,13 @@ __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
     __xipaddr_ptr ipaddr = NULL;
     __xcheck(ip == NULL);
-    __xlogd("ip===%s port=%u\n", ip, port);
     ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
-    memset(ipaddr, 0, sizeof(struct __xipaddr));
     __xcheck(ipaddr == NULL);
-    __xcheck(socket_addr_from(ipaddr, &ipaddr->addrlen, ip, port) != 0);
-
-    char tmp[INET6_ADDRSTRLEN] = {0};
-    uint16_t tport;
-    socket_addr_to(ipaddr, ipaddr->addrlen, tmp, &tport);
-    __xlogd("ip===%s port=%u\n", tmp, tport);
-
-    // if (inet_pton(AF_INET, ip, &ipaddr->v4.sin_addr) == 1){
-    //     __xbreak(socket_addr_from_ipv4(ipaddr, ip, port) != 0);
-    //     ipaddr->addrlen = sizeof(struct sockaddr_in);
-
-    // }else if (inet_pton(AF_INET6, ip, &ipaddr->v6.sin6_addr) == 1){
-    //     __xbreak(socket_addr_from_ipv6(ipaddr, ip, port) != 0);
-    //     ipaddr->addrlen = sizeof(struct sockaddr_in6);
-
-    // }else {
-    //     goto Clean;
-    // }
-
+    memset(ipaddr, 0, sizeof(struct __xipaddr));
+    __xcheck(socket_addr_from((struct sockaddr_storage*)ipaddr, &ipaddr->addrlen, ip, port) != 0);
     return ipaddr;
 
 XClean:
-
     if (ipaddr != NULL){
         free(ipaddr);
     }
@@ -603,7 +550,6 @@ struct __xapi_enter posix_api_enter = {
     .udp_host_to_addr = udp_host_to_addr,
     .udp_addr_to_host = udp_addr_to_host,
     .udp_addr_is_ipv6 = udp_addr_is_ipv6,
-    .udp_hostbyname = udp_hostbyname,
     .udp_addrinfo = udp_addrinfo,
 
     .make_path = __ex_make_path,

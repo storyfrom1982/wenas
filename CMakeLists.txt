@@ -111,7 +111,9 @@ if(ENV_CHECK_BACKTRACE)
     list(APPEND kzx_sources src/xapi/backtrace.c)
 endif()
 
-list(APPEND kzx_inclides src/xapi/dep)
+list(APPEND kzx_inclides src/xapi/dep src/xapi/dep/libuv-1.49.2/include)
+
+add_subdirectory(src/xapi/dep/libuv-1.49.2)
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
@@ -119,7 +121,7 @@ function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     target_compile_options(${EXECUTABLE_NAME} PRIVATE ${kzx_cflags})
     target_include_directories(${EXECUTABLE_NAME} PRIVATE src ${kzx_inclides})
     target_link_directories(${EXECUTABLE_NAME} PRIVATE ${kzx_directories})
-    target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags})
+    target_link_libraries(${EXECUTABLE_NAME} ${kzx_ldflags} uv)
 endfunction(build_executable)
 
 function(build_library LIBRARY_NAME LIBRARY_SOURCES)
@@ -128,7 +130,7 @@ function(build_library LIBRARY_NAME LIBRARY_SOURCES)
     target_compile_options(${LIBRARY_NAME} PRIVATE ${kzx_cflags})
     target_include_directories(${LIBRARY_NAME} PRIVATE src ${kzx_inclides})
     target_link_directories(${LIBRARY_NAME} PRIVATE ${kzx_directories})
-    target_link_libraries(${LIBRARY_NAME} ${kzx_ldflags})
+    target_link_libraries(${LIBRARY_NAME} ${kzx_ldflags} uv)
 endfunction(build_library)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})

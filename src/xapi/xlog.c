@@ -13,6 +13,8 @@
 
 #include "xnet/xmalloc.h"
 
+#include "uv.h"
+
 #define __log_text_size			1024 * 8
 #define __log_file_size         1024 * 1024 * 64
 #define __log_path_max_len      256

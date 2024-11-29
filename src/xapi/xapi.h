@@ -21,10 +21,11 @@
 #define __XAPI_IP_STR_LEN           46
 
 
-typedef void* __xmutex_ptr;
+
 typedef void* __xprocess_ptr;
 typedef void* __xfile_ptr;
 
+typedef struct xmutex *__xmutex_ptr;
 typedef struct __xipaddr* __xipaddr_ptr;
 
 
@@ -68,10 +69,9 @@ typedef struct __xapi_enter {
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock[2], uint64_t microseconds);
-    bool (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
-    bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
+    int (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
+    int (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
     bool (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
-    bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
     __xipaddr_ptr (*udp_any_to_addr)(int ipv6, uint16_t port);
     __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
 
