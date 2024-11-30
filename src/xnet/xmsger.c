@@ -169,7 +169,7 @@ struct xmsger {
     __atom_size pos, len;
     xmsgercb_ptr callback;
     xpipe_ptr mpipe;
-    __xprocess_ptr mpid;
+    __xthread_ptr mpid;
     struct xchannellist send_list, recv_list;
 };
 
@@ -1589,7 +1589,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
     msger->mpipe = xpipe_create(sizeof(void*) * 1024, "SEND PIPE");
     __xcheck(msger->mpipe == NULL);
 
-    msger->mpid = __xapi->process_create(main_loop, msger);
+    msger->mpid = __xapi->thread_create(main_loop, msger);
     __xcheck(msger->mpid == NULL);
 
     __xlogd("xmsger_create exit\n");
@@ -1629,7 +1629,7 @@ void xmsger_free(xmsger_ptr *pptr)
 
         if (msger->mpid){
             __xlogd("xmsger_free main process\n");
-            __xapi->process_free(msger->mpid);
+            __xapi->thread_join(msger->mpid);
         }
 
         // channel free 会用到 rpipe，所以将 tree clear 提前

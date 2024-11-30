@@ -1,12 +1,13 @@
 #ifndef __XATOM_H__
 #define __XATOM_H__
 
-#include <time.h>
+// #include <time.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef uint64_t __atom_size;
-typedef uint64_t __atom_bool;
+typedef size_t __atom_size;
+typedef size_t __atom_bool;
 
 // Built-in Function: bool __sync_bool_compare_and_swap (type *ptr, type oldval, type newval, ...)
 // __int64 _InterlockedCompareExchange64_HLERelease(
@@ -37,8 +38,16 @@ typedef uint64_t __atom_bool;
 #   error "This OS is unsupported !"
 #endif
 
-#define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 1000L}}, NULL)
+// #define __atom_lock(x)			while(!__set_true(x)) nanosleep((const struct timespec[]){{0, 1000L}}, NULL)
+#define __atom_lock(x) \
+    do { \
+        __ATOM_TRY_LOCK: \
+        while (!__set_true(x)) \
+            goto __ATOM_TRY_LOCK; \
+    } while(0)
+
 #define __atom_try_lock(x)		__set_true(x)
 #define __atom_unlock(x)		__set_false(x)
+
 
 #endif

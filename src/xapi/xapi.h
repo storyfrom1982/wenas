@@ -1,13 +1,13 @@
 #ifndef __XAPI_H__
 #define __XAPI_H__
 
-#if !defined(__linux__) && !defined(__APPLE__)
-#error Not yet adapted to the environment
-#endif
+// #if !defined(__linux__) && !defined(__APPLE__)
+// #error Not yet adapted to the environment
+// #endif
 
 
-#include <stddef.h>
-#include <assert.h>
+// #include <stddef.h>
+// #include <assert.h>
 
 #include "xatom.h"
 
@@ -22,10 +22,9 @@
 
 
 
-typedef void* __xprocess_ptr;
-typedef void* __xfile_ptr;
-
-typedef struct xmutex *__xmutex_ptr;
+typedef int __xfile_t;
+typedef void* __xthread_ptr;
+typedef struct __xmutex* __xmutex_ptr;
 typedef struct __xipaddr* __xipaddr_ptr;
 
 
@@ -44,9 +43,9 @@ typedef struct __xapi_enter {
 ///// 并发任务
 ///////////////////////////////////////////////////////
 
-    __xprocess_ptr (*process_create)(void*(*task_enter)(void*), void *ctx);
-    void (*process_free)(__xprocess_ptr pid);
-    __xprocess_ptr (*process_self)();
+    __xthread_ptr (*thread_create)(void*(*task_enter)(void*), void *ctx);
+    void (*thread_join)(__xthread_ptr pid);
+    __xthread_ptr (*thread_self)();
 
     __xmutex_ptr (*mutex_create)();
     void (*mutex_free)(__xmutex_ptr mutex);
@@ -79,20 +78,22 @@ typedef struct __xapi_enter {
 ///// 文件存储
 ///////////////////////////////////////////////////////
 
-    bool (*make_path)(const char* path);
-    bool (*check_path)(const char* path);
-    bool (*check_file)(const char* path);
-    bool (*delete_path)(const char* path);
-    bool (*delete_file)(const char* path);
-    bool (*move_path)(const char* from, const char* to);
+    
+    int (*fs_isdir)(const char* path);
+    int (*fs_isfile)(const char* path);
+    int (*fs_mkdir)(const char* path);
+    int (*fs_rmdir)(const char* path);
+    int (*fs_mkpath)(const char* path);
+    int (*fs_remove)(const char* path);
+    int (*fs_rename)(const char* path, const char* to);
+    int (*fs_size)(const char* path);
 
-    __xfile_ptr (*fopen)(const char* path, const char* mode);
-    int (*fclose)(__xfile_ptr);
-    int64_t (*ftell)(__xfile_ptr);
-    int64_t (*fflush)(__xfile_ptr);
-    int64_t (*fwrite)(__xfile_ptr, void* data, uint64_t size);
-    int64_t (*fread)(__xfile_ptr, void* buf, uint64_t size);
-    int64_t (*fseek)(__xfile_ptr, int64_t offset, int32_t whence);
+    __xfile_t (*fs_open)(const char* path, int flags, int mode);
+    int (*fs_close)(__xfile_t);
+    int (*fs_write)(__xfile_t, void* data, unsigned int size);
+    int (*fs_read)(__xfile_t, void* buf, unsigned int size);
+    int64_t (*fs_tell)(__xfile_t);
+    int64_t (*fs_lseek)(__xfile_t, int64_t offset, int whence);
 
 ///////////////////////////////////////////////////////
 ///// 内存管理

@@ -71,7 +71,7 @@ typedef struct xpeer{
     xmsger_ptr msger;
 
     xpipe_ptr task_pipe;
-    __xprocess_ptr task_pid;
+    __xthread_ptr task_pid;
     struct xmsgercb listener;
     
     uint64_t msgid;
@@ -622,7 +622,7 @@ int main(int argc, char *argv[])
     peer->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xcheck(peer->task_pipe == NULL);
 
-    peer->task_pid = __xapi->process_create(task_loop, peer);
+    peer->task_pid = __xapi->thread_create(task_loop, peer);
     __xcheck(peer->task_pid == NULL);
     
     peer->msger = xmsger_create(&peer->listener, 1);
@@ -745,7 +745,7 @@ int main(int argc, char *argv[])
     }
 
     if (peer->task_pid){
-        __xapi->process_free(peer->task_pid);
+        __xapi->thread_join(peer->task_pid);
     }
 
     if (peer->task_pipe){

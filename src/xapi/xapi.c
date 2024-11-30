@@ -8,7 +8,7 @@
 #include "uv.h"
 
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
-static uint64_t __unix_time(void)
+static uint64_t __xtime(void)
 {
 	uv_timespec64_t tp;
 	uv_clock_gettime(UV_CLOCK_REALTIME, &tp);
@@ -16,7 +16,7 @@ static uint64_t __unix_time(void)
 }
 
 ///@return nanoseconds(relative time)
-static uint64_t __unix_clock(void)
+static uint64_t __xclock(void)
 {
 	uv_timespec64_t tp;
 	uv_clock_gettime(UV_CLOCK_MONOTONIC, &tp);
@@ -24,7 +24,7 @@ static uint64_t __unix_clock(void)
 }
 
 
-static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
+static uint64_t __ex_strftime(char *buf, size_t size, uint64_t timepoint)
 {
 	time_t sec = (time_t)timepoint;
     struct tm t;
@@ -37,32 +37,24 @@ static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
 //////////////////////////////////////
 //////////////////////////////////////
 
-static __xprocess_ptr __posix_thread_create(void*(*task_enter)(void*), void *ctx)
+static __xthread_ptr __xthread_create(void*(*task_enter)(void*), void *ctx)
 {
-    // pthread_t tid;
-    // pthread_attr_t attr;
-    // pthread_attr_init(&attr);
-    // pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    
-    // int ret = pthread_create(&tid, &attr, task_enter, ctx);
-
     uv_thread_t tid;
     int ret = uv_thread_create(&tid, task_enter, ctx);
     if (ret == 0){
-        return (__xprocess_ptr)tid;
+        return (__xthread_ptr)tid;
     }
     return NULL;
 }
 
-static void __posix_thread_free(__xprocess_ptr pid)
+static void __xthread_join(__xthread_ptr tid)
 {
-    // pthread_join((pthread_t)pid, NULL);
-    uv_thread_join((uv_thread_t)pid);
+    uv_thread_join((uv_thread_t)tid);
 }
 
-static __xprocess_ptr __posix_thread_self()
+static __xthread_ptr __xthread_self()
 {
-    // return (__xprocess_ptr)pthread_self();
-    return (__xprocess_ptr)uv_thread_self();
+    return (__xthread_ptr)uv_thread_self();
 }
 
 
@@ -71,17 +63,15 @@ static __xprocess_ptr __posix_thread_self()
 //////////////////////////////////////
 
 
-typedef struct xmutex {
-    // pthread_cond_t cond[1];
-    // pthread_mutex_t mutex[1];
+typedef struct __xmutex {
     uv_cond_t cond[1];
     uv_mutex_t mutex[1];
 }*__xmutex_ptr;
 
 
-static __xmutex_ptr __posix_mutex_create()
+static __xmutex_ptr __xmutex_create()
 {
-    __xmutex_ptr ptr = (__xmutex_ptr)malloc(sizeof(struct xmutex));
+    __xmutex_ptr ptr = (__xmutex_ptr)malloc(sizeof(struct __xmutex));
     __xcheck(ptr == NULL);
     int ret = uv_mutex_init(ptr->mutex);
     __xcheck(ret != 0);
@@ -96,7 +86,7 @@ XClean:
     return NULL;
 }
 
-static void __posix_mutex_free(__xmutex_ptr ptr)
+static void __xmutex_free(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_mutex_destroy(ptr->mutex);
@@ -106,7 +96,7 @@ XClean:
     return;
 }
 
-static void __posix_mutex_lock(__xmutex_ptr ptr)
+static void __xmutex_lock(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_mutex_lock(ptr->mutex);
@@ -114,7 +104,7 @@ XClean:
     return;
 }
 
-bool __posix_mutex_trylock(__xmutex_ptr ptr)
+bool __xmutex_trylock(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     return uv_mutex_trylock(ptr->mutex) == 0;
@@ -122,7 +112,7 @@ XClean:
     return false;
 }
 
-static void __posix_mutex_notify(__xmutex_ptr ptr)
+static void __xmutex_notify(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_cond_signal(ptr->cond);
@@ -130,7 +120,7 @@ XClean:
     return;
 }
 
-static void __posix_mutex_broadcast(__xmutex_ptr ptr)
+static void __xmutex_broadcast(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_cond_broadcast(ptr->cond);
@@ -138,7 +128,7 @@ XClean:
     return;
 }
 
-static void __posix_mutex_wait(__xmutex_ptr ptr)
+static void __xmutex_wait(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_cond_wait(ptr->cond, ptr->mutex);
@@ -146,7 +136,7 @@ XClean:
     return;
 }
 
-static int __posix_mutex_timedwait(__xmutex_ptr ptr, uint64_t delay)
+static int __xmutex_timedwait(__xmutex_ptr ptr, uint64_t delay)
 {
     __xcheck(ptr == NULL);
     if (uv_cond_timedwait(ptr->cond, ptr->mutex, delay) == UV_ETIMEDOUT){
@@ -157,7 +147,7 @@ XClean:
     return -1;
 }
 
-static void __posix_mutex_unlock(__xmutex_ptr ptr)
+static void __xmutex_unlock(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     uv_mutex_unlock(ptr->mutex);
@@ -173,110 +163,124 @@ XClean:
 #include <sys/stat.h>
 
 
-static __xfile_ptr __ex_fopen(const char* path, const char* mode)
+static __xfile_t __fs_open(const char* path, int flags, int mode)
 {
-	return fopen(path, mode);
+    uv_fs_t open_req;
+    //flags UV_FS_O_WRONLY | UV_FS_O_APPEND, UV_FS_O_RDWR | UV_FS_O_CREAT
+    //mode S_IWUSR | S_IRUSR
+    __xfile_t fd = uv_fs_open(NULL, &open_req, path, flags, mode, NULL);
+    uv_fs_req_cleanup(&open_req);
+    return fd;
 }
 
-static int __ex_fclose(__xfile_ptr fp)
+static int __fs_close(__xfile_t fd)
 {
-	return fclose((FILE*)fp) == 0 ? true : false;
+    uv_fs_t close_req;
+    int r = uv_fs_close(NULL, &close_req, fd, NULL);
+    uv_fs_req_cleanup(&close_req);
+    return r;
 }
 
-static int64_t __ex_ftell(__xfile_ptr fp)
+static int __fs_write(__xfile_t fd, void *data, unsigned int size)
 {
-	return ftello((FILE*)fp);
+    uv_fs_t write_req;
+    uv_buf_t iov = uv_buf_init(data, size);
+    int r = uv_fs_write(NULL, &write_req, fd, &iov, 1, -1, NULL);
+    uv_fs_req_cleanup(&write_req);
+    return r;
 }
 
-static int64_t __ex_fflush(__xfile_ptr fp)
+static int __fs_read(__xfile_t fd, void *buf, unsigned int size)
 {
-	return fflush((FILE*)fp);
+    uv_fs_t read_req;
+    uv_buf_t iov = uv_buf_init(buf, size);
+    int r = uv_fs_read(NULL, &read_req, fd, &iov, 1, -1, NULL);
+    uv_fs_req_cleanup(&read_req);
+    return r;
 }
 
-static int64_t __ex_fwrite(__xfile_ptr fp, void *data, uint64_t size)
+static int64_t __fs_tell(__xfile_t fd)
 {
-	return fwrite(data, 1, size, (FILE*)fp);
+    return lseek(fd, 0, SEEK_CUR);
 }
 
-static int64_t __ex_fread(__xfile_ptr fp, void *buf, uint64_t size)
+static int64_t __fs_lseek(__xfile_t fd, int64_t offset, int32_t whence)
 {
-	return fread(buf, 1, size, (FILE*)fp);
+    return lseek(fd, offset, SEEK_SET);
 }
 
-static int64_t __ex_fseek(__xfile_ptr fp, int64_t offset, int32_t whence)
+static uint64_t __fs_size(const char* filename)
 {
-	return fseeko((FILE*)fp, offset, whence);
+    uv_fs_t stat_req;
+    uint64_t size = 0;
+    int r = uv_fs_stat(NULL, &stat_req, filename, NULL);
+    if (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFREG){
+        size = ((uv_stat_t*)stat_req.ptr)->st_size;
+    }
+    uv_fs_req_cleanup(&stat_req);
+    return size;
 }
 
-
-/*** The following code is referencing: https://github.com/ireader/sdk.git ***/
-
-static bool __ex_check_file(const char* path)
+static int __fs_isfile(const char* filepath)
 {
-	struct stat info;
-	return (stat(path, &info)==0 && (info.st_mode&S_IFREG)) ? true : false;
+    uv_fs_t stat_req;
+    int r = uv_fs_stat(NULL, &stat_req, filepath, NULL);
+    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFREG);
+    uv_fs_req_cleanup(&stat_req);
+    return r;
 }
 
-/// get file size in bytes
-/// return file size
-static uint64_t __ex_file_size(const char* filename)
+static int __fs_isdir(const char* path)
 {
-	struct stat st;
-	if (0 == stat(filename, &st) && (st.st_mode & S_IFREG))
-		return st.st_size;
-	return -1;
+    uv_fs_t stat_req;
+    int r = uv_fs_stat(NULL, &stat_req, path, NULL);
+    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFDIR);
+    uv_fs_req_cleanup(&stat_req);
+    return r;
 }
 
-static bool __ex_check_path(const char* path)
+static int __fs_mkdir(const char* path)
 {
-	struct stat info;
-	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
+    uv_fs_t mkdir_req;
+    int r = uv_fs_mkdir(NULL, &mkdir_req, path, 0755, NULL);
+    uv_fs_req_cleanup(&mkdir_req);
+    return r;
 }
 
-static bool __ex_mkdir(const char* path)
+static int __fs_rmdir(const char* path)
 {
-	int r = mkdir(path, 0777);
-	return 0 == r ? true : false;
+    uv_fs_t rmdir_req;
+    int r = uv_fs_rmdir(NULL, &rmdir_req, path, NULL);
+    uv_fs_req_cleanup(&rmdir_req);
+    return r;
 }
 
-static bool __ex_delete_path(const char* path)
+static int __fs_remove(const char* path)
 {
-	int r = rmdir(path);
-	return 0 == r ? true : false;
+    uv_fs_t req;
+    int r = uv_fs_unlink(NULL, &req, path, NULL);
+    uv_fs_req_cleanup(&req);
+    return r;
 }
 
-static bool __ex_realpath(const char* path, char resolved_path[PATH_MAX])
+static int __fs_rename(const char* path, const char* to)
 {
-	char* p = realpath(path, resolved_path);
-	return p ? true : false;
+    uv_fs_t rename_req;
+    int r = uv_fs_rename(NULL, &rename_req, path, to, NULL);
+    uv_fs_req_cleanup(&rename_req);
+    return r;
 }
 
-/// delete a name and possibly the file it refers to
-/// 0-ok, other-error
-static bool __ex_delete_file(const char* path)
-{
-	int r = remove(path);
-	return 0 == r ? true : false;
-}
-
-/// change the name or location of a file
-/// 0-ok, other-error
-static bool __ex_move_path(const char* from, const char* to)
-{
-	int r = rename(from, to);
-	return 0 == r ? true : false;
-}
-
-static bool __ex_make_path(const char* path)
+static int __fs_mkpath(const char* path)
 {
     if (path == NULL || path[0] == '\0'){
-        return false;
+        return -1;
     }
 
     bool ret = true;
     uint64_t len = strlen(path);
 
-    if (!__ex_check_path(path)){
+    if (!__fs_isdir(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -285,17 +289,17 @@ static bool __ex_make_path(const char* path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!__ex_check_path(buf)){
-                    ret = __ex_mkdir(buf);
-                    if (!ret){
+                if (!__fs_isdir(buf)){
+                    ret = __fs_mkdir(buf);
+                    if (ret != 0){
                         break;
                     }
                 }
                 *p = '/';
             }
         }
-        if (ret){
-            ret = __ex_mkdir(buf);
+        if (ret == 0){
+            ret = __fs_mkdir(buf);
         }
     }
 
@@ -360,7 +364,7 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 #ifdef __XDEBUG__
     static uint64_t send_number = 0, lost_number = 0;
     send_number++;
-    uint64_t randtime = __unix_clock() / 1000000ULL;
+    uint64_t randtime = __xclock() / 1000000ULL;
     if ((send_number & 0x03) == (randtime & 0x03)){
         __xlogd("lost pack ...........\n");
         return size;
@@ -520,24 +524,24 @@ static int __ex_dladdr(const void* addr, void *buf, size_t size)
 
 struct __xapi_enter posix_api_enter = {
 
-    .time = __unix_time,
-    .clock = __unix_clock,
-    .strftime = __unix_strftime,
+    .time = __xtime,
+    .clock = __xclock,
+    .strftime = __ex_strftime,
     .snprintf = snprintf,
 
-    .process_create = __posix_thread_create,
-    .process_free = __posix_thread_free,
-    .process_self = __posix_thread_self,
+    .thread_create = __xthread_create,
+    .thread_join = __xthread_join,
+    .thread_self = __xthread_self,
 
-    .mutex_create = __posix_mutex_create,
-    .mutex_free = __posix_mutex_free,
-    .mutex_lock = __posix_mutex_lock,
-    .mutex_trylock = __posix_mutex_trylock,
-    .mutex_unlock = __posix_mutex_unlock,
-    .mutex_wait = __posix_mutex_wait,
-    .mutex_timedwait = __posix_mutex_timedwait,
-    .mutex_notify = __posix_mutex_notify,
-    .mutex_broadcast = __posix_mutex_broadcast,
+    .mutex_create = __xmutex_create,
+    .mutex_free = __xmutex_free,
+    .mutex_lock = __xmutex_lock,
+    .mutex_trylock = __xmutex_trylock,
+    .mutex_unlock = __xmutex_unlock,
+    .mutex_wait = __xmutex_wait,
+    .mutex_timedwait = __xmutex_timedwait,
+    .mutex_notify = __xmutex_notify,
+    .mutex_broadcast = __xmutex_broadcast,
 
     .udp_open = udp_open,
     .udp_close = udp_close,
@@ -552,20 +556,19 @@ struct __xapi_enter posix_api_enter = {
     .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_addrinfo = udp_addrinfo,
 
-    .make_path = __ex_make_path,
-    .check_path = __ex_check_path,
-    .delete_path = __ex_delete_path,
-    .move_path = __ex_move_path,
-    .check_file = __ex_check_file,
-    .delete_file = __ex_delete_file,
+    .fs_mkpath = __fs_mkpath,
+    .fs_isdir = __fs_isdir,
+    .fs_rmdir = __fs_rmdir,
+    .fs_rename = __fs_rename,
+    .fs_isfile = __fs_isfile,
+    .fs_remove = __fs_remove,
 
-    .fopen = __ex_fopen,
-    .fclose = __ex_fclose,
-    .ftell = __ex_ftell,
-    .fflush = __ex_fflush,
-    .fwrite = __ex_fwrite,
-    .fread = __ex_fread,
-    .fseek = __ex_fseek,
+    .fs_open = __fs_open,
+    .fs_close = __fs_close,
+    .fs_tell = __fs_tell,
+    .fs_write = __fs_write,
+    .fs_read = __fs_read,
+    .fs_lseek = __fs_lseek,
     
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,

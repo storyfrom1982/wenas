@@ -317,7 +317,7 @@ typedef struct xltpd{
     xserver_t ring;
     xmsger_ptr msger;
     xpipe_ptr task_pipe;
-    __xprocess_ptr task_pid;
+    __xthread_ptr task_pid;
     struct xmsgercb listener;
     uuid_list_t uuid_table;
     uint64_t task_count;
@@ -850,7 +850,7 @@ int main(int argc, char *argv[])
     server->task_pipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xcheck(server->task_pipe == NULL);
 
-    server->task_pid = __xapi->process_create(task_loop, server);
+    server->task_pid = __xapi->thread_create(task_loop, server);
     __xcheck(server->task_pid == NULL);
     
     server->msger = xmsger_create(&server->listener, 0);
@@ -872,7 +872,7 @@ int main(int argc, char *argv[])
     }
 
     if (server->task_pid){
-        __xapi->process_free(server->task_pid);
+        __xapi->thread_join(server->task_pid);
     }
 
     if (server->task_pipe){
