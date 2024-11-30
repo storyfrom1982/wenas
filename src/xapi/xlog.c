@@ -102,7 +102,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
     n = snprintf(gloger->log1, __log_path_max_len - 1, "%s/1.log", path);
     gloger->log0[n] = '\0';
 
-    gloger->fp = __xapi->fopen(gloger->log0, "a+t");
+    gloger->fp = __xapi->fopen(gloger->log0, "a+b");
     __xcheck(gloger->fp == NULL);
 
     __xlogi(">>>>-------------->\n");
