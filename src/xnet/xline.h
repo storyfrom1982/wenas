@@ -14,11 +14,11 @@ enum {
 };
 
 //xline 静态分配的最大长度（ 64bit 数的长度为 8 字节，加 1 字节头部标志位 ）
-#define XLINE_STATIC_SIZE      9
+#define XLINE_SIZE          9
 
 
 typedef struct xline {
-    uint8_t b[XLINE_STATIC_SIZE];
+    uint8_t b[XLINE_SIZE];
 }xline_t;
 
 typedef xline_t* xline_ptr;
@@ -101,7 +101,7 @@ static inline double __xl_b2float(xl_ptr l)
 #define __xl_b2i(l)                 (__xl_b2n(l, int64_t))
 #define __xl_b2u(l)                 (__xl_b2n(l, uint64_t))
 #define __xl_b2f(l)                 (__xl_b2float(l))
-#define __xl_b2o(l)                 ((void*)&(l)->b[XLINE_STATIC_SIZE])
+#define __xl_b2o(l)                 ((void*)&(l)->b[XLINE_SIZE])
 
 #define __xl_typeis_int(l)          ((l)->b[0] == XLINE_TYPE_INT)
 #define __xl_typeis_uint(l)         ((l)->b[0] == XLINE_TYPE_UINT)
@@ -114,7 +114,7 @@ static inline double __xl_b2float(xl_ptr l)
 
 #define __xl_sizeof_head(l)         (__xl_typeis_obj(l) ? XLINE_SIZE : 1)
 #define __xl_sizeof_body(l)         (__xl_typeis_obj(l) ? __xl_b2u((l)) : 8)
-#define __xl_sizeof_line(l)         (__xl_typeis_obj(l) ? __xl_b2u((l)) + XLINE_STATIC_SIZE : XLINE_STATIC_SIZE)
+#define __xl_sizeof_line(l)         (__xl_typeis_obj(l) ? __xl_b2u((l)) + XLINE_SIZE : XLINE_SIZE)
 
 
 // #define XLINE_MAKER_SIZE            (1024 * 16)
@@ -125,25 +125,25 @@ static inline double __xl_b2float(xl_ptr l)
 #define XLMSG_FLAG_CONNECT          0x02
 #define XLMSG_FLAG_DISCONNECT       0x04
 
-typedef struct xlmsg {
+typedef struct xlinekv {
     uint8_t flag;
     __atom_size ref;
     void *cb;
     struct xchanne *channel;
     struct xchannel_ctx *ctx;
-    struct xlmsg *prev, *next;
+    struct xlinekv *prev, *next;
     uint64_t wpos, spos, rpos, range, size;
     uint8_t *key;
-    uint8_t *body;
-    xline_t line;
-}xlmsg_t;
+    uint8_t *data;
+    xline_t head;
+}xlinekv_t;
 
-typedef xlmsg_t* xlmsg_ptr;
+typedef xlinekv_t* xlmsg_ptr;
 
 
 static inline xlmsg_ptr xl_creator(uint64_t size)
 {
-    xlmsg_ptr obj = (xlmsg_ptr)malloc(sizeof(xlmsg_t) + XLINE_STATIC_SIZE + size);
+    xlmsg_ptr obj = (xlmsg_ptr)malloc(sizeof(xlinekv_t) + XLINE_SIZE + size);
     __xcheck(obj == NULL);
     obj->ref = 1;
     obj->size = size;
@@ -152,7 +152,7 @@ static inline xlmsg_ptr xl_creator(uint64_t size)
     obj->cb = NULL;
     obj->ctx = NULL;
     obj->prev = obj->next = NULL;
-    obj->body = obj->line.b + XLINE_STATIC_SIZE;
+    obj->data = obj->head.b + XLINE_SIZE;
     return obj;
 XClean:
     return NULL;
@@ -165,7 +165,7 @@ static inline xlmsg_ptr xl_maker()
 
 static inline void xl_fixed(xlmsg_ptr msg)
 {
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
 }
 
 static inline void xl_free(xlmsg_ptr msg)
@@ -175,50 +175,50 @@ static inline void xl_free(xlmsg_ptr msg)
     }
 }
 
-static inline uint64_t xl_hold_obj(xlmsg_ptr msg, const char *key)
+static inline uint64_t xl_obj_begin(xlmsg_ptr msg, const char *key)
 {
-    msg->key = msg->body + msg->wpos;
+    msg->key = msg->data + msg->wpos;
     msg->key[0] = slength(key) + 1;
     mcopy(msg->key + 1, key, msg->key[0]);
-    msg->wpos += (msg->key[0] + 1 + XLINE_STATIC_SIZE);
+    msg->wpos += (msg->key[0] + 1 + XLINE_SIZE);
     // obj 的 val 是一个 xline，xline 有 9 个字节的头
     // wpos 指向 val 里面的第一个元素的 key，所以要跳过 xline 头的 9 个字节
     // 返回的 pos 指向 xline 的头，因为 save 的时候，要更新 xline 的长度
-    return msg->wpos - XLINE_STATIC_SIZE;
+    return msg->wpos - XLINE_SIZE;
 }
 
-static inline void xl_fixed_obj(xlmsg_ptr msg, uint64_t pos)
+static inline void xl_obj_end(xlmsg_ptr msg, uint64_t pos)
 {
-    uint64_t len = msg->wpos - pos - XLINE_STATIC_SIZE;
-    *((xline_ptr)(msg->body + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
+    uint64_t len = msg->wpos - pos - XLINE_SIZE;
+    *((xline_ptr)(msg->data + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
 }
 
-static inline uint64_t xl_hold_list(xlmsg_ptr msg, const char *key)
+static inline uint64_t xl_list_begin(xlmsg_ptr msg, const char *key)
 {
-    return xl_hold_obj(msg, key);
+    return xl_obj_begin(msg, key);
 }
 
-static inline void xl_fixed_list(xlmsg_ptr msg, uint64_t pos)
+static inline void xl_list_end(xlmsg_ptr msg, uint64_t pos)
 {
-    uint64_t len = msg->wpos - pos - XLINE_STATIC_SIZE;
-    *((xline_ptr)(msg->body + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
+    uint64_t len = msg->wpos - pos - XLINE_SIZE;
+    *((xline_ptr)(msg->data + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
 }
 
-static inline uint64_t xl_list_hold_obj(xlmsg_ptr msg)
+static inline uint64_t xl_list_obj_begin(xlmsg_ptr msg)
 {
-    msg->wpos += XLINE_STATIC_SIZE;
-    return msg->wpos - XLINE_STATIC_SIZE;
+    msg->wpos += XLINE_SIZE;
+    return msg->wpos - XLINE_SIZE;
 }
 
-static inline void xl_list_fixed_obj(xlmsg_ptr msg, uint64_t pos)
+static inline void xl_list_obj_end(xlmsg_ptr msg, uint64_t pos)
 {
-    return xl_fixed_obj(msg, pos);
+    return xl_obj_end(msg, pos);
 }
 
 #define __xl_fill_key(msg, key, keylen) \
     do { \
         if (keylen > 253) keylen = 253; \
-        msg->key = msg->body + msg->wpos; \
+        msg->key = msg->data + msg->wpos; \
         msg->key[0] = keylen + 1; \
         mcopy(msg->key + 1, key, keylen); \
         *(msg->key + msg->key[0]) = '\0'; \
@@ -228,11 +228,11 @@ static inline void xl_list_fixed_obj(xlmsg_ptr msg, uint64_t pos)
 #if 1
 #define __xl_realloc(msg, msgpptr, keylen, vallen) \
     do { \
-        uint64_t newlen = XLINE_STATIC_SIZE + (msg->size * 2) + (keylen + 2 + XLINE_STATIC_SIZE + vallen); \
-        msg = (xlmsg_t*)malloc(sizeof(xlmsg_t) + newlen); \
+        uint64_t newlen = (msg->size * 2) + (keylen + 2 + XLINE_SIZE + vallen); \
+        msg = (xlinekv_t*)malloc(sizeof(xlinekv_t) + newlen); \
         __xcheck(msg == NULL); \
-        mcopy(msg, (*msgpptr), sizeof(xlmsg_t) + (*msgpptr)->wpos); \
-        msg->body = msg->line.b + XLINE_STATIC_SIZE; \
+        mcopy(msg, (*msgpptr), sizeof(xlinekv_t) + (*msgpptr)->wpos); \
+        msg->data = msg->head.b + XLINE_SIZE; \
         msg->size = newlen; \
         free((*msgpptr)); \
         *msgpptr = msg; \
@@ -242,142 +242,142 @@ static inline void xl_list_fixed_obj(xlmsg_ptr msg, uint64_t pos)
     do {}while(0)
 #endif
 
-static inline uint64_t xl_add_word(xlmsg_t **msgpptr, const char *key, const char *word)
+static inline uint64_t xl_add_word(xlinekv_t **msgpptr, const char *key, const char *word)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
     uint64_t wordlen = slength(word) + 1;
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE + wordlen)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE + wordlen)){
         __xl_realloc(msg, msgpptr, keylen, wordlen);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_n2b(wordlen, XLINE_TYPE_STR);
-    msg->wpos += XLINE_STATIC_SIZE;
-    mcopy(msg->body + msg->wpos, word, wordlen);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_n2b(wordlen, XLINE_TYPE_STR);
+    msg->wpos += XLINE_SIZE;
+    mcopy(msg->data + msg->wpos, word, wordlen);
     msg->wpos += wordlen;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_str(xlmsg_t **msgpptr, const char *key, const char *str, size_t len)
+static inline uint64_t xl_add_str(xlinekv_t **msgpptr, const char *key, const char *str, size_t len)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE + len)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE + len)){
         __xl_realloc(msg, msgpptr, keylen, len);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_n2b(len, XLINE_TYPE_STR);
-    msg->wpos += XLINE_STATIC_SIZE;
-    mcopy(msg->body + msg->wpos, str, len);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_n2b(len, XLINE_TYPE_STR);
+    msg->wpos += XLINE_SIZE;
+    mcopy(msg->data + msg->wpos, str, len);
     msg->wpos += len;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_bin(xlmsg_t **msgpptr, const char *key, const void *bin, uint64_t size)
+static inline uint64_t xl_add_bin(xlinekv_t **msgpptr, const char *key, const void *bin, uint64_t size)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE + size)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE + size)){
         __xl_realloc(msg, msgpptr, keylen, size);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_n2b(size, XLINE_TYPE_BIN);
-    msg->wpos += XLINE_STATIC_SIZE;
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_n2b(size, XLINE_TYPE_BIN);
+    msg->wpos += XLINE_SIZE;
     if (bin != NULL){
-        mcopy(msg->body + msg->wpos, bin, size);
+        mcopy(msg->data + msg->wpos, bin, size);
     }
     msg->wpos += size;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_obj(xlmsg_t **msgpptr, const char *key, xline_ptr xl)
+static inline uint64_t xl_add_obj(xlinekv_t **msgpptr, const char *key, xline_ptr xl)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
     uint64_t size = __xl_sizeof_line(xl);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE + size)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + size)){
         __xl_realloc(msg, msgpptr, keylen, size);
     }
     __xl_fill_key(msg, key, keylen);
     if (xl != NULL){
-        mcopy(msg->body + msg->wpos, xl->b, size);
+        mcopy(msg->data + msg->wpos, xl->b, size);
     }
     msg->wpos += size;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_int(xlmsg_t **msgpptr, const char *key, int64_t i64)
+static inline uint64_t xl_add_int(xlinekv_t **msgpptr, const char *key, int64_t i64)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE)){
         __xl_realloc(msg, msgpptr, keylen, 0);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_i2b(i64);
-    msg->wpos += XLINE_STATIC_SIZE;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_i2b(i64);
+    msg->wpos += XLINE_SIZE;
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_uint(xlmsg_t **msgpptr, const char *key, uint64_t u64)
+static inline uint64_t xl_add_uint(xlinekv_t **msgpptr, const char *key, uint64_t u64)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE)){
         __xl_realloc(msg, msgpptr, keylen, 0);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_u2b(u64);
-    msg->wpos += XLINE_STATIC_SIZE;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_u2b(u64);
+    msg->wpos += XLINE_SIZE;
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_float(xlmsg_t **msgpptr, const char *key, double f64)
+static inline uint64_t xl_add_float(xlinekv_t **msgpptr, const char *key, double f64)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE)){
         __xl_realloc(msg, msgpptr, keylen, 0);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_f2b(f64);
-    msg->wpos += XLINE_STATIC_SIZE;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_f2b(f64);
+    msg->wpos += XLINE_SIZE;
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
 }
 
-static inline uint64_t xl_add_ptr(xlmsg_t **msgpptr, const char *key, void *ptr)
+static inline uint64_t xl_add_ptr(xlinekv_t **msgpptr, const char *key, void *ptr)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t u64 = (uint64_t)(ptr);
     uint64_t keylen = slength(key);
-    if ((msg->size - msg->wpos) < (keylen + 2 + XLINE_STATIC_SIZE)){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < (keylen + 2 + XLINE_SIZE)){
         __xl_realloc(msg, msgpptr, keylen, 0);
     }
     __xl_fill_key(msg, key, keylen);
-    *((xline_ptr)(msg->body + msg->wpos)) = __xl_u2b(u64);
-    msg->wpos += XLINE_STATIC_SIZE;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
+    *((xline_ptr)(msg->data + msg->wpos)) = __xl_u2b(u64);
+    msg->wpos += XLINE_SIZE;
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_OBJ);
     return msg->wpos;
 XClean:
     return EENDED;
@@ -386,10 +386,10 @@ XClean:
 static inline xline_ptr xl_next(xlmsg_ptr msg)
 {
     if (msg->rpos < msg->wpos){
-        msg->key = msg->body + msg->rpos;
+        msg->key = msg->data + msg->rpos;
         msg->rpos += (msg->key[0] + 1);
         msg->key++;
-        xline_ptr val = (xline_ptr)(msg->body + msg->rpos);
+        xline_ptr val = (xline_ptr)(msg->data + msg->rpos);
         msg->rpos += __xl_sizeof_line(val);
         return val;
     }
@@ -402,9 +402,9 @@ static inline xline_ptr xl_find(xlmsg_ptr msg, const char *key)
     uint64_t rpos = msg->rpos;
 
     while (msg->rpos < msg->wpos) {
-        msg->key = msg->body + msg->rpos;
+        msg->key = msg->data + msg->rpos;
         msg->rpos += (msg->key[0] + 1);
-        val = (xline_ptr)(msg->body + msg->rpos);
+        val = (xline_ptr)(msg->data + msg->rpos);
         msg->rpos += __xl_sizeof_line(val);
         if (slength(key) + 1 == msg->key[0]
             && mcompare(key, msg->key + 1, msg->key[0]) == 0){
@@ -416,9 +416,9 @@ static inline xline_ptr xl_find(xlmsg_ptr msg, const char *key)
     msg->rpos = 0;
 
     while (msg->rpos < rpos) {
-        msg->key = msg->body + msg->rpos;
+        msg->key = msg->data + msg->rpos;
         msg->rpos += (msg->key[0] + 1);
-        val = (xline_ptr)(msg->body + msg->rpos);
+        val = (xline_ptr)(msg->data + msg->rpos);
         msg->rpos += __xl_sizeof_line(val);
         if (slength(key) + 1 == msg->key[0]
             && mcompare(key, msg->key + 1, msg->key[0]) == 0){
@@ -475,18 +475,18 @@ static inline void* xl_find_ptr(xlmsg_ptr msg, const char *key)
     return NULL;
 }
 
-static inline uint64_t xl_list_append(xlmsg_t **msgpptr, xline_ptr xl)
+static inline uint64_t xl_list_append(xlinekv_t **msgpptr, xline_ptr xl)
 {
-    xlmsg_t *msg = *msgpptr;
+    xlinekv_t *msg = *msgpptr;
     uint64_t size = __xl_sizeof_line(xl);
-    if ((msg->size - msg->wpos) < size){
+    if ((msg->size - (msg->wpos + XLINE_SIZE)) < size){
         __xl_realloc(msg, msgpptr, size, 0);
     }
     if (xl != NULL){
-        mcopy(msg->body + msg->wpos, xl->b, size);
+        mcopy(msg->data + msg->wpos, xl->b, size);
     }
     msg->wpos += size;
-    msg->line = __xl_n2b(msg->wpos, XLINE_TYPE_LIST);
+    msg->head = __xl_n2b(msg->wpos, XLINE_TYPE_LIST);
     return msg->wpos;
 XClean:
     return EENDED;
@@ -495,25 +495,25 @@ XClean:
 static inline xline_ptr xl_list_next(xlmsg_ptr msg)
 {
     if (msg->rpos < msg->wpos){
-        xline_ptr ptr = (xline_ptr)(msg->body + msg->rpos);
+        xline_ptr ptr = (xline_ptr)(msg->data + msg->rpos);
         msg->rpos += __xl_sizeof_line(ptr);
         return ptr;
     }
     return NULL;
 }
 
-static xlmsg_t xl_parser(xline_ptr xl)
+static xlinekv_t xl_parser(xline_ptr xl)
 {
-    xlmsg_t parser = {0};
+    xlinekv_t parser = {0};
     parser.rpos = 0;
     parser.wpos = __xl_sizeof_body(xl);
-    parser.body = __xl_b2o(xl);
+    parser.data = __xl_b2o(xl);
     return parser;
 }
 
 static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
 {
-    xlmsg_t parser = xl_parser(xl);
+    xlinekv_t parser = xl_parser(xl);
 
     int len = slength(key);
 
@@ -552,7 +552,7 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
             }else if (__xl_typeis_list(xl)){
 
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
-                xlmsg_t xllist = xl_parser(xl);
+                xlinekv_t xllist = xl_parser(xl);
 
                 while ((xl = xl_list_next(&xllist)) != NULL){
                     if (__xl_typeis_int(xl)){
@@ -573,7 +573,7 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
     }else if (__xl_typeis_list(xl)){
 
         *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
-        xlmsg_t xllist = xl_parser(xl);
+        xlinekv_t xllist = xl_parser(xl);
 
         while ((xl = xl_list_next(&xllist)) != NULL){
             if (__xl_typeis_int(xl)){
@@ -614,7 +614,8 @@ static inline void xl_format(xline_ptr xl, const char *key, int depth, char *buf
 
 static void xl_test()
 {
-    xlmsg_t *msg = xl_maker();
+    xlinekv_t *xobj, *xlist;
+    xlinekv_t *msg = xl_maker();
     char bin[1024];
     xl_add_word(&msg, "word", "hello word");
     xl_add_str(&msg, "str", "hello string", slength("hello string")+1);
@@ -622,55 +623,57 @@ static void xl_test()
     xl_add_int(&msg, "int", -123456789);
     xl_add_uint(&msg, "uint", 123456789);
     xl_add_float(&msg, "float", 123456789.123);
-    xl_printf(&msg->line);
+    xl_printf(&msg->head);
 
-    uint64_t pos = xl_hold_obj(msg, "obj");
+    uint64_t pos = xl_obj_begin(msg, "obj");
     xl_add_word(&msg, "word", "hello word");
     xl_add_str(&msg, "str", "hello string", slength("hello string")+1);
     xl_add_bin(&msg, "bin", bin, sizeof(bin));
     xl_add_int(&msg, "int", -123456789);
     xl_add_uint(&msg, "uint", 123456789);
     xl_add_float(&msg, "float", 123456789.123);
-    xl_fixed_obj(msg, pos);
-    xl_printf(&msg->line);
+    xl_obj_end(msg, pos);
+    xl_printf(&msg->head);
 
-    pos = xl_hold_list(msg, "list");
+    pos = xl_list_begin(msg, "list");
     for (int i = 0; i < 3; ++i){
-        uint64_t opos = xl_list_hold_obj(msg);
+        uint64_t opos = xl_list_obj_begin(msg);
             xl_add_word(&msg, "word", "hello word");
             xl_add_str(&msg, "str", "hello string", slength("hello string")+1);
             xl_add_bin(&msg, "bin", bin, sizeof(bin));
             xl_add_int(&msg, "int", -123456789);
             xl_add_uint(&msg, "uint", 123456789);
             xl_add_float(&msg, "float", 123456789.123);
-        xl_list_fixed_obj(msg, opos);
+        xl_list_obj_end(msg, opos);
     }
-    xl_fixed_list(msg, pos);
-    xl_printf(&msg->line);
+    xl_list_end(msg, pos);
+    xl_printf(&msg->head);
 
-    xlmsg_t *xobj = xl_maker();
+    xobj = xl_maker();
     xl_add_word(&xobj, "word", "hello word");
     xl_add_str(&xobj, "str", "hello string", slength("hello string")+1);
     xl_add_bin(&xobj, "bin", bin, sizeof(bin));
     xl_add_int(&xobj, "int", -123456789);
     xl_add_uint(&xobj, "uint", 123456789);
     xl_add_float(&xobj, "float", 123456789.123);
-    xl_add_obj(&msg, "addobj", &xobj->line);
-    xl_free(xobj);
-    xl_printf(&msg->line);
+    xl_add_obj(&msg, "addobj", &xobj->head);
+    
+    xl_printf(&msg->head);
 
-    xobj = xl_maker();
+    xlist = xl_maker();
     for (int i = 0; i < 10; ++i){
         double f = i * 0.1f;
-        xl_list_append(&xobj, &__xl_f2b(f));
+        xl_list_append(&xlist, &__xl_f2b(f));
     }
-    xl_printf(&xobj->line);
+    xl_printf(&xlist->head);
 
-    xl_add_obj(&msg, "addlist", &xobj->line);
-    xl_free(xobj);
-    xl_printf(&msg->line);
+    xl_add_obj(&msg, "addlist", &xlist->head);
+    
+    xl_printf(&msg->head);
 
     xl_free(msg);
+    xl_free(xobj);
+    xl_free(xlist);
 }
 
 

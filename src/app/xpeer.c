@@ -64,7 +64,7 @@ typedef struct xpeer{
     // uint64_t key;
     uint8_t uuid[32];
     __atom_bool runnig;
-    xlmsg_t parser;
+    xlinekv_t parser;
     uint64_t task_id;
     // struct __xipaddr addr;
     xline_ptr chord_list;
@@ -300,9 +300,9 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xlmsg_ptr msg)
     static uint64_t msgid;
     static xapi_handle_t handle;
     static xmsg_processor_t *processor;
-    xl_printf(&msg->line);
+    xl_printf(&msg->head);
 
-    ctx->server->parser = xl_parser(&msg->line);
+    ctx->server->parser = xl_parser(&msg->head);
     const char *api = xl_find_word(&ctx->server->parser, "api");
 
     if (msg->flag == XLMSG_FLAG_RECV){
@@ -480,7 +480,7 @@ static void api_timeout(xchannel_ctx_t *pctx)
             xmsger_connect(pctx->server->msger, xkv);
         }else {
             if (xkv){
-                xl_printf(&xkv->line);
+                xl_printf(&xkv->head);
             }
         }
     }else {
@@ -547,18 +547,18 @@ xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
     xl_add_uint(&msg, "port", mp->port);
     xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
 
-    uint64_t pos = xl_hold_list(msg, "list");
+    uint64_t pos = xl_list_begin(msg, "list");
     for (int i = 0; i < 10; ++i){
-        uint64_t opos = xl_list_hold_obj(msg);
+        uint64_t opos = xl_list_obj_begin(msg);
         xl_add_word(&msg, "api", "login");
         xl_add_uint(&msg, "tid", msgid);
         xl_add_word(&msg, "host", mp->host);
         xl_add_uint(&msg, "port", mp->port);
-        xl_list_fixed_obj(msg, opos);
+        xl_list_obj_end(msg, opos);
     }
-    xl_fixed_list(msg, pos);
-    __xlogd("xl_printf(&msg->line) size=%lu\n", __xl_sizeof_line(&msg->line));
-    xl_printf(&msg->line);
+    xl_list_end(msg, pos);
+    __xlogd("xl_printf(&msg->line) size=%lu\n", __xl_sizeof_line(&msg->head));
+    xl_printf(&msg->head);
     xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
     return ctx;
 }
@@ -645,20 +645,21 @@ int main(int argc, char *argv[])
 
     // __xapi->udp_addrinfo(hostip, 16, hostname);
     peer->port = 9256;
-    __xapi->udp_addrinfo(peer->ip, hostname);
-    __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
+
+    // __xapi->udp_addrinfo(peer->ip, hostname);
+    // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
     // const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    // const char *cip = "47.92.77.19";
+    const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
     // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    // mcopy(peer->ip, cip, slength(cip));
-    // peer->ip[slength(cip)] = '\0';
+    mcopy(peer->ip, cip, slength(cip));
+    peer->ip[slength(cip)] = '\0';
 
     // xlmsg_ptr msg = xline_maker();
     // xline_add_word(msg, "api", "testreconnect");

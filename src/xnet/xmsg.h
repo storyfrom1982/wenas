@@ -64,13 +64,13 @@ static inline uint64_t xmsg_hold_kv(xmsg_ptr msg, const char *key)
     mcopy(msg->key + 1, key, msg->key[0]);
     msg->sendpos += 1 + msg->key[0];
     uint64_t pos = msg->sendpos;
-    msg->sendpos += XLINE_STATIC_SIZE;
+    msg->sendpos += XLINE_SIZE;
     return pos;
 }
 
 static inline void xmsg_save_kv(xmsg_ptr msg, uint64_t pos)
 {
-    uint64_t len = msg->sendpos - pos - XLINE_STATIC_SIZE;
+    uint64_t len = msg->sendpos - pos - XLINE_SIZE;
     *((xline_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_XLKV);
 }
 
@@ -81,14 +81,14 @@ static inline uint64_t xmsg_hold_list(xmsg_ptr msg, const char *key)
 
 static inline void xmsg_save_list(xmsg_ptr msg, uint64_t pos)
 {
-    uint64_t len = msg->sendpos - pos - XLINE_STATIC_SIZE;
+    uint64_t len = msg->sendpos - pos - XLINE_SIZE;
     *((xline_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_LIST);
 }
 
 static inline uint64_t xmsg_list_hold_kv(xmsg_ptr msg)
 {
     msg->recvpos = msg->sendpos;
-    msg->sendpos += XLINE_STATIC_SIZE;
+    msg->sendpos += XLINE_SIZE;
     return msg->recvpos;
 }
 
@@ -100,7 +100,7 @@ static inline void xmsg_list_save_xlkv(xmsg_ptr msg, uint64_t pos)
 static inline uint64_t xlmsg_add_obj(xmsg_ptr msg, const char *key, uint8_t keylen, const void *val, size_t size, uint8_t flag)
 {
     // 检查是否有足够的空间写入
-    if ((int64_t)(msg->size - msg->sendpos) < (keylen + XLINE_STATIC_SIZE + size)){
+    if ((int64_t)(msg->size - msg->sendpos) < (keylen + XLINE_SIZE + size)){
         return EENDED;
     }
     // key 本身的长度不能超过 253，因为 uint8_t 只能存储 0-255 之间的数字
@@ -121,7 +121,7 @@ static inline uint64_t xlmsg_add_obj(xmsg_ptr msg, const char *key, uint8_t keyl
     msg->sendpos += (msg->key[0] + 1);
     // 把 val 的长度和类型写入头部的 9 个字节
     *((xline_ptr)(msg->body + msg->sendpos)) = __n2xl(size, flag);
-    msg->sendpos += XLINE_STATIC_SIZE;
+    msg->sendpos += XLINE_SIZE;
     // 复制 val 到接下来的内存地址
     mcopy(msg->body + msg->sendpos, val, size);
     // 先把 val 的 size 加入到 wpos
@@ -158,7 +158,7 @@ static inline uint64_t xlmsg_add_list(xmsg_ptr msg, const char *key, xline_ptr x
 static inline uint64_t xlmsg_append_number(xmsg_ptr msg, const char *key, uint8_t keylen, struct xl val)
 {
     // 检查是否有足够的空间写入
-    if ((int64_t)(msg->size - msg->sendpos) < (keylen + XLINE_STATIC_SIZE)){
+    if ((int64_t)(msg->size - msg->sendpos) < (keylen + XLINE_SIZE)){
         return EENDED;
     }
     // key 本身的长度不能超过 253，因为 uint8_t 只能存储 0-255 之间的数字
@@ -178,7 +178,7 @@ static inline uint64_t xlmsg_append_number(xmsg_ptr msg, const char *key, uint8_
     // 因为我们的 key 除了字符串头部的一个字节的长度，还有一个字节的结束符'\0'，所以这里再加 1
     msg->sendpos += (msg->key[0] + 1);
     *((xline_ptr)(msg->body + msg->sendpos)) = val;
-    msg->sendpos += XLINE_STATIC_SIZE;
+    msg->sendpos += XLINE_SIZE;
     // 返回当前写入长度
     return msg->sendpos;
 }

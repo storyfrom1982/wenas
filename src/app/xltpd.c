@@ -301,7 +301,7 @@ typedef struct xchannel_ctx {
     xchannel_ptr channel;
     struct xltpd *server;
     // xmsg_ptr msg;
-    xlmsg_t xlparser;
+    xlinekv_t xlparser;
     struct xmsg_callback tasklist;
     xserver_t xchord;
     void (*release)(struct xchannel_ctx*);
@@ -657,27 +657,27 @@ static void command(xchannel_ctx_ptr pctx)
 
         const char *ip;
         uint16_t port;
-        uint64_t lpos = xl_hold_list(res, "nodes");
+        uint64_t lpos = xl_list_begin(res, "nodes");
         xserver_t node = pctx->server->ring->predecessor;
 
         while (node != pctx->server->ring) {
             ip = xchannel_get_host(node->channel);
             port = xchannel_get_port(node->channel);
-            uint64_t kvpos = xl_list_hold_obj(res);
+            uint64_t kvpos = xl_list_obj_begin(res);
             xl_add_word(&res, "ip", ip);
             xl_add_uint(&res, "port", port);
             xl_add_uint(&res, "key", node->key);
-            xl_list_fixed_obj(res, kvpos);
+            xl_list_obj_end(res, kvpos);
             node = node->predecessor;
         }
 
-        uint64_t kvpos = xl_list_hold_obj(res);
+        uint64_t kvpos = xl_list_obj_begin(res);
         xl_add_word(&res, "ip", pctx->server->ip);
         xl_add_uint(&res, "port", pctx->server->port);
         xl_add_uint(&res, "key", pctx->server->ring->key);
-        xl_list_fixed_obj(res, kvpos);
+        xl_list_obj_end(res, kvpos);
 
-        xl_fixed_list(res, lpos);
+        xl_list_end(res, lpos);
 
         xl_add_uint(&res, "code", 200);
 
@@ -685,11 +685,11 @@ static void command(xchannel_ctx_ptr pctx)
 
         xline_ptr xlnode;
         xline_ptr xlnodes = xl_find(&pctx->xlparser, "nodes");
-        xlmsg_t kvnodes = xl_parser(xlnodes);
+        xlinekv_t kvnodes = xl_parser(xlnodes);
 
         while ((xlnode = xl_list_next(&kvnodes)) != NULL)
         {
-            xlmsg_t kvnode = xl_parser(xlnode);
+            xlinekv_t kvnode = xl_parser(xlnode);
             char *ip = xl_find_word(&kvnode, "ip");
             uint16_t port = xl_find_uint(&kvnode, "port");
             uint32_t key = xl_find_uint(&kvnode, "key");
@@ -727,8 +727,8 @@ typedef void(*api_handle)(xchannel_ctx_ptr pctx);
 
 static void api_processor(xchannel_ctx_ptr ctx, xlmsg_ptr msg)
 {
-    xl_printf(&msg->line);
-    ctx->xlparser = xl_parser(&msg->line);
+    xl_printf(&msg->head);
+    ctx->xlparser = xl_parser(&msg->head);
     __xlogd("task_loop 1\n");
     const char *api = xl_find_word(&ctx->xlparser, "api");
     api_handle handle = xtree_find(ctx->server->api, api, slength(api));
@@ -752,8 +752,8 @@ static void* task_loop(void *ptr)
         if (ctx->process){
             ctx->process(ctx, msg);
         }else {
-            xl_printf(&msg->line);
-            ctx->xlparser = xl_parser(&msg->line);
+            xl_printf(&msg->head);
+            ctx->xlparser = xl_parser(&msg->head);
             const char *api = xl_find_word(&ctx->xlparser, "api");
             api_handle handle = xtree_find(server->api, api, slength(api));
             if (handle){
