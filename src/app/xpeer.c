@@ -219,7 +219,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
     xlmsg_ptr msg = xl_maker();
     msg->flag = XLMSG_FLAG_RECV;
     msg->ctx = xchannel_get_ctx(channel);
-    xl_add_word(msg, "api", "disconnect");
+    xl_add_word(&msg, "api", "disconnect");
     xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
@@ -383,11 +383,11 @@ static void send_logout(xpeer_t *peer)
         msg->flag = XLMSG_FLAG_DISCONNECT;
         // msg->cb = res_login;
         msg->ctx = ctx;
-        // xl_add_word(msg, "api", "login");
-        // xl_add_uint(msg, "tid", msgid);
-        // xl_add_word(msg, "host", mp->host);
-        // xl_add_uint(msg, "port", mp->port);
-        // xl_add_bin(msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+        // xl_add_word(&msg, "api", "login");
+        // xl_add_uint(&msg, "tid", msgid);
+        // xl_add_word(&msg, "host", mp->host);
+        // xl_add_uint(&msg, "port", mp->port);
+        // xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
         xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
         ctx = next;
     }
@@ -410,9 +410,9 @@ static void send_echo(xchannel_ctx_t *ctx, const char *text)
     msg->flag = XLMSG_FLAG_SEND;
     msg->ctx = ctx;
     msg->cb = res_echo;
-    xl_add_word(msg, "api", "echo");
-    xl_add_uint(msg, "tid", xserver_get_msgid(ctx->server));
-    xl_add_word(msg, "text", text);
+    xl_add_word(&msg, "api", "echo");
+    xl_add_uint(&msg, "tid", xserver_get_msgid(ctx->server));
+    xl_add_word(&msg, "text", text);
     xpipe_write(ctx->server->task_pipe, &msg, __sizeof_ptr);
 }
 
@@ -437,11 +437,11 @@ static void send_detect(xpeer_t *peer, const char *host, uint16_t port)
     msg->flag = XLMSG_FLAG_CONNECT;
     msg->cb = res_detect;
     msg->ctx = mp->ctx;
-    xl_add_word(msg, "api", "detect");
-    xl_add_uint(msg, "tid", msgid);
-    xl_add_word(msg, "host", mp->host);
-    xl_add_uint(msg, "port", mp->port);
-    xl_add_bin(msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    xl_add_word(&msg, "api", "detect");
+    xl_add_uint(&msg, "tid", msgid);
+    xl_add_word(&msg, "host", mp->host);
+    xl_add_uint(&msg, "port", mp->port);
+    xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
     xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
 }
 
@@ -505,10 +505,10 @@ static void api_login(xchannel_ctx_t *pctx)
 {
     uint64_t tid = xl_find_uint(&pctx->server->parser, "tid");
     xlmsg_ptr res = xl_maker();
-    xl_add_word(res, "api", "res");
-    xl_add_word(res, "req", "login");
-    xl_add_uint(res, "tid", tid);
-    xl_add_uint(res, "code", 200);
+    xl_add_word(&res, "api", "res");
+    xl_add_word(&res, "req", "login");
+    xl_add_uint(&res, "tid", tid);
+    xl_add_uint(&res, "code", 200);
     xmsger_send(pctx->server->msger, pctx->channel, res);
 }
 
@@ -516,12 +516,12 @@ static void api_echo(xchannel_ctx_t *pctx)
 {
     uint64_t tid = xl_find_uint(&pctx->server->parser, "tid");
     xlmsg_ptr res = xl_maker();
-    xl_add_word(res, "api", "res");
-    xl_add_word(res, "req", "echo");
-    xl_add_uint(res, "tid", tid);
-    xl_add_word(res, "host", xchannel_get_host(pctx->channel));
-    xl_add_uint(res, "port", xchannel_get_port(pctx->channel));
-    xl_add_uint(res, "code", 200);
+    xl_add_word(&res, "api", "res");
+    xl_add_word(&res, "req", "echo");
+    xl_add_uint(&res, "tid", tid);
+    xl_add_word(&res, "host", xchannel_get_host(pctx->channel));
+    xl_add_uint(&res, "port", xchannel_get_port(pctx->channel));
+    xl_add_uint(&res, "code", 200);
     xmsger_send(pctx->server->msger, pctx->channel, res);
 }
 
@@ -541,11 +541,24 @@ xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
     msg->flag = XLMSG_FLAG_CONNECT;
     msg->cb = res_login;
     msg->ctx = mp->ctx;
-    xl_add_word(msg, "api", "login");
-    xl_add_uint(msg, "tid", msgid);
-    xl_add_word(msg, "host", mp->host);
-    xl_add_uint(msg, "port", mp->port);
-    xl_add_bin(msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    xl_add_word(&msg, "api", "login");
+    xl_add_uint(&msg, "tid", msgid);
+    xl_add_word(&msg, "host", mp->host);
+    xl_add_uint(&msg, "port", mp->port);
+    xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+
+    uint64_t pos = xl_hold_list(msg, "list");
+    for (int i = 0; i < 10; ++i){
+        uint64_t opos = xl_list_hold_obj(msg);
+        xl_add_word(&msg, "api", "login");
+        xl_add_uint(&msg, "tid", msgid);
+        xl_add_word(&msg, "host", mp->host);
+        xl_add_uint(&msg, "port", mp->port);
+        xl_list_fixed_obj(msg, opos);
+    }
+    xl_fixed_list(msg, pos);
+    __xlogd("xl_printf(&msg->line) size=%lu\n", __xl_sizeof_line(&msg->line));
+    xl_printf(&msg->line);
     xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
     return ctx;
 }
@@ -728,6 +741,8 @@ int main(int argc, char *argv[])
 
             // req_forward(server->ctx, key);
 
+        }else if (strcmp(command, "test") == 0) {
+            xl_test();
         }else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
             break;

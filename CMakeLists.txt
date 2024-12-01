@@ -113,7 +113,8 @@ endif()
 
 list(APPEND kzx_inclides src/xapi/dep src/xapi/dep/libuv-1.49.2/include)
 
-add_subdirectory(src/xapi/dep/libuv-1.49.2)
+# add_subdirectory(src/xapi/dep/libuv-1.49.2)
+list(APPEND kzx_directories src/xapi/dep)
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})
@@ -134,7 +135,7 @@ function(build_library LIBRARY_NAME LIBRARY_SOURCES)
 endfunction(build_library)
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
-    build_executable(xltpd src/app/xltpd.c)
+    # build_executable(xltpd src/app/xltpd.c)
     build_executable(xpeer src/app/xpeer.c)
     # build_executable(xserver test/xnet/dht_test.c)
     # build_executable(xserver test/xnet/xline_test.c)
