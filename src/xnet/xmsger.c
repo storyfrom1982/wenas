@@ -56,7 +56,7 @@ typedef struct xmsg* xmsg_ptr;
 typedef struct xpack {
     uint64_t ts; // 计算往返耗时
     uint64_t delay; // 累计超时时长
-    xlinekv_t *msg;
+    xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
     struct xhead head;
@@ -98,7 +98,7 @@ typedef struct sserialbuf {
 
 typedef struct xmsgbuf {
     uint8_t range, spos, rpos, wpos;
-    xlinekv_t *buf[1];
+    xline_t *buf[1];
 }*xmsgbuf_ptr;
 
 
@@ -142,7 +142,7 @@ struct xchannel {
     struct xpacklist flushlist;
     struct xchannellist *worklist;
 
-    xlmsg_ptr xkv;
+    xline_t *xkv;
     // // xmsg_ptr msg_head, *msg_tail;
     // // xmsg_ptr smsg;
     // xmsg_ptr sender;
@@ -236,7 +236,7 @@ struct xmsger {
 // xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlinekv_ptr xkv);
 // void xmsg_free(xmsg_ptr msg);
 
-static inline void xmsg_fixed(xlinekv_t *msg)
+static inline void xmsg_fixed(xline_t *msg)
 {
     if (msg){
         msg->spos = msg->rpos= 0;
@@ -453,7 +453,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
     if (channel->connected && __serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0){
 
         // __xlogd("xchannel_serial_msg sendable=%u\n", __serialbuf_sendable(channel->msgbuf));
-        xlinekv_t *msg = channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
+        xline_t *msg = channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
         // __xlogd("xchannel_serial_msg 2\n");
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
         // __xlogd("xchannel_serial_msg 3\n");
@@ -472,7 +472,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         // pack->head.sid = msg->streamid;
         pack->head.range = msg->range;
         // __xlogd("xchannel_serial_msg 5\n");
-        mcopy(pack->body, msg->data + msg->spos, pack->head.len);
+        mcopy(pack->body, msg->ptr + msg->spos, pack->head.len);
         msg->spos += pack->head.len;
         msg->range --;
 
@@ -602,7 +602,7 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
                     // channel->rmsg->range = pack->head.range;
                 }
-                mcopy(channel->xkv->data + channel->xkv->wpos, pack->body, pack->head.len);
+                mcopy(channel->xkv->ptr + channel->xkv->wpos, pack->body, pack->head.len);
                 channel->xkv->wpos += pack->head.len;
                 // channel->rmsg->range--;
                 if (channel->xkv->size - channel->xkv->wpos < PACK_BODY_SIZE){
@@ -924,7 +924,7 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 }
 
 
-static inline bool xmsger_process_msg(xmsger_ptr msger, xlinekv_t *msg)
+static inline bool xmsger_process_msg(xmsger_ptr msger, xline_t *msg)
 {
     xchannel_ptr channel = msg->channel;
 
@@ -935,7 +935,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlinekv_t *msg)
             return false;
         }
 
-        xlinekv_t parser = xl_parser(&msg->head);
+        xline_t parser = xl_parser(&msg->data);
         char *ip = xl_find_word(&parser, "host");
         uint64_t port = xl_find_uint(&parser, "port");
 
@@ -1423,7 +1423,7 @@ static void* main_loop(void *ptr)
     return NULL;
 }
 
-bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xlinekv_t *msg)
+bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
 {
     // __xlogd("xmsger_send_message enter\n");
     __xcheck(channel == NULL || msg == NULL);
@@ -1456,7 +1456,7 @@ XClean:
     return false;
 }
 
-bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xlinekv_t *msg)
+bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
 {
     __xcheck(channel == NULL || msg == NULL);
 
@@ -1481,7 +1481,7 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, xlinekv_t *msg)
+bool xmsger_connect(xmsger_ptr msger, xline_t *msg)
 {
     __xlogd("xmsger_connect enter\n");
 
@@ -1645,7 +1645,7 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->mpipe){
             __xlogd("xmsger_free msg pipe: %lu\n", xpipe_readable(msger->mpipe));
             while (xpipe_readable(msger->mpipe) > 0){
-                xlinekv_t *msg;
+                xline_t *msg;
                 xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
                 if (msg){
                     xl_free(msg);

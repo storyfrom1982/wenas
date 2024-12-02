@@ -289,7 +289,7 @@ void node_remove(xserver_t ring, uint32_t key)
 
 typedef struct xmsg_callback {
     index_node_t node;
-    xline_ptr req;
+    xdata_ptr req;
     struct xchannel_ctx *channelctx;
     struct xmsg_callback *prev, *next;
     void (*process)(struct xmsg_callback*, struct xchannel_ctx*);
@@ -301,7 +301,7 @@ typedef struct xchannel_ctx {
     xchannel_ptr channel;
     struct xltpd *server;
     // xmsg_ptr msg;
-    xlinekv_t xlparser;
+    xline_t xlparser;
     struct xmsg_callback tasklist;
     xserver_t xchord;
     void (*release)(struct xchannel_ctx*);
@@ -520,7 +520,7 @@ static void api_login(xchannel_ctx_ptr pctx)
     }
     uint64_t tid = xl_find_uint(&pctx->xlparser, "tid");
     pctx->node.hash_key = xl_find_uint(&pctx->xlparser, "key");
-    xline_ptr xb = xl_find(&pctx->xlparser, "uuid");
+    xdata_ptr xb = xl_find(&pctx->xlparser, "uuid");
     uint64_t *uuid = __xl_b2o(xb);
     for (int i = 0; i < 4; i++){
         pctx->node.uuid[i] = uuid[i];
@@ -683,13 +683,13 @@ static void command(xchannel_ctx_ptr pctx)
 
     }else if (mcompare(cmd, "chord_invite", slength("chord_invite")) == 0){
 
-        xline_ptr xlnode;
-        xline_ptr xlnodes = xl_find(&pctx->xlparser, "nodes");
-        xlinekv_t kvnodes = xl_parser(xlnodes);
+        xdata_ptr xlnode;
+        xdata_ptr xlnodes = xl_find(&pctx->xlparser, "nodes");
+        xline_t kvnodes = xl_parser(xlnodes);
 
         while ((xlnode = xl_list_next(&kvnodes)) != NULL)
         {
-            xlinekv_t kvnode = xl_parser(xlnode);
+            xline_t kvnode = xl_parser(xlnode);
             char *ip = xl_find_word(&kvnode, "ip");
             uint16_t port = xl_find_uint(&kvnode, "port");
             uint32_t key = xl_find_uint(&kvnode, "key");
@@ -727,8 +727,8 @@ typedef void(*api_handle)(xchannel_ctx_ptr pctx);
 
 static void api_processor(xchannel_ctx_ptr ctx, xlmsg_ptr msg)
 {
-    xl_printf(&msg->head);
-    ctx->xlparser = xl_parser(&msg->head);
+    xl_printf(&msg->data);
+    ctx->xlparser = xl_parser(&msg->data);
     __xlogd("task_loop 1\n");
     const char *api = xl_find_word(&ctx->xlparser, "api");
     api_handle handle = xtree_find(ctx->server->api, api, slength(api));
@@ -752,8 +752,8 @@ static void* task_loop(void *ptr)
         if (ctx->process){
             ctx->process(ctx, msg);
         }else {
-            xl_printf(&msg->head);
-            ctx->xlparser = xl_parser(&msg->head);
+            xl_printf(&msg->data);
+            ctx->xlparser = xl_parser(&msg->data);
             const char *api = xl_find_word(&ctx->xlparser, "api");
             api_handle handle = xtree_find(server->api, api, slength(api));
             if (handle){

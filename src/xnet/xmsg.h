@@ -71,7 +71,7 @@ static inline uint64_t xmsg_hold_kv(xmsg_ptr msg, const char *key)
 static inline void xmsg_save_kv(xmsg_ptr msg, uint64_t pos)
 {
     uint64_t len = msg->sendpos - pos - XLINE_SIZE;
-    *((xline_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_XLKV);
+    *((xdata_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_XLKV);
 }
 
 static inline uint64_t xmsg_hold_list(xmsg_ptr msg, const char *key)
@@ -82,7 +82,7 @@ static inline uint64_t xmsg_hold_list(xmsg_ptr msg, const char *key)
 static inline void xmsg_save_list(xmsg_ptr msg, uint64_t pos)
 {
     uint64_t len = msg->sendpos - pos - XLINE_SIZE;
-    *((xline_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_LIST);
+    *((xdata_ptr)(msg->body + pos)) = __n2xl(len, XLINE_TYPE_LIST);
 }
 
 static inline uint64_t xmsg_list_hold_kv(xmsg_ptr msg)
@@ -120,7 +120,7 @@ static inline uint64_t xlmsg_add_obj(xmsg_ptr msg, const char *key, uint8_t keyl
     // 因为我们的 key 除了字符串头部的一个字节的长度，还有一个字节的结束符'\0'，所以这里再加 1
     msg->sendpos += (msg->key[0] + 1);
     // 把 val 的长度和类型写入头部的 9 个字节
-    *((xline_ptr)(msg->body + msg->sendpos)) = __n2xl(size, flag);
+    *((xdata_ptr)(msg->body + msg->sendpos)) = __n2xl(size, flag);
     msg->sendpos += XLINE_SIZE;
     // 复制 val 到接下来的内存地址
     mcopy(msg->body + msg->sendpos, val, size);
@@ -145,12 +145,12 @@ static inline uint64_t xlmsg_add_bin(xmsg_ptr msg, const char *key, const void *
     return xlmsg_add_obj(msg, key, slength(key), val, size, XLINE_TYPE_BIN);
 }
 
-static inline uint64_t xlmsg_add_kv(xmsg_ptr msg, const char *key, xline_ptr xl, size_t size)
+static inline uint64_t xlmsg_add_kv(xmsg_ptr msg, const char *key, xdata_ptr xl, size_t size)
 {
     return xlmsg_add_obj(msg, key, slength(key), xl->b, size, XLINE_TYPE_XLKV);
 }
 
-static inline uint64_t xlmsg_add_list(xmsg_ptr msg, const char *key, xline_ptr xl, size_t size)
+static inline uint64_t xlmsg_add_list(xmsg_ptr msg, const char *key, xdata_ptr xl, size_t size)
 {
     return xlmsg_add_obj(msg, key, slength(key), xl->b, size, XLINE_TYPE_LIST);
 }
@@ -177,7 +177,7 @@ static inline uint64_t xlmsg_append_number(xmsg_ptr msg, const char *key, uint8_
     *(msg->key + msg->key[0]) = '\0';
     // 因为我们的 key 除了字符串头部的一个字节的长度，还有一个字节的结束符'\0'，所以这里再加 1
     msg->sendpos += (msg->key[0] + 1);
-    *((xline_ptr)(msg->body + msg->sendpos)) = val;
+    *((xdata_ptr)(msg->body + msg->sendpos)) = val;
     msg->sendpos += XLINE_SIZE;
     // 返回当前写入长度
     return msg->sendpos;
@@ -209,15 +209,15 @@ static inline void xlmsg_parser(xmsg_ptr msg)
     msg->recvpos = 0;
 }
 
-static inline xline_ptr xlmsg_find(xmsg_ptr msg, const char *key)
+static inline xdata_ptr xlmsg_find(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = NULL;
+    xdata_ptr val = NULL;
     uint64_t rpos = msg->recvpos;
 
     while (msg->recvpos < msg->sendpos) {
         msg->key = msg->body + msg->recvpos;
         msg->recvpos += (msg->key[0] + 1);
-        val = (xline_ptr)(msg->body + msg->recvpos);
+        val = (xdata_ptr)(msg->body + msg->recvpos);
         msg->recvpos += __sizeof_line(val);
         if (slength(key) + 1 == msg->key[0]
             && mcompare(key, msg->key + 1, msg->key[0]) == 0){
@@ -231,7 +231,7 @@ static inline xline_ptr xlmsg_find(xmsg_ptr msg, const char *key)
     while (msg->recvpos < rpos) {
         msg->key = msg->body + msg->recvpos;
         msg->recvpos += (msg->key[0] + 1);
-        val = (xline_ptr)(msg->body + msg->recvpos);
+        val = (xdata_ptr)(msg->body + msg->recvpos);
         msg->recvpos += __sizeof_line(val);
         if (slength(key) + 1 == msg->key[0]
             && mcompare(key, msg->key + 1, msg->key[0]) == 0){
@@ -245,7 +245,7 @@ static inline xline_ptr xlmsg_find(xmsg_ptr msg, const char *key)
 
 static inline int64_t xlmsg_find_integer(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = xlmsg_find(msg, key);
+    xdata_ptr val = xlmsg_find(msg, key);
     if (val){
         return __xl2i(val);
     }
@@ -254,7 +254,7 @@ static inline int64_t xlmsg_find_integer(xmsg_ptr msg, const char *key)
 
 static inline uint64_t xlmsg_find_number(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = xlmsg_find(msg, key);
+    xdata_ptr val = xlmsg_find(msg, key);
     if (val){
         return __xl2u(val);
     }
@@ -263,7 +263,7 @@ static inline uint64_t xlmsg_find_number(xmsg_ptr msg, const char *key)
 
 static inline double xlmsg_find_float(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = xlmsg_find(msg, key);
+    xdata_ptr val = xlmsg_find(msg, key);
     if (val){
         return __xl2f(val);
     }
@@ -272,7 +272,7 @@ static inline double xlmsg_find_float(xmsg_ptr msg, const char *key)
 
 static inline const char* xlmsg_find_word(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = xlmsg_find(msg, key);
+    xdata_ptr val = xlmsg_find(msg, key);
     if (val){
         return (const char*)__xl2o(val);
     }
@@ -281,14 +281,14 @@ static inline const char* xlmsg_find_word(xmsg_ptr msg, const char *key)
 
 static inline void* xlmsg_find_ptr(xmsg_ptr msg, const char *key)
 {
-    xline_ptr val = xlmsg_find(msg, key);
+    xdata_ptr val = xlmsg_find(msg, key);
     if (val){
         return (void *)(__xl2u(val));
     }
     return NULL;
 }
 
-static inline uint64_t xlmsg_list_append(xmsg_ptr msg, xline_ptr ptr)
+static inline uint64_t xlmsg_list_append(xmsg_ptr msg, xdata_ptr ptr)
 {
     msg->recvpos = __sizeof_line(ptr);
     if ((int64_t)(msg->size - msg->sendpos) < msg->recvpos){
@@ -299,10 +299,10 @@ static inline uint64_t xlmsg_list_append(xmsg_ptr msg, xline_ptr ptr)
     return msg->sendpos;
 }
 
-static inline xline_ptr xlmsg_list_next(xmsg_ptr msg)
+static inline xdata_ptr xlmsg_list_next(xmsg_ptr msg)
 {
     if (msg->recvpos < msg->sendpos){
-        xline_ptr ptr = (xline_ptr)(msg->body + msg->recvpos);
+        xdata_ptr ptr = (xdata_ptr)(msg->body + msg->recvpos);
         msg->recvpos += __sizeof_line(ptr);
         return ptr;
     }
