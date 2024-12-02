@@ -657,7 +657,7 @@ static void command(xchannel_ctx_ptr pctx)
 
         const char *ip;
         uint16_t port;
-        uint64_t lpos = xl_list_begin(res, "nodes");
+        uint64_t lpos = xl_add_list_begin(res, "nodes");
         xserver_t node = pctx->server->ring->predecessor;
 
         while (node != pctx->server->ring) {
@@ -677,7 +677,7 @@ static void command(xchannel_ctx_ptr pctx)
         xl_add_uint(&res, "key", pctx->server->ring->key);
         xl_list_obj_end(res, kvpos);
 
-        xl_list_end(res, lpos);
+        xl_add_list_end(res, lpos);
 
         xl_add_uint(&res, "code", 200);
 

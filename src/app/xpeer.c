@@ -320,7 +320,7 @@ static inline void xapi_processor(xchannel_ctx_t *ctx, xline_t *msg)
             xmsger_send(ctx->server->msger, ctx->channel, msg);
         }else if (msg->flag == XLMSG_FLAG_CONNECT){
             processor = (xmsg_processor_t *)ctx->handler;
-            xmsger_connect(ctx->server->msger, msg);
+            xmsger_connect(ctx->server->msger, msg->ctx, msg);
         }else if (msg->flag == XLMSG_FLAG_DISCONNECT){
             xmsger_disconnect(ctx->server->msger, ctx->channel, msg);
         }
@@ -337,15 +337,18 @@ static void* task_loop(void *ptr)
 
     while (xpipe_read(server->task_pipe, &msg, __sizeof_ptr) == __sizeof_ptr)
     {
-        if (msg->ctx){
-            ctx = msg->ctx;
-            if (ctx->process != NULL){
-                ctx->process(ctx, msg);
-            }else {
-                xapi_processor(ctx, msg);
-            }
-        }else {
-            xl_free(msg);
+        // if (msg->ctx){
+        //     ctx = msg->ctx;
+        //     if (ctx->process != NULL){
+        //         ctx->process(ctx, msg);
+        //     }else {
+        //         xapi_processor(ctx, msg);
+        //     }
+        // }else 
+        {
+            // xl_printf(&msg->data);
+            __xlogd("msg addr 3 ==== %X\n", msg);
+            xl_free(&msg);
         }
     }
 
@@ -480,7 +483,7 @@ static void api_timeout(xchannel_ctx_t *pctx)
     if (xchannel_get_keepalive(pctx->channel)){
         if (pctx->reconnected < 3){
             pctx->reconnected++;
-            xmsger_connect(pctx->server->msger, xkv);
+            xmsger_connect(pctx->server->msger, pctx, xkv);
         }else {
             if (xkv){
                 xl_printf(&xkv->data);
@@ -540,28 +543,49 @@ xchannel_ctx_t* xltp_bootstrap(xpeer_t *peer, const char *host, uint16_t port)
     mcopy(mp->host, host, slength(host));
     mp->host[slength(host)] = '\0';    
     mp->port = port;
+
     xline_t *msg = xl_maker();
+    __xlogd("msg addr 1 ==== %X\n", msg);
     msg->flag = XLMSG_FLAG_CONNECT;
     msg->cb = res_login;
     msg->ctx = mp->ctx;
-    xl_add_word(&msg, "api", "login");
-    xl_add_uint(&msg, "tid", msgid);
-    xl_add_word(&msg, "host", mp->host);
-    xl_add_uint(&msg, "port", mp->port);
-    xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    // xl_add_word(&msg, "api", "login");
+    // xl_add_uint(&msg, "tid", msgid);
+    // xl_add_word(&msg, "host", mp->host);
+    // xl_add_uint(&msg, "port", mp->port);
+    // xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
 
-    uint64_t pos = xl_list_begin(msg, "list");
+    char tmp[2048];
+    char key[1024] = {0};
     for (int i = 0; i < 10; ++i){
-        uint64_t opos = xl_list_obj_begin(msg);
+        snprintf(key, 1024, "key=%d", i);
+        uint64_t pos = xl_add_obj_begin(&msg, key);
         xl_add_word(&msg, "api", "login");
         xl_add_uint(&msg, "tid", msgid);
         xl_add_word(&msg, "host", mp->host);
+        __xlogd("msg ============== size=%lu wpos=%lu\n", msg->size, msg->wpos);
         xl_add_uint(&msg, "port", mp->port);
-        xl_list_obj_end(msg, opos);
+        __xlogd("msg ==============>> size=%lu wpos=%lu\n", msg->size, msg->wpos);
+        // xl_add_word(&msg, "host", mp->host);
+        // xl_add_bin(&msg, "tmp", tmp, 2048);
+        xl_add_obj_end(&msg, pos);
     }
-    xl_list_end(msg, pos);
+    
+
+    uint64_t pos = xl_add_list_begin(&msg, "list");
+    for (int i = 0; i < 10; ++i){
+        uint64_t opos = xl_add_obj_begin(&msg, NULL);
+            xl_add_word(&msg, "api", "login");
+            xl_add_uint(&msg, "tid", msgid);
+            xl_add_word(&msg, "host", mp->host);
+            xl_add_uint(&msg, "port", mp->port);
+        xl_add_obj_end(&msg, opos);
+    }
+    xl_add_list_end(&msg, pos);
+    
     // __xlogd("xl_printf(&msg->line) size=%lu\n", __xl_sizeof_line(&msg->head));
-    // xl_printf(&msg->head);
+    xl_printf(&msg->data);
+    __xlogd("msg addr 2 ==== %X\n", msg);
     xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
     return ctx;
 }
@@ -749,6 +773,7 @@ int main(int argc, char *argv[])
             for (int i = 0; i < 1000; i++)
             {
                 xline_t *msg = xl_test(i);
+                // xl_printf(&msg->data);
                 xpipe_write(peer->task_pipe, &msg, __sizeof_ptr);
             }
 
