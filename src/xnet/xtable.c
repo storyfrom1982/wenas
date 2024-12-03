@@ -15,8 +15,8 @@ static inline int bytes_compare(const void *a, const void *b)
 {
     search_node_t *na = (search_node_t*)a;
 	search_node_t *nb = (search_node_t*)b;
-    char *s1 = na->uuid; 
-    char *s2 = nb->uuid;
+    char *s1 = (char*)na->uuid; 
+    char *s2 = (char*)nb->uuid;
     int len = (na->uuid_len < nb->uuid_len ? na->uuid_len : nb->uuid_len);
     while (--len && *(char*)s1 == *(char*)s2){
         s1 = (char*)s1 + 1;

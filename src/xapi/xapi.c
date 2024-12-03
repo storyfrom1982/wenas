@@ -37,7 +37,7 @@ static uint64_t __ex_strftime(char *buf, size_t size, uint64_t timepoint)
 //////////////////////////////////////
 //////////////////////////////////////
 
-static __xthread_ptr __xthread_create(void*(*task_enter)(void*), void *ctx)
+static __xthread_ptr __xthread_create(void(*task_enter)(void*), void *ctx)
 {
     uv_thread_t tid;
     int ret = uv_thread_create(&tid, task_enter, ctx);
@@ -49,7 +49,8 @@ static __xthread_ptr __xthread_create(void*(*task_enter)(void*), void *ctx)
 
 static void __xthread_join(__xthread_ptr tid)
 {
-    uv_thread_join((uv_thread_t)tid);
+    uv_thread_t id = (uv_thread_t)tid;
+    uv_thread_join(&id);
 }
 
 static __xthread_ptr __xthread_self()

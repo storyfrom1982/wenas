@@ -404,7 +404,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
     // 释放未完整接收的消息
     if (channel->xkv != NULL){
         __xlogd("xchannel_clear 3\n");
-        xl_free(channel->xkv);
+        xl_free(&channel->xkv);
         channel->xkv = NULL;
     }
     __xlogd("xchannel_clear exit\n");
@@ -1183,7 +1183,7 @@ static inline void xmsger_check_all(xmsger_ptr msger)
 
 }
 
-static void* main_loop(void *ptr)
+static void main_loop(void *ptr)
 {
     __xlogd("xmsger_loop enter\n");
 
@@ -1428,7 +1428,7 @@ static void* main_loop(void *ptr)
 
     __xlogd("xmsger_loop exit\n");
 
-    return NULL;
+    return;
 }
 
 bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
@@ -1621,8 +1621,11 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
 
 XClean:
 
-    if (msger->sock >= 0){
-        __xapi->udp_close(msger->sock);
+    if (msger->sock[0] > 0){
+        __xapi->udp_close(msger->sock[0]);
+    }
+    if (msger->sock[1] > 0){
+        __xapi->udp_close(msger->sock[1]);
     }
     xmsger_free(&msger);
     __xlogd("xmsger_create failed\n");
@@ -1671,7 +1674,7 @@ void xmsger_free(xmsger_ptr *pptr)
                 xline_t *msg;
                 xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
                 if (msg){
-                    xl_free(msg);
+                    xl_free(&msg);
                 }
             }
             xpipe_free(&msger->mpipe);
@@ -1698,7 +1701,7 @@ bool xchannel_get_keepalive(xchannel_ptr channel)
 const char* xchannel_get_host(xchannel_ptr channel)
 {
     if (channel->port == 0){
-        __xapi->udp_addr_to_host(&channel->addr, channel->ip, &channel->port);
+        __xapi->udp_addr_to_host((const __xipaddr_ptr)&channel->addr, channel->ip, &channel->port);
     }
     return channel->ip;
 }
@@ -1706,7 +1709,7 @@ const char* xchannel_get_host(xchannel_ptr channel)
 uint16_t xchannel_get_port(xchannel_ptr channel)
 {
     if (channel->port == 0){
-        __xapi->udp_addr_to_host(&channel->addr, channel->ip, &channel->port);
+        __xapi->udp_addr_to_host((const __xipaddr_ptr)&channel->addr, channel->ip, &channel->port);
     }
     return channel->port;
 }

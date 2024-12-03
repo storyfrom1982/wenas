@@ -18,7 +18,7 @@ void* uuid_generate(void *uuid_bin_buf, const char *user_name)
     }
     mcopy(seed + 16, user_name, name_len);
     sha256_init(&shactx);
-    sha256_update(&shactx, seed, name_len + 16);
+    sha256_update(&shactx, (const uint8_t*)seed, name_len + 16);
     sha256_finish(&shactx, uuid_bin_buf);
     return uuid_bin_buf;
 }

@@ -69,10 +69,10 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             // __xpipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
             // 所以在阻塞之前，唤醒一次读线程
             __xapi->mutex_notify(pipe->mutex);
-            __xapi->mutex_wait(pipe->mutex);
             if (!pipe->breaking){
-                __xapi->mutex_unlock(pipe->mutex);
+                __xapi->mutex_wait(pipe->mutex);
             }
+            __xapi->mutex_unlock(pipe->mutex);
         }
     }
 
@@ -123,11 +123,11 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
     // __xlogd("%s xpipe_read >>>>>--------------> enter\n", pipe->name);
 
     // 长度大于 0 才能进入读循环
-    while (pos < len) {
+    while (!pipe->breaking && pos < len) {
 
         pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
 
-        if (!pipe->breaking && pos != len){
+        if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
             // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
             // 所以在阻塞之前，唤醒一次写线程
@@ -135,11 +135,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
             if (!pipe->breaking){
                 __xapi->mutex_wait(pipe->mutex);
             }
-            if (!pipe->breaking){
-                __xapi->mutex_unlock(pipe->mutex);
-            }else {
-                break;
-            }
+            __xapi->mutex_unlock(pipe->mutex);
         }
     }
 
@@ -175,15 +171,14 @@ static inline void xpipe_free(xpipe_ptr *pptr)
         *pptr = NULL;
         if (pipe){
             xpipe_clear(pipe);
-            if (pipe->mutex){
-                xpipe_break(pipe);
-                __xapi->mutex_free(pipe->mutex);
+            xpipe_break(pipe);
+            // 确保读写线程退出才能释放管道，否则释放互斥锁可能崩溃
+            __xapi->mutex_free(pipe->mutex);
+            if (pipe->buf){
+                free(pipe->buf);
             }
+            free(pipe);
         }
-        if (pipe->buf){
-            free(pipe->buf);
-        }
-        free(pipe);
     }
 }
 

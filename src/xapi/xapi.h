@@ -43,7 +43,7 @@ typedef struct __xapi_enter {
 ///// 并发任务
 ///////////////////////////////////////////////////////
 
-    __xthread_ptr (*thread_create)(void*(*task_enter)(void*), void *ctx);
+    __xthread_ptr (*thread_create)(void(*task_enter)(void*), void *ctx);
     void (*thread_join)(__xthread_ptr pid);
     __xthread_ptr (*thread_self)();
 

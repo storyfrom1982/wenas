@@ -511,7 +511,7 @@ static xline_t xl_parser(xdata_t *xd)
     return parser;
 }
 
-static inline void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
+static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
 {
     xline_t parser = xl_parser(xd);
 

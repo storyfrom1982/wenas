@@ -417,7 +417,7 @@ inline static xpeer_task_ptr add_task(xchannel_ctx_ptr pctx, void(*enter)(xpeer_
     return task;
 }
 
-inline static xpeer_task_ptr remove_task(xpeer_task_ptr task)
+inline static void remove_task(xpeer_task_ptr task)
 {
     xltpd_ptr server = task->channelctx->server;
     __xlogd("remove_task tid=%lu\n", task->node.index);
@@ -482,11 +482,11 @@ static void chord_join(xchannel_ctx_ptr pctx)
         pctx->release = chord_remove;
 
         xline_t *msg = xl_maker();
-        xl_add_word(msg, "api", "chord_notify");
-        xl_add_word(msg, "password", password);
-        xl_add_word(msg, "ip", pctx->server->ip);
-        xl_add_uint(msg, "port", pctx->server->port);
-        xl_add_uint(msg, "key", pctx->server->ring->key);
+        xl_add_word(&msg, "api", "chord_notify");
+        xl_add_word(&msg, "password", password);
+        xl_add_word(&msg, "ip", pctx->server->ip);
+        xl_add_uint(&msg, "port", pctx->server->port);
+        xl_add_uint(&msg, "key", pctx->server->ring->key);
         xmsger_send(pctx->server->msger, pctx->channel, msg);
         node_print_all(pctx->server->ring);
     }
@@ -671,7 +671,7 @@ static void command(xchannel_ctx_ptr pctx)
             node = node->predecessor;
         }
 
-        uint64_t kvpos = xl_add_obj_begin(res, NULL);
+        uint64_t kvpos = xl_add_obj_begin(&res, NULL);
         xl_add_word(&res, "ip", pctx->server->ip);
         xl_add_uint(&res, "port", pctx->server->port);
         xl_add_uint(&res, "key", pctx->server->ring->key);
@@ -730,15 +730,15 @@ static void api_processor(xchannel_ctx_ptr ctx, xline_t *msg)
     xl_printf(&msg->data);
     ctx->xlparser = xl_parser(&msg->data);
     __xlogd("task_loop 1\n");
-    const char *api = xl_find_word(&ctx->xlparser, "api");
+    char *api = xl_find_word(&ctx->xlparser, "api");
     api_handle handle = xtree_find(ctx->server->api, api, slength(api));
     if (handle){
         handle(ctx);
     }
-    __xlogd("task_loop 3\n");    
+    __xlogd("task_loop 3\n");
 }
 
-static void* task_loop(void *ptr)
+static void task_loop(void *ptr)
 {
     __xlogd("task_loop enter\n");
 
@@ -754,7 +754,7 @@ static void* task_loop(void *ptr)
         }else {
             xl_printf(&msg->data);
             ctx->xlparser = xl_parser(&msg->data);
-            const char *api = xl_find_word(&ctx->xlparser, "api");
+            char *api = xl_find_word(&ctx->xlparser, "api");
             api_handle handle = xtree_find(server->api, api, slength(api));
             if (handle){
                 handle(ctx);
@@ -767,7 +767,7 @@ static void* task_loop(void *ptr)
 
 XClean:
 
-    return NULL;
+    return;
 }
 
 static xltpd_ptr g_server = NULL;
