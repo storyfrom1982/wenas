@@ -676,9 +676,9 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(peer->ip, hostname);
     // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
-    // const char *cip = "192.168.1.6";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    const char *cip = "47.92.77.19";
+    // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";

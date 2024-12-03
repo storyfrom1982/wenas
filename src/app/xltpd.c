@@ -351,7 +351,7 @@ static void on_msg_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
 static void on_message_to_peer(xmsgercb_ptr listener, xchannel_ptr channel, xline_t *xkv)
 {
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
-    xl_free(xkv);
+    xl_free(&xkv);
     __xlogd("on_message_to_peer >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -760,7 +760,7 @@ static void* task_loop(void *ptr)
                 handle(ctx);
             }
         }
-        xl_free(msg);
+        xl_free(&msg);
     }
 
     __xlogd("task_loop exit\n");
