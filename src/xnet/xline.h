@@ -2,6 +2,7 @@
 #define __XLINE_H__
 
 #include "xmalloc.h"
+#include "xlib/avlmini.h"
 
 enum {
     XLINE_TYPE_INT  = 0x01, //整数
@@ -127,6 +128,8 @@ typedef struct xline {
     __atom_size ref;
     uint8_t flag;
     void *cb, *ctx;
+    uint64_t index;
+    struct avl_node node;
     struct xline *prev, *next;
     uint64_t wpos, rpos, size;
     uint8_t *key;
@@ -154,6 +157,11 @@ XClean:
 static inline xline_t* xl_maker()
 {
     return xl_creator(XLINE_MAKER_SIZE);
+}
+
+static inline void xl_hold(xline_t *xl)
+{
+    __atom_add(xl->ref, 1);
 }
 
 static inline void xl_fixed(xline_t *xl)

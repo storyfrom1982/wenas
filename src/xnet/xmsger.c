@@ -806,7 +806,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
-            if (((rpack->head.ack - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) > 1){
+            if (((rpack->head.ack - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) >= 1){
                 // 使用临时变量
                 uint8_t index = channel->sendbuf->rpos;
                 // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
