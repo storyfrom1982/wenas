@@ -720,7 +720,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     // // channel->smsg = pack->msg->next;
                     // __ring_list_take_out(&channel->msglist, pack->msg);
                     // 把已经传送到对端的 msg 交给发送线程处理
-                    channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg);
+                    channel->msger->callback->on_msg_to_peer(channel->msger->callback, channel, pack->msg->xl);
                     // __xloge("xchannel_recv_ack >>>>-----------> MSG pack->msg = %p  rpos=%p\n", pack->msg, channel->msgbuf->buf[__serialbuf_rpos(channel->msgbuf)]);
                     if (pack->msg != &channel->msgbuf->buf[__serialbuf_rpos(channel->msgbuf)]){
                         __xloge("xchannel_recv_ack >>>>-----------> MSG INDEX ERROR\n");
@@ -1027,7 +1027,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
                 msger->temp_channels.count, temp->rcid, temp->temp_cid[0], temp->temp_cid[1], temp->temp_cid[2]);
         }
 
-        free(msg);
+        xl_free(&msg->xl);
     }
 
     return true;
@@ -1189,7 +1189,7 @@ static void* main_loop(void *ptr)
 
     xmsger_ptr msger = (xmsger_ptr)ptr;
 
-    xlmsg_t msg;
+    xlmsg_t msg = {0};
     xchannel_ptr channel = NULL;
 
     uint64_t cid[3] = {0};
@@ -1504,7 +1504,7 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
 
     xlmsg_t msg;
     msg.xl = xl;
-    xmsg_fixed(xl);
+    xmsg_fixed(&msg);
     msg.flag = XLMSG_FLAG_CONNECT;
     msg.ctx = ctx;
     msg.channel = NULL;
