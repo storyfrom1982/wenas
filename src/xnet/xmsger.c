@@ -53,10 +53,11 @@ typedef struct xhead {
 
 typedef struct xlmsg {
     void *ctx;
-    xchannel_ptr channel;
+    uint32_t flag;
+    uint32_t range;
+    uint64_t spos;
     xline_t *xl;
-    uint64_t flag;
-    uint64_t spos, range;
+    // xchannel_ptr channel;
 }xlmsg_t;
 
 typedef struct xpack {
@@ -934,7 +935,7 @@ static inline void xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 
 static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
 {
-    xchannel_ptr channel = msg->channel;
+    xchannel_ptr channel = (xchannel_ptr)msg->ctx;
 
     if (msg->flag == XLMSG_FLAG_CONNECT){
 
@@ -1001,8 +1002,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
 
     }else if (msg->flag == XLMSG_FLAG_DISCONNECT){
 
-        if (msg->channel != NULL){
-            channel = msg->channel;
+        if (channel != NULL){
             __xlogd("xmsger_process_msg >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u->%u] KEY[%u] SN[%u]\n", 
                                         channel->ip, channel->port, channel->lcid, channel->rcid, channel->local_key, channel->serial_number);
             xchannel_clear(channel);
@@ -1434,6 +1434,9 @@ static void* main_loop(void *ptr)
 bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 {
     // __xlogd("xmsger_send_message enter\n");
+    if (channel == NULL){
+        __xlogd("xmsger_send_message enter\n");
+    }
     __xcheck(channel == NULL || xl == NULL);
 
     xlmsg_t msg;
@@ -1441,7 +1444,7 @@ bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 
     if (__serialbuf_writable(channel->msgbuf) > 0){
         xmsg_fixed(&msg);
-        msg.channel = channel;
+        msg.ctx = channel;
         msg.flag = XLMSG_FLAG_SEND;
         __atom_add(msger->len, xl->wpos);
         __atom_add(channel->len, xl->wpos);
@@ -1482,7 +1485,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     msg.xl = xl;
     xmsg_fixed(&msg);
     msg.flag = XLMSG_FLAG_DISCONNECT;
-    msg.channel = channel;
+    msg.ctx = channel;
     __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
 
     return true;
@@ -1507,7 +1510,6 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     xmsg_fixed(&msg);
     msg.flag = XLMSG_FLAG_CONNECT;
     msg.ctx = ctx;
-    msg.channel = NULL;
     __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
 
     __xlogd("xmsger_connect exit\n");

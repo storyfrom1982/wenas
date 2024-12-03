@@ -124,13 +124,11 @@ static inline double __xl_b2float(xdata_t *d)
 #define XLMSG_FLAG_DISCONNECT       0x04
 
 typedef struct xline {
-    uint8_t flag;
     __atom_size ref;
-    void *cb;
-    struct xchanne *channel;
-    struct xchannel_ctx *ctx;
+    uint8_t flag;
+    void *cb, *ctx;
     struct xline *prev, *next;
-    uint64_t wpos, spos, rpos, range, size;
+    uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *ptr;
     xdata_t data;
@@ -145,8 +143,7 @@ static inline xline_t* xl_creator(uint64_t size)
     obj->size = size;
     obj->wpos = 0;
     obj->rpos = 0;
-    obj->cb = NULL;
-    obj->ctx = NULL;
+    obj->cb = obj->ctx = NULL;
     obj->prev = obj->next = NULL;
     obj->ptr = obj->data.b + XDATA_SIZE;
     return obj;
