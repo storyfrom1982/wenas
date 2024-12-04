@@ -70,7 +70,7 @@ set(kzx_sources
 )
 
 set(kzx_defines "")
-set(kzx_cflags "")
+set(kzx_cflags "-Wno-format;")
 set(kzx_cxxflags "")
 set(kzx_ldflags "")
 set(kzx_inclides "")
@@ -102,7 +102,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(kzx_cflags "-m64;-O0;-g;-Wno-format;")
+    list(APPEND kzx_cflags "-m64;-O0;-g;")
     list(APPEND kzx_defines -D__XDEBUG__)
 endif()
 
@@ -113,8 +113,8 @@ endif()
 
 list(APPEND kzx_inclides src/xapi/dep src/xapi/dep/libuv-1.49.2/include)
 
-# add_subdirectory(src/xapi/dep/libuv-1.49.2)
-list(APPEND kzx_directories src/xapi/dep)
+add_subdirectory(src/xapi/dep/libuv-1.49.2)
+# list(APPEND kzx_directories src/xapi/dep)
 
 function(build_executable EXECUTABLE_NAME EXECUTABLE_SOURCES)
     add_executable(${EXECUTABLE_NAME} ${EXECUTABLE_SOURCES} ${kzx_sources})

@@ -22,7 +22,8 @@ enum {
 # define PACK_BODY_SIZE              64
 #else
 // 1024 + 256
-# define PACK_BODY_SIZE              1280
+// # define PACK_BODY_SIZE              1280
+# define PACK_BODY_SIZE              64
 #endif
 
 #define PACK_ONLINE_SIZE            ( PACK_BODY_SIZE + PACK_HEAD_SIZE )

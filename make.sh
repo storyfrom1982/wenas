@@ -1,6 +1,6 @@
 #!/bin/sh
 clear
-rm -rf build
+# rm -rf build
 rm -rf tmp
 cmake -B build -D CMAKE_BUILD_TYPE=$5 && cmake --build build
 
