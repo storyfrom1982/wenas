@@ -1008,6 +1008,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
                                         channel->ip, channel->port, channel->lcid, channel->rcid, channel->local_key, channel->serial_number);
             xchannel_clear(channel);
             xchannel_serial_pack(channel, XMSG_PACK_BYE);
+
             // 移除链接池
             avl_tree_remove(&msger->peers, channel);
             // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
@@ -1087,11 +1088,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
-                            if (channel->connected){
-                                msger->callback->on_msg_timeout(msger->callback, channel);
-                            }else {
-                                msger->callback->on_connection_timeout(msger->callback, channel);
-                            }
+                            msger->callback->on_timeout(msger->callback, channel);
                             // 移除超时的连接
                             avl_tree_remove(&msger->peers, channel);
                             xchannel_free(channel);

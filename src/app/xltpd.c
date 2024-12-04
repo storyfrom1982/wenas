@@ -829,10 +829,9 @@ int main(int argc, char *argv[])
     listener->ctx = server;
     listener->on_connection_to_peer = on_connection_to_peer;
     listener->on_connection_from_peer = on_connection_from_peer;
-    listener->on_connection_timeout = on_msg_timeout;
+    listener->on_timeout = on_msg_timeout;
     listener->on_msg_from_peer = on_message_from_peer;
     listener->on_msg_to_peer = on_message_to_peer;
-    listener->on_msg_timeout = on_msg_timeout;
     listener->on_disconnection = on_disconnect;
 
     // server->sock = __xapi->udp_open();

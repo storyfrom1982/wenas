@@ -17,11 +17,10 @@ typedef struct xmsgercb {
     void *ctx;
     void (*on_connection_to_peer)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_connection_from_peer)(struct xmsgercb*, xchannel_ptr channel);
-    void (*on_connection_timeout)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_msg_from_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
     void (*on_msg_to_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
-    void (*on_msg_timeout)(struct xmsgercb*, xchannel_ptr channel);
     void (*on_disconnection)(struct xmsgercb*, xchannel_ptr channel);
+    void (*on_timeout)(struct xmsgercb*, xchannel_ptr channel);
 }*xmsgercb_ptr;
 
 

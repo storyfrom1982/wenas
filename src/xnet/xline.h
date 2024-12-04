@@ -609,7 +609,7 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
         uint64_t len = __xl_sizeof_line(xd) * 2; \
         char buf[len]; \
         xl_format((xd), "", 1, buf, &pos, len); \
-        __xlogi("xline len[%lu]\n####################################\n%s####################################\n", pos, buf); \
+        __xlogi("\n####################################\n%s####################################\n", buf); \
     }while(0)
 
 
