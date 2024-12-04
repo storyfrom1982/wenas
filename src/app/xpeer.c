@@ -69,6 +69,7 @@ typedef struct xpeer {
     struct avl_tree uuid_table;
     xtree recv_api;
 
+    uint64_t channel_count;
     struct xchannel_ctx channels;
     xpeer_ctx_t *server;
 
@@ -170,7 +171,25 @@ static inline void msgid_table_init(struct avl_tree *table)
     avl_tree_init(table, msgid_compare, msgid_find, sizeof(xline_t), AVL_OFFSET(xline_t, node));
 }
 
-static inline xpeer_ctx_t* xpeer_ctx_free(xpeer_ctx_t *ctx)
+uint64_t xserver_get_msgid(xpeer_t *server)
+{
+    return __atom_add(server->msgid, 1);
+}
+
+static inline xline_t* xmsg_new(xpeer_ctx_t *ctx, uint8_t flag, msg_cb_t cb)
+{
+    xline_t *msg = xl_maker();
+    __xcheck(msg == NULL);
+    msg->flag = flag;
+    msg->index = __atom_add(ctx->server->msgid, 1);
+    msg->cb = cb;
+    msg->ctx = ctx;
+    return msg;
+XClean:
+    return NULL;
+}
+
+static inline void xpeer_ctx_free(xpeer_ctx_t *ctx)
 {
     ctx->prev->next = ctx->next;
     ctx->next->prev = ctx->prev;
@@ -349,18 +368,20 @@ XClean:
     return;
 }
 
-uint64_t xserver_get_msgid(xpeer_t *server)
-{
-    return __atom_add(server->msgid, 1);
-}
+xpeer_ctx_t* xltp_login(xpeer_t *peer, const char *host, uint16_t port);
+static void xltp_logout(xpeer_t *peer);
 
 static void res_logout(xpeer_ctx_t *ctx, void *userctx)
 {
+    if (--ctx->server->channel_count == 0){
+        xltp_login(ctx->server, ctx->server->ip, ctx->server->port);
+    }
     __xlogi("res_logout --------------------- \n");
 }
 
 static void res_echo(xpeer_ctx_t *ctx, void *userctx)
 {
+    ctx->server->channel_count ++;
     char *host = xl_find_word(&ctx->server->parser, "host");
     uint16_t port = xl_find_uint(&ctx->server->parser, "port");
     __xlogi("echo public address[%s:%u]\n", host, port);
@@ -369,10 +390,12 @@ static void res_echo(xpeer_ctx_t *ctx, void *userctx)
     }else {
         __xlogi("disable puching\n");
     }
+    xltp_logout(ctx->server);
 }
 
 static void res_login(xpeer_ctx_t *ctx, void *user)
 {
+    ctx->server->channel_count ++;
     char *host = xl_find_word(&ctx->server->parser, "host");
     ctx->server->pub_port = xl_find_uint(&ctx->server->parser, "port");
     mcopy(ctx->server->pub_ip, host, slength(host));
@@ -381,12 +404,14 @@ static void res_login(xpeer_ctx_t *ctx, void *user)
     __xcheck(new_ctx == NULL);
     new_ctx->handler = NULL;
     new_ctx->process = NULL;
-    xline_t *msg = xl_maker();
+    xline_t *msg = xmsg_new(new_ctx, XLMSG_FLAG_CONNECT, res_echo);
     __xcheck(msg == NULL);
-    msg->flag = XLMSG_FLAG_CONNECT;
-    msg->index = xserver_get_msgid(new_ctx->server);
-    msg->cb = res_echo;
-    msg->ctx = new_ctx;
+    // xline_t *msg = xl_maker();
+    // __xcheck(msg == NULL);
+    // msg->flag = XLMSG_FLAG_CONNECT;
+    // msg->index = xserver_get_msgid(new_ctx->server);
+    // msg->cb = res_echo;
+    // msg->ctx = new_ctx;
     xl_add_word(&msg, "api", "echo");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", new_ctx->server->ip);
@@ -457,17 +482,17 @@ static void api_echo(xpeer_ctx_t *ctx)
 static void xltp_logout(xpeer_t *peer)
 {
     xline_t *msg = NULL;
-    xpeer_ctx_t *next, *ctx = peer->channels.next;
+    xpeer_ctx_t *ctx = peer->channels.next;
     while (ctx != &peer->channels){
-        next = ctx->next;
-        ctx->next->prev = ctx->prev;
-        ctx->prev->next = ctx->next;
-        msg = xl_maker();
-        msg->flag = XLMSG_FLAG_DISCONNECT;
-        msg->cb = res_logout;
-        msg->ctx = ctx;
+        // msg = xl_maker();
+        // msg->flag = XLMSG_FLAG_DISCONNECT;
+        // msg->index = xserver_get_msgid(peer);
+        // msg->cb = res_logout;
+        // msg->ctx = ctx;
+        msg = xmsg_new(ctx, XLMSG_FLAG_DISCONNECT, res_logout);
+        __xcheck(msg == NULL);
         __xcheck(xpipe_write(peer->task_pipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-        ctx = next;
+        ctx = ctx->next;
     }
     return;
 XClean:
@@ -483,12 +508,14 @@ xpeer_ctx_t* xltp_login(xpeer_t *peer, const char *host, uint16_t port)
     __xcheck(ctx == NULL);
     ctx->handler = NULL;
     ctx->process = NULL;
-    xline_t *msg = xl_maker();
+    xline_t *msg = xmsg_new(ctx, XLMSG_FLAG_CONNECT, res_login);
     __xcheck(msg == NULL);
-    msg->flag = XLMSG_FLAG_CONNECT;
-    msg->index = xserver_get_msgid(peer);
-    msg->cb = res_login;
-    msg->ctx = ctx;
+    // xline_t *msg = xl_maker();
+    // __xcheck(msg == NULL);
+    // msg->flag = XLMSG_FLAG_CONNECT;
+    // msg->index = xserver_get_msgid(peer);
+    // msg->cb = res_login;
+    // msg->ctx = ctx;
     xl_add_word(&msg, "api", "login");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", host);
@@ -582,9 +609,9 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(peer->ip, hostname);
     // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
-    // const char *cip = "192.168.1.6";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    const char *cip = "47.92.77.19";
+    // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
