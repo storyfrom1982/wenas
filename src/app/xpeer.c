@@ -263,11 +263,14 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
 {
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> enter\n");
     xpeer_t *server = (xpeer_t*)listener->ctx;
-    xline_t *msg = xl_maker();
-    msg->flag = XLMSG_FLAG_RECV;
-    msg->ctx = xchannel_get_ctx(channel);
-    xl_add_word(&msg, "api", "disconnect");
-    xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
+    xpeer_ctx_t *ctx = xchannel_get_ctx(channel);
+    if (ctx != NULL){
+        xline_t *msg = xl_maker();
+        msg->flag = XLMSG_FLAG_RECV;
+        msg->ctx = ctx;
+        xl_add_word(&msg, "api", "disconnect");
+        xpipe_write(server->task_pipe, &msg, __sizeof_ptr);
+    }
     __xlogd("on_disconnect >>>>>>>>>>>>>>>>>>>>---------------> exit\n");
 }
 
@@ -620,7 +623,7 @@ int main(int argc, char *argv[])
     peer->task_pid = __xapi->thread_create(task_loop, peer);
     __xcheck(peer->task_pid == NULL);
     
-    peer->msger = xmsger_create(&peer->listener, 1);
+    peer->msger = xmsger_create(&peer->listener, 0);
 
     // server->listen_pid = __xapi->process_create(listen_loop, server);
     // __xbreak(server->listen_pid == NULL);
@@ -631,9 +634,9 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(peer->ip, hostname);
     // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
-    // const char *cip = "192.168.1.6";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    const char *cip = "47.92.77.19";
+    // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";

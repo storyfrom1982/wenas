@@ -362,15 +362,15 @@ static int udp_bind_addr(int sock, __xipaddr_ptr ipaddr)
 
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
-#ifdef __XDEBUG__
-    static uint64_t send_number = 0, lost_number = 0;
-    send_number++;
-    uint64_t randtime = __xclock() / 1000000ULL;
-    if ((send_number & 0x03) == (randtime & 0x03)){
-        __xlogd("lost pack ...........\n");
-        return size;
-    }
-#endif
+// #ifdef __XDEBUG__
+//     static uint64_t send_number = 0, lost_number = 0;
+//     send_number++;
+//     uint64_t randtime = __xclock() / 1000000ULL;
+//     if ((send_number & 0x03) == (randtime & 0x03)){
+//         __xlogd("lost pack ...........\n");
+//         return size;
+//     }
+// #endif
     return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
 

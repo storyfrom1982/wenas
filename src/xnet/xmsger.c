@@ -415,15 +415,17 @@ static inline void xchannel_clear(xchannel_ptr channel)
 
 static inline void xchannel_free(xchannel_ptr channel)
 {
-    __xlogd("xchannel_free enter\n");
+    __xlogd("xchannel_free --------------- enter\n");
     xchannel_clear(channel);
+    __xlogd("xchannel_free --------------- 1\n");
     __xchannel_take_out_list(channel);
+    __xlogd("xchannel_free --------------- 2\n");
     free(channel->recvbuf);
     free(channel->sendbuf);
     free(channel->msgbuf);
     free(channel->addr);
     free(channel);
-    __xlogd("xchannel_free exit\n");
+    __xlogd("xchannel_free --------------- exit\n");
 }
 
 static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
@@ -1171,6 +1173,10 @@ static inline void xmsger_check_all(xmsger_ptr msger)
                 msger->callback->on_disconnection(msger->callback, channel);
                 // 移除超时的连接
                 avl_tree_remove(&msger->peers, channel);
+                // 如果连接正在创建中，需要从缓存中移除
+                if (!channel->connected){
+                    avl_tree_remove(&msger->temp_channels, channel);
+                }
                 xchannel_free(channel);
             }else {
                 // 队列的第一个连接没有超时，后面的连接就都没有超时
@@ -1635,6 +1641,12 @@ XClean:
 static void free_channel(void *val)
 {
     xchannel_free((xchannel_ptr)val);
+    avl_tree_remove(&((xchannel_ptr)val)->msger->temp_channels, (xchannel_ptr)val);
+}
+
+static void free_channel_1(void *val)
+{
+    xchannel_free((xchannel_ptr)val);
 }
 
 void xmsger_free(xmsger_ptr *pptr)
@@ -1658,9 +1670,11 @@ void xmsger_free(xmsger_ptr *pptr)
             __xapi->thread_join(msger->mpid);
         }
 
+        __xlogd("xmsger_free peers\n");
         // channel free 会用到 rpipe，所以将 tree clear 提前
         avl_tree_clear(&msger->peers, free_channel);
-        avl_tree_clear(&msger->temp_channels, free_channel);
+        __xlogd("xmsger_free temps\n");
+        avl_tree_clear(&msger->temp_channels, free_channel_1);
         // if (msger->chcache){
         //     // __xlogd("xmsger_free clear channel cache\n");
         //     // xtree_clear(msger->chcache, free_channel);
