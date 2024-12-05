@@ -181,7 +181,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
         fflush(stdout);
     }
 
-    if (__XLOG_LEVEL_ERROR == level){
-        exit(0);
-    }
+    // if (__XLOG_LEVEL_ERROR == level){
+    //     exit(0);
+    // }
 }

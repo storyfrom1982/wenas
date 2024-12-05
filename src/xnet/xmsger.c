@@ -395,6 +395,8 @@ static inline void xchannel_clear(xchannel_ptr channel)
     }
     __xlogd("xchannel_clear 2\n");
     for (int i = 0; i < channel->msgbuf->range; ++i){
+        // msg 加了引用计数，这里需要释放一次
+        xl_free(&channel->msgbuf->buf[i].xl);
         channel->msgbuf->buf[i].xl = NULL;
         // mclear(&channel->msgbuf->buf[i], sizeof(xlmsg_t));
         // if (channel->msgbuf->buf[i] != NULL){
