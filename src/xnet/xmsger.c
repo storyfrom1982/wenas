@@ -448,8 +448,8 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.sn = channel->sendbuf->wpos;
     pack->head.cid = channel->rcid;
     __atom_add(channel->sendbuf->wpos, 1);
-    // channel->len += pack->head.len;
-    // channel->msger->len += pack->head.len;
+    channel->len += pack->head.len;
+    channel->msger->len += pack->head.len;
     // // 加入发送队列，并且从待回收队列中移除
     // if(channel->worklist != &channel->msger->send_list) {
     //     __xchannel_take_out_list(channel);
