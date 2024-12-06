@@ -629,8 +629,8 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
                     channel->timestamp = __xapi->clock();
                     // 判断队列是否有多个成员
                     if (channel->worklist->len > 1){
-                        __xlogd("xchannel_recv_msg >>>>------------------------> 3 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
-                                    channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
+                        __xlogd("xchannel_recv_msg >>>>------------------------> 3 channel=%X prev=%s next=%X\n", channel, channel->prev, channel->next);
+                        __xlogd("xchannel_recv_msg >>>>------------------------> 4 listlen=%lu list=%X\n", channel->worklist->len, channel->worklist);
                         // 将更新后的成员移动到队尾
                         __xchannel_move_to_end(channel);
                     }
