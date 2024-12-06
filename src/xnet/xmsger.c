@@ -631,6 +631,7 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
 
             // 收到一个完整的消息，需要判断是否需要更新保活
             if (pack->head.range == 1 && channel->worklist == &channel->msger->recv_list){
+                __xlogd("xchannel_recv_msg >>>>------------------------> update timestamp\n");
                 // 更新时间戳
                 channel->timestamp = __xapi->clock();
                 // 判断队列是否有多个成员
