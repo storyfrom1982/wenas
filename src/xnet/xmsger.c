@@ -150,7 +150,7 @@ struct xchannel {
     struct xpacklist flushlist;
     struct xchannellist *worklist;
 
-    xline_t *xkv;
+    xline_t *msg;
     // // xmsg_ptr msg_head, *msg_tail;
     // // xmsg_ptr smsg;
     // xmsg_ptr sender;
@@ -405,10 +405,10 @@ static inline void xchannel_clear(xchannel_ptr channel)
         // }
     }
     // 释放未完整接收的消息
-    if (channel->xkv != NULL){
+    if (channel->msg != NULL){
         __xlogd("xchannel_clear 3\n");
-        xl_free(&channel->xkv);
-        channel->xkv = NULL;
+        xl_free(&channel->msg);
+        channel->msg = NULL;
     }
     __xlogd("xchannel_clear exit\n");
 }
@@ -448,8 +448,8 @@ static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
     pack->head.sn = channel->sendbuf->wpos;
     pack->head.cid = channel->rcid;
     __atom_add(channel->sendbuf->wpos, 1);
-    channel->len += pack->head.len;
-    channel->msger->len += pack->head.len;
+    // channel->len += pack->head.len;
+    // channel->msger->len += pack->head.len;
     // // 加入发送队列，并且从待回收队列中移除
     // if(channel->worklist != &channel->msger->send_list) {
     //     __xchannel_take_out_list(channel);
@@ -542,10 +542,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 发送成功才能清空标志
             channel->ack.flag = 0;
 
-            // 数据已发送，从待发送数据中减掉这部分长度
-            __atom_add(channel->pos, pack->head.len);
-            __atom_add(channel->msger->pos, pack->head.len);
-
             // 缓冲区下标指向下一个待发送 pack
             __atom_add(channel->sendbuf->spos, 1);
 
@@ -610,36 +606,37 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
         do {
             if (pack->head.type == XMSG_PACK_MSG){
                 // 如果当前消息的数据为空，证明这个包是新消息的第一个包
-                if (channel->xkv == NULL){
-                    channel->xkv = xl_creator(pack->head.range * PACK_BODY_SIZE);
-                    __xcheck(channel->xkv == NULL);
+                if (channel->msg == NULL){
+                    channel->msg = xl_creator(pack->head.range * PACK_BODY_SIZE);
+                    __xcheck(channel->msg == NULL);
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
                     // channel->rmsg->range = pack->head.range;
                 }
-                mcopy(channel->xkv->ptr + channel->xkv->wpos, pack->body, pack->head.len);
-                channel->xkv->wpos += pack->head.len;
-                // channel->rmsg->range--;
-                if (channel->xkv->size - channel->xkv->wpos < PACK_BODY_SIZE){
+                mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
+                channel->msg->wpos += pack->head.len;
+                if (channel->msg->size - channel->msg->wpos < PACK_BODY_SIZE){
                     // 更新消息长度
-                    xl_fixed(channel->xkv);
+                    xl_fixed(channel->msg);
                     // xl_printf(&channel->xkv->line);
                     // 通知用户已收到一个完整的消息
-                    channel->msger->callback->on_msg_from_peer(channel->msger->callback, channel, channel->xkv);
-                    channel->xkv = NULL;
+                    __xlogd("xchannel_recv_msg >>>>------------------------> 1 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
+                                channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
+                    channel->msger->callback->on_msg_from_peer(channel->msger->callback, channel, channel->msg);
+                    __xlogd("xchannel_recv_msg >>>>------------------------> 2 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
+                                channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
+                    channel->msg = NULL;
+                    // 更新时间戳
+                    channel->timestamp = __xapi->clock();
+                    // 判断队列是否有多个成员
+                    if (channel->worklist->len > 1){
+                        __xlogd("xchannel_recv_msg >>>>------------------------> 3 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
+                                    channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
+                        // 将更新后的成员移动到队尾
+                        __xchannel_move_to_end(channel);
+                    }
                 }
             }
 
-            // 收到一个完整的消息，需要判断是否需要更新保活
-            if (pack->head.range == 1 && channel->worklist == &channel->msger->recv_list){
-                __xlogd("xchannel_recv_msg >>>>------------------------> update timestamp\n");
-                // 更新时间戳
-                channel->timestamp = __xapi->clock();
-                // 判断队列是否有多个成员
-                if (channel->worklist->len > 1){
-                    // 将更新后的成员移动到队尾
-                    __xchannel_move_to_end(channel);
-                }
-            }
             // 处理玩的缓冲区置空
             channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)] = NULL;
             // 更新读索引
@@ -703,17 +700,19 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 __ring_list_take_out(&channel->flushlist, pack);
 
-                // 判断是否有未发送的消息
-                if (__serialbuf_sendable(channel->msgbuf) == 0){
-                    // 判断是否有待重传的包，再判断是否需要保活
-                    if (!channel->keepalive && __serialbuf_sendable(channel->sendbuf) == 0 && channel->flushlist.len == 0){
-                        // 不需要保活，加入等待超时队列
-                        if (__atom_try_lock(channel->sending)){
-                            __xchannel_take_out_list(channel);
-                            __xchannel_put_into_list(&channel->msger->recv_list, channel);
-                            __atom_unlock(channel->sending);
-                        }
-                    }
+                // 数据已发送，从待发送数据中减掉这部分长度
+                __atom_add(channel->pos, pack->head.len);
+                __atom_add(channel->msger->pos, pack->head.len);
+
+                // 判断是否有未发送的消息和未确认消息和是否需要保活
+                if (channel->flushlist.len == 0 
+                    && channel->pos == channel->len
+                    && !channel->keepalive){
+                    // 不需要保活，必须加入等待超时队列
+                    __atom_lock(channel->sending);
+                    __xchannel_take_out_list(channel);
+                    __xchannel_put_into_list(&channel->msger->recv_list, channel);
+                    __atom_unlock(channel->sending);
                 }
             }
 
@@ -809,6 +808,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->back_delay = channel->back_range / channel->back_times;
                 // 从定时队列中移除
                 __ring_list_take_out(&channel->flushlist, pack);
+                // 数据已发送，从待发送数据中减掉这部分长度
+                __atom_add(channel->pos, pack->head.len);
+                __atom_add(channel->msger->pos, pack->head.len);
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
