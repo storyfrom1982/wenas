@@ -123,6 +123,7 @@ static inline double __xl_b2float(xdata_t *d)
 #define XLMSG_FLAG_SEND             0x01
 #define XLMSG_FLAG_CONNECT          0x02
 #define XLMSG_FLAG_DISCONNECT       0x04
+#define XLMSG_FLAG_FINAL            0x08
 
 typedef struct xline {
     __atom_size ref;

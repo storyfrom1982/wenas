@@ -29,6 +29,7 @@ extern void xmsger_free(xmsger_ptr *pptr);
 extern bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg);
 extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
 extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
+extern bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel);
 
 extern bool xchannel_get_keepalive(xchannel_ptr channel);
 extern const char* xchannel_get_host(xchannel_ptr channel);

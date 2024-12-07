@@ -419,6 +419,15 @@ static inline void xchannel_free(xchannel_ptr channel)
     xchannel_clear(channel);
     __xlogd("xchannel_free --------------- 1\n");
     __xchannel_take_out_list(channel);
+    __xlogd("xchannel_free enter peers %lu\n", channel->msger->peers.count);
+    if (channel->node.left != channel->node.right){
+        avl_tree_remove(&channel->msger->peers, channel);
+    }
+    __xlogd("xchannel_free exit peers %lu\n", channel->msger->peers.count);
+    __xlogd("xchannel_free temps %lu\n", channel->msger->temp_channels.count);
+    if (channel->temp.left != channel->temp.right){
+        avl_tree_remove(&channel->msger->temp_channels, channel);
+    }
     __xlogd("xchannel_free --------------- 2\n");
     free(channel->recvbuf);
     free(channel->sendbuf);
@@ -709,10 +718,13 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     && channel->pos == channel->len
                     && !channel->keepalive){
                     // 不需要保活，必须加入等待超时队列
-                    __atom_lock(channel->sending);
-                    __xchannel_take_out_list(channel);
-                    __xchannel_put_into_list(&channel->msger->recv_list, channel);
-                    __atom_unlock(channel->sending);
+                    if (__atom_try_lock(channel->sending)){
+                        // 这里使用 try lock 
+                        // 如果没有获得锁，是因为外部正在写入数据，所以不需要切换到接收队列
+                        __xchannel_take_out_list(channel);
+                        __xchannel_put_into_list(&channel->msger->recv_list, channel);
+                        __atom_unlock(channel->sending);
+                    }
                 }
             }
 
@@ -945,7 +957,15 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
 {
     xchannel_ptr channel = (xchannel_ptr)msg->ctx;
 
-    if (msg->flag == XLMSG_FLAG_CONNECT){
+    if (msg->flag == XLMSG_FLAG_SEND){
+
+        // 这里必须加锁
+        __atom_lock(channel->sending);
+        __xchannel_take_out_list(channel);
+        __xchannel_put_into_list(&msger->send_list, channel);
+        __atom_unlock(channel->sending);
+
+    }else if (msg->flag == XLMSG_FLAG_CONNECT){
 
         channel = xchannel_create(msger, PACK_SERIAL_RANGE);
         if(channel == NULL){
@@ -987,23 +1007,12 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
         __atom_add(channel->len, msg->xl->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = *msg;
         __atom_add(channel->msgbuf->wpos, 1);
+
         if (channel->worklist != &msger->send_list){
+            // 这里无需加锁，因为此时，其他线程还没这个连接的指针
             __xchannel_take_out_list(channel);
             __xchannel_put_into_list(&msger->send_list, channel);
         }
-
-        // xchannel_send_msg(channel, msg);
-
-        // if (req != NULL){
-        //     xl_printf(&req->line);
-        //     xl_free(msg->lkv);
-        //     msg->lkv = req;
-        //     xmsg_fixed(msg);
-        //     xchannel_send_msg(channel, msg);
-        //     // firstmsg = firstmsg->next;
-        // }else {
-        //     free(msg);
-        // }
 
         __xlogd("xmsger_process_msg >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u] KEY[%u] SN[%u]\n", 
                                     channel->ip, port, channel->lcid, channel->local_key, channel->serial_number);
@@ -1018,6 +1027,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
 
             // 移除链接池
             avl_tree_remove(&msger->peers, channel);
+            channel->node.left = channel->node.right = NULL;
             // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
             channel->temp_cid[0] = channel->cid[0];
             channel->temp_cid[1] = channel->cid[1];
@@ -1037,6 +1047,11 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
         }
 
         xl_free(&msg->xl);
+
+    }else if (msg->flag == XLMSG_FLAG_FINAL){
+
+        __xlogd("XLMSG_FLAG_FINAL----------------------------XLMSG_FLAG_FINAL\n");
+        xchannel_free(msg->ctx);
     }
 
     return true;
@@ -1096,9 +1111,9 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
                             msger->callback->on_timeout(msger->callback, channel);
-                            // 移除超时的连接
-                            avl_tree_remove(&msger->peers, channel);
-                            xchannel_free(channel);
+                            // // 移除超时的连接
+                            // avl_tree_remove(&msger->peers, channel);
+                            // xchannel_free(channel);
                             break;
 
                         }else {
@@ -1174,13 +1189,13 @@ static inline void xmsger_check_all(xmsger_ptr msger)
             if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                 // __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_disconnect (%lu)\n", *(uint64_t*)(&channel->addr->port), __xapi->clock() - channel->timestamp);
                 msger->callback->on_disconnection(msger->callback, channel);
-                // 移除超时的连接
-                avl_tree_remove(&msger->peers, channel);
-                // 如果连接正在创建中，需要从缓存中移除
-                if (!channel->connected){
-                    avl_tree_remove(&msger->temp_channels, channel);
-                }
-                xchannel_free(channel);
+                // // 移除超时的连接
+                // avl_tree_remove(&msger->peers, channel);
+                // // 如果连接正在创建中，需要从缓存中移除
+                // if (!channel->connected){
+                //     avl_tree_remove(&msger->temp_channels, channel);
+                // }
+                // xchannel_free(channel);
             }else {
                 // 队列的第一个连接没有超时，后面的连接就都没有超时
                 break;
@@ -1266,6 +1281,7 @@ static void main_loop(void *ptr)
                         __xlogd("xmsger_loop >>>>-------------> RECV PONG: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                         if (!channel->connected){
                             avl_tree_remove(&msger->temp_channels, channel);
+                            channel->temp.left = channel->temp.right = NULL;
                             channel->connected = true;
                             msger->callback->on_connection_from_peer(msger->callback, channel);
                         }
@@ -1283,9 +1299,10 @@ static void main_loop(void *ptr)
                     }else if (rpack->head.type == XMSG_PACK_BYE){
                         __xlogd("xmsger_loop >>>>-------------> RECV BYE: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                         msger->callback->on_disconnection(msger->callback, channel);
-                        // 被动端收到 BYE，删除索引
+                        // // 被动端收到 BYE，删除索引
                         avl_tree_remove(&msger->peers, channel);
-                        xchannel_free(channel);
+                        channel->node.left = channel->node.right = NULL;
+                        // xchannel_free(channel);
                         // 回复最后的 ACK
                         xchannel_send_final(msger->sock[i], addr, rpack);
 
@@ -1378,7 +1395,8 @@ static void main_loop(void *ptr)
                             __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                             msger->callback->on_disconnection(msger->callback, channel);
                             avl_tree_remove(&msger->temp_channels, channel);
-                            xchannel_free(channel);
+                            channel->temp.left = channel->temp.right = NULL;
+                            // xchannel_free(channel);
                         }
                     }
 
@@ -1452,19 +1470,24 @@ bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     msg.xl = xl;
 
     if (__serialbuf_writable(channel->msgbuf) > 0){
+
         xmsg_fixed(&msg);
         msg.ctx = channel;
         msg.flag = XLMSG_FLAG_SEND;
         __atom_add(msger->len, xl->wpos);
         __atom_add(channel->len, xl->wpos);
+
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
+
+        // 必须先锁住 worklist
         __atom_lock(channel->sending);
         if (channel->worklist != &msger->send_list){
-            __xchannel_take_out_list(channel);
-            __xchannel_put_into_list(&msger->send_list, channel);
+            // 发送一个切换队列的消息
+            __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, sizeof(msg)) != sizeof(msg)));
         }
         __atom_unlock(channel->sending);
+        
         // __xlogd("xmsger_send_message exit\n");
         return true;
     }
@@ -1477,6 +1500,17 @@ XClean:
 
     // __xlogd("xmsger_send_message failed\n");
 
+    return false;
+}
+
+bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
+{
+    xlmsg_t msg;
+    msg.flag = XLMSG_FLAG_FINAL;
+    msg.ctx = channel;
+    __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
+    return true;
+XClean:
     return false;
 }
 
@@ -1644,7 +1678,7 @@ XClean:
 static void free_channel(void *val)
 {
     xchannel_free((xchannel_ptr)val);
-    avl_tree_remove(&((xchannel_ptr)val)->msger->temp_channels, (xchannel_ptr)val);
+    // avl_tree_remove(&((xchannel_ptr)val)->msger->temp_channels, (xchannel_ptr)val);
 }
 
 static void free_channel_1(void *val)
@@ -1673,11 +1707,26 @@ void xmsger_free(xmsger_ptr *pptr)
             __xapi->thread_join(msger->mpid);
         }
 
-        __xlogd("xmsger_free peers\n");
+        xchannel_ptr next, channel = msger->recv_list.head.next;
+
+        while (channel != &msger->recv_list.head){
+            next = channel->next;
+            xchannel_free(channel);
+            channel = next;
+        }
+
+        channel = msger->send_list.head.next;
+        while (channel != &msger->send_list.head){
+            next = channel->next;
+            xchannel_free(channel);
+            channel = next;
+        }
+
+        __xlogd("xmsger_free peers %lu\n", msger->peers.count);
         // channel free 会用到 rpipe，所以将 tree clear 提前
-        avl_tree_clear(&msger->peers, free_channel);
-        __xlogd("xmsger_free temps\n");
-        avl_tree_clear(&msger->temp_channels, free_channel_1);
+        avl_tree_clear(&msger->peers, NULL);
+        __xlogd("xmsger_free temps %lu\n", msger->temp_channels.count);
+        avl_tree_clear(&msger->temp_channels, NULL);
         // if (msger->chcache){
         //     // __xlogd("xmsger_free clear channel cache\n");
         //     // xtree_clear(msger->chcache, free_channel);

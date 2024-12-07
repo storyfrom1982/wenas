@@ -456,14 +456,16 @@ static void api_res(xpeer_ctx_t *ctx)
 static void api_discon(xpeer_ctx_t *ctx)
 {
     __xlogd("api_discon enter\n");
+    xmsger_final(ctx->server->msger, ctx->channel);
     xpeer_ctx_free(ctx);
     __xlogd("api_discon exit\n");
 }
 
-static void api_timeout(xpeer_ctx_t *pctx)
+static void api_timeout(xpeer_ctx_t *ctx)
 {
     __xlogd("api_timeout enter\n");
-    xpeer_ctx_free(pctx);
+    xmsger_final(ctx->server->msger, ctx->channel);
+    xpeer_ctx_free(ctx);
     __xlogd("api_timeout exit\n");
 }
 
