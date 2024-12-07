@@ -139,6 +139,7 @@ struct xchannel {
 
     bool keepalive;
     bool connected;
+    bool disconnected;
     __atom_bool sending;
     __atom_size pos, len;
 
@@ -1110,7 +1111,10 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
-                            msger->callback->on_timeout(msger->callback, channel);
+                            if (!channel->disconnected){
+                                channel->disconnected = true;
+                                msger->callback->on_timeout(msger->callback, channel);
+                            }
                             // // 移除超时的连接
                             // avl_tree_remove(&msger->peers, channel);
                             // xchannel_free(channel);
@@ -1188,7 +1192,10 @@ static inline void xmsger_check_all(xmsger_ptr msger)
             // 10 秒钟超时
             if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                 // __xlogd("main_loop (IP:%X) >>>>>---------------------------------> on_disconnect (%lu)\n", *(uint64_t*)(&channel->addr->port), __xapi->clock() - channel->timestamp);
-                msger->callback->on_disconnection(msger->callback, channel);
+                if (!channel->disconnected){
+                    channel->disconnected = true;
+                    msger->callback->on_disconnection(msger->callback, channel);
+                }
                 // // 移除超时的连接
                 // avl_tree_remove(&msger->peers, channel);
                 // // 如果连接正在创建中，需要从缓存中移除
