@@ -416,7 +416,8 @@ static inline void xchannel_clear(xchannel_ptr channel)
 
 static inline void xchannel_free(xchannel_ptr channel)
 {
-    __xlogd("xchannel_free --------------- enter\n");
+    __xlogd("xchannel_free --------------- \n");
+    __xlogd("xchannel_free >>>>-------------------> IP[%s] PORT[%u] CID[%u->%u]\n", channel->ip, channel->port, channel->lcid, channel->rcid);
     xchannel_clear(channel);
     __xlogd("xchannel_free --------------- 1\n");
     __xchannel_take_out_list(channel);
@@ -845,7 +846,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                 // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                                 pack->head.acks = channel->recvbuf->wpos;
                             }
-                            __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", pack->head.sn);
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+                                    pack->head.type, channel->ip, channel->port, channel->lcid, channel->rcid, 
+                                    pack->head.flag, pack->head.ack, pack->head.acks, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), PACK_HEAD_SIZE + pack->head.len) == PACK_HEAD_SIZE + pack->head.len){
                                 pack->delay *= XCHANNEL_RESEND_STEPPING;
                             }else {
@@ -1023,7 +1026,7 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
         if (channel != NULL){
             __xlogd("xmsger_process_msg >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u->%u] KEY[%u] SN[%u]\n", 
                                         channel->ip, channel->port, channel->lcid, channel->rcid, channel->local_key, channel->serial_number);
-            xchannel_clear(channel);
+            // xchannel_clear(channel);
             xchannel_serial_pack(channel, XMSG_PACK_BYE);
 
             // 移除链接池
@@ -1132,7 +1135,9 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 // TODO ack 也要更新
                             }
 
-                            __xlogd("RESEND >>>>>>>>>>------------> PACK: %u\n", spack->head.sn);
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+                                    spack->head.type, channel->ip, channel->port, channel->lcid, channel->rcid, 
+                                    spack->head.flag, spack->head.ack, spack->head.acks, spack->head.sn);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), PACK_HEAD_SIZE + spack->head.len) == PACK_HEAD_SIZE + spack->head.len){
