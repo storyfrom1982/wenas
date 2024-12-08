@@ -1054,8 +1054,9 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
 
     }else if (msg->flag == XLMSG_FLAG_FINAL){
 
-        __xlogd("XLMSG_FLAG_FINAL----------------------------XLMSG_FLAG_FINAL\n");
-        xchannel_free(msg->ctx);
+        __xlogd("xmsger_process_msg >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u] KEY[%u] SN[%u]\n", 
+                                    channel->ip, channel->port, channel->lcid, channel->local_key, channel->serial_number);
+        xchannel_free(channel);
     }
 
     return true;
@@ -1309,8 +1310,10 @@ static void main_loop(void *ptr)
                         }
 
                     }else if (rpack->head.type == XMSG_PACK_BYE){
-                        __xlogd("xmsger_loop >>>>-------------> RECV BYE: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                        __xlogd("xmsger_loop >>>>-------------> enter RECV BYE: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                        channel->disconnected = true;
                         msger->callback->on_disconnection(msger->callback, channel);
+                        __xlogd("xmsger_loop >>>>-------------> exit RECV BYE: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                         // // 被动端收到 BYE，删除索引
                         avl_tree_remove(&msger->peers, channel);
                         channel->node.left = channel->node.right = NULL;
@@ -1403,9 +1406,11 @@ static void main_loop(void *ptr)
                         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: CID(%u) FLAG(%u:%u:%u)\n", rpack->head.cid, rpack->head.flag, rpack->head.ack, rpack->head.acks);
                         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: cid[%lu] cid[%lu] cid[%lu]\n", cid[0], cid[1], cid[2]);
                         if (channel){
-                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK1: cid[%lu] cid[%lu] cid[%lu]\n", channel->cid[0], channel->cid[1], channel->cid[2]);
-                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First: cid[%lu] cid[%lu] cid[%lu]\n", channel->cid[0], channel->cid[1], channel->cid[2]);
+                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First enter: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                            channel->disconnected = true;
                             msger->callback->on_disconnection(msger->callback, channel);
+                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
                             avl_tree_remove(&msger->temp_channels, channel);
                             channel->temp.left = channel->temp.right = NULL;
                             // xchannel_free(channel);
