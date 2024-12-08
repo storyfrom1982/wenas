@@ -254,6 +254,7 @@ static void on_timeout(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_t *server = (xpeer_t*)listener->ctx;
     xpeer_ctx_t *ctx = xchannel_get_ctx(channel);
     if (ctx != NULL){
+        ctx->channel = channel;
         xline_t *msg = xl_maker();
         msg->flag = XLMSG_FLAG_RECV;
         msg->ctx = ctx;
@@ -268,6 +269,7 @@ static void on_disconnect(xmsgercb_ptr listener, xchannel_ptr channel)
     xpeer_t *server = (xpeer_t*)listener->ctx;
     xpeer_ctx_t *ctx = xchannel_get_ctx(channel);
     if (ctx != NULL){
+        ctx->channel = channel;
         xline_t *msg = xl_maker();
         msg->flag = XLMSG_FLAG_RECV;
         msg->ctx = ctx;
