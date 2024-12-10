@@ -1408,6 +1408,7 @@ static void main_loop(void *ptr)
                         channel->ack.cid = rcid;
                         __xlogd("xmsger_loop >>>>-------------> RECV PING: REMOTE CID(%u) SN(%u)\n", rcid, serial_number);
                         __xlogd("xmsger_loop >>>>-------------> RECV PING: LOCAL  CID(%u) SN(%u)\n", channel->lcid, channel->serial_number);
+                        channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
                     }
 
                     // 更新接收缓冲区和 ACK
@@ -1415,7 +1416,6 @@ static void main_loop(void *ptr)
 
                     if (channel->status != XMSG_PACK_PONG){
                         channel->status = XMSG_PACK_PONG;
-                        channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
                         xchannel_serial_pack(channel, XMSG_PACK_PONG);
                         xchannel_send_pack(channel);
                     }else {
