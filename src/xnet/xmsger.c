@@ -1309,8 +1309,8 @@ static void main_loop(void *ptr)
                     if (channel->status == XMSG_PACK_PING){
                         channel->status = XMSG_PACK_MSG;
                         // 取出同步参数
-                        uint8_t serial_range = rpack->head.flags[0];
-                        uint8_t serial_number = rpack->head.flags[1];
+                        uint8_t serial_number = rpack->head.flags[0];
+                        uint8_t serial_range = rpack->head.flags[1];
                         uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
                         // __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
                         // __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid, channel->local_key, channel->serial_number);
@@ -1368,8 +1368,8 @@ static void main_loop(void *ptr)
                     channel = avl_tree_find(&msger->temp_channels, &cid);
                     if (channel == NULL){
                         // 取出同步参数
-                        uint8_t serial_range = rpack->head.flags[0];
-                        uint8_t serial_number = rpack->head.flags[1];
+                        uint8_t serial_number = rpack->head.flags[0];
+                        uint8_t serial_range = rpack->head.flags[1];
                         uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
                         // 创建连接
                         channel = xchannel_create(msger, serial_range);
