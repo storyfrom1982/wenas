@@ -774,7 +774,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->status = XMSG_PACK_MSG;
                     avl_tree_remove(&channel->msger->temp_channels, channel);
                     channel->temp.left = channel->temp.right = NULL;
-                    channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
+                    // channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
                 }
             }
 
@@ -1417,6 +1417,7 @@ static void main_loop(void *ptr)
                         channel->status = XMSG_PACK_PONG;
                         xchannel_serial_pack(channel, XMSG_PACK_PONG);
                         xchannel_send_pack(channel);
+                        channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
                     }else {
                         __xlogd("xmsger_loop >>>>-------------> RESEND PONG\n");
                         xpack_ptr pack = channel->flushlist.head.next;
