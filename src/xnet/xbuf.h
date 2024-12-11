@@ -75,6 +75,7 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
             __xapi->mutex_unlock(pipe->mutex);
         }
     }
+    __xapi->mutex_notify(pipe->mutex);
 
     // __xlogd("%s xpipe_write >>>>>--------------> exit\n", pipe->name);
 
@@ -124,9 +125,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
     // 长度大于 0 才能进入读循环
     while (!pipe->breaking && pos < len) {
-
         pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
-
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
             // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
@@ -138,6 +137,7 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
             __xapi->mutex_unlock(pipe->mutex);
         }
     }
+    __xapi->mutex_notify(pipe->mutex);
 
     // __xlogd("%s xpipe_read >>>>>--------------> exit\n", pipe->name);
 
