@@ -47,7 +47,7 @@ static inline uint64_t __xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
     }
 
     __atom_unlock(pipe->wlock);
-    __xapi->mutex_notify(pipe->mutex);
+    // __xapi->mutex_notify(pipe->mutex);
 
     return writable;
 }
@@ -66,11 +66,18 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
         pos += __xpipe_write(pipe, (uint8_t*)data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __xpipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
-            // 所以在阻塞之前，唤醒一次读线程
-            __xapi->mutex_notify(pipe->mutex);
-            if (!pipe->breaking){
-                __xapi->mutex_wait(pipe->mutex);
+            if (__atom_try_lock(pipe->rlock)){
+                if ((uint64_t)(pipe->len - pipe->writer + pipe->reader) == 0){
+                    __atom_unlock(pipe->rlock);
+                    if (!pipe->breaking){
+                        // __xpipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
+                        // 所以在阻塞之前，唤醒一次读线程
+                        __xapi->mutex_notify(pipe->mutex);
+                        __xapi->mutex_wait(pipe->mutex);
+                    }
+                }else {
+                    __atom_unlock(pipe->rlock);
+                }
             }
             __xapi->mutex_unlock(pipe->mutex);
         }
@@ -107,7 +114,7 @@ static inline uint64_t __xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
     }
 
     __atom_unlock(pipe->rlock);
-    __xapi->mutex_notify(pipe->mutex);
+    // __xapi->mutex_notify(pipe->mutex);
 
     return readable;
 }
@@ -128,11 +135,18 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
         pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
-            // 所以在阻塞之前，唤醒一次写线程
-            __xapi->mutex_notify(pipe->mutex);
-            if (!pipe->breaking){
-                __xapi->mutex_wait(pipe->mutex);
+            if (__atom_try_lock(pipe->wlock)){
+                if ((uint64_t)(pipe->writer - pipe->reader) == 0){
+                    __atom_unlock(pipe->wlock);
+                    if (!pipe->breaking){
+                        // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
+                        // 所以在阻塞之前，唤醒一次写线程
+                        __xapi->mutex_notify(pipe->mutex);
+                        __xapi->mutex_wait(pipe->mutex);
+                    }
+                }else {
+                    __atom_unlock(pipe->wlock);
+                }
             }
             __xapi->mutex_unlock(pipe->mutex);
         }
