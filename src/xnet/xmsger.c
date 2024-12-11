@@ -593,8 +593,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("<SEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
-        channel->ack.type, channel->ip, channel->port, channel->lcid, channel->rcid, channel->ack.flag, channel->ack.ack, channel->ack.acks);
+    __xlogd("<SEND ACK> IP[%s] PORT[%u] CID[%u->%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+        channel->ip, channel->port, channel->lcid, channel->rcid, channel->ack.flag, channel->ack.ack, channel->ack.acks);
 
     if ((__xapi->udp_sendto(channel->sock, channel->addr, (void*)&channel->ack, PACK_HEAD_SIZE)) == PACK_HEAD_SIZE){
         channel->ack.flag = 0;
@@ -605,7 +605,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
 static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr rpack)
 {
-    __xlogd("xchannel_send_final >>>>-----------------------------------------------------------> SEND FINAL ACK\n");
+    __xlogd("<SEND FINAL> CID[%u] FLAG[%u:%u:%u] >>>>-------------------> SN[%u]\n", rpack->head.cid, rpack->head.flag, rpack->head.ack, rpack->head.acks);
     rpack->head.type = XMSG_PACK_ACK;
     rpack->head.flag = XMSG_PACK_BYE;
     // 设置 acks，通知发送端已经接收了所有包
@@ -618,7 +618,7 @@ static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr r
     rpack->head.range = 1;
     // int sock = __xapi->udp_addr_is_ipv6(addr) ? msger->sock[1] : msger->sock[0];
     if (__xapi->udp_sendto(sock, addr, (void*)&rpack->head, PACK_HEAD_SIZE) != PACK_HEAD_SIZE){
-        __xlogd("xchannel_send_ack >>>>------------------------> failed\n");
+        __xlogd("xchannel_send_final >>>>------------------------> failed\n");
     }
 }
 
@@ -1056,12 +1056,12 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xlmsg_t *msg)
                 msger->temp_channels.count, temp->rcid, temp->temp_cid[0], temp->temp_cid[1], temp->temp_cid[2]);
         }
 
-        xl_free(&msg->xl);
+        // xl_free(&msg->xl);
 
     }else if (msg->flag == XMSG_PACK_FINAL){
 
-        __xlogd("xmsger_process_msg >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
-                                    channel->ip, channel->port, channel->lcid, channel->serial_number);
+        __xlogd("xmsger_process_msg >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
+                                    channel->ip, channel->port, channel->lcid, channel->rcid, channel->serial_number);
         xchannel_free(channel);
     }
 
