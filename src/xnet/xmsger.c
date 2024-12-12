@@ -505,7 +505,7 @@ static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr r
     rpack->head.flag = XPACK_FLAG_ACK;
     rpack->head.ack.flag = XPACK_FLAG_BYE;
     // 设置 acks，通知发送端已经接收了所有包
-    rpack->head.ack.pos = rpack->head.sn;
+    rpack->head.ack.pos = rpack->head.sn + 1;
     rpack->head.ack.sn = rpack->head.ack.pos;
     // 要设置包长度，对方要校验长度
     rpack->head.len = 0;
@@ -579,9 +579,9 @@ XClean:
 #include <stdlib.h>
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
-    // __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n", 
-    //         rpack->head.ack, rpack->head.acks, channel->sendbuf->rpos, channel->sendbuf->spos, 
-    //         (uint8_t)(rpack->head.ack - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
+    __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n", 
+            rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
+            (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 
