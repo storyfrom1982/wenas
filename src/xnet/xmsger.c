@@ -672,6 +672,15 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->temp.left = channel->temp.right = NULL;
                     // channel->msger->callback->on_connection_from_peer(channel->msger->callback, channel);
                 }
+
+            }else if (pack->head.flag == XPACK_FLAG_BYE){
+
+                __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                if (channel->status != XPACK_FLAG_BYE){
+                    channel->status = XPACK_FLAG_BYE;
+                    channel->msger->cb->on_disconnection(channel->msger->cb, channel);
+                    avl_tree_remove(&channel->msger->peers, channel);
+                }
             }
 
             __atom_add(channel->sendbuf->rpos, 1);
@@ -1343,23 +1352,23 @@ static void main_loop(void *ptr)
 
                 }else if (rpack->head.flag == XPACK_FLAG_ACK){
                     
-                    if (rpack->head.ack.flag == XPACK_FLAG_BYE){
-                        // 主动端收到 BYE 的 ACK，移除索引
-                        // __xlogd("temp channels = %lu\n", msger->temps.count);
-                        channel = avl_tree_find(&msger->peers, &cid[0]);
-                        __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: CID(%u) FLAG(%u:%u:%u)\n", rpack->head.rcid, rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
-                        __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: cid[%lu] cid[%lu] cid[%lu]\n", cid[0], cid[1], cid[2]);
-                        if (channel){
-                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First: cid[%lu] cid[%lu] cid[%lu]\n", channel->cid[0], channel->cid[1], channel->cid[2]);
-                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First enter: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
-                            channel->status = XPACK_FLAG_BYE;
-                            msger->cb->on_disconnection(msger->cb, channel);
-                            __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
-                            avl_tree_remove(&msger->peers, channel);
-                            // channel->temp.left = channel->temp.right = NULL;
-                            // xchannel_free(channel);
-                        }
-                    }
+                    // if (rpack->head.ack.flag == XPACK_FLAG_BYE){
+                    //     // 主动端收到 BYE 的 ACK，移除索引
+                    //     // __xlogd("temp channels = %lu\n", msger->temps.count);
+                    //     channel = avl_tree_find(&msger->peers, &cid[0]);
+                    //     __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: CID(%u) FLAG(%u:%u:%u)\n", rpack->head.rcid, rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
+                    //     __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: cid[%lu] cid[%lu] cid[%lu]\n", cid[0], cid[1], cid[2]);
+                    //     if (channel){
+                    //         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First: cid[%lu] cid[%lu] cid[%lu]\n", channel->cid[0], channel->cid[1], channel->cid[2]);
+                    //         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First enter: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                    //         channel->status = XPACK_FLAG_BYE;
+                    //         msger->cb->on_disconnection(msger->cb, channel);
+                    //         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
+                    //         avl_tree_remove(&msger->peers, channel);
+                    //         // channel->temp.left = channel->temp.right = NULL;
+                    //         // xchannel_free(channel);
+                    //     }
+                    // }
 
                 }else {}
             }
