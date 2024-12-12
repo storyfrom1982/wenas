@@ -174,9 +174,7 @@ static inline void xl_free(xline_t **pptr)
 {
     if (pptr && *pptr){
         if (__atom_sub((*pptr)->ref, 1) == 0){
-            __xlogd("xl_free >>>>---------------> enter\n");
             free((*pptr));
-            __xlogd("xl_free >>>>---------------> exit\n");
         }
     }
 }
