@@ -497,17 +497,19 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr rpack)
 {
     __xlogd("<SEND FINAL> CID[%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", rpack->head.rcid, rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
+    // 调换 cid
+    uint16_t cid = rpack->head.rcid;
+    rpack->head.rcid = rpack->head.lcid;
+    rpack->head.lcid = cid;
+    // 设置 flag
     rpack->head.flag = XPACK_FLAG_ACK;
     rpack->head.ack.flag = XPACK_FLAG_BYE;
     // 设置 acks，通知发送端已经接收了所有包
     rpack->head.ack.pos = rpack->head.sn;
     rpack->head.ack.sn = rpack->head.ack.pos;
-    // 使用默认的校验码
-    // rpack->head.key = (XMSG_VAL ^ XMSG_KEY);
     // 要设置包长度，对方要校验长度
     rpack->head.len = 0;
     rpack->head.range = 1;
-    // int sock = __xapi->udp_addr_is_ipv6(addr) ? msger->sock[1] : msger->sock[0];
     if (__xapi->udp_sendto(sock, addr, (void*)&rpack->head, XHEAD_SIZE) != XHEAD_SIZE){
         __xlogd("xchannel_send_final >>>>------------------------> failed\n");
     }
@@ -924,30 +926,30 @@ static inline bool xmsger_process_msg(xmsger_ptr msger, xmsg_t *msg)
             channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = *msg;
             __atom_add(channel->msgbuf->wpos, 1);
             if (channel->worklist != &msger->send_list){
-                // 这里无需加锁，因为此时，其他线程还没这个连接的指针
+                // TODO 这里可能要加锁
                 __xchannel_take_out_list(channel);
                 __xchannel_put_into_list(&msger->send_list, channel);
             }
 
-            // 移除链接池
-            avl_tree_remove(&msger->peers, channel);
-            channel->node.left = channel->node.right = NULL;
-            // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
-            channel->temp_cid[0] = channel->cid[0];
-            channel->temp_cid[1] = channel->cid[1];
-            channel->temp_cid[2] = channel->cid[2];
-            *(uint16_t*)&channel->temp_cid[0] = channel->rcid;
+            // // 移除链接池
+            // avl_tree_remove(&msger->peers, channel);
+            // channel->node.left = channel->node.right = NULL;
+            // // 换成对端 cid 作为当前的索引，因为对端已经不再持有本端的 cid，收到 BYE 时直接回复 ACK 即可
+            // channel->temp_cid[0] = channel->cid[0];
+            // channel->temp_cid[1] = channel->cid[1];
+            // channel->temp_cid[2] = channel->cid[2];
+            // *(uint16_t*)&channel->temp_cid[0] = channel->rcid;
 
-            __xlogd("temp channels count = %lu cid=%u cid[%lu] cid[%lu] cid[%lu]\n", 
-                msger->temps.count, channel->rcid, channel->temp_cid[0], channel->temp_cid[1], channel->temp_cid[2]);
+            // __xlogd("temp channels count = %lu cid=%u cid[%lu] cid[%lu] cid[%lu]\n", 
+            //     msger->temps.count, channel->rcid, channel->temp_cid[0], channel->temp_cid[1], channel->temp_cid[2]);
 
-            // 加入暂存链接池
-            avl_tree_add(&msger->temps, channel);
+            // // 加入暂存链接池
+            // avl_tree_add(&msger->temps, channel);
 
-            xchannel_ptr temp = avl_tree_find(&msger->temps, &channel->temp_cid[0]);
+            // xchannel_ptr temp = avl_tree_find(&msger->temps, &channel->temp_cid[0]);
 
-            __xlogd("temp channels count = %lu cid=%u cid[%lu] cid[%lu] cid[%lu]\n", 
-                msger->temps.count, temp->rcid, temp->temp_cid[0], temp->temp_cid[1], temp->temp_cid[2]);
+            // __xlogd("temp channels count = %lu cid=%u cid[%lu] cid[%lu] cid[%lu]\n", 
+            //     msger->temps.count, temp->rcid, temp->temp_cid[0], temp->temp_cid[1], temp->temp_cid[2]);
         }
 
         // xl_free(&msg->xl);
@@ -1343,8 +1345,8 @@ static void main_loop(void *ptr)
                     
                     if (rpack->head.ack.flag == XPACK_FLAG_BYE){
                         // 主动端收到 BYE 的 ACK，移除索引
-                        __xlogd("temp channels = %lu\n", msger->temps.count);
-                        channel = avl_tree_find(&msger->temps, &cid[0]);
+                        // __xlogd("temp channels = %lu\n", msger->temps.count);
+                        channel = avl_tree_find(&msger->peers, &cid[0]);
                         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: CID(%u) FLAG(%u:%u:%u)\n", rpack->head.rcid, rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
                         __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK: cid[%lu] cid[%lu] cid[%lu]\n", cid[0], cid[1], cid[2]);
                         if (channel){
@@ -1353,8 +1355,8 @@ static void main_loop(void *ptr)
                             channel->status = XPACK_FLAG_BYE;
                             msger->cb->on_disconnection(msger->cb, channel);
                             __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
-                            avl_tree_remove(&msger->temps, channel);
-                            channel->temp.left = channel->temp.right = NULL;
+                            avl_tree_remove(&msger->peers, channel);
+                            // channel->temp.left = channel->temp.right = NULL;
                             // xchannel_free(channel);
                         }
                     }
