@@ -110,7 +110,7 @@ struct xchannel {
     bool connected;
     // bool disconnected;
     __atom_bool sending;
-    // __atom_bool disconnecting;
+    __atom_bool disconnecting;
     __atom_size pos, len;
 
     xline_t *msg;
@@ -201,16 +201,18 @@ struct xmsger {
     __ring_list_move_to_end((rnode)->worklist, (rnode))
 
 
-static inline void xmsg_fixed(xmsg_t *msg)
+static inline int xmsg_fixed(xmsg_t *msg)
 {
-    if (msg){
-        msg->spos = 0;
-        msg->range = (msg->xl->wpos / XBODY_SIZE);
-        if (msg->range * XBODY_SIZE < msg->xl->wpos){
-            // 有余数，增加一个包
-            msg->range ++;
-        }
+    __xcheck(msg == NULL);
+    msg->spos = 0;
+    msg->range = (msg->xl->wpos / XBODY_SIZE);
+    if (msg->range * XBODY_SIZE < msg->xl->wpos){
+        // 有余数，增加一个包
+        msg->range ++;
     }
+    return 0;
+XClean:
+    return -1;
 }
 
 
@@ -1432,20 +1434,16 @@ static void main_loop(void *ptr)
 
 bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 {
-    // __xlogd("xmsger_send_message enter\n");
-    if (channel == NULL){
-        __xlogd("xmsger_send_message enter\n");
-    }
     __xcheck(channel == NULL || xl == NULL);
-
-    xmsg_t msg;
-    msg.xl = xl;
 
     if (__serialbuf_writable(channel->msgbuf) > 0){
 
-        xmsg_fixed(&msg);
+        xmsg_t msg;
+        msg.xl = xl;
         msg.ctx = channel;
         msg.flag = XPACK_FLAG_MSG;
+        __xcheck(xmsg_fixed(&msg) != 0);
+
         __atom_add(msger->len, xl->wpos);
         __atom_add(channel->len, xl->wpos);
 
@@ -1455,31 +1453,30 @@ bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
         // 必须先锁住 worklist
         __atom_lock(channel->sending);
         if (channel->worklist != &msger->send_list){
-            // 发送一个切换队列的消息
-            __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, sizeof(msg)) != sizeof(msg)));
+            // 发送一个消息，网络线程收到后会切换队列
+            // 如果在这里切换队列，网络线程中好多地方就必须加锁
+            if ((xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg))){
+                // 如果执行到这里，网络线程也将会终止，所有资源都将会被清空
+                __xloge("xpipe_write() failed\n");
+                __atom_unlock(channel->sending);
+                goto XClean;
+            }
         }
         __atom_unlock(channel->sending);
-        
-        // __xlogd("xmsger_send_message exit\n");
         return true;
     }
 
-    // __xcheck((xpipe_write(msger->mpipe, (uint8_t*)&msg, __sizeof_ptr) != __sizeof_ptr));
-
-    // return true;
-
 XClean:
-
-    // __xlogd("xmsger_send_message failed\n");
-
     return false;
 }
 
 bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
 {
+    // 状态错误会报错
+    __xcheck(!channel->disconnecting);
     xmsg_t msg;
-    msg.flag = XPACK_FLAG_FINAL;
     msg.ctx = channel;
+    msg.flag = XPACK_FLAG_FINAL;
     __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
     return true;
 XClean:
@@ -1489,53 +1486,32 @@ XClean:
 bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 {
     __xcheck(channel == NULL || xl == NULL);
-
-    // 避免重复调用
-    if (channel->status != XPACK_FLAG_BYE){
-        // TDDO 使用 disconnecting
-        channel->status = XPACK_FLAG_BYE;
-        xmsg_t msg;
-        msg.xl = xl;
-        xmsg_fixed(&msg);
-        msg.flag = XPACK_FLAG_BYE;
-        msg.ctx = channel;
-        __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
-    }
-
+    // 重复调用会报错
+    __xcheck(!__set_true(channel->disconnecting));
+    xmsg_t msg;
+    msg.xl = xl;
+    msg.ctx = channel;
+    msg.flag = XPACK_FLAG_BYE;
+    __xcheck(xmsg_fixed(&msg) != 0);
+    __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
     return true;
-
 XClean:
-
-    if (xl){
-        free(xl);
-    }
     return false;
 
 }
 
 bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
 {
-    __xlogd("xmsger_connect enter\n");
-
     __xcheck(msger == NULL || xl == NULL);
-
     xmsg_t msg;
     msg.xl = xl;
-    xmsg_fixed(&msg);
-    msg.flag = XPACK_FLAG_PING;
     msg.ctx = ctx;
+    msg.flag = XPACK_FLAG_PING;
+    __xcheck(xmsg_fixed(&msg) != 0);
     __xcheck(xpipe_write(msger->mpipe, &msg, sizeof(msg)) != sizeof(msg));
-
-    __xlogd("xmsger_connect exit\n");
-
     return true;
-
 XClean:
-
-    // if (msg){
-    //     xl_free(msg);
-    // }
-    return false;    
+    return false;
 }
 
 static inline int temp_cid_compare(const void *a, const void *b)
