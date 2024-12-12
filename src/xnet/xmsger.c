@@ -203,9 +203,6 @@ struct xmsger {
     __ring_list_move_to_end((rnode)->worklist, (rnode))
 
 
-// xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr channel, struct xchannel_ctx *ctx, xlinekv_ptr xkv);
-// void xmsg_free(xmsg_ptr msg);
-
 static inline void xmsg_fixed(xmsg_t *msg)
 {
     if (msg){
@@ -218,31 +215,6 @@ static inline void xmsg_fixed(xmsg_t *msg)
     }
 }
 
-// xmsg_ptr xmsg_maker(uint32_t flag, xchannel_ptr *channel, xlmsg_ptr xkv)
-// {
-//     xmsg_ptr msg = (xmsg_ptr)malloc(sizeof(struct xmsg));
-//     if (msg){
-//         msg->flag = flag;
-//         msg->channel = channel;
-//         msg->xlmsg = xkv;
-//         msg->prev = msg->next = NULL;
-//         xmsg_fixed(msg);
-//     }
-//     return msg;
-// }
-
-// void xmsg_free(xmsg_ptr msg)
-// {
-//     __xlogd("xmsg_free >>>>>>>>>> enter\n");
-//     if (msg){
-//         if (msg->xlmsg){
-//             xl_free(msg->xlmsg);
-//         }
-//         __xlogd("xmsg_free >>>>>>>>>> free\n");
-//         free(msg);
-//     }
-//     __xlogd("xmsg_free >>>>>>>>>> exit\n");
-// }
 
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_range)
 {
@@ -400,77 +372,48 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free --------------- exit\n");
 }
 
-static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
+static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t flag)
 {
     xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
-    // // *(uint8_t*)(pack->body) = channel->local_key;
-    // *(uint8_t*)(pack->body + 1) = channel->serial_range;
-    // *(uint8_t*)(pack->body + 2) = channel->serial_number;
-    // *(uint16_t*)(pack->body + 3) = channel->lcid;
-    // pack->head.len = 5;
-
     pack->head.flags[0] = channel->serial_number;
     pack->head.flags[1] = channel->serial_range;
-    *(uint16_t*)&pack->head.flags[2] = channel->lcid;
-
     pack->msg = NULL;
-    pack->head.flag = type;
-    // pack->head.sid = 0;
+    pack->head.flag = flag;
     pack->head.range = 1;
     pack->channel = channel;
     pack->delay = channel->back_delay;
     pack->head.resend = 0;
     pack->head.ack.flag = 0;
-    // pack->head.key = (XMSG_VAL ^ channel->remote_key);
     pack->head.sn = channel->sendbuf->wpos;
     pack->head.rcid = channel->rcid;
+    pack->head.lcid = channel->lcid;
     __atom_add(channel->sendbuf->wpos, 1);
     channel->len += pack->head.len;
     channel->msger->len += pack->head.len;
-    // // 加入发送队列，并且从待回收队列中移除
-    // if(channel->worklist != &channel->msger->send_list) {
-    //     __xchannel_take_out_list(channel);
-    //     __xchannel_put_into_list(&channel->msger->send_list, channel);
-    // }
 }
 
 static inline void xchannel_serial_msg(xchannel_ptr channel)
 {
-    // __xlogd("xchannel_serial_msg enter connect=%u writable=%u sendable=%u\n", channel->connected,
-    //         __serialbuf_writable(channel->sendbuf), __serialbuf_sendable(channel->msgbuf));
-    // xmsg_ptr msg = channel->msg_head;
-
     // 每次只缓冲一个包，尽量使发送速度均匀
-    // if (channel->connected && __serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0)
-    if (__serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0)
-    {
+    if (__serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0){
 
-        // __xlogd("xchannel_serial_msg sendable=%u\n", __serialbuf_sendable(channel->msgbuf));
         xmsg_t *msg = &channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
-        // __xlogd("xchannel_serial_msg 2\n");
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
-        // __xlogd("xchannel_serial_msg 3\n");
-        pack->msg = msg;
-        // __xlogd("xchannel_serial_msg msg=%p wpos=%lu\n", msg, msg->wpos);
-        if (msg->xl->wpos - msg->spos < XBODY_SIZE){
-            // __xlogd("xchannel_serial_msg 3.6\n");
-            pack->head.len = msg->xl->wpos - msg->spos;
-        }else{
-            // __xlogd("xchannel_serial_msg 3.7\n");
-            pack->head.len = XBODY_SIZE;
-        }
-        // __xlogd("xchannel_serial_msg 4\n");
 
-        // pack->head.type = XMSG_PACK_MSG;
+        pack->msg = msg;
         pack->head.flag = msg->flag;
         if (pack->head.flag == XPACK_FLAG_PING){
             pack->head.flags[0] = channel->serial_number;
             pack->head.flags[1] = channel->serial_range;
-            *(uint16_t*)&pack->head.flags[2] = channel->lcid;
         }
-        // pack->head.sid = msg->streamid;
+
+        if (msg->xl->wpos - msg->spos < XBODY_SIZE){
+            pack->head.len = msg->xl->wpos - msg->spos;
+        }else{
+            pack->head.len = XBODY_SIZE;
+        }
+
         pack->head.range = msg->range;
-        // __xlogd("xchannel_serial_msg 5\n");
         mcopy(pack->body, msg->xl->ptr + msg->spos, pack->head.len);
         msg->spos += pack->head.len;
         msg->range --;
@@ -479,25 +422,15 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->delay = channel->back_delay;
         pack->head.resend = 0;
         pack->head.ack.flag = 0;
-        // pack->head.key = (XMSG_VAL ^ channel->remote_key);
         pack->head.sn = channel->sendbuf->wpos;
         pack->head.rcid = channel->rcid;
+        pack->head.lcid = channel->lcid;
         __atom_add(channel->sendbuf->wpos, 1);
         // 判断消息是否全部写入缓冲区
-        // __xlogd("xchannel_serial_msg 6\n");
         if (msg->spos == msg->xl->wpos){
-            // __xlogd("xchannel_serial_msg 7\n");
-            // channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)] = NULL;
             __atom_add(channel->msgbuf->spos, 1);
-            // // 更新当前消息
-            // channel->sender = channel->sender->next;
-            // // channel->msg_head = channel->msg_head->next;
-            // // if (channel->msg_head == NULL){
-            // //     channel->msg_tail = &channel->msg_head;
-            // // }
         }
     }
-    // __xlogd("xchannel_serial_msg exit\n");
 }
 
 static inline void xchannel_send_pack(xchannel_ptr channel)
@@ -1267,7 +1200,8 @@ static void main_loop(void *ptr)
                         // 取出同步参数
                         uint8_t serial_number = rpack->head.flags[0];
                         uint8_t serial_range = rpack->head.flags[1];
-                        uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
+                        // uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
+                        uint16_t rcid = rpack->head.lcid;
                         // __xlogd("xmsger_loop >>>>-------------> RECV PONG: REMOTE CID(%u) KEY(%u) SN(%u)\n", rcid, remote_key, serial_number);
                         // __xlogd("xmsger_loop >>>>-------------> RECV PONG: LOCAL  CID(%u) KEY(%u) SN(%u)\n", channel->lcid, channel->local_key, channel->serial_number);
                         // 更新 rcid
@@ -1329,7 +1263,8 @@ static void main_loop(void *ptr)
                         // 取出同步参数
                         uint8_t serial_number = rpack->head.flags[0];
                         uint8_t serial_range = rpack->head.flags[1];
-                        uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
+                        // uint16_t rcid = *((uint16_t*)(&rpack->head.flags[2]));
+                        uint16_t rcid = rpack->head.lcid;
                         // 创建连接
                         channel = xchannel_create(msger, serial_range);
                         __xcheck(channel == NULL);
