@@ -113,7 +113,7 @@ struct xchannel {
     __atom_bool disconnecting;
     __atom_size pos, len;
 
-    xline_t *msg;
+    xline_t *xlmsg;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -221,18 +221,11 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
     __xcheck(channel == NULL);
 
-    // channel->connected = false;
-
     channel->msger = msger;
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
-
-    // channel->local_key = channel->timestamp % XMSG_KEY;
     channel->serial_number = channel->timestamp % channel->serial_range;
-
-    // channel->remote_key = XMSG_KEY;
     channel->back_delay = 300000000UL;
-    // channel->ack.key = (XMSG_VAL ^ XMSG_KEY);
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -247,34 +240,29 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     __xcheck(channel->msgbuf == NULL);
     channel->msgbuf->range = 8;
 
-    // channel->sender = &channel->msglist.head;
-    // channel->msglist.len = 0;
-    // channel->msglist.head.prev = &channel->msglist.head;
-    // channel->msglist.head.next = &channel->msglist.head;
-
     channel->flushlist.len = 0;
     channel->flushlist.head.prev = &channel->flushlist.head;
     channel->flushlist.head.next = &channel->flushlist.head;
 
-    // 所有新创建的连接，都先进入接收队列，同时出入保活状态，检测到超时就会被释放
+    // 所有新创建的连接，都先进入接收队列，同时处于保活状态，检测到超时就会被释放
     __xchannel_put_into_list(&msger->recv_list, channel);
-
-    // channel->msg_tail = &channel->msg_head;
 
     return channel;
 
-    XClean:
+XClean:
 
     if (channel){
         if (channel->recvbuf){
             free(channel->recvbuf);
-        }        
+        }
         if (channel->sendbuf){
             free(channel->sendbuf);
         }
+        if (channel->msgbuf){
+            free(channel->msgbuf);
+        }
         free(channel);
     }
-
     return NULL;
 }
 
@@ -282,30 +270,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
 {
     __xlogd("xchannel_clear enter\n");
 
-    // xmsg_ptr msg, next;
-    // msg = channel->msglist.head.next;
-    // // // 如果有未确认的 msg，就清理待确认队列
-    // // if (channel->smsg != NULL){
-    // //     msg = channel->smsg;
-    // // }else {
-    // //     // 如果没有待确认 msg，就清理发送队列
-    // //     msg = channel->msg_head;
-    // // }
-    // // // 重置消息发送队列
-    // // channel->smsg = channel->msg_head = NULL;
-    // // channel->msg_tail = &channel->msg_head;
-    // // 后释放没有发送出去的 msg
-    // while (msg != &channel->msglist.head){
-    //     __xlogd("xchannel_clear ------------------------- msg\n");
-    //     next = msg->next;
-    //     __ring_list_take_out(&channel->msglist, msg);
-    //     // 减掉不能发送的数据长度，有的 msg 可能已经发送了一半，所以要减掉 sendpos
-    //     channel->len -= msg->xlmsg->wpos - msg->sendpos;
-    //     channel->msger->len -= msg->xlmsg->wpos - msg->sendpos;
-    //     xl_free(msg->xlmsg);
-    //     free(msg);
-    //     msg = next;
-    // }
     // 清空冲洗队列
     channel->flushlist.len = 0;
     channel->flushlist.head.prev = &channel->flushlist.head;
@@ -318,7 +282,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
         channel->sendbuf->spos++;
     }
     channel->sendbuf->rpos = channel->sendbuf->spos;
-    __xlogd("xchannel_clear 1\n");
+
     // 缓冲区里的包有可能不是连续的，所以不能顺序的清理，如果使用 rpos 就会出现内存泄漏的 BUG
     for (int i = 0; i < channel->recvbuf->range; ++i){
         if (channel->recvbuf->buf[i] != NULL){
@@ -327,49 +291,42 @@ static inline void xchannel_clear(xchannel_ptr channel)
             channel->recvbuf->buf[i] = NULL;
         }
     }
-    __xlogd("xchannel_clear 2\n");
+
+    // 清理没有发送的消息
     for (int i = 0; i < channel->msgbuf->range; ++i){
-        // msg 加了引用计数，这里需要释放一次
-        xl_free(&channel->msgbuf->buf[i].xl);
-        channel->msgbuf->buf[i].xl = NULL;
-        // mclear(&channel->msgbuf->buf[i], sizeof(xlmsg_t));
-        // if (channel->msgbuf->buf[i] != NULL){
-        //     xl_free(channel->msgbuf->buf[i]);
-        //     channel->msgbuf->buf[i] = NULL;
-        // }
+        if (channel->msgbuf->buf[i].xl != NULL){
+            // xl 加了引用计数，这里需要释放一次
+            xl_free(&channel->msgbuf->buf[i].xl);
+            channel->msgbuf->buf[i].xl = NULL;
+        }
     }
+
     // 释放未完整接收的消息
-    if (channel->msg != NULL){
-        __xlogd("xchannel_clear 3\n");
-        xl_free(&channel->msg);
-        channel->msg = NULL;
+    if (channel->xlmsg != NULL){
+        xl_free(&channel->xlmsg);
+        channel->xlmsg = NULL;
     }
+    
     __xlogd("xchannel_clear exit\n");
 }
 
 static inline void xchannel_free(xchannel_ptr channel)
 {
-    __xlogd("xchannel_free --------------- \n");
     __xlogd("xchannel_free >>>>-------------------> IP[%s] PORT[%u] CID[%u->%u]\n", channel->ip, channel->port, channel->lcid, channel->rcid);
     xchannel_clear(channel);
-    __xlogd("xchannel_free --------------- 1\n");
     __xchannel_take_out_list(channel);
-    __xlogd("xchannel_free enter peers %lu\n", channel->msger->peers.count);
     if (channel->node.parent != &channel->node){
         avl_tree_remove(&channel->msger->peers, channel);
     }
-    __xlogd("xchannel_free exit peers %lu\n", channel->msger->peers.count);
-    __xlogd("xchannel_free temps %lu\n", channel->msger->temps.count);
     if (channel->temp.parent != &channel->temp){
         avl_tree_remove(&channel->msger->temps, channel);
     }
-    __xlogd("xchannel_free --------------- 2\n");
     free(channel->recvbuf);
     free(channel->sendbuf);
     free(channel->msgbuf);
     free(channel->addr);
     free(channel);
-    __xlogd("xchannel_free --------------- exit\n");
+    __xlogd("xchannel_free >>>>-------------------> exit\n");
 }
 
 static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t flag)
@@ -527,25 +484,25 @@ static inline void xchannel_recv_msg(xchannel_ptr channel)
             // if (pack->head.type == XMSG_PACK_MSG){
             if (pack->head.len > 0){
                 // 如果当前消息的数据为空，证明这个包是新消息的第一个包
-                if (channel->msg == NULL){
-                    channel->msg = xl_creator(pack->head.range * XBODY_SIZE);
-                    __xcheck(channel->msg == NULL);
+                if (channel->xlmsg == NULL){
+                    channel->xlmsg = xl_creator(pack->head.range * XBODY_SIZE);
+                    __xcheck(channel->xlmsg == NULL);
                     // 收到消息的第一个包，为当前消息分配资源，记录消息的分包数
                     // channel->rmsg->range = pack->head.range;
                 }
-                mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
-                channel->msg->wpos += pack->head.len;
-                if (channel->msg->size - channel->msg->wpos < XBODY_SIZE){
+                mcopy(channel->xlmsg->ptr + channel->xlmsg->wpos, pack->body, pack->head.len);
+                channel->xlmsg->wpos += pack->head.len;
+                if (channel->xlmsg->size - channel->xlmsg->wpos < XBODY_SIZE){
                     // 更新消息长度
-                    xl_fixed(channel->msg);
+                    xl_fixed(channel->xlmsg);
                     // xl_printf(&channel->xkv->line);
                     // 通知用户已收到一个完整的消息
                     // __xlogd("xchannel_recv_msg >>>>------------------------> 1 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
                     //             channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
-                    channel->msger->cb->on_msg_from_peer(channel->msger->cb, channel, channel->msg);
+                    channel->msger->cb->on_msg_from_peer(channel->msger->cb, channel, channel->xlmsg);
                     // __xlogd("xchannel_recv_msg >>>>------------------------> 2 channel=%X prev=%s next=%X listlen=%lu list=%X\n", 
                     //             channel, channel->prev, channel->next, channel->worklist->len, channel->worklist);
-                    channel->msg = NULL;
+                    channel->xlmsg = NULL;
                     // 更新时间戳
                     channel->timestamp = __xapi->clock();
                     __xlogd("xchannel_recv_msg >>>>------------------------> timestamp=%lu\n", channel->timestamp);
