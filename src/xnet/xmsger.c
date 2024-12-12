@@ -675,8 +675,11 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             }else if (pack->head.flag == XPACK_FLAG_BYE){
 
-                __xlogd("xmsger_loop >>>>-------------> RECV FINAL ACK First exit: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->rcid);
-                if (channel->status != XPACK_FLAG_BYE){
+                __xlogd("xchannel_recv_ack >>>>-------------> RECV FINAL ACK: status(%x)\n", channel->status);
+                // if (channel->status != XPACK_FLAG_BYE)
+                {
+                    // 这里只能执行一次，首先 channel 已经从 peers 中移除，还有 ack 也不会被重复确认
+                    __xlogd("xchannel_recv_ack >>>>----------+++---> RECV FINAL ACK: IP(%s) PORT(%u) CID(%u->%u)\n", channel->ip, channel->port, channel->rcid, channel->lcid);
                     channel->status = XPACK_FLAG_BYE;
                     channel->msger->cb->on_disconnection(channel->msger->cb, channel);
                     avl_tree_remove(&channel->msger->peers, channel);
@@ -1490,6 +1493,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 
     // 避免重复调用
     if (channel->status != XPACK_FLAG_BYE){
+        // TDDO 使用 disconnecting
         channel->status = XPACK_FLAG_BYE;
         xmsg_t msg;
         msg.xl = xl;
