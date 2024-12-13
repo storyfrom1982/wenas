@@ -134,13 +134,16 @@ typedef struct xchannellist {
 
 struct xmsger {
     int sock[2];
+    int lsock;
+    uint16_t lport;
+    __xipaddr_ptr laddr;
     __xipaddr_ptr addr;
     __atom_bool running;
     __atom_size pos, len;
     uint16_t cid;
     uint64_t timer;
     xmsgercb_ptr cb;
-    xpipe_ptr mpipe;
+    // xpipe_ptr mpipe;
     __xthread_ptr mpid;
     struct avl_tree peers;
     struct avl_tree temps;
@@ -1091,7 +1094,13 @@ static void main_loop(void *ptr)
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
             if (rpack->head.flag == XPACK_FLAG_LOCAL){
-                xmsger_recv_local(msger, &rpack->head);
+                // char ip[46] = {0};
+                // uint16_t port = 0;
+                // __xapi->udp_addr_to_host(addr, ip, &port);
+                // __xlogd("ip=%s port=%u\n", ip, port);
+                if (mcompare(addr, msger->laddr, 8) == 0){
+                    xmsger_recv_local(msger, &rpack->head);
+                }
                 rpack->head.len = 0;
                 continue;
             }
@@ -1103,11 +1112,6 @@ static void main_loop(void *ptr)
             // cid.cid = rpack->head.cid;
             // cid.port = msger->addr->port;
             // cid.ip = msger->addr->ip;
-
-            // char ip[46] = {0};
-            // uint16_t port = 0;
-            // __xapi->udp_addr_to_host(addr, ip, &port);
-            // __xlogd("ip=%s port=%u\n", ip, port);
 
             channel = avl_tree_find(&msger->peers, &cid);
 
@@ -1368,7 +1372,7 @@ bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_FINAL;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
-    __xapi->udp_sendto(msger->sock[0], msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.ctx = channel;
     // msg.flag = XPACK_FLAG_FINAL;
@@ -1388,7 +1392,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_BYE;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_sendto(msger->sock[0], msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.xl = xl;
     // msg.ctx = channel;
@@ -1409,7 +1413,7 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_PING;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)ctx;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_sendto(msger->sock[0], msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
 
     // xmsg_t msg;
     // msg.xl = xl;
@@ -1479,23 +1483,31 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
-    msger->sock[0] = __xapi->udp_open(0);
+    msger->sock[0] = __xapi->udp_open(0, 1, 1);
     __xcheck(msger->sock[0] < 0);
     __xcheck(__xapi->udp_bind(msger->sock[0], 9256) == -1);
 
     if (ipv6){
-        msger->sock[1] = __xapi->udp_open(1);
+        msger->sock[1] = __xapi->udp_open(1, 1, 1);
         __xcheck(msger->sock[1] < 0);
         __xcheck(__xapi->udp_bind(msger->sock[1], 9256) == -1);
     }else {
-        msger->sock[1] = __xapi->udp_open(0);
+        msger->sock[1] = __xapi->udp_open(0, 1, 1);
         __xcheck(msger->sock[1] < 0);
         __xcheck(__xapi->udp_bind(msger->sock[1], 9257) == -1);
     }
 
+    msger->lsock = __xapi->udp_open(0, 0, 0);
+    __xcheck(msger->lsock < 0);
+    msger->lport = 9256;
+    do {
+        msger->lport++;
+    }while (__xapi->udp_bind(msger->lsock, msger->lport) == -1);
     msger->addr = __xapi->udp_host_to_addr("127.0.0.1", 9256);
     __xcheck(msger->addr == NULL);
-
+    msger->laddr = __xapi->udp_host_to_addr("127.0.0.1", msger->lport);
+    __xcheck(msger->laddr == NULL);
+    
     msger->running = true;
     msger->cb = callback;
     msger->cid = __xapi->clock() % UINT16_MAX;
@@ -1504,15 +1516,11 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
     msger->send_list.head.prev = &msger->send_list.head;
     msger->send_list.head.next = &msger->send_list.head;
 
-    // msger->recv_list.len = 0;
-    // msger->recv_list.head.prev = &msger->recv_list.head;
-    // msger->recv_list.head.next = &msger->recv_list.head;
-
     avl_tree_init(&msger->peers, cid_compare, cid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
     avl_tree_init(&msger->temps, temp_cid_compare, temp_cid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, temp));
 
-    msger->mpipe = xpipe_create(sizeof(xmsg_t) * 1024, "SEND PIPE");
-    __xcheck(msger->mpipe == NULL);
+    // msger->mpipe = xpipe_create(sizeof(xmsg_t) * 1024, "SEND PIPE");
+    // __xcheck(msger->mpipe == NULL);
 
     msger->mpid = __xapi->thread_create(main_loop, msger);
     __xcheck(msger->mpid == NULL);
@@ -1523,12 +1531,12 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
 
 XClean:
 
-    if (msger->sock[0] > 0){
-        __xapi->udp_close(msger->sock[0]);
-    }
-    if (msger->sock[1] > 0){
-        __xapi->udp_close(msger->sock[1]);
-    }
+    // if (msger->sock[0] > 0){
+    //     __xapi->udp_close(msger->sock[0]);
+    // }
+    // if (msger->sock[1] > 0){
+    //     __xapi->udp_close(msger->sock[1]);
+    // }
     xmsger_free(&msger);
     __xlogd("xmsger_create failed\n");
     return NULL;
@@ -1556,14 +1564,16 @@ void xmsger_free(xmsger_ptr *pptr)
 
         __set_false(msger->running);
 
-        struct xhead pack;
-        pack.flag = XPACK_FLAG_FINAL;
-        __xapi->udp_sendto(msger->sock[0], msger->addr, &pack, XHEAD_SIZE);
-
-        if (msger->mpipe){
-            __xlogd("xmsger_free break mpipe\n");
-            xpipe_break(msger->mpipe);
+        if (msger->lsock > 0 && msger->addr != NULL){
+            struct xhead msg;
+            msg.flag = XPACK_FLAG_FINAL;
+            __xapi->udp_sendto(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
         }
+
+        // if (msger->mpipe){
+        //     __xlogd("xmsger_free break mpipe\n");
+        //     xpipe_break(msger->mpipe);
+        // }
 
         if (msger->mpid){
             __xlogd("xmsger_free main process\n");
@@ -1571,51 +1581,44 @@ void xmsger_free(xmsger_ptr *pptr)
         }
 
         xchannel_ptr next, channel = msger->send_list.head.next;
-
-        while (channel != &msger->send_list.head){
-            next = channel->next;
-            xchannel_free(channel);
-            channel = next;
-        }
-
-        channel = msger->send_list.head.next;
-        while (channel != &msger->send_list.head){
+        while (channel != NULL && channel != &msger->send_list.head){
             next = channel->next;
             xchannel_free(channel);
             channel = next;
         }
 
         __xlogd("xmsger_free peers %lu\n", msger->peers.count);
-        // channel free 会用到 rpipe，所以将 tree clear 提前
         avl_tree_clear(&msger->peers, NULL);
         __xlogd("xmsger_free temps %lu\n", msger->temps.count);
         avl_tree_clear(&msger->temps, NULL);
-        // if (msger->chcache){
-        //     // __xlogd("xmsger_free clear channel cache\n");
-        //     // xtree_clear(msger->chcache, free_channel);
-        //     // __xlogd("xmsger_free channel cache\n");
-        //     xtree_free(&msger->chcache);
+
+        // if (msger->mpipe){
+        //     __xlogd("xmsger_free msg pipe: %lu\n", xpipe_readable(msger->mpipe));
+        //     while (xpipe_readable(msger->mpipe) > 0){
+        //         xline_t *msg;
+        //         xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
+        //         if (msg){
+        //             xl_free(&msg);
+        //         }
+        //     }
+        //     xpipe_free(&msger->mpipe);
         // }
 
-        if (msger->mpipe){
-            __xlogd("xmsger_free msg pipe: %lu\n", xpipe_readable(msger->mpipe));
-            while (xpipe_readable(msger->mpipe) > 0){
-                xline_t *msg;
-                xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
-                if (msg){
-                    xl_free(&msg);
-                }
-            }
-            xpipe_free(&msger->mpipe);
-        }
-
-        if (msger->sock[0] >= 0){
+        if (msger->sock[0] > 0){
             __xapi->udp_close(msger->sock[0]);
         }
-        if (msger->sock[1] >= 0){
+        if (msger->sock[1] > 0){
             __xapi->udp_close(msger->sock[1]);
         }
-        free(msger->addr);
+        if (msger->lsock > 0){
+            __xapi->udp_close(msger->lsock);
+        }
+        if (msger->addr){
+            free(msger->addr);
+        }
+        if (msger->laddr){
+            free(msger->laddr);
+        }
         free(msger);
     }
 

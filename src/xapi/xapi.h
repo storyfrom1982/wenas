@@ -61,7 +61,7 @@ typedef struct __xapi_enter {
 ///// 网络接口
 ///////////////////////////////////////////////////////
 
-    int (*udp_open)(int ipv6);
+    int (*udp_open)(int ipv6, int reuse, int nonblock);
     int (*udp_close)(int sock);
     int (*udp_bind)(int sock, uint16_t port);
     int (*udp_bind_addr)(int sock, __xipaddr_ptr ipaddr);

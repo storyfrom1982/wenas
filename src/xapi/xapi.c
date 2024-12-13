@@ -326,21 +326,21 @@ struct __xipaddr {
     socklen_t addrlen;
 };
 
-static int udp_open(int ipv6)
+static int udp_open(int ipv6, int reuse, int nonblock)
 {
     int sock;
-    int opt = 1;
+    int opt;
     if (ipv6){
         __xcheck((sock = socket_udp_ipv6()) < 0);
     }else {
         __xcheck((sock = socket_udp()) < 0);
     }
+    opt = nonblock;
+    __xcheck(socket_setnonblock(sock, opt) != 0);
+    opt = reuse;
     __xcheck(socket_setreuseport(sock, opt) != 0);
     __xcheck(socket_setreuseaddr(sock, opt) != 0);
-    __xcheck(socket_setnonblock(sock, opt) != 0);
-
     return sock;
-
 XClean:
     return -1;
 }
