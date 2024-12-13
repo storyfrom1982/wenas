@@ -13,9 +13,10 @@
 #define XPACK_FLAG_PING     0x01
 #define XPACK_FLAG_PONG     0x02
 #define XPACK_FLAG_MSG      0x04
-#define XPACK_FLAG_BYE      0x08
-#define XPACK_FLAG_FINAL    0x10
-#define XPACK_FLAG_LOCAL    0x20
+#define XPACK_FLAG_ONL      0x08
+#define XPACK_FLAG_BYE      0x10
+#define XPACK_FLAG_FINAL    0x20
+#define XPACK_FLAG_LOCAL    0x40
 
 #define XPACK_SERIAL_RANGE  64
 
@@ -1006,7 +1007,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                     }else {
                         __xlogd("xmsger_send_all timestamp=%lu delay = %ld\n", channel->timestamp, delay);
-                        xchannel_serial_pack(channel, XPACK_FLAG_MSG);
+                        xchannel_serial_pack(channel, XPACK_FLAG_ONL);
                         // 更新时间戳
                         channel->timestamp = __xapi->clock();
 
