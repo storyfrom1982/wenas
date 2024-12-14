@@ -103,17 +103,15 @@ struct xchannel {
     uint16_t port;
     uint16_t rcid;
     uint16_t lcid;
-    uint64_t cid[3];
-    uint64_t temp_cid[3];
+    uint64_t unicid[3];
+    uint64_t tempcid[3];
     __xipaddr_ptr addr;
     struct xchannel_ctx *ctx;
 
-    // uint8_t status;
     bool keepalive;
     bool connected;
     bool disconnected;
     __atom_bool disconnecting;
-    __atom_bool sending;
     __atom_size pos, len;
 
     xline_t *xlmsg;
@@ -123,7 +121,6 @@ struct xchannel {
     serialbuf_ptr recvbuf;
     sserialbuf_ptr sendbuf;
     struct xpacklist flushlist;
-    // struct xchannellist *worklist;
 
     xchannel_ptr prev, next;
 };
@@ -134,11 +131,9 @@ typedef struct xchannellist {
 }*xchannellist_ptr;
 
 struct xmsger {
-    int sock[2];
-    int lsock;
-    uint16_t lport;
-    __xipaddr_ptr laddr;
-    __xipaddr_ptr addr;
+    int sock[3];
+    uint16_t port, lport;
+    __xipaddr_ptr addr, laddr;
     __atom_bool running;
     __atom_size pos, len;
     uint16_t cid;
@@ -834,10 +829,10 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         do {
             channel->lcid = msger->cid++;
-            channel->cid[0] = ((uint64_t*)channel->addr)[0];
-            channel->cid[1] = ((uint64_t*)channel->addr)[1];
-            channel->cid[2] = ((uint64_t*)channel->addr)[2];
-            *(uint16_t*)&channel->cid[0] = channel->lcid;
+            channel->unicid[0] = ((uint64_t*)channel->addr)[0];
+            channel->unicid[1] = ((uint64_t*)channel->addr)[1];
+            channel->unicid[2] = ((uint64_t*)channel->addr)[2];
+            *(uint16_t*)&channel->unicid[0] = channel->lcid;
         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
         channel->rcid = channel->lcid;
@@ -1205,9 +1200,9 @@ static void main_loop(void *ptr)
                         channel = xchannel_create(msger, serial_range);
                         __xcheck(channel == NULL);
 
-                        channel->temp_cid[0] = cid[0];
-                        channel->temp_cid[1] = cid[1];
-                        channel->temp_cid[2] = cid[2];
+                        channel->tempcid[0] = cid[0];
+                        channel->tempcid[1] = cid[1];
+                        channel->tempcid[2] = cid[2];
                         avl_tree_add(&msger->temps, channel);
 
                         __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
@@ -1216,10 +1211,10 @@ static void main_loop(void *ptr)
 
                         do {
                             channel->lcid = msger->cid++;
-                            channel->cid[0] = ((uint64_t*)channel->addr)[0];
-                            channel->cid[1] = ((uint64_t*)channel->addr)[1];
-                            channel->cid[2] = ((uint64_t*)channel->addr)[2];
-                            *(uint16_t*)&channel->cid[0] = channel->lcid;
+                            channel->unicid[0] = ((uint64_t*)channel->addr)[0];
+                            channel->unicid[1] = ((uint64_t*)channel->addr)[1];
+                            channel->unicid[2] = ((uint64_t*)channel->addr)[2];
+                            *(uint16_t*)&channel->unicid[0] = channel->lcid;
                         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
                         // __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
@@ -1318,7 +1313,7 @@ bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_FINAL;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
-    __xcheck(__xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
+    __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
 XClean:
     return false;
@@ -1334,7 +1329,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_BYE;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xcheck(__xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
+    __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
 XClean:
     return false;
@@ -1349,16 +1344,16 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_PING;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)ctx;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xcheck(__xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
+    __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
 XClean:
     return false;
 }
 
-static inline int temp_cid_compare(const void *a, const void *b)
+static inline int tempcid_compare(const void *a, const void *b)
 {
-    uint64_t *x = &((xchannel_ptr)a)->temp_cid[0];
-    uint64_t *y = &((xchannel_ptr)b)->temp_cid[0];
+    uint64_t *x = &((xchannel_ptr)a)->tempcid[0];
+    uint64_t *y = &((xchannel_ptr)b)->tempcid[0];
     for (int i = 0; i < 3; ++i){
         if (x[i] != y[i]){
             return (x[i] > y[i]) ? 1 : -1;
@@ -1367,34 +1362,10 @@ static inline int temp_cid_compare(const void *a, const void *b)
     return 0;
 }
 
-static inline int temp_cid_find(const void *a, const void *b)
-{
-    uint64_t *x = (uint64_t*)a;
-    uint64_t *y = &((xchannel_ptr)b)->temp_cid[0];
-    for (int i = 0; i < 3; ++i){
-        if (x[i] != y[i]){
-            return (x[i] > y[i]) ? 1 : -1;
-        }
-    }
-    return 0;
-}
-
-static inline int cid_compare(const void *a, const void *b)
-{
-    uint64_t *x = &((xchannel_ptr)a)->cid[0];
-    uint64_t *y = &((xchannel_ptr)b)->cid[0];
-    for (int i = 0; i < 3; ++i){
-        if (x[i] != y[i]){
-            return (x[i] > y[i]) ? 1 : -1;
-        }
-    }
-    return 0;
-}
-
-static inline int cid_find(const void *a, const void *b)
+static inline int tempcid_find(const void *a, const void *b)
 {
     uint64_t *x = (uint64_t*)a;
-    uint64_t *y = &((xchannel_ptr)b)->cid[0];
+    uint64_t *y = &((xchannel_ptr)b)->tempcid[0];
     for (int i = 0; i < 3; ++i){
         if (x[i] != y[i]){
             return (x[i] > y[i]) ? 1 : -1;
@@ -1403,7 +1374,31 @@ static inline int cid_find(const void *a, const void *b)
     return 0;
 }
 
-xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
+static inline int unicid_compare(const void *a, const void *b)
+{
+    uint64_t *x = &((xchannel_ptr)a)->unicid[0];
+    uint64_t *y = &((xchannel_ptr)b)->unicid[0];
+    for (int i = 0; i < 3; ++i){
+        if (x[i] != y[i]){
+            return (x[i] > y[i]) ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+static inline int unicid_find(const void *a, const void *b)
+{
+    uint64_t *x = (uint64_t*)a;
+    uint64_t *y = &((xchannel_ptr)b)->unicid[0];
+    for (int i = 0; i < 3; ++i){
+        if (x[i] != y[i]){
+            return (x[i] > y[i]) ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port)
 {
     __xlogd("xmsger_create enter\n");
 
@@ -1411,27 +1406,32 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
 
     xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
 
+    msger->port = port;
     msger->sock[0] = __xapi->udp_open(0, 1, 1);
     __xcheck(msger->sock[0] < 0);
-    __xcheck(__xapi->udp_bind(msger->sock[0], 9256) == -1);
-
+    while (__xapi->udp_bind(msger->sock[0], msger->port) == -1){
+        // 指定的端口在客户端上有可能被占用
+        msger->port++;
+    }
+    
     if (ipv6){
         msger->sock[1] = __xapi->udp_open(1, 1, 1);
         __xcheck(msger->sock[1] < 0);
-        __xcheck(__xapi->udp_bind(msger->sock[1], 9256) == -1);
+        __xcheck(__xapi->udp_bind(msger->sock[1], msger->port) == -1);
     }else {
+        // TODO 不需要两个 ipv4 连接，nat 探测可以连接其他节点
         msger->sock[1] = __xapi->udp_open(0, 1, 1);
         __xcheck(msger->sock[1] < 0);
-        __xcheck(__xapi->udp_bind(msger->sock[1], 9257) == -1);
+        __xcheck(__xapi->udp_bind(msger->sock[1], msger->port+1) == -1);
     }
 
-    msger->lsock = __xapi->udp_open(0, 0, 0);
-    __xcheck(msger->lsock < 0);
-    msger->lport = 9256;
-    do {
+    msger->sock[2] = __xapi->udp_open(0, 0, 0);
+    __xcheck(msger->sock[2] < 0);
+    msger->lport = msger->port+1;
+    while (__xapi->udp_bind(msger->sock[2], msger->lport) == -1){
         msger->lport++;
-    }while (__xapi->udp_bind(msger->lsock, msger->lport) == -1);
-    msger->addr = __xapi->udp_host_to_addr("127.0.0.1", 9256);
+    }
+    msger->addr = __xapi->udp_host_to_addr("127.0.0.1", msger->port);
     __xcheck(msger->addr == NULL);
     msger->laddr = __xapi->udp_host_to_addr("127.0.0.1", msger->lport);
     __xcheck(msger->laddr == NULL);
@@ -1444,8 +1444,8 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
     msger->sendlist.head.prev = &msger->sendlist.head;
     msger->sendlist.head.next = &msger->sendlist.head;
 
-    avl_tree_init(&msger->peers, cid_compare, cid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
-    avl_tree_init(&msger->temps, temp_cid_compare, temp_cid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, temp));
+    avl_tree_init(&msger->peers, unicid_compare, unicid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
+    avl_tree_init(&msger->temps, tempcid_compare, tempcid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, temp));
 
     // msger->mpipe = xpipe_create(sizeof(xmsg_t) * 1024, "SEND PIPE");
     // __xcheck(msger->mpipe == NULL);
@@ -1456,30 +1456,10 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6)
     __xlogd("xmsger_create exit\n");
 
     return msger;
-
 XClean:
-
-    // if (msger->sock[0] > 0){
-    //     __xapi->udp_close(msger->sock[0]);
-    // }
-    // if (msger->sock[1] > 0){
-    //     __xapi->udp_close(msger->sock[1]);
-    // }
     xmsger_free(&msger);
-    __xlogd("xmsger_create failed\n");
     return NULL;
 }
-
-static void free_channel(void *val)
-{
-    xchannel_free((xchannel_ptr)val);
-    // avl_tree_remove(&((xchannel_ptr)val)->msger->temp_channels, (xchannel_ptr)val);
-}
-
-// static void free_channel_1(void *val)
-// {
-//     xchannel_free((xchannel_ptr)val);
-// }
 
 void xmsger_free(xmsger_ptr *pptr)
 {
@@ -1492,16 +1472,12 @@ void xmsger_free(xmsger_ptr *pptr)
 
         __set_false(msger->running);
 
-        if (msger->lsock > 0 && msger->addr != NULL){
-            struct xhead msg;
-            msg.flag = XPACK_FLAG_FINAL;
-            __xapi->udp_local_send(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
+        if (msger->sock[2] > 0 && msger->addr != NULL){
+            struct xhead pack;
+            pack.flag = XPACK_FLAG_LOCAL;
+            pack.ack.flag = XPACK_FLAG_FINAL;
+            __xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE);
         }
-
-        // if (msger->mpipe){
-        //     __xlogd("xmsger_free break mpipe\n");
-        //     xpipe_break(msger->mpipe);
-        // }
 
         if (msger->tid){
             __xlogd("xmsger_free main process\n");
@@ -1520,26 +1496,14 @@ void xmsger_free(xmsger_ptr *pptr)
         __xlogd("xmsger_free temps %lu\n", msger->temps.count);
         avl_tree_clear(&msger->temps, NULL);
 
-        // if (msger->mpipe){
-        //     __xlogd("xmsger_free msg pipe: %lu\n", xpipe_readable(msger->mpipe));
-        //     while (xpipe_readable(msger->mpipe) > 0){
-        //         xline_t *msg;
-        //         xpipe_read(msger->mpipe, &msg, __sizeof_ptr);
-        //         if (msg){
-        //             xl_free(&msg);
-        //         }
-        //     }
-        //     xpipe_free(&msger->mpipe);
-        // }
-
         if (msger->sock[0] > 0){
             __xapi->udp_close(msger->sock[0]);
         }
         if (msger->sock[1] > 0){
             __xapi->udp_close(msger->sock[1]);
         }
-        if (msger->lsock > 0){
-            __xapi->udp_close(msger->lsock);
+        if (msger->sock[2] > 0){
+            __xapi->udp_close(msger->sock[2]);
         }
         if (msger->addr){
             free(msger->addr);

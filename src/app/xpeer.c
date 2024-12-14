@@ -677,7 +677,7 @@ int main(int argc, char *argv[])
     peer->task_pid = __xapi->thread_create(task_loop, peer);
     __xcheck(peer->task_pid == NULL);
     
-    peer->msger = xmsger_create(&peer->listener, 0);
+    peer->msger = xmsger_create(&peer->listener, 0, 9256);
 
     // server->listen_pid = __xapi->process_create(listen_loop, server);
     // __xbreak(server->listen_pid == NULL);
