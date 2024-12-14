@@ -451,7 +451,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("<SEND ACK> IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+    __xlogd("<SEND ACK> IP[%s] PORT[%u] CID[%u->%u] >>>>-------------------> ACK[%u:%u:%u]\n", 
         channel->ip, channel->port, channel->lcid, channel->rcid, channel->ack.ack.flag, channel->ack.ack.sn, channel->ack.ack.pos);
 
     if ((__xapi->udp_sendto(channel->sock, channel->addr, (void*)&channel->ack, XHEAD_SIZE)) == XHEAD_SIZE){
@@ -463,8 +463,8 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
 static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr pack)
 {
-    __xlogd("<SEND FINAL> CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
-        pack->head.lcid, pack->head.rcid, pack->head.ack.flag, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
+    __xlogd("<SEND FINAL> CID[%u->%u] >>>>-------------------> ACK[%u:%u:%u]\n", 
+        pack->head.lcid, pack->head.rcid, pack->head.ack.flag, pack->head.ack.sn, pack->head.ack.pos);
     // 调换 cid
     uint16_t cid = pack->head.rcid;
     pack->head.rcid = pack->head.lcid;
@@ -965,9 +965,9 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 // TODO ack 也要更新
                             }
 
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u] delay=%lu\n", 
                                     spack->head.flag, channel->ip, channel->port, channel->lcid, channel->rcid, 
-                                    spack->head.ack.flag, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
+                                    spack->head.ack.flag, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, spack->delay / 1000000UL);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
