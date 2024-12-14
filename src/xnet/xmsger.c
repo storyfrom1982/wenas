@@ -536,8 +536,8 @@ XClean:
 
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
-    __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n", 
-            rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
+    __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n",
+            rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
             (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
@@ -640,8 +640,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
-
-        __xlogd("RECV ACK OUT OF OEDER >>>>-----------> sn=%u pos=%u\n", rpack->head.ack.sn, rpack->head.ack.pos);
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
 
@@ -759,15 +757,16 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
         // SN 不在 rpos 与 wpos 之间
         if ((uint8_t)(channel->recvbuf->wpos - pack->head.sn) > (uint8_t)(pack->head.sn - channel->recvbuf->wpos)){
 
-            __xlogd("RECV EARLY >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] FLAG[%u] SN[%u] WPOS[%u]\n", 
-                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.flag, pack->head.sn, channel->recvbuf->wpos);
-
             // SN 在 wpos 方向越界，是提前到达的 PACK
 
             // 设置将要回复的单个 ACK
             channel->ack.ack.sn = pack->head.sn;
             // 设置将要回复的最大连续 ACK，这时 ack 一定会大于 acks
             channel->ack.ack.pos = channel->recvbuf->wpos;
+
+            __xlogd("RECV EARLY >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] FLAG[%u] SN[%u] ACK[%u:%u:%u]\n", 
+                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.flag, pack->head.sn, 
+                    channel->ack.ack.flag, channel->ack.ack.sn, channel->ack.ack.pos);
 
             // 这里 wpos - 1 在 wpos 等于 0 时会造成 acks 的值是 255
             // channel->ack.acks = channel->recvbuf->wpos - 1;
