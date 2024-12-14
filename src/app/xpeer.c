@@ -412,11 +412,13 @@ static void req_hello(xpeer_ctx_t *ctx)
 {
     xline_t *msg = xmsg_new(ctx, XLMSG_FLAG_SEND, res_hello);
     __xcheck(msg == NULL);
-    xl_add_word(&msg, "api", "echo");
+    xl_add_word(&msg, "api", "hello");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", ctx->server->ip);
     xl_add_uint(&msg, "port", ctx->server->port+1);
-    xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    uint8_t uuid[4096];
+    xl_add_bin(&msg, "uuid", uuid, 4096);
+    // xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
     __xcheck(xpipe_write(ctx->server->task_pipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return;
 XClean:
@@ -496,6 +498,8 @@ static void api_hello(xpeer_ctx_t *ctx)
     xl_add_uint(&res, "tid", tid);
     xl_add_word(&res, "host", xchannel_get_host(ctx->channel));
     xl_add_uint(&res, "port", xchannel_get_port(ctx->channel));
+    uint8_t uuid[4096];
+    xl_add_bin(&res, "uuid", uuid, 4096);
     xl_add_uint(&res, "code", 200);
     xmsger_send(ctx->server->msger, ctx->channel, res);
 }
@@ -684,9 +688,9 @@ int main(int argc, char *argv[])
     // __xapi->udp_addrinfo(peer->ip, hostname);
     // __xlogd("host ip = %s port=%u\n", peer->ip, peer->port);
 
-    // const char *cip = "192.168.1.6";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    const char *cip = "47.92.77.19";
+    // const char *cip = "47.92.77.19";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
