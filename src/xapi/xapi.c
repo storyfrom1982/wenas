@@ -374,7 +374,7 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
     return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
 
-static int udp_send_local(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
+static int udp_local_send(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
     return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
@@ -554,7 +554,7 @@ struct __xapi_enter posix_api_enter = {
     .udp_bind = udp_bind_any,
     .udp_bind_addr = udp_bind_addr,
     .udp_sendto = udp_sendto,
-    .udp_send_local = udp_send_local,
+    .udp_local_send = udp_local_send,
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
     .udp_any_to_addr = udp_any_to_addr,

@@ -1103,10 +1103,6 @@ static void main_loop(void *ptr)
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
             if (rpack->head.flag == XPACK_FLAG_LOCAL){
-                // char ip[46] = {0};
-                // uint16_t port = 0;
-                // __xapi->udp_addr_to_host(addr, ip, &port);
-                // __xlogd("ip=%s port=%u\n", ip, port);
                 if (mcompare(addr, msger->laddr, 8) == 0){
                     xmsger_recv_local(msger, &rpack->head);
                 }
@@ -1118,17 +1114,21 @@ static void main_loop(void *ptr)
             cid[1] = ((uint64_t*)addr)[1];
             cid[2] = ((uint64_t*)addr)[2];
             *(uint16_t*)&cid[0] = rpack->head.rcid;
-            // cid.cid = rpack->head.cid;
-            // cid.port = msger->addr->port;
-            // cid.ip = msger->addr->ip;
+
+            char ip[46] = {0};
+            uint16_t port = 0;
+            __xapi->udp_addr_to_host(addr, ip, &port);
+            __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) ACK(%u:%u:%u) SN(%u)\n",
+                rpack->head.flag, ip, port, rpack->head.lcid, rpack->head.rcid, 
+                rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
 
             channel = avl_tree_find(&msger->peers, &cid);
 
             if (channel){
 
-                __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
-                        rpack->head.flag, channel->ip, channel->port, channel->rcid, rpack->head.rcid, 
-                        rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
+                // __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
+                //         rpack->head.flag, channel->ip, channel->port, channel->rcid, rpack->head.rcid, 
+                //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
 
                 if (rpack->head.flag == XPACK_FLAG_MSG) {
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
@@ -1381,7 +1381,7 @@ bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_FINAL;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
-    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.ctx = channel;
     // msg.flag = XPACK_FLAG_FINAL;
@@ -1401,7 +1401,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_BYE;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.xl = xl;
     // msg.ctx = channel;
@@ -1422,7 +1422,7 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_PING;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)ctx;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_local_send(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
 
     // xmsg_t msg;
     // msg.xl = xl;
@@ -1576,7 +1576,7 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->lsock > 0 && msger->addr != NULL){
             struct xhead msg;
             msg.flag = XPACK_FLAG_FINAL;
-            __xapi->udp_send_local(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
+            __xapi->udp_local_send(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
         }
 
         // if (msger->mpipe){
