@@ -66,6 +66,7 @@ typedef struct __xapi_enter {
     int (*udp_bind)(int sock, uint16_t port);
     int (*udp_bind_addr)(int sock, __xipaddr_ptr ipaddr);
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
+    int (*udp_send_local)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
     int (*udp_listen)(int sock[2], uint64_t microseconds);
     int (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);

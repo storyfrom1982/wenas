@@ -362,15 +362,20 @@ static int udp_bind_addr(int sock, __xipaddr_ptr ipaddr)
 
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 {
-// #ifdef __XDEBUG__
-//     static uint64_t send_number = 0, lost_number = 0;
-//     send_number++;
-//     uint64_t randtime = __xclock() / 1000000ULL;
-//     if ((send_number & 0x03) == (randtime & 0x03)){
-//         __xlogd("lost pack ...........\n");
-//         return size;
-//     }
-// #endif
+#ifdef __XDEBUG__
+    static uint64_t send_number = 0, lost_number = 0;
+    send_number++;
+    uint64_t randtime = __xclock() / 1000000ULL;
+    if ((send_number & 0x03) == (randtime & 0x03)){
+        __xlogd("lost pack ...........%lu\n", size);
+        return size;
+    }
+#endif
+    return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
+}
+
+static int udp_send_local(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
+{
     return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
 
@@ -549,6 +554,7 @@ struct __xapi_enter posix_api_enter = {
     .udp_bind = udp_bind_any,
     .udp_bind_addr = udp_bind_addr,
     .udp_sendto = udp_sendto,
+    .udp_send_local = udp_send_local,
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
     .udp_any_to_addr = udp_any_to_addr,

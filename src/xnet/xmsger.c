@@ -232,7 +232,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
     channel->serial_number = channel->timestamp % channel->serial_range;
-    channel->back_delay = 300000000UL;
+    channel->back_delay = 50000000UL;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -435,7 +435,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录当前时间
             pack->ts = __xapi->clock();
-            pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING;
+            pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
             channel->timestamp = pack->ts;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
@@ -642,7 +642,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
 
-            // __xlogd("xchannel_recv_ack >>>>-----------> (%u) OUT OF OEDER ACK: %u\n", channel->peer_cid, rpack->head.ack);
+            __xlogd("RECV ACK OUT OF OEDER >>>>-----------> IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u]\n", 
+                    channel->ip, channel->port, channel->lcid, channel->rcid, 
+                    rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
 
             pack = &channel->sendbuf->buf[rpack->head.ack.sn & (channel->sendbuf->range - 1)];
 
@@ -924,8 +926,8 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                 while (spack != &channel->flushlist.head)
                 {
                     xpack_ptr next_pack = spack->next;
-
-                    if ((delay = ((spack->ts + spack->delay) - __xapi->clock())) > 0) {
+                    delay = (int64_t)((spack->ts + spack->delay) - __xapi->clock());
+                    if (delay >= 0) {
                         // 未超时
                         if (msger->timer > delay){
                             // 超时时间更近，更新休息时间
@@ -935,6 +937,8 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                         break;
 
                     }else {
+
+                        // __xlogd("backdelay=%lu spack->delay =%lu delay ====================== %ld\n", channel->back_delay, spack->delay / 1000000UL, delay);
 
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
@@ -965,9 +969,10 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 // TODO ack 也要更新
                             }
 
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u] delay=%lu\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Delay[%lu:%lu]\n", 
                                     spack->head.flag, channel->ip, channel->port, channel->lcid, channel->rcid, 
-                                    spack->head.ack.flag, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, spack->delay / 1000000UL);
+                                    spack->head.ack.flag, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
+                                    channel->back_delay / 1000000UL, spack->delay / 1000000UL);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
@@ -1373,7 +1378,7 @@ bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_FINAL;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
-    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.ctx = channel;
     // msg.flag = XPACK_FLAG_FINAL;
@@ -1393,7 +1398,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_BYE;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
     // xmsg_t msg;
     // msg.xl = xl;
     // msg.ctx = channel;
@@ -1414,7 +1419,7 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     pack.ack.flag = XPACK_FLAG_PING;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)ctx;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
-    __xapi->udp_sendto(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
+    __xapi->udp_send_local(msger->lsock, msger->addr, &pack, XHEAD_SIZE);
 
     // xmsg_t msg;
     // msg.xl = xl;
@@ -1568,7 +1573,7 @@ void xmsger_free(xmsger_ptr *pptr)
         if (msger->lsock > 0 && msger->addr != NULL){
             struct xhead msg;
             msg.flag = XPACK_FLAG_FINAL;
-            __xapi->udp_sendto(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
+            __xapi->udp_send_local(msger->lsock, msger->addr, &msg, XHEAD_SIZE);
         }
 
         // if (msger->mpipe){
