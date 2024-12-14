@@ -764,8 +764,8 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             // 设置将要回复的最大连续 ACK，这时 ack 一定会大于 acks
             channel->ack.ack.pos = channel->recvbuf->wpos;
 
-            __xlogd("RECV EARLY >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] FLAG[%u] SN[%u] ACK[%u:%u:%u]\n", 
-                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.flag, pack->head.sn, 
+            __xlogd("RECV EARLY >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] FLAG[%u] ACK[%u:%u:%u]\n", 
+                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.flag,
                     channel->ack.ack.flag, channel->ack.ack.sn, channel->ack.ack.pos);
 
             // 这里 wpos - 1 在 wpos 等于 0 时会造成 acks 的值是 255
@@ -787,13 +787,14 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             
         }else {
 
-            __xlogd("RECV AGAIN >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
-                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.sn);
             // SN 在 rpos 方向越界，是滞后到达的 PACK，发生了重传
             // 回复 ACK 等于 ACKS，通知对端包已经收到
             channel->ack.ack.pos = channel->recvbuf->wpos;
             channel->ack.ack.sn = channel->ack.ack.pos;
             // 重复到达的 PACK
+            __xlogd("RECV AGAIN >>>>--------> IP=[%s] PORT=[%u] CID[%u->%u] FLAG[%u] ACK[%u:%u:%u]\n", 
+                    channel->ip, channel->port, channel->lcid, channel->rcid, pack->head.flag,
+                    channel->ack.ack.flag, channel->ack.ack.sn, channel->ack.ack.pos);
         }
     }
 
@@ -801,7 +802,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 }
 
 
-static inline bool xmsger_recv_local(xmsger_ptr msger, xhead_ptr head)
+static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 {
     // xchannel_ptr channel = (xchannel_ptr)head->flags[0];
     xmsg_t msg;
@@ -861,7 +862,7 @@ static inline bool xmsger_recv_local(xmsger_ptr msger, xhead_ptr head)
         //     __xchannel_put_into_list(&msger->send_list, channel);
         // }
 
-        __xlogd("xmsger_recv_local >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
+        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
                                     channel->ip, port, channel->lcid, channel->serial_number);
 
     }else if (msg.flag == XPACK_FLAG_BYE){
@@ -875,12 +876,12 @@ static inline bool xmsger_recv_local(xmsger_ptr msger, xhead_ptr head)
         __atom_add(channel->len, msg.xl->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
-        __xlogd("xmsger_recv_local >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
+        __xlogd("xmsger_local_recv >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
                     channel->ip, channel->port, channel->lcid, channel->rcid, channel->serial_number);
 
     }else if (msg.flag == XPACK_FLAG_FINAL){
         xchannel_ptr channel = (xchannel_ptr)(*(uint64_t*)&head->flags[0]);
-        __xlogd("xmsger_recv_local >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
+        __xlogd("xmsger_local_recv >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u->%u] SN[%u]\n", 
                                     channel->ip, channel->port, channel->lcid, channel->rcid, channel->serial_number);
         xchannel_free(channel);
     }
@@ -1104,7 +1105,7 @@ static void main_loop(void *ptr)
 
             if (rpack->head.flag == XPACK_FLAG_LOCAL){
                 if (mcompare(addr, msger->laddr, 8) == 0){
-                    xmsger_recv_local(msger, &rpack->head);
+                    xmsger_local_recv(msger, &rpack->head);
                 }
                 rpack->head.len = 0;
                 continue;
@@ -1288,7 +1289,7 @@ static void main_loop(void *ptr)
 
             // if (__xpipe_read(msger->mpipe, &msg, sizeof(msg)) == sizeof(msg)){
             //     __xpipe_notify(msger->mpipe);
-            //     __xcheck(!xmsger_recv_local(msger, &msg));
+            //     __xcheck(!xmsger_local_recv(msger, &msg));
             // }            
 
             // 检查每个连接，如果满足发送条件，就发送一个数据包
@@ -1301,7 +1302,7 @@ static void main_loop(void *ptr)
         // // __xlogd("xmsger_loop 1\n");
         // if (__xpipe_read(msger->mpipe, &msg, sizeof(msg)) == sizeof(msg)){
         //     __xpipe_notify(msger->mpipe);
-        //     __xcheck(!xmsger_recv_local(msger, &msg));
+        //     __xcheck(!xmsger_local_recv(msger, &msg));
         // else 
         {
             // __xlogd("xmsger_loop 2\n");

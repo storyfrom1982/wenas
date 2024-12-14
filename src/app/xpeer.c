@@ -403,6 +403,29 @@ static void res_logout(xpeer_ctx_t *ctx, void *userctx)
     __xlogi("res_logout --------------------- \n");
 }
 
+static void req_hello(xpeer_ctx_t *ctx);
+static void res_hello(xpeer_ctx_t *ctx, void *userctx)
+{
+    req_hello(ctx);
+}
+static void req_hello(xpeer_ctx_t *ctx)
+{
+    xline_t *msg = xmsg_new(ctx, XLMSG_FLAG_SEND, res_hello);
+    __xcheck(msg == NULL);
+    xl_add_word(&msg, "api", "echo");
+    xl_add_uint(&msg, "tid", msg->index);
+    xl_add_word(&msg, "host", ctx->server->ip);
+    xl_add_uint(&msg, "port", ctx->server->port+1);
+    xl_add_bin(&msg, "uuid", ctx->server->uuid, UUID_BIN_BUF_LEN);
+    __xcheck(xpipe_write(ctx->server->task_pipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    return;
+XClean:
+    if (msg != NULL){
+        xl_free(&msg);
+    }
+    return;
+}
+
 static void res_echo(xpeer_ctx_t *ctx, void *userctx)
 {
     ctx->server->channel_count ++;
@@ -414,7 +437,8 @@ static void res_echo(xpeer_ctx_t *ctx, void *userctx)
     }else {
         __xlogi("disable puching\n");
     }
-    xltp_logout(ctx->server);
+    // xltp_logout(ctx->server);
+    req_hello(ctx);
 }
 
 static void res_login(xpeer_ctx_t *ctx, void *user)
@@ -433,12 +457,6 @@ static void res_login(xpeer_ctx_t *ctx, void *user)
     new_ctx->process = NULL;
     xline_t *msg = xmsg_new(new_ctx, XLMSG_FLAG_CONNECT, res_echo);
     __xcheck(msg == NULL);
-    // xline_t *msg = xl_maker();
-    // __xcheck(msg == NULL);
-    // msg->flag = XLMSG_FLAG_CONNECT;
-    // msg->index = xserver_get_msgid(new_ctx->server);
-    // msg->cb = res_echo;
-    // msg->ctx = new_ctx;
     xl_add_word(&msg, "api", "echo");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", new_ctx->server->ip);
@@ -467,6 +485,19 @@ static void api_res(xpeer_ctx_t *ctx)
         ((msg_cb_t)(msg->cb))(msg->ctx, NULL);
         xpeer_del_msg_cb(msg->ctx, msg);
     }
+}
+
+static void api_hello(xpeer_ctx_t *ctx)
+{
+    uint64_t tid = xl_find_uint(&ctx->server->parser, "tid");
+    xline_t *res = xl_maker();
+    xl_add_word(&res, "api", "res");
+    xl_add_word(&res, "req", "hello");
+    xl_add_uint(&res, "tid", tid);
+    xl_add_word(&res, "host", xchannel_get_host(ctx->channel));
+    xl_add_uint(&res, "port", xchannel_get_port(ctx->channel));
+    xl_add_uint(&res, "code", 200);
+    xmsger_send(ctx->server->msger, ctx->channel, res);
 }
 
 static void api_discon(xpeer_ctx_t *ctx)
@@ -614,6 +645,7 @@ int main(int argc, char *argv[])
     xpeer_regisger_recv_api(peer, "timeout", api_timeout);
     xpeer_regisger_recv_api(peer, "login", api_login);
     xpeer_regisger_recv_api(peer, "echo", api_echo);
+    xpeer_regisger_recv_api(peer, "hello", api_hello);
 
     xmsgercb_ptr listener = &peer->listener;
 
