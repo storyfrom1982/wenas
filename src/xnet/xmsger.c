@@ -536,9 +536,9 @@ XClean:
 
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
-    __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n",
-            rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
-            (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
+    // __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n",
+    //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
+    //         (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 
@@ -643,9 +643,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
 
-            __xlogd("RECV ACK OUT OF OEDER >>>>-----------> IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u]\n", 
-                    channel->ip, channel->port, channel->lcid, channel->rcid, 
-                    rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
+            // __xlogd("RECV ACK OUT OF OEDER >>>>-----------> IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u]\n", 
+            //         channel->ip, channel->port, channel->lcid, channel->rcid, 
+            //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos);
 
             pack = &channel->sendbuf->buf[rpack->head.ack.sn & (channel->sendbuf->range - 1)];
 
@@ -688,7 +688,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                 // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
                                 pack->head.ack.pos = channel->recvbuf->wpos;
                             }
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u->%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     pack->head.flag, channel->ip, channel->port, channel->lcid, channel->rcid, 
                                     pack->head.ack.flag, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
