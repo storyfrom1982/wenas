@@ -127,7 +127,7 @@ struct avl_tree
  */
 void avl_tree_init(struct avl_tree *tree,
 		int (*compare)(const void*, const void*),
-		int (*find_compare)(const void*, const void*),
+		int (*find)(const void*, const void*),
 		 size_t size, size_t offset);
 
 void *avl_tree_first(struct avl_tree *tree);

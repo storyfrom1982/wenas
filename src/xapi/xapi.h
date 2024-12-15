@@ -1,13 +1,13 @@
 #ifndef __XAPI_H__
 #define __XAPI_H__
 
-#if !defined(__linux__) && !defined(__APPLE__)
-#error Not yet adapted to the environment
-#endif
+// #if !defined(__linux__) && !defined(__APPLE__)
+// #error Not yet adapted to the environment
+// #endif
 
 
-#include <stddef.h>
-#include <assert.h>
+// #include <stddef.h>
+// #include <assert.h>
 
 #include "xatom.h"
 
@@ -18,13 +18,14 @@
 
 #define __XAPI_TIMEDOUT             1
 #define __XAPI_MAP_FAILED           ((void *) -1)
-#define __XAPI_IP_STR_LEN           16
+#define __XAPI_IP_STR_LEN           46
 
 
-typedef void* __xmutex_ptr;
-typedef void* __xprocess_ptr;
-typedef void* __xfile_ptr;
-typedef void* __xipaddr_ptr;
+
+typedef int __xfile_t;
+typedef void* __xthread_ptr;
+typedef struct __xmutex* __xmutex_ptr;
+typedef struct __xipaddr* __xipaddr_ptr;
 
 
 typedef struct __xapi_enter {
@@ -42,9 +43,9 @@ typedef struct __xapi_enter {
 ///// 并发任务
 ///////////////////////////////////////////////////////
 
-    __xprocess_ptr (*process_create)(void*(*task_enter)(void*), void *ctx);
-    void (*process_free)(__xprocess_ptr pid);
-    __xprocess_ptr (*process_self)();
+    __xthread_ptr (*thread_create)(void(*task_enter)(void*), void *ctx);
+    void (*thread_join)(__xthread_ptr pid);
+    __xthread_ptr (*thread_self)();
 
     __xmutex_ptr (*mutex_create)();
     void (*mutex_free)(__xmutex_ptr mutex);
@@ -60,36 +61,40 @@ typedef struct __xapi_enter {
 ///// 网络接口
 ///////////////////////////////////////////////////////
 
-    int (*udp_open)(int buf_size);
+    int (*udp_open)(int ipv6, int reuse, int nonblock);
     int (*udp_close)(int sock);
-    int (*udp_bind)(uint16_t port);
+    int (*udp_bind)(int sock, uint16_t port);
+    int (*udp_bind_addr)(int sock, __xipaddr_ptr ipaddr);
     int (*udp_sendto)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
+    int (*udp_local_send)(int sock, __xipaddr_ptr ipaddr, void *data, size_t size);
     int (*udp_recvfrom)(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size);
-    int (*udp_listen)(int sock, uint64_t microseconds);
-    bool (*udp_addrinfo)(char* ip_str, size_t ip_str_len, const char *name);
-    bool (*udp_hostbyname)(char* ip_str, size_t ip_str_len, const char *name);
+    int (*udp_listen)(int sock[2], uint64_t microseconds);
+    int (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
+    int (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
+    bool (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
+    __xipaddr_ptr (*udp_any_to_addr)(int ipv6, uint16_t port);
     __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
-    __xipaddr_ptr (*udp_new_addr)(const __xipaddr_ptr addr);
-    bool (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
 
 ///////////////////////////////////////////////////////
 ///// 文件存储
 ///////////////////////////////////////////////////////
 
-    bool (*make_path)(const char* path);
-    bool (*check_path)(const char* path);
-    bool (*check_file)(const char* path);
-    bool (*delete_path)(const char* path);
-    bool (*delete_file)(const char* path);
-    bool (*move_path)(const char* from, const char* to);
+    
+    int (*fs_isdir)(const char* path);
+    int (*fs_isfile)(const char* path);
+    int (*fs_mkdir)(const char* path);
+    int (*fs_rmdir)(const char* path);
+    int (*fs_mkpath)(const char* path);
+    int (*fs_remove)(const char* path);
+    int (*fs_rename)(const char* path, const char* to);
+    int (*fs_size)(const char* path);
 
-    __xfile_ptr (*fopen)(const char* path, const char* mode);
-    int (*fclose)(__xfile_ptr);
-    int64_t (*ftell)(__xfile_ptr);
-    int64_t (*fflush)(__xfile_ptr);
-    int64_t (*fwrite)(__xfile_ptr, void* data, uint64_t size);
-    int64_t (*fread)(__xfile_ptr, void* buf, uint64_t size);
-    int64_t (*fseek)(__xfile_ptr, int64_t offset, int32_t whence);
+    __xfile_t (*fs_open)(const char* path, int flags, int mode);
+    int (*fs_close)(__xfile_t);
+    int (*fs_write)(__xfile_t, void* data, unsigned int size);
+    int (*fs_read)(__xfile_t, void* buf, unsigned int size);
+    int64_t (*fs_tell)(__xfile_t);
+    int64_t (*fs_lseek)(__xfile_t, int64_t offset, int whence);
 
 ///////////////////////////////////////////////////////
 ///// 内存管理
@@ -141,21 +146,14 @@ extern void __xlog_printf(enum __xlog_level level, const char *file, int line, c
         do {} while(0)
 #endif
 
-#define __xbreak(condition) \
+
+#define __xcheck(condition) \
     do { \
         if ((condition)) { \
             __xloge("ERROR: %s\n", #condition); \
-            goto Clean; \
+            goto XClean; \
         } \
     } while (0)
-
-// #define __xcheck(condition) \
-//     do { \
-//         if (!(condition)) { \
-//             __xloge("ERROR: %s\n", #condition); \
-//             goto XClean; \
-//         } \
-//     } while (0)
 
 
 

@@ -404,7 +404,7 @@ static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_
         }
         n += result;
     }
-    __xlog_debug("[!!! Segmentation fault !!!] 0x%X->0x%X\n%s\n", ptr_pid, (uint64_t)__xapi->process_self(), buf);
+    __xlog_debug("[!!! Segmentation fault !!!] 0x%X->0x%X\n%s\n", ptr_pid, (uint64_t)__xapi->thread_self(), buf);
 #endif //UNWIND_BACKTRACE
 }
 
@@ -535,7 +535,7 @@ void* malloc(size_t size)
 #ifdef UNWIND_BACKTRACE
         // ptr->trace 的开始位置用来存储获取跟踪堆栈的深度
         *((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
-        *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
+        *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->thread_self();
 #endif
 
         return __pointer2address(ptr);
@@ -586,7 +586,7 @@ void* malloc(size_t size)
 
 #ifdef UNWIND_BACKTRACE
     *((int64_t*)ptr->trace) = __xapi->backtrace(((void**)ptr->trace) + 1, __backtrace_depth - 2);
-    *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->process_self();
+    *(((int64_t*)ptr->trace) + (*((int64_t*)ptr->trace))) = (uint64_t)__xapi->thread_self();
 #endif
 
     return __pointer2address(ptr);
@@ -825,10 +825,9 @@ size_t slength(const char *s)
     return l;
 }
 
-int mcompare(const void *s1, const void *s2, size_t n){
-    assert(s1);
-    assert(s2);
-    if (!n){
+int mcompare(const void *s1, const void *s2, size_t n)
+{
+    if (s1 == NULL || s2 == NULL || n == 0){
         return 0;
     }
     while (--n && *(char*)s1 == *(char*)s2){
@@ -840,9 +839,7 @@ int mcompare(const void *s1, const void *s2, size_t n){
 
 void* mcopy(void *dst, const void *src, size_t n)
 {
-    assert(dst);
-    assert(src);
-    if (!n){
+    if (src == NULL || dst == NULL || n == 0){
         return dst;
     }
     size_t l = n / 8;

@@ -5,38 +5,26 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include "uv.h"
+
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
-static uint64_t __unix_time(void)
+static uint64_t __xtime(void)
 {
-#if defined(CLOCK_REALTIME)
-	struct timespec tp;
-	clock_gettime(CLOCK_REALTIME, &tp);
+	uv_timespec64_t tp;
+	uv_clock_gettime(UV_CLOCK_REALTIME, &tp);
 	return (uint64_t)tp.tv_sec * NANO_SECONDS + tp.tv_nsec;
-#else
-	// POSIX.1-2008 marks gettimeofday() as obsolete, recommending the use of clock_gettime(2) instead.
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (uint64_t)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
-#endif
 }
 
 ///@return nanoseconds(relative time)
-static uint64_t __unix_clock(void)
+static uint64_t __xclock(void)
 {
-#if defined(CLOCK_MONOTONIC)
-	struct timespec tp;
-	clock_gettime(CLOCK_MONOTONIC, &tp);
+	uv_timespec64_t tp;
+	uv_clock_gettime(UV_CLOCK_MONOTONIC, &tp);
 	return (uint64_t)tp.tv_sec * NANO_SECONDS + tp.tv_nsec;
-#else
-	// POSIX.1-2008 marks gettimeofday() as obsolete, recommending the use of clock_gettime(2) instead.
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (uint64_t)tv.tv_sec * NANO_SECONDS + tv.tv_usec * MILLI_SECONDS;
-#endif
 }
 
 
-static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
+static uint64_t __ex_strftime(char *buf, size_t size, uint64_t timepoint)
 {
 	time_t sec = (time_t)timepoint;
     struct tm t;
@@ -49,27 +37,25 @@ static uint64_t __unix_strftime(char *buf, size_t size, uint64_t timepoint)
 //////////////////////////////////////
 //////////////////////////////////////
 
-static __xprocess_ptr __posix_thread_create(void*(*task_enter)(void*), void *ctx)
+static __xthread_ptr __xthread_create(void(*task_enter)(void*), void *ctx)
 {
-    pthread_t tid;
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);    
-    int ret = pthread_create(&tid, &attr, task_enter, ctx);
+    uv_thread_t tid;
+    int ret = uv_thread_create(&tid, task_enter, ctx);
     if (ret == 0){
-        return (__xprocess_ptr)tid;
+        return (__xthread_ptr)tid;
     }
     return NULL;
 }
 
-static void __posix_thread_free(__xprocess_ptr pid)
+static void __xthread_join(__xthread_ptr tid)
 {
-    pthread_join((pthread_t)pid, NULL);
+    uv_thread_t id = (uv_thread_t)tid;
+    uv_thread_join(&id);
 }
 
-static __xprocess_ptr __posix_thread_self()
+static __xthread_ptr __xthread_self()
 {
-    return (__xprocess_ptr)pthread_self();
+    return (__xthread_ptr)uv_thread_self();
 }
 
 
@@ -78,85 +64,96 @@ static __xprocess_ptr __posix_thread_self()
 //////////////////////////////////////
 
 
-typedef struct posix_mutex {
-    pthread_cond_t cond[1];
-    pthread_mutex_t mutex[1];
-}*__posix_mutex_ptr;
+typedef struct __xmutex {
+    uv_cond_t cond[1];
+    uv_mutex_t mutex[1];
+}*__xmutex_ptr;
 
 
-static __xmutex_ptr __posix_mutex_create()
+static __xmutex_ptr __xmutex_create()
 {
-    __posix_mutex_ptr ptr = (__posix_mutex_ptr)malloc(sizeof(struct posix_mutex));
-    assert(ptr);
-    __xlogd("__posix_mutex_create ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
-    int ret = pthread_mutex_init(ptr->mutex, NULL);
-    __xlogd("create mutex == 0x%X\n", ptr->mutex);
-    assert(ret == 0);
-    ret = pthread_cond_init(ptr->cond, NULL);
-    assert(ret == 0);
-    return (__xmutex_ptr)ptr;
+    __xmutex_ptr ptr = (__xmutex_ptr)malloc(sizeof(struct __xmutex));
+    __xcheck(ptr == NULL);
+    int ret = uv_mutex_init(ptr->mutex);
+    __xcheck(ret != 0);
+    ret = uv_cond_init(ptr->cond);
+    __xcheck(ret != 0);
+    return ptr;
+
+XClean:
+    if (ptr){
+        free(ptr);
+    }
+    return NULL;
 }
 
-static void __posix_mutex_free(__xmutex_ptr ptr)
+static void __xmutex_free(__xmutex_ptr ptr)
 {
-    int ret;
-    assert(ptr);
-    __xlogd("free mutex == 0x%X\n", ((__posix_mutex_ptr)ptr)->mutex);
-    ret = pthread_mutex_destroy(((__posix_mutex_ptr)ptr)->mutex);
-    assert(ret == 0);
-    ret = pthread_cond_destroy(((__posix_mutex_ptr)ptr)->cond);
-    assert(ret == 0);
-    __xlogd("__posix_mutex_free ptr == 0x%X\n", ((__posix_mutex_ptr)ptr));
+    __xcheck(ptr == NULL);
+    uv_mutex_destroy(ptr->mutex);
+    uv_cond_destroy(ptr->cond);
     free(ptr);
+XClean:
+    return;
 }
 
-static void __posix_mutex_lock(__xmutex_ptr ptr)
+static void __xmutex_lock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_mutex_lock(((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_mutex_lock(ptr->mutex);
+XClean:
+    return;
 }
 
-bool __posix_mutex_trylock(__xmutex_ptr ptr)
+bool __xmutex_trylock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    return pthread_mutex_trylock(((__posix_mutex_ptr)ptr)->mutex) == 0;
+    __xcheck(ptr == NULL);
+    return uv_mutex_trylock(ptr->mutex) == 0;
+XClean:
+    return false;
 }
 
-static void __posix_mutex_notify(__xmutex_ptr ptr)
+static void __xmutex_notify(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_signal(((__posix_mutex_ptr)ptr)->cond);
+    __xcheck(ptr == NULL);
+    uv_cond_signal(ptr->cond);
+XClean:
+    return;
 }
 
-static void __posix_mutex_broadcast(__xmutex_ptr ptr)
+static void __xmutex_broadcast(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_broadcast(((__posix_mutex_ptr)ptr)->cond);
+    __xcheck(ptr == NULL);
+    uv_cond_broadcast(ptr->cond);
+XClean:
+    return;
 }
 
-static void __posix_mutex_wait(__xmutex_ptr ptr)
+static void __xmutex_wait(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_cond_wait(((__posix_mutex_ptr)ptr)->cond, ((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_cond_wait(ptr->cond, ptr->mutex);
+XClean:
+    return;
 }
 
-static int __posix_mutex_timedwait(__xmutex_ptr ptr, uint64_t delay)
+static int __xmutex_timedwait(__xmutex_ptr ptr, uint64_t delay)
 {
-    assert(ptr);
-    struct timespec ts;
-    delay += __unix_time();
-    ts.tv_sec = delay / NANO_SECONDS;
-    ts.tv_nsec = delay % NANO_SECONDS;
-    if (pthread_cond_timedwait(((__posix_mutex_ptr)ptr)->cond, ((__posix_mutex_ptr)ptr)->mutex, &ts) == ETIMEDOUT){
+    __xcheck(ptr == NULL);
+    if (uv_cond_timedwait(ptr->cond, ptr->mutex, delay) == UV_ETIMEDOUT){
         return __XAPI_TIMEDOUT;
     }
     return 0;
+XClean:
+    return -1;
 }
 
-static void __posix_mutex_unlock(__xmutex_ptr ptr)
+static void __xmutex_unlock(__xmutex_ptr ptr)
 {
-    assert(ptr);
-    pthread_mutex_unlock(((__posix_mutex_ptr)ptr)->mutex);
+    __xcheck(ptr == NULL);
+    uv_mutex_unlock(ptr->mutex);
+XClean:
+    return;
 }
 
 
@@ -167,110 +164,124 @@ static void __posix_mutex_unlock(__xmutex_ptr ptr)
 #include <sys/stat.h>
 
 
-static __xfile_ptr __ex_fopen(const char* path, const char* mode)
+static __xfile_t __fs_open(const char* path, int flags, int mode)
 {
-	return fopen(path, mode);
+    uv_fs_t open_req;
+    //flags UV_FS_O_WRONLY | UV_FS_O_APPEND, UV_FS_O_RDWR | UV_FS_O_CREAT
+    //mode S_IWUSR | S_IRUSR
+    __xfile_t fd = uv_fs_open(NULL, &open_req, path, flags, mode, NULL);
+    uv_fs_req_cleanup(&open_req);
+    return fd;
 }
 
-static int __ex_fclose(__xfile_ptr fp)
+static int __fs_close(__xfile_t fd)
 {
-	return fclose((FILE*)fp) == 0 ? true : false;
+    uv_fs_t close_req;
+    int r = uv_fs_close(NULL, &close_req, fd, NULL);
+    uv_fs_req_cleanup(&close_req);
+    return r;
 }
 
-static int64_t __ex_ftell(__xfile_ptr fp)
+static int __fs_write(__xfile_t fd, void *data, unsigned int size)
 {
-	return ftello((FILE*)fp);
+    uv_fs_t write_req;
+    uv_buf_t iov = uv_buf_init(data, size);
+    int r = uv_fs_write(NULL, &write_req, fd, &iov, 1, -1, NULL);
+    uv_fs_req_cleanup(&write_req);
+    return r;
 }
 
-static int64_t __ex_fflush(__xfile_ptr fp)
+static int __fs_read(__xfile_t fd, void *buf, unsigned int size)
 {
-	return fflush((FILE*)fp);
+    uv_fs_t read_req;
+    uv_buf_t iov = uv_buf_init(buf, size);
+    int r = uv_fs_read(NULL, &read_req, fd, &iov, 1, -1, NULL);
+    uv_fs_req_cleanup(&read_req);
+    return r;
 }
 
-static int64_t __ex_fwrite(__xfile_ptr fp, void *data, uint64_t size)
+static int64_t __fs_tell(__xfile_t fd)
 {
-	return fwrite(data, 1, size, (FILE*)fp);
+    return lseek(fd, 0, SEEK_CUR);
 }
 
-static int64_t __ex_fread(__xfile_ptr fp, void *buf, uint64_t size)
+static int64_t __fs_lseek(__xfile_t fd, int64_t offset, int32_t whence)
 {
-	return fread(buf, 1, size, (FILE*)fp);
+    return lseek(fd, offset, SEEK_SET);
 }
 
-static int64_t __ex_fseek(__xfile_ptr fp, int64_t offset, int32_t whence)
+static uint64_t __fs_size(const char* filename)
 {
-	return fseeko((FILE*)fp, offset, whence);
+    uv_fs_t stat_req;
+    uint64_t size = 0;
+    int r = uv_fs_stat(NULL, &stat_req, filename, NULL);
+    if (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFREG){
+        size = ((uv_stat_t*)stat_req.ptr)->st_size;
+    }
+    uv_fs_req_cleanup(&stat_req);
+    return size;
 }
 
-
-/*** The following code is referencing: https://github.com/ireader/sdk.git ***/
-
-static bool __ex_check_file(const char* path)
+static int __fs_isfile(const char* filepath)
 {
-	struct stat info;
-	return (stat(path, &info)==0 && (info.st_mode&S_IFREG)) ? true : false;
+    uv_fs_t stat_req;
+    int r = uv_fs_stat(NULL, &stat_req, filepath, NULL);
+    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFREG);
+    uv_fs_req_cleanup(&stat_req);
+    return r;
 }
 
-/// get file size in bytes
-/// return file size
-static uint64_t __ex_file_size(const char* filename)
+static int __fs_isdir(const char* path)
 {
-	struct stat st;
-	if (0 == stat(filename, &st) && (st.st_mode & S_IFREG))
-		return st.st_size;
-	return -1;
+    uv_fs_t stat_req;
+    int r = uv_fs_stat(NULL, &stat_req, path, NULL);
+    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFDIR);
+    uv_fs_req_cleanup(&stat_req);
+    return r;
 }
 
-static bool __ex_check_path(const char* path)
+static int __fs_mkdir(const char* path)
 {
-	struct stat info;
-	return (stat(path, &info)==0 && (info.st_mode&S_IFDIR)) ? true : false;
+    uv_fs_t mkdir_req;
+    int r = uv_fs_mkdir(NULL, &mkdir_req, path, 0755, NULL);
+    uv_fs_req_cleanup(&mkdir_req);
+    return r;
 }
 
-static bool __ex_mkdir(const char* path)
+static int __fs_rmdir(const char* path)
 {
-	int r = mkdir(path, 0777);
-	return 0 == r ? true : false;
+    uv_fs_t rmdir_req;
+    int r = uv_fs_rmdir(NULL, &rmdir_req, path, NULL);
+    uv_fs_req_cleanup(&rmdir_req);
+    return r;
 }
 
-static bool __ex_delete_path(const char* path)
+static int __fs_remove(const char* path)
 {
-	int r = rmdir(path);
-	return 0 == r ? true : false;
+    uv_fs_t req;
+    int r = uv_fs_unlink(NULL, &req, path, NULL);
+    uv_fs_req_cleanup(&req);
+    return r;
 }
 
-static bool __ex_realpath(const char* path, char resolved_path[PATH_MAX])
+static int __fs_rename(const char* path, const char* to)
 {
-	char* p = realpath(path, resolved_path);
-	return p ? true : false;
+    uv_fs_t rename_req;
+    int r = uv_fs_rename(NULL, &rename_req, path, to, NULL);
+    uv_fs_req_cleanup(&rename_req);
+    return r;
 }
 
-/// delete a name and possibly the file it refers to
-/// 0-ok, other-error
-static bool __ex_delete_file(const char* path)
-{
-	int r = remove(path);
-	return 0 == r ? true : false;
-}
-
-/// change the name or location of a file
-/// 0-ok, other-error
-static bool __ex_move_path(const char* from, const char* to)
-{
-	int r = rename(from, to);
-	return 0 == r ? true : false;
-}
-
-static bool __ex_make_path(const char* path)
+static int __fs_mkpath(const char* path)
 {
     if (path == NULL || path[0] == '\0'){
-        return false;
+        return -1;
     }
 
     bool ret = true;
     uint64_t len = strlen(path);
 
-    if (!__ex_check_path(path)){
+    if (!__fs_isdir(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -279,17 +290,17 @@ static bool __ex_make_path(const char* path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!__ex_check_path(buf)){
-                    ret = __ex_mkdir(buf);
-                    if (!ret){
+                if (!__fs_isdir(buf)){
+                    ret = __fs_mkdir(buf);
+                    if (ret != 0){
                         break;
                     }
                 }
                 *p = '/';
             }
         }
-        if (ret){
-            ret = __ex_mkdir(buf);
+        if (ret == 0){
+            ret = __fs_mkdir(buf);
         }
     }
 
@@ -306,36 +317,32 @@ static bool __ex_make_path(const char* path)
 #include <arpa/inet.h>
 #include <netdb.h> //struct hostent
 
-static int udp_open(int buf_size)
+
+struct __xipaddr {
+    union{
+        struct sockaddr_in v4;
+        struct sockaddr_in6 v6;
+    };
+    socklen_t addrlen;
+};
+
+static int udp_open(int ipv6, int reuse, int nonblock)
 {
     __xlogd("udp_open ........... enter\n");
     int sock;
     int opt;
-    int flags;
-    __xbreak((sock = socket(PF_INET, SOCK_DGRAM, 0)) < 0);
-    __xlogd("udp_open ........... 1\n");
-    // opt = 1;
-    // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVLOWAT, &opt, sizeof(opt)) != 0);
-    opt = 1;
-    __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0);
-    __xbreak(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0);
-    __xlogd("udp_open ........... 2\n");
-    // opt=0;
-    // __xbreak(setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) != 0);
-    // if (buf_size > 0){
-    //     opt = buf_size;
-    //     __xbreak(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) != 0);
-    //     // opt = buf_size * 5;
-    //     // __xbreak(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt)) != 0);
-    // }
-    __xlogd("udp_open ........... 3\n");
-    flags = fcntl(sock, F_GETFL, 0);
-    __xbreak(fcntl(sock, F_SETFL, flags | O_NONBLOCK) == -1);
-
-    __xlogd("udp_open ........... exit\n");
+    if (ipv6){
+        __xcheck((sock = socket_udp_ipv6()) < 0);
+    }else {
+        __xcheck((sock = socket_udp()) < 0);
+    }
+    opt = nonblock;
+    __xcheck(socket_setnonblock(sock, opt) != 0);
+    opt = reuse;
+    __xcheck(socket_setreuseport(sock, opt) != 0);
+    __xcheck(socket_setreuseaddr(sock, opt) != 0);
     return sock;
-
-Clean:
+XClean:
     return -1;
 }
 
@@ -344,18 +351,14 @@ static int udp_close(int sock)
     return close(sock);
 }
 
-static int udp_bind(uint16_t port)
+static int udp_bind_any(int sock, uint16_t port)
 {
-    // socket_t ss = udp_open(0);
-    // struct sockaddr_storage addr;
-	// socklen_t addrlen;
-    // socket_addr_from(&addr, &addrlen, NULL, port);
-    // bind(ss, (struct sockaddr*)&addr, port);
+    return socket_bind_any(sock, port);
+}
 
-    socket_t ss = socket_udp_bind_ipv4(NULL, port);
-    // socket_t ss = socket_udp_bind_ipv6(NULL, port, 1);
-    socket_setnonblock(ss, 1);
-    return ss;
+static int udp_bind_addr(int sock, __xipaddr_ptr ipaddr)
+{
+    return socket_bind(sock, (const struct sockaddr *)ipaddr, (socklen_t)ipaddr->addrlen);
 }
 
 static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
@@ -363,123 +366,99 @@ static int udp_sendto(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
 #ifdef __XDEBUG__
     static uint64_t send_number = 0, lost_number = 0;
     send_number++;
-    uint64_t randtime = __unix_clock() / 1000000ULL;
+    uint64_t randtime = __xclock() / 1000000ULL;
     if ((send_number & 0x03) == (randtime & 0x03)){
-        __xlogd("lost pack ...........\n");
+        __xlogd("lost pack ...........%lu\n", size);
         return size;
     }
 #endif
-    // __xlogd("addr len ........... %u\n", socket_addr_len((struct sockaddr*)ipaddr));
-    int ret = sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, socket_addr_len((struct sockaddr*)ipaddr));
-    if (ret != size){
-        __xlogd("error ################################## %s\n", strerror(errno));
-    }
-    return ret;
+    return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
+}
+
+static int udp_local_send(int sock, __xipaddr_ptr ipaddr, void *data, size_t size)
+{
+    return socket_sendto(sock, data, size, 0, (struct sockaddr*)ipaddr, ipaddr->addrlen);
 }
 
 static int udp_recvfrom(int sock, __xipaddr_ptr ipaddr, void *buf, size_t size)
 {
-    socklen_t addr_len = socket_addr_len((struct sockaddr*)ipaddr);
-    return recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, &addr_len);
+    return socket_recvfrom(sock, buf, size, 0, (struct sockaddr*)ipaddr, &ipaddr->addrlen);
 }
 
-static int udp_listen(int sock, uint64_t microseconds)
+static int udp_listen(int sock[2], uint64_t microseconds)
 {
     fd_set fds;
     FD_ZERO(&fds);
-    FD_SET(sock, &fds);
+    FD_SET(sock[0], &fds);
+    FD_SET(sock[1], &fds);
     struct timeval timer;
     timer.tv_sec = microseconds / 1000000UL;
     timer.tv_usec = microseconds & 1000000UL;
-    return select(sock + 1, &fds, NULL, NULL, &timer);
-    // return select(sock + 1, &fds, NULL, NULL, NULL);
+    return socket_select(sock[1] > sock[0] ? sock[1] + 1 : sock[0] + 1, &fds, NULL, NULL, &timer);
 }
 
-bool udp_addrinfo(char* ip_str, size_t ip_str_len, const char *hostname)
-{
+int udp_addrinfo(char ip[__XAPI_IP_STR_LEN], const char *hostname) {
+
     int status;
-    struct addrinfo hints = {0}, *res, *p;
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-
-    __xbreak((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0);
-
-    if (res) {
-        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
-        __xbreak(inet_ntop(res->ai_family, &(ipv4->sin_addr), ip_str, ip_str_len) == NULL);
-    }
-
+    struct addrinfo *res = NULL;
+    __xcheck((status = socket_getaddrinfo(hostname, NULL, NULL, &res)) != 0);
+    __xcheck(socket_addr_to(res->ai_addr, res->ai_addrlen, ip, NULL) != 0);
     freeaddrinfo(res);
+    return 0;
 
-    return true;
-
-Clean:
-
+XClean:
     if (res){
         freeaddrinfo(res);
     }
-
-    return false;
+    return -1;
 }
 
-bool udp_hostbyname(char* ip_str, size_t ip_str_len, const char *name)
+int udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
+    return socket_addr_to((const struct sockaddr*)addr, addr->addrlen, ip, port);
+}
+
+bool udp_addr_is_ipv6(__xipaddr_ptr addr)
 {
-    struct hostent *host_info = gethostbyname(name);
-    if (host_info != NULL && host_info->h_addr_list[0] != NULL) {
-        return inet_ntop(AF_INET, host_info->h_addr_list[0], ip_str, ip_str_len) != NULL;
+    return ((struct sockaddr*)addr)->sa_family == AF_INET6;
+}
+
+__xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
+{
+    __xipaddr_ptr ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xcheck(ipaddr == NULL);
+    if (ipv6){
+        ipaddr->v6.sin6_family = AF_INET6;
+        ipaddr->v6.sin6_port = htons(port);
+        ipaddr->v6.sin6_addr = in6addr_any;
+        ipaddr->addrlen = sizeof(struct sockaddr_in6);
+    }else {
+        ipaddr->v4.sin_family = AF_INET;
+        ipaddr->v4.sin_port = htons(port);
+        ipaddr->v4.sin_addr.s_addr = INADDR_ANY;
+        ipaddr->addrlen = sizeof(struct sockaddr_in);
     }
-    return false;
-}
+    return ipaddr;
 
-// #define INET_ADDRSTRLEN 16
-// #define INET6_ADDRSTRLEN 46
-bool udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port)
-{
-    return socket_addr_to((struct sockaddr*)addr, socket_addr_len(addr), ip, port) == 0;
+XClean:
+    if (ipaddr != NULL){
+        free(ipaddr);
+    }
+    return NULL;
 }
 
 __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
-    struct sockaddr_storage *addr = (struct sockaddr_storage*)malloc(sizeof(struct sockaddr_storage));
-    __xbreak(addr == NULL);
+    __xipaddr_ptr ipaddr = NULL;
+    __xcheck(ip == NULL);
+    ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xcheck(ipaddr == NULL);
+    memset(ipaddr, 0, sizeof(struct __xipaddr));
+    __xcheck(socket_addr_from((struct sockaddr_storage*)ipaddr, &ipaddr->addrlen, ip, port) != 0);
+    return ipaddr;
 
-	socklen_t addrlen;
-    __xbreak(socket_addr_from(addr, &addrlen, ip, port) != 0);
-    __xlogd("host to addr len = %u\n", addrlen);
-
-    return addr;
-
-Clean:
-
-    if (addr != NULL){
-        free(addr);
-    }
-
-    return NULL;
-}
-
-__xipaddr_ptr udp_new_addr(__xipaddr_ptr ipaddr)
-{
-    struct sockaddr_storage *addr = (struct sockaddr_storage*)malloc(sizeof(struct sockaddr_storage));
-    if (addr == NULL){
-        return NULL;
-    }
+XClean:
     if (ipaddr != NULL){
-        memcpy(addr, ipaddr, sizeof(struct sockaddr_storage));
-    }else {
-        memset(addr, 0, sizeof(struct sockaddr_storage));
-        // struct sockaddr_storage ss;
-        // socklen_t addrlen;
-        // __xbreak(socket_addr_from(&ss, &addrlen, "::1", 9256) != 0);
-        // __xlogd("addr len = %u %u\n", addrlen, sizeof(ss));
-        // memcpy(addr, &ss, sizeof(struct sockaddr_storage));
-        // __xlogd("addr len = %u exit\n", addrlen);
-    }
-    return addr;
-
-Clean:
-    if (addr != NULL){
-        free(addr);
+        free(ipaddr);
     }
     return NULL;
 }
@@ -552,51 +531,52 @@ static int __ex_dladdr(const void* addr, void *buf, size_t size)
 
 struct __xapi_enter posix_api_enter = {
 
-    .time = __unix_time,
-    .clock = __unix_clock,
-    .strftime = __unix_strftime,
+    .time = __xtime,
+    .clock = __xclock,
+    .strftime = __ex_strftime,
     .snprintf = snprintf,
 
-    .process_create = __posix_thread_create,
-    .process_free = __posix_thread_free,
-    .process_self = __posix_thread_self,
+    .thread_create = __xthread_create,
+    .thread_join = __xthread_join,
+    .thread_self = __xthread_self,
 
-    .mutex_create = __posix_mutex_create,
-    .mutex_free = __posix_mutex_free,
-    .mutex_lock = __posix_mutex_lock,
-    .mutex_trylock = __posix_mutex_trylock,
-    .mutex_unlock = __posix_mutex_unlock,
-    .mutex_wait = __posix_mutex_wait,
-    .mutex_timedwait = __posix_mutex_timedwait,
-    .mutex_notify = __posix_mutex_notify,
-    .mutex_broadcast = __posix_mutex_broadcast,
+    .mutex_create = __xmutex_create,
+    .mutex_free = __xmutex_free,
+    .mutex_lock = __xmutex_lock,
+    .mutex_trylock = __xmutex_trylock,
+    .mutex_unlock = __xmutex_unlock,
+    .mutex_wait = __xmutex_wait,
+    .mutex_timedwait = __xmutex_timedwait,
+    .mutex_notify = __xmutex_notify,
+    .mutex_broadcast = __xmutex_broadcast,
 
     .udp_open = udp_open,
     .udp_close = udp_close,
-    .udp_bind = udp_bind,
+    .udp_bind = udp_bind_any,
+    .udp_bind_addr = udp_bind_addr,
     .udp_sendto = udp_sendto,
+    .udp_local_send = udp_local_send,
     .udp_recvfrom = udp_recvfrom,
     .udp_listen = udp_listen,
+    .udp_any_to_addr = udp_any_to_addr,
     .udp_host_to_addr = udp_host_to_addr,
     .udp_addr_to_host = udp_addr_to_host,
-    .udp_new_addr = udp_new_addr,
-    .udp_hostbyname = udp_hostbyname,
+    .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_addrinfo = udp_addrinfo,
 
-    .make_path = __ex_make_path,
-    .check_path = __ex_check_path,
-    .delete_path = __ex_delete_path,
-    .move_path = __ex_move_path,
-    .check_file = __ex_check_file,
-    .delete_file = __ex_delete_file,
+    .fs_mkpath = __fs_mkpath,
+    .fs_isdir = __fs_isdir,
+    .fs_rmdir = __fs_rmdir,
+    .fs_rename = __fs_rename,
+    .fs_isfile = __fs_isfile,
+    .fs_remove = __fs_remove,
 
-    .fopen = __ex_fopen,
-    .fclose = __ex_fclose,
-    .ftell = __ex_ftell,
-    .fflush = __ex_fflush,
-    .fwrite = __ex_fwrite,
-    .fread = __ex_fread,
-    .fseek = __ex_fseek,
+    .fs_open = __fs_open,
+    .fs_close = __fs_close,
+    .fs_tell = __fs_tell,
+    .fs_write = __fs_write,
+    .fs_read = __fs_read,
+    .fs_lseek = __fs_lseek,
     
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,

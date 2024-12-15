@@ -75,7 +75,7 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 		symbol_offset = addr - info->dli_saddr;
 	}
 
-	__xloge(ENV_BACKTRACE_FORMAT,
+	__xlogi(ENV_BACKTRACE_FORMAT,
 			frame,
 			image,
 			addr,
@@ -89,7 +89,7 @@ static int env_backtrace_printf(int frame, const void* addr, const Dl_info* info
 
 static void env_crash_signal_handler(int sig, siginfo_t* info, void* ucontext)
 {
-    __xloge("****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
+    __xlogi("****** %s ****** Thread [0x%x] ******\n", strsignal(sig), pthread_self());
     const ucontext_t* signal_ucontext = (const ucontext_t*)ucontext;
     void *stacks[ENV_BACKTRACE_STACK_DEPTH];
     size_t stack_depth = env_backtrace(stacks, ENV_BACKTRACE_STACK_DEPTH);

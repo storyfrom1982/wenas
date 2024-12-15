@@ -10,9 +10,11 @@ typedef struct xpipe {
     // uint64_t leftover; 曾经为了避免使用一个临时变量处理折行，在这里添加了一个长周期的变量，却忽略了读写线程共用这个变量，导致 mcopy 越界的 BUG
     __atom_size writer;
     __atom_size reader;
-    __atom_bool breaking;
+    __atom_bool breaker;
     __atom_bool rlock;
     __atom_bool wlock;
+    __atom_bool rblock;
+    __atom_bool wblock;
     __xmutex_ptr mutex;
     char name[16];
     uint8_t *buf;
@@ -47,7 +49,6 @@ static inline uint64_t __xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
     }
 
     __atom_unlock(pipe->wlock);
-    __xapi->mutex_notify(pipe->mutex);
 
     return writable;
 }
@@ -62,16 +63,28 @@ static inline uint64_t xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
     // __xlogd("%s xpipe_write >>>>>--------------> enter\n", pipe->name);
 
-    while (__is_false(pipe->breaking) && pos < len) {
-
+    while (!pipe->breaker && pos < len) {
         pos += __xpipe_write(pipe, (uint8_t*)data + pos, len - pos);
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __xpipe_write 中的唤醒通知没有锁保护，不能确保在有可读空间的同时唤醒读取线程
-            // 所以在阻塞之前，唤醒一次读线程
-            __xapi->mutex_notify(pipe->mutex);
-            __xapi->mutex_wait(pipe->mutex);
+            if (!pipe->breaker){
+                __xapi->mutex_notify(pipe->mutex);
+                __atom_lock(pipe->wblock);
+                if ((pipe->len - pipe->writer + pipe->reader) == 0){
+                    __xapi->mutex_wait(pipe->mutex);
+                }
+                __atom_unlock(pipe->wblock);
+            }
             __xapi->mutex_unlock(pipe->mutex);
+        }else {
+            if (__atom_try_lock(pipe->rblock)){
+                __atom_unlock(pipe->rblock);
+            }else {
+                __xapi->mutex_lock(pipe->mutex);
+                __xapi->mutex_notify(pipe->mutex);
+                __xapi->mutex_unlock(pipe->mutex);
+            }
+            break;
         }
     }
 
@@ -105,7 +118,6 @@ static inline uint64_t __xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
     }
 
     __atom_unlock(pipe->rlock);
-    __xapi->mutex_notify(pipe->mutex);
 
     return readable;
 }
@@ -123,21 +135,37 @@ static inline uint64_t xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
     // 长度大于 0 才能进入读循环
     while (pos < len) {
-
         pos += __xpipe_read(pipe, (uint8_t*)buf + pos, len - pos);
-
         if (pos != len){
             __xapi->mutex_lock(pipe->mutex);
-            // __xpipe_read 中的唤醒通知没有锁保护，不能确保在有可写空间的同时唤醒写入线程
-            // 所以在阻塞之前，唤醒一次写线程
-            __xapi->mutex_notify(pipe->mutex);
-            if (__is_false(pipe->breaking)){
-                __xapi->mutex_wait(pipe->mutex);
+            if (!pipe->breaker){
+                // 在阻塞之前，唤醒一次写线程，因为这时缓冲区可能已经有写入的空间
+                __xapi->mutex_notify(pipe->mutex);
+                // 多线程读写时，后到这里的线程会在这里循环尝试，直到获取锁为止
+                __atom_lock(pipe->rblock);
+                if ((pipe->writer - pipe->reader) == 0){
+                    // 缓冲区尚未更新，如果有数据写入之后，写线程一定会尝试获取 rblock，所以确保写线程一定能获知这里已经进入阻塞状态
+                    __xapi->mutex_wait(pipe->mutex);
+                }
+                __atom_unlock(pipe->rblock);
+            }else {
+                // 只有缓冲区没有数据可读时，breaker 才会导致读线程返回
+                __xapi->mutex_unlock(pipe->mutex);
+                return pos;
             }
             __xapi->mutex_unlock(pipe->mutex);
-            if (__is_true(pipe->breaking)){
-                break;
+        }else {
+            if (__atom_try_lock(pipe->wblock)){
+                // 拿到 wblock，证明写线程还没有进入阻塞状态
+                // 此刻，缓冲区已经更新，写线程在阻塞之前，必然要拿锁之后再检测是否可写，这时缓冲区已经更新，写线程不会进入阻塞状态
+                __atom_unlock(pipe->wblock);
+            }else {
+                __xapi->mutex_lock(pipe->mutex);
+                // 拿到互斥锁，证明写线程已经进入阻塞状态，所以此时一定能唤醒写线程
+                __xapi->mutex_notify(pipe->mutex);
+                __xapi->mutex_unlock(pipe->mutex);
             }
+            break;
         }
     }
 
@@ -161,7 +189,7 @@ static inline void xpipe_clear(xpipe_ptr pipe){
 
 static inline void xpipe_break(xpipe_ptr pipe){
     __xapi->mutex_lock(pipe->mutex);
-    __set_true(pipe->breaking);
+    __set_true(pipe->breaker);
     __xapi->mutex_broadcast(pipe->mutex);
     __xapi->mutex_unlock(pipe->mutex);
 }
@@ -173,17 +201,14 @@ static inline void xpipe_free(xpipe_ptr *pptr)
         *pptr = NULL;
         if (pipe){
             xpipe_clear(pipe);
-            if (pipe->mutex){
-                xpipe_break(pipe);
-                // 断开两次，确保没有其他线程阻塞在管道上
-                xpipe_break(pipe);
-                __xapi->mutex_free(pipe->mutex);
+            xpipe_break(pipe);
+            // 确保读写线程退出才能释放管道，否则释放互斥锁可能崩溃
+            __xapi->mutex_free(pipe->mutex);
+            if (pipe->buf){
+                free(pipe->buf);
             }
+            free(pipe);
         }
-        if (pipe->buf){
-            free(pipe->buf);
-        }
-        free(pipe);
     }
 }
 
@@ -191,7 +216,7 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 {
     xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
-    __xbreak(pipe == NULL);
+    __xcheck(pipe == NULL);
 
     if (slength(name) > 15){
         mcopy(pipe->name, name, 15);
@@ -211,18 +236,18 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
     }
 
     pipe->buf = (uint8_t*)malloc(pipe->len);
-    __xbreak(pipe->buf == NULL);
+    __xcheck(pipe->buf == NULL);
 
     pipe->mutex = __xapi->mutex_create();
-    __xbreak(pipe->mutex == NULL);
+    __xcheck(pipe->mutex == NULL);
 
     pipe->reader = pipe->writer = 0;
-    pipe->breaking = false;
+    pipe->breaker = false;
     pipe->rlock = pipe->wlock = false;
 
     return pipe;
 
-Clean:
+XClean:
 
     xpipe_free(&pipe);
 
@@ -294,7 +319,7 @@ Clean:
 
 //     return task;
 
-// Clean:
+// XClean:
 
 //     if (task){
 //         free(task);
