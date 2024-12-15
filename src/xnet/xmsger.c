@@ -1028,6 +1028,16 @@ static void main_loop(void *ptr)
                     // 回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);
 
+                }else if (rpack->head.flag == XPACK_FLAG_HELLO){
+
+                    __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
+                    xchannel_send_ack(channel);
+
+                }else if (rpack->head.flag == XPACK_FLAG_PING){
+
+                    __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
+                    xchannel_send_ack(channel);
+
                 }else {
                     __xlogd("RECV UNKNOWN TYPE >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
                 }
