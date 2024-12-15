@@ -12,11 +12,12 @@
 #define XPACK_FLAG_ACK      0x00
 #define XPACK_FLAG_PING     0x01
 #define XPACK_FLAG_PONG     0x02
-#define XPACK_FLAG_MSG      0x04
-#define XPACK_FLAG_ONL      0x08
-#define XPACK_FLAG_BYE      0x10
-#define XPACK_FLAG_FINAL    0x20
-#define XPACK_FLAG_LOCAL    0x40
+#define XPACK_FLAG_HELLO    0x04
+#define XPACK_FLAG_MSG      0x08
+#define XPACK_FLAG_ONL      0x10
+#define XPACK_FLAG_BYE      0x20
+#define XPACK_FLAG_FINAL    0x40
+#define XPACK_FLAG_LOCAL    0x80
 
 #define XPACK_SERIAL_RANGE  64
 
@@ -86,7 +87,7 @@ typedef struct xmsgbuf {
 struct xchannel {
 
     struct avl_node node;
-    struct avl_node temp;
+    // struct avl_node temp;
 
     int sock;
 
@@ -141,7 +142,7 @@ struct xmsger {
     xmsgercb_ptr cb;
     __xthread_ptr tid;
     struct avl_tree peers;
-    struct avl_tree temps;
+    // struct avl_tree temps;
     struct xchannellist sendlist;
 };
 
@@ -323,9 +324,9 @@ static inline void xchannel_free(xchannel_ptr channel)
     if (channel->node.parent != &channel->node){
         avl_tree_remove(&channel->msger->peers, channel);
     }
-    if (channel->temp.parent != &channel->temp){
-        avl_tree_remove(&channel->msger->temps, channel);
-    }
+    // if (channel->temp.parent != &channel->temp){
+    //     avl_tree_remove(&channel->msger->temps, channel);
+    // }
     free(channel->recvbuf);
     free(channel->sendbuf);
     free(channel->msgbuf);
@@ -604,10 +605,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     pack->msg = NULL;
                 }
 
-            }else if (pack->head.flag == XPACK_FLAG_PONG){
+            }else if (pack->head.flag == XPACK_FLAG_HELLO){
 
-                if (channel->temp.parent != &channel->temp){
-                    avl_tree_remove(&channel->msger->temps, channel);
+                if (!channel->connected){
+                    channel->connected = true;
+                    // 通知用户建立连接
+                    channel->msger->cb->on_connection_to_peer(channel->msger->cb, channel);
                 }
 
             }else if (pack->head.flag == XPACK_FLAG_BYE){
@@ -826,12 +829,11 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         }
         // channel->lcid.port = channel->addr->port;
         // channel->lcid.ip = channel->addr->ip;
-
+        channel->unicid[0] = ((uint64_t*)channel->addr)[0];
+        channel->unicid[1] = ((uint64_t*)channel->addr)[1];
+        channel->unicid[2] = ((uint64_t*)channel->addr)[2];
         do {
             channel->lcid = msger->cid++;
-            channel->unicid[0] = ((uint64_t*)channel->addr)[0];
-            channel->unicid[1] = ((uint64_t*)channel->addr)[1];
-            channel->unicid[2] = ((uint64_t*)channel->addr)[2];
             *(uint16_t*)&channel->unicid[0] = channel->lcid;
         }while (avl_tree_add(&msger->peers, channel) != NULL);
         __xlogd("xmsger_process_msg 2\n");
@@ -1125,26 +1127,26 @@ static void main_loop(void *ptr)
                     // 取出同步参数
                     uint8_t serial_number = rpack->head.flags[0];
                     uint8_t serial_range = rpack->head.flags[1];
-                    channel = avl_tree_find(&msger->temps, &cid);
+                    channel = avl_tree_find(&msger->peers, &cid);
                     if (channel == NULL){
                         // 创建连接
                         channel = xchannel_create(msger, serial_range);
                         __xcheck(channel == NULL);
 
-                        channel->tempcid[0] = cid[0];
-                        channel->tempcid[1] = cid[1];
-                        channel->tempcid[2] = cid[2];
-                        avl_tree_add(&msger->temps, channel);
+                        // channel->tempcid[0] = cid[0];
+                        // channel->tempcid[1] = cid[1];
+                        // channel->tempcid[2] = cid[2];
+                        // avl_tree_add(&msger->temps, channel);
 
                         __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
                         channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
                         channel->sock = channel->msger->sock[sid];
 
+                        channel->unicid[0] = ((uint64_t*)channel->addr)[0];
+                        channel->unicid[1] = ((uint64_t*)channel->addr)[1];
+                        channel->unicid[2] = ((uint64_t*)channel->addr)[2];
                         do {
                             channel->lcid = msger->cid++;
-                            channel->unicid[0] = ((uint64_t*)channel->addr)[0];
-                            channel->unicid[1] = ((uint64_t*)channel->addr)[1];
-                            channel->unicid[2] = ((uint64_t*)channel->addr)[2];
                             *(uint16_t*)&channel->unicid[0] = channel->lcid;
                         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
@@ -1170,6 +1172,56 @@ static void main_loop(void *ptr)
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 __xlogd("xmsger_loop >>>>-------------> SEND FAILED\n");
                             }
+                        }else {
+                            // 不是同一个 PING，不回应，让对方超时以后换一个 CID 再创建连接
+                        }
+                    }
+
+                }else if (rpack->head.flag == XPACK_FLAG_HELLO){
+                    // 取出同步参数
+                    uint8_t serial_number = rpack->head.flags[0];
+                    uint8_t serial_range = rpack->head.flags[1];
+                    channel = avl_tree_find(&msger->peers, &cid);
+                    if (channel == NULL){
+                        // 创建连接
+                        channel = xchannel_create(msger, serial_range);
+                        __xcheck(channel == NULL);
+                        // 同步序列号
+                        channel->remote_sn = channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
+                        // 设置对端 cid
+                        channel->rcid = rpack->head.lcid;;
+                        channel->ack.rcid = channel->rcid;
+
+                        __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
+                        // TODO 是否需要存储这个 addr
+                        channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+                        channel->sock = channel->msger->sock[sid];
+
+                        // channel->unicid[0] = ((uint64_t*)channel->addr)[0];
+                        // channel->unicid[1] = ((uint64_t*)channel->addr)[1];
+                        // channel->unicid[2] = ((uint64_t*)channel->addr)[2];
+                        // *(uint16_t*)&channel->unicid[0] = channel->rcid;
+                        channel->unicid[0] = cid[0];
+                        channel->unicid[1] = cid[1];
+                        channel->unicid[2] = cid[2];
+                        __xcheck(avl_tree_add(&msger->peers, channel) != NULL);
+
+                        channel->connected = true;
+                        channel->msger->cb->on_connection_from_peer(channel->msger->cb, channel);
+                        // 更新接收缓冲区和 ACK
+                        __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
+                        xchannel_send_ack(channel);
+                        // xchannel_serial_pack(channel, XPACK_FLAG_PONG);
+                        // xchannel_send_pack(channel);
+
+                    }else {
+
+                        // 检查 serial range 是否一致
+                        if (serial_range == channel->recvbuf->range 
+                            && channel->flushlist.len == 1){
+                            // 同一个 HELLO，回复同一个 ACK
+                            __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
+                            xchannel_send_ack(channel);
                         }else {
                             // 不是同一个 PING，不回应，让对方超时以后换一个 CID 再创建连接
                         }
@@ -1372,7 +1424,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port)
     msger->sendlist.head.next = &msger->sendlist.head;
 
     avl_tree_init(&msger->peers, unicid_compare, unicid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
-    avl_tree_init(&msger->temps, tempcid_compare, tempcid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, temp));
+    // avl_tree_init(&msger->temps, tempcid_compare, tempcid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, temp));
 
     // msger->mpipe = xpipe_create(sizeof(xmsg_t) * 1024, "SEND PIPE");
     // __xcheck(msger->mpipe == NULL);
@@ -1420,8 +1472,8 @@ void xmsger_free(xmsger_ptr *pptr)
 
         __xlogd("xmsger_free peers %lu\n", msger->peers.count);
         avl_tree_clear(&msger->peers, NULL);
-        __xlogd("xmsger_free temps %lu\n", msger->temps.count);
-        avl_tree_clear(&msger->temps, NULL);
+        // __xlogd("xmsger_free temps %lu\n", msger->temps.count);
+        // avl_tree_clear(&msger->temps, NULL);
 
         if (msger->sock[0] > 0){
             __xapi->udp_close(msger->sock[0]);
