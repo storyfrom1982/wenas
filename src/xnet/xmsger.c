@@ -89,8 +89,6 @@ struct xchannel {
 
     int sock;
 
-    uint8_t remote_sn;
-    uint8_t serial_number;
     uint8_t serial_range;
     uint64_t timestamp;
 
@@ -210,7 +208,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->msger = msger;
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
-    channel->serial_number = 0;
     channel->back_delay = 50000000UL;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -220,7 +217,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->sendbuf = (sserialbuf_ptr) calloc(1, sizeof(struct sserialbuf) + sizeof(struct xpack) * channel->serial_range);
     __xcheck(channel->sendbuf == NULL);
     channel->sendbuf->range = channel->serial_range;
-    channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = channel->serial_number;
+    channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = 0;
 
     channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xmsg_t) * 8);
     __xcheck(channel->msgbuf == NULL);
@@ -317,8 +314,7 @@ static inline void xchannel_free(xchannel_ptr channel)
 static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t flag)
 {
     xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
-    pack->head.flags[0] = channel->serial_number;
-    pack->head.flags[1] = channel->serial_range;
+    pack->head.flags[0] = channel->serial_range;
     pack->msg = NULL;
     pack->head.flag = flag;
     pack->head.range = 1;
@@ -343,10 +339,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
 
         pack->msg = msg;
         pack->head.flag = msg->flag;
-        if (pack->head.flag == XPACK_FLAG_PING){
-            pack->head.flags[0] = channel->serial_number;
-            pack->head.flags[1] = channel->serial_range;
-        }
+        pack->head.flags[0] = channel->serial_range;
 
         if (msg->xl->wpos - msg->spos < XBODY_SIZE){
             pack->head.len = msg->xl->wpos - msg->spos;
@@ -754,7 +747,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
     xmsg_t msg;
     msg.flag = head->ack.flag;
 
-    if (msg.flag == XPACK_FLAG_PING){
+    if (msg.flag == XPACK_FLAG_HELLO){
 
         xchannel_ptr channel = xchannel_create(msger, XPACK_SERIAL_RANGE);
         if(channel == NULL){
@@ -793,8 +786,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
 
-        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
-                                    channel->ip, port, channel->cid, channel->serial_number);
+        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, port, channel->cid);
 
     }else if (msg.flag == XPACK_FLAG_BYE){
 
@@ -807,13 +799,11 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __atom_add(channel->len, msg.xl->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
-        __xlogd("xmsger_local_recv >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
-                    channel->ip, channel->port, channel->cid, channel->serial_number);
+        __xlogd("xmsger_local_recv >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
 
     }else if (msg.flag == XPACK_FLAG_FINAL){
         xchannel_ptr channel = (xchannel_ptr)(*(uint64_t*)&head->flags[0]);
-        __xlogd("xmsger_local_recv >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u] SN[%u]\n", 
-                                    channel->ip, channel->port, channel->cid, channel->serial_number);
+        __xlogd("xmsger_local_recv >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
         xchannel_free(channel);
     }
 
@@ -1056,8 +1046,7 @@ static void main_loop(void *ptr)
                 // 收到对方发起的 PING
                 if (rpack->head.flag == XPACK_FLAG_PING){
                     // 取出同步参数
-                    uint8_t serial_number = rpack->head.flags[0];
-                    uint8_t serial_range = rpack->head.flags[1];
+                    uint8_t serial_range = rpack->head.flags[0];
                     channel = avl_tree_find(&msger->peers, &cid);
                     if (channel == NULL){
                         // 创建连接
@@ -1076,9 +1065,7 @@ static void main_loop(void *ptr)
                             *(uint16_t*)&channel->ucid[0] = channel->cid;
                         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
-                        // 同步序列号
-                        channel->remote_sn = channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
-                        // 设置对端 cid
+                        // 设置 cid
                         channel->cid = rpack->head.cid;;
                         channel->ack.cid = channel->cid;
                         channel->connected = true;
@@ -1105,16 +1092,13 @@ static void main_loop(void *ptr)
 
                 }else if (rpack->head.flag == XPACK_FLAG_HELLO){
                     // 取出同步参数
-                    uint8_t serial_number = rpack->head.flags[0];
-                    uint8_t serial_range = rpack->head.flags[1];
+                    uint8_t serial_range = rpack->head.flags[0];
                     channel = avl_tree_find(&msger->peers, &cid);
                     if (channel == NULL){
                         // 创建连接
                         channel = xchannel_create(msger, serial_range);
                         __xcheck(channel == NULL);
-                        // 同步序列号
-                        channel->remote_sn = channel->recvbuf->rpos = channel->recvbuf->spos = channel->recvbuf->wpos = serial_number;
-                        // 设置对端 cid
+                        // 设置 cid
                         channel->cid = rpack->head.cid;;
                         channel->ack.cid = channel->cid;
 
@@ -1211,6 +1195,7 @@ bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
     struct xhead pack;
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_FINAL;
+    pack.len = 0;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
@@ -1226,6 +1211,7 @@ bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
     struct xhead pack;
     pack.flag = XPACK_FLAG_LOCAL;
     pack.ack.flag = XPACK_FLAG_BYE;
+    pack.len = 0;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)channel;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
@@ -1240,7 +1226,8 @@ bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
     __xcheck(msger == NULL || xl == NULL);
     struct xhead pack;
     pack.flag = XPACK_FLAG_LOCAL;
-    pack.ack.flag = XPACK_FLAG_PING;
+    pack.ack.flag = XPACK_FLAG_HELLO;
+    pack.len = 0;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)ctx;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)xl;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);

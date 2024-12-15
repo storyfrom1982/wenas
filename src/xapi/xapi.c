@@ -328,7 +328,6 @@ struct __xipaddr {
 
 static int udp_open(int ipv6, int reuse, int nonblock)
 {
-    __xlogd("udp_open ........... enter\n");
     int sock;
     int opt;
     if (ipv6){
