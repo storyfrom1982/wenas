@@ -14,8 +14,8 @@
 #define XPACK_TYPE_RES      0x02
 #define XPACK_TYPE_HELLO    0x03
 #define XPACK_TYPE_MSG      0x04
-#define XPACK_TYPE_ONL      0x05
-#define XPACK_TYPE_BYE      0x06
+#define XPACK_TYPE_BYE      0x05
+#define XPACK_TYPE_ONL      0x06
 #define XPACK_TYPE_FLUSH    0xF0
 #define XPACK_TYPE_LOCAL    0xF1
 
@@ -778,6 +778,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
             *(uint16_t*)&channel->ucid[0] = channel->cid;
         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
+        channel->ack.cid = channel->cid;
         channel->keepalive = true;
 
         __xcheck(msg.xl->wpos > XBODY_SIZE);

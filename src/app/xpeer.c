@@ -484,6 +484,7 @@ static void res_echo(xpeer_ctx_t *ctx, void *userctx)
     }
     xline_t *msg = xl_maker();
     msg->ctx = ctx;
+    msg->type = XL_MSG_TYPE_BYE;
     xl_add_word(&msg, "api", "disconnect");
     xmsger_disconnect(ctx->server->msger, ctx->channel, msg);
 }
