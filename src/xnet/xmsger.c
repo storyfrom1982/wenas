@@ -538,7 +538,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __ring_list_take_out(&channel->flushlist, pack);
             }
 
-            if (pack->head.len > 0){
+            if (pack->head.type != XPACK_TYPE_ONL){
                 // 更新已经到达对端的数据计数
                 pack->msg->rpos += pack->head.len;
                 if (pack->msg->rpos == pack->msg->wpos){
