@@ -458,6 +458,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 if (channel->xlmsg == NULL){
                     channel->xlmsg = xl_creator(pack->head.range * XBODY_SIZE);
                     __xcheck(channel->xlmsg == NULL);
+                    channel->xlmsg->type = pack->head.type;
                 }
                 mcopy(channel->xlmsg->ptr + channel->xlmsg->wpos, pack->body, pack->head.len);
                 channel->xlmsg->wpos += pack->head.len;
@@ -466,7 +467,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                     // 更新消息长度
                     xl_fixed(channel->xlmsg);
                     // 通知用户已收到一个完整的消息
-                    channel->msger->cb->on_msg_from_peer(channel->msger->cb, channel, channel->xlmsg);
+                    channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->xlmsg);
                     channel->xlmsg = NULL;
                     // 更新时间戳
                     channel->timestamp = __xapi->clock();
@@ -541,34 +542,35 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __ring_list_take_out(&channel->flushlist, pack);
             }
 
-            if (pack->head.type == XPACK_TYPE_MSG){
+            if (pack->head.len > 0){
                 // 更新已经到达对端的数据计数
                 pack->msg->xl->rpos += pack->head.len;
                 if (pack->msg->xl->rpos == pack->msg->xl->wpos){
                     // 把已经传送到对端的 msg 交给发送线程处理
-                    channel->msger->cb->on_msg_to_peer(channel->msger->cb, channel, pack->msg->xl);
+                    channel->msger->cb->on_message_to_peer(channel->msger->cb, channel, pack->msg->xl);
                     channel->msgbuf->buf[__serialbuf_rpos(channel->msgbuf)].xl = NULL;
                     __atom_add(channel->msgbuf->rpos, 1);
                     pack->msg = NULL;
                 }
 
-            }else if (pack->head.type == XPACK_TYPE_HELLO){
-
-                if (!channel->connected){
-                    channel->connected = true;
-                    // 通知用户建立连接
-                    channel->msger->cb->on_connection_to_peer(channel->msger->cb, channel);
-                }
-
-            }else if (pack->head.type == XPACK_TYPE_BYE){
-
-                // 这里只能执行一次，首先 channel 会从 peers 中移除，还有 ack 也不会被重复确认
-                __xlogd("RECV FINAL ACK: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
-                __set_true(channel->disconnecting);
-                channel->disconnected = true;
-                channel->msger->cb->on_disconnection(channel->msger->cb, channel);
-                avl_tree_remove(&channel->msger->peers, channel);
             }
+            // else if (pack->head.type == XPACK_TYPE_HELLO){
+
+            //     if (!channel->connected){
+            //         channel->connected = true;
+            //         // 通知用户建立连接
+            //         channel->msger->cb->on_connection_to_peer(channel->msger->cb, channel);
+            //     }
+
+            // }else if (pack->head.type == XPACK_TYPE_BYE){
+
+            //     // 这里只能执行一次，首先 channel 会从 peers 中移除，还有 ack 也不会被重复确认
+            //     __xlogd("RECV FINAL ACK: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
+            //     __set_true(channel->disconnecting);
+            //     channel->disconnected = true;
+            //     channel->msger->cb->on_disconnection(channel->msger->cb, channel);
+            //     avl_tree_remove(&channel->msger->peers, channel);
+            // }
 
             __atom_add(channel->sendbuf->rpos, 1);
 
@@ -855,7 +857,14 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
                                 __set_true(channel->disconnecting);
                                 channel->disconnected = true;
-                                msger->cb->on_timeout(msger->cb, channel);
+                                if (spack->msg){
+                                    msger->cb->on_message_timeout(msger->cb, channel, spack->msg->xl);
+                                }else {
+                                    xline_t *msg = xl_maker();
+                                    msg->ctx = channel->ctx;
+                                    xl_add_word(&msg, "api", "disconnect");
+                                    msger->cb->on_message_timeout(msger->cb, channel, msg);
+                                }
                             }
                             break;
 
@@ -922,7 +931,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
                             __set_true(channel->disconnecting);
                             channel->disconnected = true;
-                            msger->cb->on_disconnection(msger->cb, channel);
+                            msger->cb->on_message_timeout(msger->cb, channel, NULL);
                         }
                     }
                 }
@@ -992,17 +1001,19 @@ static void main_loop(void *ptr)
 
                     xchannel_recv_ack(channel, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_BYE || rpack->head.type == XPACK_TYPE_RES){
 
-                    if (!channel->disconnected){
-                        __set_true(channel->disconnecting);
-                        channel->disconnected = true;
-                        msger->cb->on_disconnection(msger->cb, channel);
-                        // // 被动端收到 BYE，删除索引
-                        avl_tree_remove(&msger->peers, channel);
-                    }
-                    // 回复最后的 ACK
-                    xchannel_send_final(msger->sock[sid], addr, rpack);
+                    // if (!channel->disconnected){
+                    //     // msger->cb->on_disconnection(msger->cb, channel);
+                    //     // // 被动端收到 BYE，删除索引                        
+                    // }
+                    __set_true(channel->disconnecting);
+                    channel->disconnected = true;
+                    avl_tree_remove(&msger->peers, channel);
+                    __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
+                    xchannel_send_ack(channel);                    
+                    // // 回复最后的 ACK
+                    // xchannel_send_final(msger->sock[sid], addr, rpack);
 
                 }else if (rpack->head.type == XPACK_TYPE_HELLO){
 
@@ -1025,7 +1036,7 @@ static void main_loop(void *ptr)
                 #endif
 
                 // 收到对方发起的 HELLO
-                if (rpack->head.type == XPACK_TYPE_HELLO){
+                if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
                     // 取出同步参数
                     uint8_t serial_range = rpack->head.flags[0];
                     channel = avl_tree_find(&msger->peers, &cid);
@@ -1048,7 +1059,7 @@ static void main_loop(void *ptr)
                         __xcheck(avl_tree_add(&msger->peers, channel) != NULL);
 
                         channel->connected = true;
-                        channel->msger->cb->on_connection_from_peer(channel->msger->cb, channel);
+                        // channel->msger->cb->on_connection_from_peer(channel->msger->cb, channel);
                         // 更新接收缓冲区和 ACK
                         __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                         xchannel_send_ack(channel);
@@ -1070,9 +1081,7 @@ static void main_loop(void *ptr)
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);
-
-                }else if (rpack->head.type == XPACK_TYPE_ACK){
-                }else {}
+                }
             }
 
             if (rpack == NULL){
@@ -1106,7 +1115,9 @@ XClean:
 
 bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 {
-    __xcheck(channel == NULL || xl == NULL);
+    __xcheck(msger == NULL);
+    __xcheck(channel == NULL);
+    __xcheck(xl == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
         xmsg_t msg;
         msg.xl = xl;
@@ -1123,8 +1134,10 @@ XClean:
     return false;
 }
 
-bool xmsger_final(xmsger_ptr msger, xchannel_ptr channel)
+bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
 {
+    __xcheck(msger == NULL);
+    __xcheck(channel == NULL);
     // 状态错误会报错
     __xcheck(!__set_false(channel->disconnecting));
     struct xhead pack;
@@ -1140,7 +1153,9 @@ XClean:
 
 bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
 {
-    __xcheck(channel == NULL || xl == NULL);
+    __xcheck(msger == NULL);
+    __xcheck(channel == NULL);
+    __xcheck(xl == NULL);
     // 重复调用会报错
     __xcheck(!__set_true(channel->disconnecting));
     struct xhead pack;
@@ -1158,7 +1173,8 @@ XClean:
 
 bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
 {
-    __xcheck(msger == NULL || xl == NULL);
+    __xcheck(msger == NULL);
+    __xcheck(xl == NULL);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = XPACK_TYPE_HELLO;
