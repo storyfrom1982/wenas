@@ -373,15 +373,15 @@ static void task_loop(void *ptr)
 
         if (msg->flag == XL_MSG_FLAG_RECV){
 
-            if (msg->type == XL_MSG_TYPE_MSG){
+            if (msg->type == XPACK_TYPE_MSG){
                 __xlogd("task_loop XL_MSG_TYPE_MSG\n");
                 ctx = xchannel_get_ctx(channel);
                 api_process(server, ctx, msg);
-            }else if (msg->type == XL_MSG_TYPE_HELLO){
+            }else if (msg->type == XPACK_TYPE_HELLO){
                 __xlogd("task_loop XL_MSG_TYPE_HELLO\n");
                 ctx = xpeer_ctx_create(server, channel);
                 api_process(server, ctx, msg);
-            }else if (msg->type == XL_MSG_TYPE_BYE){
+            }else if (msg->type == XPACK_TYPE_BYE){
                 __xlogd("task_loop XL_MSG_TYPE_BYE\n");
                 ctx = xchannel_get_ctx(channel);
                 api_process(server, ctx, msg);
@@ -392,14 +392,14 @@ static void task_loop(void *ptr)
 
         }else if(msg->flag == XL_MSG_FLAG_BACK){
 
-            if (msg->type == XL_MSG_TYPE_MSG){
+            if (msg->type == XPACK_TYPE_MSG){
                 __xlogd("task_loop XL_MSG_FLAG_BACK XL_MSG_TYPE_MSG\n");
-            }else if (msg->type == XL_MSG_TYPE_HELLO){
+            }else if (msg->type == XPACK_TYPE_HELLO){
                 __xlogd("task_loop XL_MSG_FLAG_BACK XL_MSG_TYPE_HELLO\n");
                 ctx = xchannel_get_ctx(channel);
                 ctx->channel = channel;
                 
-            }else if (msg->type == XL_MSG_TYPE_BYE){
+            }else if (msg->type == XPACK_TYPE_BYE){
                 __xlogd("task_loop XL_MSG_FLAG_BACK XL_MSG_TYPE_BYE\n");
                 xmsger_flush(server->msger, channel);
                 xpeer_ctx_free(ctx);
@@ -413,11 +413,11 @@ static void task_loop(void *ptr)
             if (msg->cb != NULL){
                 xpeer_add_msg_cb(msg->ctx, msg);
             }
-            if (msg->type == XL_MSG_TYPE_MSG){
+            if (msg->type == XPACK_TYPE_MSG){
                 xmsger_send(server->msger, ctx->channel, msg);
-            }else if (msg->type == XL_MSG_TYPE_HELLO){
+            }else if (msg->type == XPACK_TYPE_HELLO){
                 xmsger_connect(server->msger, msg->ctx, msg);
-            }else if (msg->type == XL_MSG_TYPE_BYE){
+            }else if (msg->type == XPACK_TYPE_BYE){
                 xmsger_disconnect(server->msger, ctx->channel, msg);
             }
         }
@@ -454,7 +454,7 @@ static void req_hello(xpeer_ctx_t *ctx)
 {
     xline_t *msg = xmsg_new(ctx, XL_MSG_FLAG_SEND, res_hello);
     __xcheck(msg == NULL);
-    msg->type = XL_MSG_TYPE_MSG;
+    msg->type = XPACK_TYPE_MSG;
     xl_add_word(&msg, "api", "hello");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", ctx->server->ip);
@@ -484,7 +484,7 @@ static void res_echo(xpeer_ctx_t *ctx, void *userctx)
     }
     xline_t *msg = xl_maker();
     msg->ctx = ctx;
-    xl_add_word(&msg, "api", "disconnect");
+    msg->type = XPACK_TYPE_BYE;
     xmsger_disconnect(ctx->server->msger, ctx->channel, msg);
 }
 
@@ -504,7 +504,7 @@ static void res_login(xpeer_ctx_t *ctx, void *user)
     new_ctx->process = NULL;
     xline_t *msg = xmsg_new(new_ctx, XL_MSG_FLAG_SEND, res_echo);
     __xcheck(msg == NULL);
-    msg->type = XL_MSG_TYPE_HELLO;
+    msg->type = XPACK_TYPE_HELLO;
     xl_add_word(&msg, "api", "echo");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", new_ctx->server->ip);
@@ -550,22 +550,6 @@ static void api_hello(xpeer_ctx_t *ctx)
     xmsger_send(ctx->server->msger, ctx->channel, res);
 }
 
-static void api_discon(xpeer_ctx_t *ctx)
-{
-    __xlogd("api_discon enter\n");
-    xmsger_flush(ctx->server->msger, ctx->channel);
-    xpeer_ctx_free(ctx);
-    __xlogd("api_discon exit\n");
-}
-
-static void api_timeout(xpeer_ctx_t *ctx)
-{
-    __xlogd("api_timeout enter\n");
-    xmsger_flush(ctx->server->msger, ctx->channel);
-    xpeer_ctx_free(ctx);
-    __xlogd("api_timeout exit\n");
-}
-
 static void api_login(xpeer_ctx_t *ctx)
 {
     uint64_t tid = xl_find_uint(&ctx->server->parser, "tid");
@@ -607,7 +591,7 @@ static void xltp_logout(xpeer_t *peer)
         // msg->ctx = ctx;
         msg = xmsg_new(ctx, XL_MSG_FLAG_SEND, res_logout);
         __xcheck(msg == NULL);
-        msg->type = XL_MSG_TYPE_BYE;
+        msg->type = XPACK_TYPE_BYE;
         __xcheck(xpipe_write(peer->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
         ctx = ctx->next;
     }
@@ -632,7 +616,7 @@ xpeer_ctx_t* xltp_login(xpeer_t *peer, const char *host, uint16_t port)
     ctx->process = NULL;
     xline_t *msg = xmsg_new(ctx, XL_MSG_FLAG_SEND, res_echo);
     __xcheck(msg == NULL);
-    msg->type = XL_MSG_TYPE_HELLO;
+    msg->type = XPACK_TYPE_HELLO;
     xl_add_word(&msg, "api", "echo");
     xl_add_uint(&msg, "tid", msg->index);
     xl_add_word(&msg, "host", host);
@@ -683,8 +667,6 @@ int main(int argc, char *argv[])
     peer->recv_api = xtree_create();
 
     xpeer_regisger_recv_api(peer, "res", api_res);
-    xpeer_regisger_recv_api(peer, "disconnect", api_discon);
-    xpeer_regisger_recv_api(peer, "timeout", api_timeout);
     xpeer_regisger_recv_api(peer, "login", api_login);
     xpeer_regisger_recv_api(peer, "echo", api_echo);
     xpeer_regisger_recv_api(peer, "hello", api_hello);
@@ -717,10 +699,12 @@ int main(int argc, char *argv[])
     
     peer->msger = xmsger_create(&peer->listener, 0, 9256);
 
-    while (peer->runnig)
+
+    while (1)
     {
         sleep(1);
     }
+    
 
     xmsger_free(&peer->msger);
 

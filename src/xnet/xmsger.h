@@ -6,7 +6,15 @@
 #include "xline.h"
 
 
-#define XMSG_MIN_SIZE       XLINEKV_SIZE
+#define XPACK_TYPE_ACK      0x00
+#define XPACK_TYPE_REQ      0x01
+#define XPACK_TYPE_RES      0x02
+#define XPACK_TYPE_HELLO    0x03
+#define XPACK_TYPE_MSG      0x04
+#define XPACK_TYPE_BYE      0x05
+#define XPACK_TYPE_ONL      0x06
+#define XPACK_TYPE_FLUSH    0xF0
+#define XPACK_TYPE_LOCAL    0xF1
 
 
 typedef struct xmsger* xmsger_ptr;
