@@ -305,12 +305,12 @@ static inline void xchannel_free(xchannel_ptr channel)
     __xlogd("xchannel_free >>>>-------------------> exit\n");
 }
 
-static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t flag)
+static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
 {
     xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
     pack->head.flags[0] = channel->serial_range;
     pack->msg = NULL;
-    pack->head.type = flag;
+    pack->head.type = type;
     pack->head.range = 1;
     pack->channel = channel;
     pack->delay = channel->back_delay;
@@ -332,7 +332,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
 
         pack->msg = msg;
-        pack->head.type = msg->flag;
+        pack->head.type = msg->type;
         pack->head.flags[0] = channel->serial_range;
         if (msg->wpos > 0){
             if (msg->wpos - msg->spos < XBODY_SIZE){
