@@ -38,6 +38,7 @@ static inline xline_t* msg_make_res(xpeer_t *peer, xline_t *msg, uint64_t mid)
 {
     xl_hold(msg);
     msg->wpos = 0;
+    msg->id = mid;
     __xcheck(xl_add_uint(&msg, "mid", msg->id) == EENDED);
     return msg;
 XClean:
@@ -60,15 +61,8 @@ static int res_echo(xline_t *res)
     xpeer_t *peer = __xmsg_get_peer(res);
     peer->parser = xl_parser(&res->data);
     xl_printf(&res->data);
-    xline_t *msg = msg_make_req(peer, "bye", NULL);
-    __xcheck(msg == NULL);
-    __xmsg_set_channel(msg, __xmsg_get_channel(res));
-    xltp_respose(peer->xltp, msg);
     return 0;
 XClean:
-    if (msg){
-        xl_free(&msg);
-    }
     return -1;
 }
 
@@ -127,8 +121,8 @@ int req_echo(xpeer_t *peer, const char *host, uint16_t port)
 {
     xline_t *msg = msg_make_req(peer, "echo", res_echo);
     __xcheck(msg == NULL);
-    xl_add_word(&msg, "host", peer->ip);
-    xl_add_uint(&msg, "port", peer->port);
+    xl_add_word(&msg, "host", host);
+    xl_add_uint(&msg, "port", port);
     uint8_t uuid[32];
     xl_add_bin(&msg, "uuid", uuid, 32);
     __xcheck(xltp_request(peer->xltp, msg) != 0);

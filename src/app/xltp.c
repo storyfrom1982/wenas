@@ -112,6 +112,7 @@ XClean:
 
 static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
 {
+    xl_printf(&msg->data);
     xltp->parser = xl_parser(&msg->data);
     uint64_t tid = xl_find_uint(&xltp->parser, "mid");
     xline_t *req = (xline_t*)avl_tree_find(&xltp->msgid_table, &tid);
@@ -152,7 +153,7 @@ static void xltp_loop(void *ptr)
         }else if(msg->flag == XL_MSG_FLAG_BACK){
 
             if (msg->type == XPACK_TYPE_REQ){
-                xchannel_set_ctx(__xmsg_get_channel(msg), __xmsg_get_xltp(msg));    
+                xchannel_set_ctx(__xmsg_get_channel(msg), __xmsg_get_xltp(msg));
             }else if (msg->type == XPACK_TYPE_RES){
                 xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
             }
