@@ -93,7 +93,7 @@ XClean:
     return -1;
 }
 
-static inline int api_process(xltp_t *xltp, xline_t *msg)
+static inline int recv_request(xltp_t *xltp, xline_t *msg)
 {
     static char *api;
     static api_cb_t cb;
@@ -104,6 +104,21 @@ static inline int api_process(xltp_t *xltp, xline_t *msg)
     cb = xtree_find(xltp->api, api, slength(api));
     if (cb){
         cb(msg);
+    }
+    return 0;
+XClean:
+    return -1;
+}
+
+static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
+{
+    xltp->parser = xl_parser(&msg->data);
+    uint64_t tid = xl_find_uint(&xltp->parser, "mid");
+    xline_t *req = (xline_t*)avl_tree_find(&xltp->msgid_table, &tid);
+    if (req && __xmsg_get_cb(req)){
+        ((msg_cb_t)(__xmsg_get_cb(req)))(msg);
+        __xmsg_set_channel(req, __xmsg_get_channel(msg));
+        xpeer_del_msg_cb(xltp, req);
     }
     return 0;
 XClean:
@@ -126,25 +141,19 @@ static void xltp_loop(void *ptr)
             __xmsg_set_peer(msg, xltp->peer);
             __xmsg_set_xltp(msg, xltp);
 
-            if (msg->type == XPACK_TYPE_MSG){
-                api_process(xltp, msg);
-            }else if (msg->type == XPACK_TYPE_HELLO){
-                api_process(xltp, msg);
-            }else if (msg->type == XPACK_TYPE_BYE){
-                api_process(xltp, msg);
+            if (msg->type == XPACK_TYPE_REQ){
+                recv_request(xltp, msg);
+            }else if (msg->type == XPACK_TYPE_RES){
+                recv_respnos(xltp, msg);
                 xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
             }
             xl_free(&msg);
 
         }else if(msg->flag == XL_MSG_FLAG_BACK){
 
-            if (msg->type == XPACK_TYPE_MSG){
-
-            }else if (msg->type == XPACK_TYPE_HELLO){
-                xchannel_set_ctx(__xmsg_get_channel(msg), __xmsg_get_xltp(msg));
-                
-            }else if (msg->type == XPACK_TYPE_BYE){
-
+            if (msg->type == XPACK_TYPE_REQ){
+                xchannel_set_ctx(__xmsg_get_channel(msg), __xmsg_get_xltp(msg));    
+            }else if (msg->type == XPACK_TYPE_RES){
                 xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
             }
             xl_free(&msg);
@@ -156,13 +165,11 @@ static void xltp_loop(void *ptr)
             if (__xmsg_get_cb(msg) != NULL){
                 xpeer_add_msg_cb(xltp, msg);
                 // 不允许在 xpeer_add_msg_cb 之后，再追加任何字段
-                // xl_add_uint(&msg, "tid", msg->id);
+                // xl_add_uint(&msg, "mid", msg->id);
             }
-            if (msg->type == XPACK_TYPE_MSG){
-                xmsger_send(xltp->msger, msg);
-            }else if (msg->type == XPACK_TYPE_HELLO){
+            if (msg->type == XPACK_TYPE_REQ){
                 xmsger_connect(xltp->msger, msg);
-            }else if (msg->type == XPACK_TYPE_BYE){
+            }else if (msg->type == XPACK_TYPE_RES){
                 xmsger_disconnect(xltp->msger, msg);
             }
         }
@@ -179,7 +186,7 @@ XClean:
 int xltp_request(xltp_t *xltp, xline_t *msg)
 {
     __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_HELLO;
+    msg->type = XPACK_TYPE_REQ;
     msg->flag = XL_MSG_FLAG_SEND;
     __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
@@ -190,7 +197,7 @@ XClean:
 int xltp_respose(xltp_t *xltp, xline_t *msg)
 {
     __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_BYE;
+    msg->type = XPACK_TYPE_RES;
     msg->flag = XL_MSG_FLAG_SEND;
     __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
@@ -205,20 +212,6 @@ int xltp_register(xltp_t *xltp, const char *api, api_cb_t cb)
     return 0;
 XClean:
     return -1;
-}
-
-int api_result(xline_t *msg)
-{
-    xltp_t *xltp = (xltp_t*)__xmsg_get_xltp(msg);
-    xline_t parser = xl_parser(&msg->data);
-    uint64_t tid = xl_find_uint(&parser, "tid");
-    xline_t *req = (xline_t*)avl_tree_find(&xltp->msgid_table, &tid);
-    if (req && __xmsg_get_cb(req)){
-        ((msg_cb_t)(__xmsg_get_cb(req)))(msg);
-        __xmsg_set_channel(req, __xmsg_get_channel(msg));
-        xpeer_del_msg_cb(xltp, req);
-    }
-    return 0;
 }
 
 xltp_t* xltp_create(xpeer_t *peer)
@@ -240,7 +233,6 @@ xltp_t* xltp_create(xpeer_t *peer)
     xltp->msglist.prev = &xltp->msglist;
     xltp->msglist.next = &xltp->msglist;
 
-    __xcheck(xltp_register(xltp, "res", api_result) != 0);
     avl_tree_init(&xltp->msgid_table, msgid_compare, msgid_find, sizeof(xline_t), AVL_OFFSET(xline_t, node));
 
     xltp->mpipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");

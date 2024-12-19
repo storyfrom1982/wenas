@@ -1,134 +1,69 @@
+#include "app/xpeer.h"
 #include <stdio.h>
-
-#include "ex/ex.h"
-#include "ex/malloc.h"
-#include "sys/struct/xline.h"
-
-
-struct targs {
-    __ex_mutex_ptr mtx;
-    ___atom_bool *testTrue;
-};
-
-static void mutex_task(xmaker_ptr ctx)
-{
-    struct targs *targ = (struct targs *)xl_find_ptr(ctx, "ctx");
-    __xlogi("lock %u\n", *targ->testTrue);
-
-    while (1)
-    {
-        bool ret = ___atom_try_lock(targ->testTrue);
-        __xlogi("__atom_try_lock %u\n", *targ->testTrue);
-        if (ret){
-            __xlogi("__atom_try_lock %u\n", *targ->testTrue);
-            break;
-        }
-    }
-    __xlogi("lock %u\n", *targ->testTrue);
-
-    __xlogi("thread enter\n");
-    ___lock lk = __ex_mutex_lock(targ->mtx);
-    __xlogi("sleep_until\n");
-    
-    __ex_mutex_timed_wait(targ->mtx, lk, 3000000000);
-
-    __ex_mutex_notify(targ->mtx);
-    __xlogi("notify\n");
-    __ex_mutex_wait(targ->mtx, lk);
-    __ex_mutex_unlock(targ->mtx, lk);
-    __xlogi("===============exit\n");
-}
-
-extern void test();
+#include <string.h>
 
 int main(int argc, char *argv[])
 {
-    env_backtrace_setup();
-    xlog_recorder_open("./tmp/log", NULL);
-    
-#if 1
-    char text[1024] = {0};
+    const char *hostname = "xltp.net";
+    uint16_t port = 9256;
+    char ip[46] = {0};
 
-    uint64_t millisecond = __ex_time();
-    // ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-    // __logi("c time %s", text);
+    xlog_recorder_open("./tmp/xpeer/log", NULL);
 
-    // millisecond = ___sys_clock();
-    // ___sys_strftime(text, 1024, millisecond / NANO_SECONDS);
-    // __logi("c clock %s", text);
+    xpeer_t *peer = xpeer_create();
+    __xcheck(peer == NULL);
 
-    ___atom_size size = 10;
-    ___atom_sub(&size, 5);
-    __xlogi("___atom_sub %lu\n", size);
 
-    ___atom_add(&size, 15);
-    __xlogi("___atom_add %lu\n", size);
+    // const char *cip = "192.168.1.6";
+    // const char *cip = "120.78.155.213";
+    const char *cip = "47.92.77.19";
+    // const char *cip = "47.99.146.226";
+    // const char *cip = hostname;
+    // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
+    // const char *cip = "2409:8a14:8743:9750:7193:6fc2:f49d:3cdb";
+    // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    ___atom_bool testTrue = false;
+    mcopy(ip, cip, slength(cip));
+    ip[slength(cip)] = '\0';
 
-    if (___set_true(&testTrue)){
-        __xlogi("set false to true\n");
+    char str[1024];
+    char input[256];
+    char command[256];
+
+    while (1)
+    {
+        printf("> "); // 命令提示符
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            break; // 读取失败，退出循环
+        }
+
+        // 去掉输入字符串末尾的换行符
+        input[strcspn(input, "\n")] = 0;
+
+        // 分割命令和参数
+        sscanf(input, "%s", command);
+
+        if (strcmp(command, "echo") == 0) {
+            xpeer_send_echo(peer, ip, port);
+
+        } else if (strcmp(command, "hello") == 0) {
+
+
+        } else if (strcmp(command, "exit") == 0) {
+            __xlogi("再见！\n");
+            break;
+        } else {
+            __xlogi("未知命令: %s\n", command);
+        }
+
+        mclear(command, 256);
     }
 
-    if (___is_true(&testTrue)){
-        __xlogi("is true\n");
-    }
+    xpeer_free(&peer);
 
-    if (___set_false(&testTrue)){
-        __xlogi("set true to false\n");
-    }
-
-    if (___is_false(&testTrue)){
-        __xlogi("is false\n");
-    }
-
-    ___atom_lock(&testTrue);
-    __xlogi("is lock\n");
-
-    __ex_mutex_ptr mtx = __ex_mutex_create();
-
-    ___lock lk = __ex_mutex_lock(mtx);
-
-    // ___atom_bool *tt = &testTrue;
-    // std::cout << "testTrue: " << *tt << std::endl;
-
-    struct targs targ;
-    targ.mtx = mtx;
-    targ.testTrue = &testTrue;
-
-    xtask_ptr task = xtask_create();
-    struct xmaker ctx;
-    xline_make(&ctx, NULL, 1024);
-    xl_add_ptr(&ctx, "func", (void*)mutex_task);
-    xl_add_ptr(&ctx, "ctx", (void*)&targ);
-    __ex_task_post(task, ctx.xlkv);
-
-    __ex_mutex_timed_wait(mtx, lk, 3000000);
-    ___atom_unlock(&testTrue);
-
-    // std::this_thread::sleep_until(std::chrono::steady_clock::now() + 1000ms);
-    
-    __xlogi("waitting\n");
-    __ex_mutex_wait(mtx, lk);
-    __xlogi("wake\n");
-    
-    __ex_mutex_broadcast(mtx);
-    __ex_mutex_unlock(mtx, lk);
-
-    __xlogi("join thread %lu\n", __ex_thread_id());
-    // ___thread_join(tid);
-    xtask_free(&task);
-
-    __ex_mutex_free(mtx);
-
-    char membuf[12343];
-    mclear(membuf, 12343);
-    memcpy(membuf, "123456789", strlen("123456789"));
-    memcmp("123", "456", 3);
-    
-#endif
     xlog_recorder_close();
-    __xlogi("exit\n");
 
-	return 0;
+XClean:
+
+    return 0;
 }

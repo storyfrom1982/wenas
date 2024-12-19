@@ -743,7 +743,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 {
     xline_t *msg = (xline_t*)(*(uint64_t*)&head->flags[0]);
 
-    if (head->ack.type == XPACK_TYPE_HELLO){
+    if (head->ack.type == XPACK_TYPE_REQ || head->ack.type == XPACK_TYPE_HELLO){
 
         xchannel_ptr channel = xchannel_create(msger, XPACK_SERIAL_RANGE);
         __xcheck(channel == NULL);
@@ -782,7 +782,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, port, channel->cid);
 
-    }else if (head->ack.type == XPACK_TYPE_BYE){
+    }else if (head->ack.type == XPACK_TYPE_RES || head->ack.type == XPACK_TYPE_BYE){
 
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
