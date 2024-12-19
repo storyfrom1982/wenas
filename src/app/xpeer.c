@@ -39,7 +39,9 @@ static inline xline_t* msg_make_res(xpeer_t *peer, xline_t *msg, uint64_t mid)
     xl_hold(msg);
     msg->wpos = 0;
     msg->id = mid;
+    __xmsg_set_cb(msg, NULL);
     __xcheck(xl_add_uint(&msg, "mid", msg->id) == EENDED);
+    xl_printf(&msg->data);
     return msg;
 XClean:
     if (msg){
@@ -125,6 +127,7 @@ int req_echo(xpeer_t *peer, const char *host, uint16_t port)
     xl_add_uint(&msg, "port", port);
     uint8_t uuid[32];
     xl_add_bin(&msg, "uuid", uuid, 32);
+    xl_printf(&msg->data);
     __xcheck(xltp_request(peer->xltp, msg) != 0);
     return 0;
 XClean:
