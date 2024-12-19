@@ -71,6 +71,7 @@ XClean:
 static int api_hello(xline_t *msg)
 {
     xpeer_t *peer = __xmsg_get_peer(msg);
+    xl_parser(&msg->data);
     uint64_t mid = xl_find_uint(&peer->parser, "mid");
     xline_t *res = msg_make_res(peer, msg, mid);
     xl_add_word(&res, "host", xchannel_get_host(__xmsg_get_channel(msg)));
@@ -88,6 +89,7 @@ XClean:
 static int api_echo(xline_t *msg)
 {
     xpeer_t *peer = __xmsg_get_peer(msg);
+    xl_parser(&msg->data);
     uint64_t mid = xl_find_uint(&peer->parser, "mid");
     xline_t *res = msg_make_res(peer, msg, mid);
     xl_add_word(&res, "host", xchannel_get_host(__xmsg_get_channel(msg)));
