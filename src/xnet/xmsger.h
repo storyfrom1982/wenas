@@ -3,7 +3,7 @@
 
 
 #include "xmalloc.h"
-#include "xline.h"
+#include "xmsg.h"
 
 
 #define XPACK_TYPE_ACK      0x00
@@ -35,16 +35,16 @@ typedef struct xmsgercb {
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port);
 extern void xmsger_free(xmsger_ptr *pptr);
-extern bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg);
-extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
-extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
+extern bool xmsger_connect(xmsger_ptr msger, xline_t *msg);
+extern bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg);
+extern bool xmsger_send(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
 
 extern bool xchannel_get_keepalive(xchannel_ptr channel);
 extern const char* xchannel_get_host(xchannel_ptr channel);
 extern uint16_t xchannel_get_port(xchannel_ptr channel);
-extern struct xchannel_ctx* xchannel_get_ctx(xchannel_ptr channel);
-extern void xchannel_set_ctx(xchannel_ptr channel, struct xchannel_ctx*);
+extern void* xchannel_get_ctx(xchannel_ptr channel);
+extern void xchannel_set_ctx(xchannel_ptr channel, void*);
 
 
 #endif //__XMSGER_H__

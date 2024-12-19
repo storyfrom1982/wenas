@@ -133,11 +133,11 @@ static inline double __xl_b2float(xdata_t *d)
 
 typedef struct xline {
     __atom_size ref;
+    uint64_t id;
     uint8_t type;
     uint8_t flag;
-    void *cb, *ctx;
+    // void *cb, *ctx;
     void *args[4];
-    uint64_t index;
     struct avl_node node;
     struct xline *prev, *next;
     uint64_t spos, range;
@@ -156,7 +156,7 @@ static inline xline_t* xl_creator(uint64_t size)
     obj->size = size;
     obj->wpos = 0;
     obj->rpos = 0;
-    obj->cb = obj->ctx = NULL;
+    obj->args[0] = obj->args[1] = obj->args[2] = obj->args[3] = NULL;
     obj->prev = obj->next = NULL;
     obj->ptr = obj->data.b + XDATA_SIZE;
     return obj;

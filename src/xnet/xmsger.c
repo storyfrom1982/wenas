@@ -91,7 +91,7 @@ struct xchannel {
     uint16_t cid;
     uint64_t ucid[3];
     __xipaddr_ptr addr;
-    struct xchannel_ctx *ctx;
+    void *ctx;
 
     bool keepalive;
     bool connected;
@@ -742,11 +742,10 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 {
     xline_t *msg = (xline_t*)(*(uint64_t*)&head->flags[0]);
-    xchannel_ptr channel = (xchannel_ptr)(*(uint64_t*)&head->flags[8]);
 
     if (head->ack.type == XPACK_TYPE_HELLO){
 
-        channel = xchannel_create(msger, XPACK_SERIAL_RANGE);
+        xchannel_ptr channel = xchannel_create(msger, XPACK_SERIAL_RANGE);
         __xcheck(channel == NULL);
 
         __xcheck(xmsg_fixed(msg) != 0);
@@ -785,8 +784,9 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
     }else if (head->ack.type == XPACK_TYPE_BYE){
 
-        __xcheck(xmsg_fixed(msg) != 0);
+        xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
+        __xcheck(xmsg_fixed(msg) != 0);
         __xcheck(msg->wpos > XBODY_SIZE);
         __atom_add(channel->msger->len, msg->wpos);
         __atom_add(channel->len, msg->wpos);
@@ -795,6 +795,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xlogd("xmsger_local_recv >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
 
     }else if (head->ack.type == XPACK_TYPE_FLUSH){
+        xchannel_ptr channel = (xchannel_ptr)(*(uint64_t*)&head->flags[8]);
         __xlogd("xmsger_local_recv >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
         xchannel_free(channel);
     }
@@ -853,7 +854,8 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                     msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
                                 }else {
                                     xline_t *msg = xl_maker();
-                                    msg->ctx = channel->ctx;
+                                    // msg->ctx = channel->ctx;
+                                    __xmsg_set_xltp(msg, channel->ctx);
                                     xl_add_word(&msg, "api", "disconnect");
                                     msger->cb->on_message_timeout(msger->cb, channel, msg);
                                 }
@@ -1110,18 +1112,18 @@ XClean:
     __xlogd("xmsger_loop exit\n");
 }
 
-bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
+bool xmsger_send(xmsger_ptr msger, xline_t *msg)
 {
     __xcheck(msger == NULL);
+    __xcheck(msg == NULL);
+    xchannel_ptr channel = __xmsg_get_channel(msg);
     __xcheck(channel == NULL);
-    __xcheck(xl == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
-        xl->args[0] = channel;
-        xl->type = XPACK_TYPE_MSG;
-        __xcheck(xmsg_fixed(xl) != 0);
-        __atom_add(msger->len, xl->wpos);
-        __atom_add(channel->len, xl->wpos);
-        channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = xl;
+        msg->type = XPACK_TYPE_MSG;
+        __xcheck(xmsg_fixed(msg) != 0);
+        __atom_add(msger->len, msg->wpos);
+        __atom_add(channel->len, msg->wpos);
+        channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
         return true;
     }
@@ -1134,7 +1136,7 @@ bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
     // 状态错误会报错
-    __xcheck(!__set_false(channel->disconnecting));
+    // __xcheck(!__set_false(channel->disconnecting));
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = XPACK_TYPE_FLUSH;
@@ -1146,19 +1148,15 @@ XClean:
     return false;
 }
 
-bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *xl)
+bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg)
 {
     __xcheck(msger == NULL);
-    __xcheck(channel == NULL);
-    __xcheck(xl == NULL);
-    // 重复调用会报错
-    __xcheck(!__set_true(channel->disconnecting));
+    __xcheck(msg == NULL);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
-    pack.ack.type = xl->type;
+    pack.ack.type = msg->type;
     pack.len = 0;
-    *((uint64_t*)(&pack.flags[0])) = (uint64_t)xl;
-    *((uint64_t*)(&pack.flags[8])) = (uint64_t)channel;
+    *((uint64_t*)(&pack.flags[0])) = (uint64_t)msg;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
 XClean:
@@ -1166,16 +1164,15 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *xl)
+bool xmsger_connect(xmsger_ptr msger, xline_t *msg)
 {
     __xcheck(msger == NULL);
-    __xcheck(xl == NULL);
+    __xcheck(msg == NULL);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
-    pack.ack.type = xl->type;
+    pack.ack.type = msg->type;
     pack.len = 0;
-    *((uint64_t*)(&pack.flags[0])) = (uint64_t)xl;
-    *((uint64_t*)(&pack.flags[8])) = (uint64_t)ctx;
+    *((uint64_t*)(&pack.flags[0])) = (uint64_t)msg;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
     return true;
 XClean:
@@ -1340,12 +1337,12 @@ uint16_t xchannel_get_port(xchannel_ptr channel)
     return channel->port;
 }
 
-struct xchannel_ctx* xchannel_get_ctx(xchannel_ptr channel)
+void* xchannel_get_ctx(xchannel_ptr channel)
 {
     return channel->ctx;
 }
 
-void xchannel_set_ctx(xchannel_ptr channel, struct xchannel_ctx *ctx)
+void xchannel_set_ctx(xchannel_ptr channel, void *ctx)
 {
     channel->ctx = ctx;
 }
