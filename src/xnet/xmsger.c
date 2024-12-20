@@ -88,6 +88,7 @@ struct xchannel {
 
     char ip[46];
     uint16_t port;
+
     uint16_t cid;
     uint64_t ucid[3];
     __xipaddr_ptr addr;
@@ -950,7 +951,9 @@ static void main_loop(void *ptr)
     size_t sid;
     uint64_t cid[3] = {0};
     xchannel_ptr channel = NULL;
-    __xipaddr_ptr addr = __xapi->udp_any_to_addr(0, 0);
+    __xipaddr_ptr addrs[2], addr;
+    addrs[0] =  __xapi->udp_any_to_addr(0, 9256);
+    addrs[1] =  __xapi->udp_any_to_addr(1, 9256);
     
     xpack_ptr rpack = (xpack_ptr)malloc(sizeof(struct xpack));
     __xcheck(rpack == NULL);
@@ -962,6 +965,7 @@ static void main_loop(void *ptr)
     {
     for (sid = 0; sid < 2; sid++)
     {
+        addr = addrs[sid];
         ((uint64_t*)addr)[0] = ((uint64_t*)addr)[1] = ((uint64_t*)addr)[2] = 0;
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
@@ -973,6 +977,15 @@ static void main_loop(void *ptr)
                 continue;
             }
 
+            #ifdef __XDEBUG__
+            char ip[46] = {0};
+            uint16_t port = 0;
+            __xapi->udp_addr_to_host(addr, ip, &port);
+            __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u) ACK(%u:%u:%u) SN(%u)\n",
+                    rpack->head.type, ip, port, rpack->head.cid, 
+                    rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
+            #endif
+
             cid[0] = ((uint64_t*)addr)[0];
             cid[1] = ((uint64_t*)addr)[1];
             cid[2] = ((uint64_t*)addr)[2];
@@ -982,9 +995,9 @@ static void main_loop(void *ptr)
 
             if (channel){
 
-                __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
-                        rpack->head.type, channel->ip, channel->port, channel->cid, rpack->head.cid, 
-                        rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
+                // __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
+                //         rpack->head.type, channel->ip, channel->port, channel->cid, rpack->head.cid, 
+                //         rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
 
                 if (rpack->head.type == XPACK_TYPE_MSG) {
 
@@ -1028,15 +1041,6 @@ static void main_loop(void *ptr)
                 }
 
             } else {
-
-                #ifdef __XDEBUG__
-                char ip[46] = {0};
-                uint16_t port = 0;
-                __xapi->udp_addr_to_host(addr, ip, &port);
-                __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u) ACK(%u:%u:%u) SN(%u)\n",
-                        rpack->head.type, ip, port, rpack->head.cid, 
-                        rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
-                #endif
 
                 // 收到对方发起的 HELLO
                 if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
