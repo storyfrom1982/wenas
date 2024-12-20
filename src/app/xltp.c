@@ -242,7 +242,7 @@ xltp_t* xltp_create(xpeer_t *peer)
     xltp->task_pid = __xapi->thread_create(xltp_loop, xltp);
     __xcheck(xltp->task_pid == NULL);
     
-    xltp->msger = xmsger_create(&xltp->listener, 0, 9256);
+    xltp->msger = xmsger_create(&xltp->listener, 1, 9256);
     __xcheck(xltp->msger == NULL);
 
     return xltp;
