@@ -72,6 +72,7 @@ typedef struct __xapi_enter {
     int (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
     int (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
     bool (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
+    __xipaddr_ptr (*udp_addr_dump)(const __xipaddr_ptr addr);
     __xipaddr_ptr (*udp_any_to_addr)(int ipv6, uint16_t port);
     __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
 

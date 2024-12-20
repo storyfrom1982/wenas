@@ -749,14 +749,18 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xcheck(channel == NULL);
 
         __xcheck(xmsg_fixed(msg) != 0);
-        xline_t parser = xl_parser(&msg->data);
-        char *ip = xl_find_word(&parser, "host");
-        uint64_t port = xl_find_uint(&parser, "port");
 
-        channel->ctx = (void*)(*(uint64_t*)&head->flags[8]);
-        mcopy(channel->ip, ip, slength(ip));
-        channel->port = port;
-        channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+        channel->addr = __xmsg_get_ipaddr(msg);
+        // channel->addr = __xapi->udp_addr_dump(addr);
+        
+        // xline_t parser = xl_parser(&msg->data);
+        // char *ip = xl_find_word(&parser, "host");
+        // uint64_t port = xl_find_uint(&parser, "port");
+        // channel->ctx = (void*)(*(uint64_t*)&head->flags[8]);
+        // mcopy(channel->ip, ip, slength(ip));
+        // channel->port = port;
+        // channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
             channel->sock = channel->msger->sock[1];
         }else {
@@ -780,7 +784,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
 
-        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, port, channel->cid);
+        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
 
     }else if (head->ack.type == XPACK_TYPE_RES || head->ack.type == XPACK_TYPE_BYE){
 

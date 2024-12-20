@@ -46,10 +46,10 @@ int main(int argc, char *argv[])
         sscanf(input, "%s", command);
 
         if (strcmp(command, "echo") == 0) {
+            xpeer_echo(peer, ip, port);
+
+        } else if (strcmp(command, "boot") == 0) {
             xpeer_bootstrap(peer);
-
-        } else if (strcmp(command, "hello") == 0) {
-
 
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");

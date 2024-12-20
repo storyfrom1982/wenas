@@ -14,7 +14,7 @@ typedef struct xltp {
     __atom_bool runnig;
     xpeer_t *peer;
     xline_t parser;
-    __xipaddr_ptr addr;
+    // __xipaddr_ptr addr;
     xmsger_ptr msger;
 
     xtree api;
@@ -176,11 +176,15 @@ static void xltp_loop(void *ptr)
 
         }else if(msg->flag == XL_MSG_FLAG_BOOT){
 
-            xltp->addr = __xapi->udp_host_to_addr("xltp.net", 9256);
-            __xapi->udp_addr_to_host(xltp->addr, xltp->ip, &xltp->port);
-            __xlogd("bootstrap %s:%u\n", xltp->ip, xltp->port);
+            if (__xmsg_get_cb(msg) != NULL){
+                xpeer_add_msg_cb(xltp, msg);
+            }
+            __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
+            // __xapi->udp_addr_to_host(addr, xltp->ip, &xltp->port);
+            // __xlogd("bootstrap %s:%u\n", xltp->ip, xltp->port);
+            __xmsg_set_ipaddr(msg, addr);
+            xmsger_connect(xltp->msger, msg);
         }
-
     }
 
     __xlogd("xltp_loop >>>>---------------> exit\n");
@@ -304,6 +308,10 @@ void xltp_free(xltp_t **pptr)
             xtree_clear(xltp->api, NULL);
             xtree_free(&xltp->api);
         }
+
+        // if (xltp->addr){
+        //     free(xltp->addr);
+        // }
 
         free(xltp);
     }

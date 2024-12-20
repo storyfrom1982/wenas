@@ -416,6 +416,17 @@ int udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
     return socket_addr_to((const struct sockaddr*)addr, addr->addrlen, ip, port);
 }
 
+__xipaddr_ptr udp_addr_dump(const __xipaddr_ptr addr)
+{
+    __xipaddr_ptr res = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xcheck(addr == NULL);
+    __xcheck(res == NULL);
+    *res = *addr;
+    return res;
+XClean:
+    return NULL;
+}
+
 bool udp_addr_is_ipv6(__xipaddr_ptr addr)
 {
     return ((struct sockaddr*)addr)->sa_family == AF_INET6;
@@ -562,6 +573,7 @@ struct __xapi_enter posix_api_enter = {
     .udp_addr_to_host = udp_addr_to_host,
     .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_addrinfo = udp_addrinfo,
+    .udp_addr_dump = udp_addr_dump,
 
     .fs_mkpath = __fs_mkpath,
     .fs_isdir = __fs_isdir,
