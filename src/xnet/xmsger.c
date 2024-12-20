@@ -1076,7 +1076,7 @@ static void main_loop(void *ptr)
                         }
                     }
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_RES || rpack->head.type == XPACK_TYPE_BYE){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);
