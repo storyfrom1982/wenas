@@ -3,6 +3,12 @@
 
 #include "xline.h"
 
+#define XL_MSG_FLAG_RECV            0x00
+#define XL_MSG_FLAG_SEND            0x01
+#define XL_MSG_FLAG_BACK            0x02
+#define XL_MSG_FLAG_TIMEOUT         0x03
+#define XL_MSG_FLAG_BOOT            0x04
+
 typedef struct xltp xltp_t;
 typedef struct xpeer xpeer_t;
 typedef struct xchannel xchannel_t;

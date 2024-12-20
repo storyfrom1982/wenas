@@ -119,17 +119,6 @@ static inline double __xl_b2float(xdata_t *d)
 // #define XLINE_MAKER_SIZE            (1024 * 16)
 #define XLINE_MAKER_SIZE            (16)
 
-// #define XL_MSG_TYPE_REQ             0x01
-// #define XL_MSG_TYPE_RES             0x02
-// #define XL_MSG_TYPE_HELLO           0x03
-// #define XL_MSG_TYPE_MSG             0x04
-// #define XL_MSG_TYPE_BYE             0x05
-// #define XL_MSG_TYPE_FLUSH           0xF0
-
-#define XL_MSG_FLAG_RECV            0x00
-#define XL_MSG_FLAG_SEND            0x01
-#define XL_MSG_FLAG_BACK            0x02
-#define XL_MSG_FLAG_TIMEOUT         0x03
 
 typedef struct xline {
     __atom_size ref;
@@ -628,7 +617,6 @@ static xline_t* xl_test(int count)
 {
     xline_t *xobj, *xlist;
     xline_t *xl = xl_maker();
-    xl->flag = XL_MSG_FLAG_SEND;
     char bin[1024];
     xl_add_word(&xl, "api", "test");
     xl_add_int(&xl, "count", count);

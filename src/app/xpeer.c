@@ -139,9 +139,22 @@ XClean:
     return -1;
 }
 
-int xpeer_send_echo(xpeer_t *peer, const char *host, uint16_t port)
+int xpeer_bootstrap(xpeer_t *peer)
 {
-    return req_echo(peer, host, port);
+    xline_t *msg = msg_make_req(peer, "echo", res_echo);
+    __xcheck(msg == NULL);
+    // xl_add_word(&msg, "host", host);
+    // xl_add_uint(&msg, "port", port);
+    uint8_t uuid[32];
+    xl_add_bin(&msg, "uuid", uuid, 32);
+    xl_printf(&msg->data);
+    __xcheck(xltp_bootstrap(peer->xltp, msg) != 0);
+    return 0;
+XClean:
+    if (msg != NULL){
+        xl_free(&msg);
+    }
+    return -1;
 }
 
 xpeer_t* xpeer_create()

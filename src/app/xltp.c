@@ -14,7 +14,7 @@ typedef struct xltp {
     __atom_bool runnig;
     xpeer_t *peer;
     xline_t parser;
-    // struct __xipaddr addr;
+    __xipaddr_ptr addr;
     xmsger_ptr msger;
 
     xtree api;
@@ -173,6 +173,12 @@ static void xltp_loop(void *ptr)
             }else if (msg->type == XPACK_TYPE_RES){
                 xmsger_disconnect(xltp->msger, msg);
             }
+
+        }else if(msg->flag == XL_MSG_FLAG_BOOT){
+
+            xltp->addr = __xapi->udp_host_to_addr("xltp.net", 9256);
+            __xapi->udp_addr_to_host(xltp->addr, xltp->ip, &xltp->port);
+            __xlogd("bootstrap %s:%u\n", xltp->ip, xltp->port);
         }
 
     }
@@ -200,6 +206,17 @@ int xltp_respose(xltp_t *xltp, xline_t *msg)
     __xcheck(xltp == NULL || msg == NULL);
     msg->type = XPACK_TYPE_RES;
     msg->flag = XL_MSG_FLAG_SEND;
+    __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    return 0;
+XClean:
+    return -1;
+}
+
+int xltp_bootstrap(xltp_t *xltp, xline_t *msg)
+{
+    __xcheck(xltp == NULL || msg == NULL);
+    msg->type = XPACK_TYPE_REQ;
+    msg->flag = XL_MSG_FLAG_BOOT;
     __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:

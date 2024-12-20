@@ -14,9 +14,9 @@ int main(int argc, char *argv[])
     __xcheck(peer == NULL);
 
 
-    // const char *cip = "192.168.1.6";
+    const char *cip = "192.168.1.6";
     // const char *cip = "120.78.155.213";
-    const char *cip = "47.92.77.19";
+    // const char *cip = "47.92.77.19";
     // const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
     // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
         sscanf(input, "%s", command);
 
         if (strcmp(command, "echo") == 0) {
-            xpeer_send_echo(peer, ip, port);
+            xpeer_bootstrap(peer);
 
         } else if (strcmp(command, "hello") == 0) {
 
