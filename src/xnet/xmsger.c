@@ -1009,7 +1009,7 @@ static void main_loop(void *ptr)
                     // // 回复最后的 ACK
                     // xchannel_send_final(msger->sock[sid], addr, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_HELLO){
+                }else if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
 
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
