@@ -951,7 +951,7 @@ static void main_loop(void *ptr)
     size_t sid;
     uint64_t cid[3] = {0};
     xchannel_ptr channel = NULL;
-    __xipaddr_ptr addrs[2], addr;
+    __xipaddr_ptr addrs[2] = {0}, addr;
     addrs[0] =  __xapi->udp_any_to_addr(0, 9256);
     addrs[1] =  __xapi->udp_any_to_addr(1, 9256);
     
@@ -1113,10 +1113,13 @@ XClean:
         free(rpack);
     }
 
-    if (addr){
-        free(addr);
+    if (addrs[0]){
+        free(addrs[0]);
     }
 
+    if (addrs[1]){
+        free(addrs[1]);
+    }
     __xlogd("xmsger_loop exit\n");
 }
 
@@ -1211,7 +1214,7 @@ static inline int unicid_find(const void *a, const void *b)
     return 0;
 }
 
-xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port)
+xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port)
 {
     __xlogd("xmsger_create enter\n");
 
@@ -1227,16 +1230,9 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port)
         msger->port++;
     }
     
-    if (ipv6){
-        msger->sock[1] = __xapi->udp_open(1, 1, 1);
-        __xcheck(msger->sock[1] < 0);
-        __xcheck(__xapi->udp_bind(msger->sock[1], msger->port) == -1);
-    }else {
-        // TODO 不需要两个 ipv4 连接，nat 探测可以连接其他节点
-        msger->sock[1] = __xapi->udp_open(0, 1, 1);
-        __xcheck(msger->sock[1] < 0);
-        __xcheck(__xapi->udp_bind(msger->sock[1], msger->port+1) == -1);
-    }
+    msger->sock[1] = __xapi->udp_open(1, 1, 1);
+    __xcheck(msger->sock[1] < 0);
+    __xcheck(__xapi->udp_bind(msger->sock[1], msger->port) == -1);
 
     msger->sock[2] = __xapi->udp_open(0, 0, 0);
     __xcheck(msger->sock[2] < 0);

@@ -33,7 +33,7 @@ typedef struct xmsgercb {
 }*xmsgercb_ptr;
 
 
-extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, int ipv6, uint16_t port);
+extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port);
 extern void xmsger_free(xmsger_ptr *pptr);
 extern bool xmsger_connect(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg);
