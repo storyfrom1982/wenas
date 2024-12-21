@@ -98,7 +98,7 @@ struct xchannel {
     // bool connected;
     // bool disconnected;
     bool timedout;
-    __atom_bool disconnecting;
+    // __atom_bool disconnecting;
     __atom_size pos, len;
 
     xline_t *msg;
@@ -830,7 +830,8 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
-                            if (__set_true(channel->disconnecting)){
+                            if (!channel->timedout){
+                                channel->timedout = true;
                                 __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                                 msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
@@ -879,7 +880,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                 if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
                     if (!channel->timedout){
                         channel->timedout = true;
-                        __set_true(channel->disconnecting);
+                        // __set_true(channel->disconnecting);
                         __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                         if (channel->ctx != NULL){
@@ -971,7 +972,7 @@ static void msger_loop(void *ptr)
                     // channel->disconnected = true;
                     // avl_tree_remove(&msger->peers, channel);
                     // 收到完整的消息才能断开连接
-                    __set_true(channel->disconnecting);
+                    // __set_true(channel->disconnecting);
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);                    
 
@@ -1093,7 +1094,7 @@ bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
     // 状态错误会报错
-    __xcheck(!__set_false(channel->disconnecting));
+    // __xcheck(!__set_false(channel->disconnecting));
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = XPACK_TYPE_FLUSH;
