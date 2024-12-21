@@ -5,6 +5,7 @@
 #include "xnet/xmsg.h"
 #include "xnet/xmsger.h"
 
+xline_t* xltp_make_req(xltp_t *xltp, void *ctx, const char *api, msg_cb_t cb);
 
 int xltp_request(xltp_t *xltp, xline_t *msg);
 int xltp_respose(xltp_t *xltp, xline_t *msg);

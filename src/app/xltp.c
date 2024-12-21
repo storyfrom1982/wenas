@@ -12,6 +12,7 @@ typedef struct xltp {
     uint16_t port;
     char ip[46];
     __atom_bool runnig;
+    __atom_size msgid;
     xpeer_t *peer;
     xline_t parser;
     // __xipaddr_ptr addr;
@@ -35,6 +36,24 @@ static inline int msgid_compare(const void *a, const void *b)
 static inline int msgid_find(const void *a, const void *b)
 {
 	return (*(uint64_t*)a) - ((xline_t*)b)->id;
+}
+
+xline_t* xltp_make_req(xltp_t *xltp, void *ctx, const char *api, msg_cb_t cb)
+{
+    xline_t *msg = xl_maker();
+    __xcheck(msg == NULL);
+    msg->id = __atom_add(xltp->msgid, 1);
+    __xmsg_set_cb(msg, cb);
+    __xmsg_set_peer(msg, ctx);
+    __xmsg_set_xltp(msg, xltp);
+    __xcheck(xl_add_word(&msg, "api", api) == EENDED);
+    __xcheck(xl_add_uint(&msg, "mid", msg->id) == EENDED);
+    return msg;
+XClean:
+    if (msg){
+        xl_free(&msg);
+    }
+    return NULL;
 }
 
 inline static void xpeer_add_msg_cb(xltp_t *xltp, xline_t *msg)
@@ -112,7 +131,7 @@ XClean:
 
 static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
 {
-    xl_printf(&msg->data);
+    // xl_printf(&msg->data);
     xltp->parser = xl_parser(&msg->data);
     uint64_t tid = xl_find_uint(&xltp->parser, "mid");
     xline_t *req = (xline_t*)avl_tree_find(&xltp->msgid_table, &tid);

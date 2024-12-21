@@ -11,42 +11,21 @@ typedef struct xpeer {
     char ip[46];
     uint16_t pub_port;
     char pub_ip[46];
-    uint64_t msgid;
-    xline_t parser;    
+    xline_t parser;
     xline_t msglist;
 }xpeer_t;
 
-static inline xline_t* msg_make_req(xpeer_t *peer, const char *api, msg_cb_t cb)
-{
-    xline_t *msg = xl_maker();
-    __xcheck(msg == NULL);
-    msg->id = peer->msgid++;
-    __xmsg_set_cb(msg, cb);
-    __xmsg_set_peer(msg, peer);
-    __xmsg_set_xltp(msg, peer->xltp);
-    __xcheck(xl_add_word(&msg, "api", api) == EENDED);
-    __xcheck(xl_add_uint(&msg, "mid", msg->id) == EENDED);
-    return msg;
-XClean:
-    if (msg){
-        xl_free(&msg);
-    }
-    return NULL;
-}
 
-static inline xline_t* msg_make_res(xpeer_t *peer, xline_t *msg, uint64_t mid)
+static inline xline_t* xpeer_make_res(xpeer_t *peer, xline_t *req)
 {
-    xl_hold(msg);
-    msg->wpos = 0;
-    msg->id = mid;
-    __xmsg_set_cb(msg, NULL);
-    __xcheck(xl_add_uint(&msg, "mid", msg->id) == EENDED);
-    xl_printf(&msg->data);
-    return msg;
+    req->wpos = 0;
+    __xmsg_set_cb(req, NULL);
+    peer->parser = xl_parser(&req->data);
+    __xcheck((req->id = xl_find_uint(&peer->parser, "mid")) == EENDED);
+    __xcheck(xl_add_uint(&req, "mid", req->id) == EENDED);
+    xl_hold(req);
+    return req;
 XClean:
-    if (msg){
-        xl_free(&msg);
-    }
     return NULL;
 }
 
@@ -80,10 +59,12 @@ XClean:
 
 static int api_hello(xline_t *msg)
 {
+    __xcheck(msg == NULL);
+    xl_printf(&msg->data);
     xpeer_t *peer = __xmsg_get_peer(msg);
-    peer->parser = xl_parser(&msg->data);
-    uint64_t mid = xl_find_uint(&peer->parser, "mid");
-    xline_t *res = msg_make_res(peer, msg, mid);
+    __xcheck(peer == NULL);
+    xline_t *res = xpeer_make_res(peer, msg);
+    __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "code", 200);
@@ -98,30 +79,36 @@ XClean:
 
 static int api_echo(xline_t *msg)
 {
+    __xcheck(msg == NULL);
+    xl_printf(&msg->data);
     xpeer_t *peer = __xmsg_get_peer(msg);
-    peer->parser = xl_parser(&msg->data);
-    uint64_t mid = xl_find_uint(&peer->parser, "mid");
-    xline_t *res = msg_make_res(peer, msg, mid);
+    __xcheck(peer == NULL);
+    xline_t *res = xpeer_make_res(peer, msg);
+    __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
+    uint8_t uuid[8192];
+    xl_add_bin(&res, "uuid", uuid, 8192);
     xl_add_uint(&res, "code", 200);
+    // TODO 这里有可能会阻塞，xpeer 需要运行自己的线程
     xltp_respose(peer->xltp, res);
     return 0;
 XClean:
-    if (res != NULL){
-        xl_free(&res);
-    }
     return -1;
 }
 
 static int api_boot(xline_t *msg)
 {
+    __xcheck(msg == NULL);
+    xl_printf(&msg->data);
     xpeer_t *peer = __xmsg_get_peer(msg);
-    peer->parser = xl_parser(&msg->data);
-    uint64_t mid = xl_find_uint(&peer->parser, "mid");
-    xline_t *res = msg_make_res(peer, msg, mid);
+    __xcheck(peer == NULL);
+    xline_t *res = xpeer_make_res(peer, msg);
+    __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
+    uint8_t uuid[8192];
+    xl_add_bin(&res, "uuid", uuid, 8192);
     xl_add_uint(&res, "code", 200);
     xltp_respose(peer->xltp, res);
     return 0;
@@ -134,7 +121,7 @@ XClean:
 
 static int req_hello(xpeer_t *peer)
 {
-    xline_t *msg = msg_make_req(peer, "echo", res_hello);
+    xline_t *msg = xltp_make_req(peer->xltp, peer, "hello", res_hello);
     __xcheck(msg == NULL);
     xl_add_word(&msg, "host", peer->ip);
     xl_add_uint(&msg, "port", peer->port);
@@ -151,15 +138,14 @@ XClean:
 
 int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
 {
-    xline_t *msg = msg_make_req(peer, "echo", res_echo);
+    xline_t *msg = xltp_make_req(peer->xltp, peer, "echo", res_echo);
     __xcheck(msg == NULL);
     __xipaddr_ptr addr = __xapi->udp_host_to_addr(host, port);
     __xmsg_set_ipaddr(msg, addr);
     xl_add_word(&msg, "host", host);
     xl_add_uint(&msg, "port", port);    
-    uint8_t uuid[32];
-    xl_add_bin(&msg, "uuid", uuid, 32);
-    xl_printf(&msg->data);
+    uint8_t uuid[8192];
+    xl_add_bin(&msg, "uuid", uuid, 8192);
     __xcheck(xltp_request(peer->xltp, msg) != 0);
     return 0;
 XClean:
@@ -171,11 +157,10 @@ XClean:
 
 int xpeer_bootstrap(xpeer_t *peer)
 {
-    xline_t *msg = msg_make_req(peer, "boot", res_boot);
+    xline_t *msg = xltp_make_req(peer->xltp, peer, "boot", res_boot);
     __xcheck(msg == NULL);
     uint8_t uuid[32];
     xl_add_bin(&msg, "uuid", uuid, 32);
-    xl_printf(&msg->data);
     __xcheck(xltp_bootstrap(peer->xltp, msg) != 0);
     return 0;
 XClean:

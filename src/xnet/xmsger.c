@@ -753,7 +753,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         channel->ack.cid = channel->cid;
         channel->keepalive = true;
 
-        __xcheck(msg->wpos > XBODY_SIZE);
+        // __xcheck(msg->wpos > XBODY_SIZE);
         __atom_add(channel->msger->len, msg->wpos);
         __atom_add(channel->len, msg->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
@@ -767,7 +767,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
         __xcheck(xmsg_fixed(msg) != 0);
-        __xcheck(msg->wpos > XBODY_SIZE);
+        // __xcheck(msg->wpos > XBODY_SIZE);
         __atom_add(channel->msger->len, msg->wpos);
         __atom_add(channel->len, msg->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
