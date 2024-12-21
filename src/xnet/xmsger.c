@@ -86,8 +86,8 @@ struct xchannel {
     uint64_t back_delay;
     uint64_t back_range;
 
-    char ip[46];
-    uint16_t port;
+    // char ip[46];
+    // uint16_t port;
 
     uint16_t cid;
     uint64_t ucid[3];
@@ -292,7 +292,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
 
 static inline void xchannel_free(xchannel_ptr channel)
 {
-    __xlogd("xchannel_free >>>>-------------------> IP[%s] PORT[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
+    __xlogd("xchannel_free >>>>-------------------> CID[%u]\n", channel->cid);
     xchannel_clear(channel);
     __ring_list_take_out(&channel->msger->sendlist, channel);
     if (channel->node.parent != &channel->node){
@@ -373,8 +373,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
 
-        __xlogd("<SEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-------------------> SN[%u]\n", 
-            pack->head.type, channel->ip, channel->port, channel->cid, 
+        __xlogd("<SEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>------> SN[%u]\n", 
+            pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
             pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
 
         if (channel->ack.ack.type != 0){
@@ -414,8 +414,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
 static inline void xchannel_send_ack(xchannel_ptr channel)
 {
-    __xlogd("<SEND ACK> IP[%s] PORT[%u] CID[%u] >>>>-------------------> ACK[%u:%u:%u]\n", 
-        channel->ip, channel->port, channel->cid, channel->ack.ack.type, channel->ack.ack.sn, channel->ack.ack.pos);
+    __xlogd("<SEND> TYPE(0) IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u]\n", 
+        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
+        channel->ack.ack.type, channel->ack.ack.sn, channel->ack.ack.pos);
 
     if ((__xapi->udp_sendto(channel->sock, channel->addr, (void*)&channel->ack, XHEAD_SIZE)) == XHEAD_SIZE){
         channel->ack.ack.type = 0;
@@ -426,8 +427,10 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
 static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr pack)
 {
-    __xlogd("<SEND FINAL> CID[%u] >>>>-------------------> ACK[%u:%u:%u]\n", 
-        pack->head.cid, pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos);
+    __xlogd("<SEND FINAL> IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u]\n", 
+        __xapi->udp_addr_ip(addr), __xapi->udp_addr_port(addr), pack->head.cid, 
+        pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos);
+
     // 设置 flag
     pack->head.type = XPACK_TYPE_ACK;
     pack->head.ack.type = XPACK_TYPE_BYE;
@@ -539,35 +542,15 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __ring_list_take_out(&channel->flushlist, pack);
             }
 
-            if (pack->head.type != XPACK_TYPE_ONL){
-                // 更新已经到达对端的数据计数
-                pack->msg->rpos += pack->head.len;
-                if (pack->msg->rpos == pack->msg->wpos){
-                    // 把已经传送到对端的 msg 交给发送线程处理
-                    channel->msger->cb->on_message_to_peer(channel->msger->cb, channel, pack->msg);
-                    channel->msgbuf->buf[__serialbuf_rpos(channel->msgbuf)] = NULL;
-                    __atom_add(channel->msgbuf->rpos, 1);
-                    pack->msg = NULL;
-                }
-
+            // 更新已经到达对端的数据计数
+            pack->msg->rpos += pack->head.len;
+            if (pack->msg->rpos == pack->msg->wpos){
+                // 把已经传送到对端的 msg 交给发送线程处理
+                channel->msger->cb->on_message_to_peer(channel->msger->cb, channel, pack->msg);
+                channel->msgbuf->buf[__serialbuf_rpos(channel->msgbuf)] = NULL;
+                __atom_add(channel->msgbuf->rpos, 1);
+                pack->msg = NULL;
             }
-            // else if (pack->head.type == XPACK_TYPE_HELLO){
-
-            //     if (!channel->connected){
-            //         channel->connected = true;
-            //         // 通知用户建立连接
-            //         channel->msger->cb->on_connection_to_peer(channel->msger->cb, channel);
-            //     }
-
-            // }else if (pack->head.type == XPACK_TYPE_BYE){
-
-            //     // 这里只能执行一次，首先 channel 会从 peers 中移除，还有 ack 也不会被重复确认
-            //     __xlogd("RECV FINAL ACK: IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
-            //     __set_true(channel->disconnecting);
-            //     channel->disconnected = true;
-            //     channel->msger->cb->on_disconnection(channel->msger->cb, channel);
-            //     avl_tree_remove(&channel->msger->peers, channel);
-            // }
 
             __atom_add(channel->sendbuf->rpos, 1);
 
@@ -627,7 +610,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                 pack->head.ack.pos = channel->recvbuf->wpos;
                             }
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
-                                    pack->head.type, channel->ip, channel->port, channel->cid, 
+                                    pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 pack->delay *= XCHANNEL_RESEND_STEPPING;
@@ -703,7 +686,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             channel->ack.ack.pos = channel->recvbuf->wpos;
 
             __xlogd("RECV EARLY >>>>--------> IP=[%s] PORT=[%u] CID[%u] FLAG[%u] ACK[%u:%u:%u]\n", 
-                    channel->ip, channel->port, channel->cid, pack->head.type,
+                    __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->head.type,
                     channel->ack.ack.type, channel->ack.ack.sn, channel->ack.ack.pos);
 
             // 这里 wpos - 1 在 wpos 等于 0 时会造成 acks 的值是 255
@@ -731,7 +714,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             channel->ack.ack.sn = channel->ack.ack.pos;
             // 重复到达的 PACK
             __xlogd("RECV AGAIN >>>>--------> IP=[%s] PORT=[%u] CID[%u] FLAG[%u] ACK[%u:%u:%u]\n", 
-                    channel->ip, channel->port, channel->cid, pack->head.type,
+                    __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->head.type,
                     channel->ack.ack.type, channel->ack.ack.sn, channel->ack.ack.pos);
         }
     }
@@ -752,15 +735,6 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xcheck(xmsg_fixed(msg) != 0);
 
         channel->addr = __xmsg_get_ipaddr(msg);
-        // channel->addr = __xapi->udp_addr_dump(addr);
-        
-        // xline_t parser = xl_parser(&msg->data);
-        // char *ip = xl_find_word(&parser, "host");
-        // uint64_t port = xl_find_uint(&parser, "port");
-        // channel->ctx = (void*)(*(uint64_t*)&head->flags[8]);
-        // mcopy(channel->ip, ip, slength(ip));
-        // channel->port = port;
-        // channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
             channel->sock = channel->msger->sock[1];
@@ -785,7 +759,8 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
 
-        __xlogd("xmsger_local_recv >>>>--------> Create channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
+        __xlogd("<CONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
+                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
     }else if (head->ack.type == XPACK_TYPE_RES || head->ack.type == XPACK_TYPE_BYE){
 
@@ -797,11 +772,13 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __atom_add(channel->len, msg->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
-        __xlogd("xmsger_local_recv >>>>--------> Release channel IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
+        __xlogd("<DISCONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
+                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
     }else if (head->ack.type == XPACK_TYPE_FLUSH){
         xchannel_ptr channel = (xchannel_ptr)(*(uint64_t*)&head->flags[8]);
-        __xlogd("xmsger_local_recv >>>>--------> XLMSG_FLAG_FINAL IP=[%s] PORT=[%u] CID[%u]\n", channel->ip, channel->port, channel->cid);
+        __xlogd("<FINAL> IP=[%s] PORT=[%u] CID[%u]\n", 
+                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
         xchannel_free(channel);
     }
 
@@ -852,18 +829,11 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
                             if (!channel->disconnected){
-                                __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
+                                __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                                        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                                 __set_true(channel->disconnecting);
                                 channel->disconnected = true;
-                                if (spack->msg){
-                                    msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
-                                }else {
-                                    xline_t *msg = xl_maker();
-                                    // msg->ctx = channel->ctx;
-                                    __xmsg_set_xltp(msg, channel->ctx);
-                                    xl_add_word(&msg, "api", "disconnect");
-                                    msger->cb->on_message_timeout(msger->cb, channel, msg);
-                                }
+                                msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
                             }
                             break;
 
@@ -880,7 +850,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             }
 
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Delay[%lu:%lu]\n", 
-                                    spack->head.type, channel->ip, channel->port, channel->cid, 
+                                    spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
                                     channel->back_delay / 1000000UL, spack->delay / 1000000UL);
 
@@ -904,36 +874,6 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                     spack = npack;
                 }
 
-            }else if (channel->pos == channel->len){ // 只要发送缓冲区有数据， pos 就不可能等于 len
-
-                if (channel->keepalive){
-
-                    if ((delay = ((NANO_SECONDS * 9) - (__xapi->clock() - channel->timestamp))) > 0) {
-                        // 未超时
-                        if (msger->timer > delay){
-                            // 超时时间更近，更新休息时间
-                            msger->timer = delay;
-                        }
-
-                    }else {
-
-                        xchannel_serial_pack(channel, XPACK_TYPE_ONL);
-                        // 更新时间戳
-                        channel->timestamp = __xapi->clock();
-
-                    }
-
-                }else {
-
-                    if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
-                        if (!channel->disconnected){
-                            __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
-                            __set_true(channel->disconnecting);
-                            channel->disconnected = true;
-                            msger->cb->on_message_timeout(msger->cb, channel, NULL);
-                        }
-                    }
-                }
             }
 
             channel = channel->next;
@@ -977,14 +917,9 @@ static void main_loop(void *ptr)
                 continue;
             }
 
-            #ifdef __XDEBUG__
-            char ip[46] = {0};
-            uint16_t port = 0;
-            __xapi->udp_addr_to_host(addr, ip, &port);
             __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u) ACK(%u:%u:%u) SN(%u)\n",
-                    rpack->head.type, ip, port, rpack->head.cid, 
+                    rpack->head.type, __xapi->udp_addr_ip(addr), __xapi->udp_addr_port(addr), rpack->head.cid, 
                     rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
-            #endif
 
             cid[0] = ((uint64_t*)addr)[0];
             cid[1] = ((uint64_t*)addr)[1];
@@ -994,10 +929,6 @@ static void main_loop(void *ptr)
             channel = avl_tree_find(&msger->peers, &cid[0]);
 
             if (channel){
-
-                // __xlogd("[RECV] TYPE(%u) IP(%s) PORT(%u) CID(%u->%u) FLAG(%u:%u:%u) SN(%u)\n",
-                //         rpack->head.type, channel->ip, channel->port, channel->cid, rpack->head.cid, 
-                //         rpack->head.ack.type, rpack->head.ack.sn, rpack->head.ack.pos, rpack->head.sn);
 
                 if (rpack->head.type == XPACK_TYPE_MSG) {
 
@@ -1031,13 +962,9 @@ static void main_loop(void *ptr)
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
 
-                }else if (rpack->head.type == XPACK_TYPE_ONL){
-
-                    __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
-                    xchannel_send_ack(channel);
-
                 }else {
-                    __xlogd("RECV UNKNOWN TYPE >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", channel->ip, channel->port, channel->cid);
+                    __xlogd("RECV UNKNOWN TYPE >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                            __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                 }
 
             } else {
@@ -1055,9 +982,10 @@ static void main_loop(void *ptr)
                         channel->cid = rpack->head.cid;;
                         channel->ack.cid = channel->cid;
 
-                        __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
-                        // TODO 是否需要存储这个 addr
-                        channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+                        // __xapi->udp_addr_to_host(addr, channel->ip, &channel->port);
+                        // // TODO 是否需要存储这个 addr
+                        // channel->addr = __xapi->udp_host_to_addr(channel->ip, channel->port);
+                        channel->addr = __xapi->udp_addr_dump(addr);
                         channel->sock = channel->msger->sock[sid];
 
                         channel->ucid[0] = cid[0];
@@ -1325,20 +1253,14 @@ bool xchannel_get_keepalive(xchannel_ptr channel)
     return channel->keepalive;
 }
 
-const char* xchannel_get_host(xchannel_ptr channel)
+const char* xchannel_get_ip(xchannel_ptr channel)
 {
-    if (channel->port == 0){
-        __xapi->udp_addr_to_host((const __xipaddr_ptr)&channel->addr, channel->ip, &channel->port);
-    }
-    return channel->ip;
+    return __xapi->udp_addr_ip(channel->addr);
 }
 
 uint16_t xchannel_get_port(xchannel_ptr channel)
 {
-    if (channel->port == 0){
-        __xapi->udp_addr_to_host((const __xipaddr_ptr)&channel->addr, channel->ip, &channel->port);
-    }
-    return channel->port;
+    return __xapi->udp_addr_port(channel->addr);
 }
 
 void* xchannel_get_ctx(xchannel_ptr channel)

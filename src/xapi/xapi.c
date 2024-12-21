@@ -324,6 +324,10 @@ struct __xipaddr {
         struct sockaddr_in6 v6;
     };
     socklen_t addrlen;
+#ifdef __XDEBUG__
+    char ip[46];
+    uint16_t port;
+#endif
 };
 
 static int udp_open(int ipv6, int reuse, int nonblock)
@@ -473,6 +477,22 @@ XClean:
     return NULL;
 }
 
+const char* udp_addr_ip(const __xipaddr_ptr addr)
+{
+    if (addr->port == 0){
+        udp_addr_to_host(addr, addr->ip, &addr->port);
+    }
+    return addr->ip;
+}
+
+uint16_t udp_addr_port(const __xipaddr_ptr addr)
+{
+    if (addr->port == 0){
+        udp_addr_to_host(addr, addr->ip, &addr->port);
+    }
+    return addr->port;
+}
+
 
 #include <sys/mman.h>
 
@@ -574,6 +594,10 @@ struct __xapi_enter posix_api_enter = {
     .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_addrinfo = udp_addrinfo,
     .udp_addr_dump = udp_addr_dump,
+#ifdef __XDEBUG__
+    .udp_addr_ip = udp_addr_ip,
+    .udp_addr_port = udp_addr_port,
+#endif    
 
     .fs_mkpath = __fs_mkpath,
     .fs_isdir = __fs_isdir,

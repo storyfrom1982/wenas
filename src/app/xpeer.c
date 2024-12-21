@@ -84,7 +84,7 @@ static int api_hello(xline_t *msg)
     peer->parser = xl_parser(&msg->data);
     uint64_t mid = xl_find_uint(&peer->parser, "mid");
     xline_t *res = msg_make_res(peer, msg, mid);
-    xl_add_word(&res, "host", xchannel_get_host(__xmsg_get_channel(msg)));
+    xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "code", 200);
     xltp_respose(peer->xltp, res);
@@ -102,7 +102,7 @@ static int api_echo(xline_t *msg)
     peer->parser = xl_parser(&msg->data);
     uint64_t mid = xl_find_uint(&peer->parser, "mid");
     xline_t *res = msg_make_res(peer, msg, mid);
-    xl_add_word(&res, "host", xchannel_get_host(__xmsg_get_channel(msg)));
+    xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "code", 200);
     xltp_respose(peer->xltp, res);
@@ -120,7 +120,7 @@ static int api_boot(xline_t *msg)
     peer->parser = xl_parser(&msg->data);
     uint64_t mid = xl_find_uint(&peer->parser, "mid");
     xline_t *res = msg_make_res(peer, msg, mid);
-    xl_add_word(&res, "host", xchannel_get_host(__xmsg_get_channel(msg)));
+    xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "code", 200);
     xltp_respose(peer->xltp, res);

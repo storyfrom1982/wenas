@@ -12,7 +12,7 @@
 #define XPACK_TYPE_HELLO    0x03
 #define XPACK_TYPE_MSG      0x04
 #define XPACK_TYPE_BYE      0x05
-#define XPACK_TYPE_ONL      0x06
+// #define XPACK_TYPE_ONL      0x06
 #define XPACK_TYPE_FLUSH    0xF0
 #define XPACK_TYPE_LOCAL    0xF1
 
@@ -41,7 +41,7 @@ extern bool xmsger_send(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
 
 extern bool xchannel_get_keepalive(xchannel_ptr channel);
-extern const char* xchannel_get_host(xchannel_ptr channel);
+extern const char* xchannel_get_ip(xchannel_ptr channel);
 extern uint16_t xchannel_get_port(xchannel_ptr channel);
 extern void* xchannel_get_ctx(xchannel_ptr channel);
 extern void xchannel_set_ctx(xchannel_ptr channel, void*);

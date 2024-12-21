@@ -140,7 +140,7 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
 
     uint64_t millisecond = __xapi->time() / MICRO_SECONDS;
     n = __xapi->strftime(text, __log_text_size, millisecond / MILLI_SECONDS);
-    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%08X] %4d %-21s [%s] ", 
+    n += snprintf(text + n, __log_text_size - n, ".%03u [0x%08X] %4d %-16s [%s] ", 
                     (unsigned int)(millisecond % 1000), __xapi->thread_self(), 
                     line, file != NULL ? __path_clear(file) : "<*>", s_log_level_strings[level]);
 
