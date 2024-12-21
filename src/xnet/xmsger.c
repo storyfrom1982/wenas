@@ -94,13 +94,14 @@ struct xchannel {
     __xipaddr_ptr addr;
     void *ctx;
 
-    bool keepalive;
-    bool connected;
-    bool disconnected;
+    // bool keepalive;
+    // bool connected;
+    // bool disconnected;
+    bool timedout;
     __atom_bool disconnecting;
     __atom_size pos, len;
 
-    xline_t *xlmsg;
+    xline_t *msg;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -281,10 +282,10 @@ static inline void xchannel_clear(xchannel_ptr channel)
     }
 
     // 释放未完整接收的消息
-    if (channel->xlmsg != NULL){
+    if (channel->msg != NULL){
         __xlogd("xchannel_clear msg recv buf\n");
-        xl_free(&channel->xlmsg);
-        channel->xlmsg = NULL;
+        xl_free(&channel->msg);
+        channel->msg = NULL;
     }
     
     __xlogd("xchannel_clear exit\n");
@@ -455,20 +456,20 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
 
             if (pack->head.len > 0){
                 // 如果当前接收缓冲区为空，证明这个包是新消息的第一个包
-                if (channel->xlmsg == NULL){
-                    channel->xlmsg = xl_creator(pack->head.range * XBODY_SIZE);
-                    __xcheck(channel->xlmsg == NULL);
-                    channel->xlmsg->type = pack->head.type;
+                if (channel->msg == NULL){
+                    channel->msg = xl_creator(pack->head.range * XBODY_SIZE);
+                    __xcheck(channel->msg == NULL);
+                    channel->msg->type = pack->head.type;
                 }
-                mcopy(channel->xlmsg->ptr + channel->xlmsg->wpos, pack->body, pack->head.len);
-                channel->xlmsg->wpos += pack->head.len;
+                mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
+                channel->msg->wpos += pack->head.len;
                 // 收到了一个完整的消息
-                if (channel->xlmsg->size - channel->xlmsg->wpos < XBODY_SIZE){
+                if (channel->msg->size - channel->msg->wpos < XBODY_SIZE){
                     // 更新消息长度
-                    xl_fixed(channel->xlmsg);
+                    xl_fixed(channel->msg);
                     // 通知用户已收到一个完整的消息
-                    channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->xlmsg);
-                    channel->xlmsg = NULL;
+                    channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
+                    channel->msg = NULL;
                     // 更新时间戳
                     channel->timestamp = __xapi->clock();
                 }
@@ -734,6 +735,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         __xcheck(xmsg_fixed(msg) != 0);
 
+        channel->ctx = __xmsg_get_xltp(msg);
         channel->addr = __xmsg_get_ipaddr(msg);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
@@ -751,7 +753,7 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         }while (avl_tree_add(&msger->peers, channel) != NULL);
 
         channel->ack.cid = channel->cid;
-        channel->keepalive = true;
+        // channel->keepalive = true;
 
         // __xcheck(msg->wpos > XBODY_SIZE);
         __atom_add(channel->msger->len, msg->wpos);
@@ -828,11 +830,9 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 
                         if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
-                            if (!channel->disconnected){
+                            if (__set_true(channel->disconnecting)){
                                 __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                                __set_true(channel->disconnecting);
-                                channel->disconnected = true;
                                 msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
                             }
                             break;
@@ -874,6 +874,29 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                     spack = npack;
                 }
 
+            }else if (channel->pos == channel->len){
+
+                if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
+                    if (!channel->timedout){
+                        channel->timedout = true;
+                        __set_true(channel->disconnecting);
+                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
+                        if (channel->ctx != NULL){
+                            if (channel->msg != NULL){
+                                __xmsg_set_xltp(channel->msg, channel->ctx);
+                                msger->cb->on_message_timeout(msger->cb, channel, channel->msg);
+                                channel->msg = NULL;
+                            }else {
+                                xline_t *msg = xl_maker();
+                                __xmsg_set_xltp(msg, channel->ctx);
+                                msger->cb->on_message_timeout(msger->cb, channel, msg);
+                            }
+                        }else {
+                            xchannel_free(channel);
+                        }
+                    }
+                }
             }
 
             channel = channel->next;
@@ -882,7 +905,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
 }
 
 
-static void main_loop(void *ptr)
+static void msger_loop(void *ptr)
 {
     __xlogd("xmsger_loop enter\n");
 
@@ -945,17 +968,12 @@ static void main_loop(void *ptr)
 
                 }else if (rpack->head.type == XPACK_TYPE_BYE || rpack->head.type == XPACK_TYPE_RES){
 
-                    // if (!channel->disconnected){
-                    //     // msger->cb->on_disconnection(msger->cb, channel);
-                    //     // // 被动端收到 BYE，删除索引                        
-                    // }
+                    // channel->disconnected = true;
+                    // avl_tree_remove(&msger->peers, channel);
+                    // 收到完整的消息才能断开连接
                     __set_true(channel->disconnecting);
-                    channel->disconnected = true;
-                    avl_tree_remove(&msger->peers, channel);
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);                    
-                    // // 回复最后的 ACK
-                    // xchannel_send_final(msger->sock[sid], addr, rpack);
 
                 }else if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
 
@@ -993,7 +1011,7 @@ static void main_loop(void *ptr)
                         channel->ucid[2] = cid[2];
                         __xcheck(avl_tree_add(&msger->peers, channel) != NULL);
 
-                        channel->connected = true;
+                        // channel->connected = true;
                         // channel->msger->cb->on_connection_from_peer(channel->msger->cb, channel);
                         // 更新接收缓冲区和 ACK
                         __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
@@ -1075,7 +1093,7 @@ bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
     // 状态错误会报错
-    // __xcheck(!__set_false(channel->disconnecting));
+    __xcheck(!__set_false(channel->disconnecting));
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = XPACK_TYPE_FLUSH;
@@ -1183,7 +1201,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port)
 
     avl_tree_init(&msger->peers, unicid_compare, unicid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
 
-    msger->tid = __xapi->thread_create(main_loop, msger);
+    msger->tid = __xapi->thread_create(msger_loop, msger);
     __xcheck(msger->tid == NULL);
 
     __xlogd("xmsger_create exit\n");
@@ -1248,10 +1266,10 @@ void xmsger_free(xmsger_ptr *pptr)
     __xlogd("xmsger_free exit\n");
 }
 
-bool xchannel_get_keepalive(xchannel_ptr channel)
-{
-    return channel->keepalive;
-}
+// bool xchannel_get_keepalive(xchannel_ptr channel)
+// {
+//     return channel->keepalive;
+// }
 
 const char* xchannel_get_ip(xchannel_ptr channel)
 {

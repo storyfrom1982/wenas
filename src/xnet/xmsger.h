@@ -40,7 +40,6 @@ extern bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_send(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
 
-extern bool xchannel_get_keepalive(xchannel_ptr channel);
 extern const char* xchannel_get_ip(xchannel_ptr channel);
 extern uint16_t xchannel_get_port(xchannel_ptr channel);
 extern void* xchannel_get_ctx(xchannel_ptr channel);

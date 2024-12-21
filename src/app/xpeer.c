@@ -21,8 +21,8 @@ static inline xline_t* xpeer_make_res(xpeer_t *peer, xline_t *req)
     req->wpos = 0;
     __xmsg_set_cb(req, NULL);
     peer->parser = xl_parser(&req->data);
-    __xcheck((req->id = xl_find_uint(&peer->parser, "mid")) == EENDED);
-    __xcheck(xl_add_uint(&req, "mid", req->id) == EENDED);
+    __xcheck((req->id = xl_find_uint(&peer->parser, "rid")) == EENDED);
+    __xcheck(xl_add_uint(&req, "rid", req->id) == EENDED);
     xl_hold(req);
     return req;
 XClean:
