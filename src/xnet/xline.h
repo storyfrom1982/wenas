@@ -544,7 +544,7 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
                 xl_format(xd, (const char*)parser.key, depth + 1, buf, pos, size);
             }else if (__xl_typeis_list(xd)){
 
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: [\n", (depth + 1) * 4, parser.key);
                 xline_t xllist = xl_parser(xd);
 
                 while ((xd = xl_list_next(&xllist)) != NULL){
@@ -562,14 +562,14 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
                         xl_format(xd, "", depth + 1, buf, pos, size);
                     }
                 }
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s},\n", depth * 4, "");
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s],\n", depth * 4, "");
 
             }
         }
 
     }else if (__xl_typeis_list(xd)){
 
-        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: {\n", (depth + 1) * 4, parser.key);
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: [\n", (depth + 1) * 4, parser.key);
         xline_t xllist = xl_parser(xd);
 
         while ((xd = xl_list_next(&xllist)) != NULL){
@@ -587,7 +587,7 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
                 xl_format(xd, "", depth + 1, buf, pos, size);
             }
         }
-        *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s},\n", depth * 4, "");
+        *pos += __xapi->snprintf(buf + *pos, size - *pos, "  %*s],\n", depth * 4, "");
     }
 
     if (depth == 1){
@@ -672,7 +672,7 @@ static xline_t* xl_test(int count)
 
     xl_add_obj(&xl, "addlist", &xlist->data);
     
-    xl_printf(&xl->data);
+    // xl_printf(&xl->data);
 
     // xl_free(&xl);
     xl_free(&xobj);

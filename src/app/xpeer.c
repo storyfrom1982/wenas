@@ -82,8 +82,9 @@ static int api_echo(xline_t *msg, xapi_ctx_ptr peer)
     __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
-    uint8_t uuid[8192];
-    xl_add_bin(&res, "uuid", uuid, 8192);
+    xline_t *test = xl_test(10);
+    xl_add_obj(&msg, "test", &test->data);
+    xl_free(&test);
     xl_add_uint(&res, "code", 200);
     // TODO 这里有可能会阻塞，xpeer 需要运行自己的线程
     xltp_respose(peer->xltp, res);
@@ -138,8 +139,9 @@ int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
     __xmsg_set_ipaddr(msg, addr);
     xl_add_word(&msg, "host", host);
     xl_add_uint(&msg, "port", port);    
-    uint8_t uuid[8192];
-    xl_add_bin(&msg, "uuid", uuid, 8192);
+    xline_t *test = xl_test(10);
+    xl_add_obj(&msg, "test", &test->data);
+    xl_free(&test);
     __xcheck(xltp_request(peer->xltp, msg) != 0);
     return 0;
 XClean:
