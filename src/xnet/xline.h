@@ -549,15 +549,15 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
 
                 while ((xd = xl_list_next(&xllist)) != NULL){
                     if (__xl_typeis_int(xd)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*ld,\n", depth * 4, __xl_b2i(xd));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*ld,\n", (depth + 1) * 4, __xl_b2i(xd));
                     }else if (__xl_typeis_uint(xd)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lu,\n", depth * 4, __xl_b2u(xd));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lu,\n", (depth + 1) * 4, __xl_b2u(xd));
                     }else if (__xl_typeis_real(xd)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", depth * 4, __xl_b2f(xd));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", (depth + 1) * 4, __xl_b2f(xd));
                     }else if (__xl_typeis_str(xd)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_b2o(xd));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_b2o(xd));
                     }else if (__xl_typeis_bin(xd)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: size[%lu],\n", (depth + 1) * 4, parser.key, __xl_sizeof_body(xd));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    bin,\n");
                     }else if (__xl_typeis_obj(xd)){
                         xl_format(xd, "", depth + 1, buf, pos, size);
                     }
@@ -574,15 +574,15 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
 
         while ((xd = xl_list_next(&xllist)) != NULL){
             if (__xl_typeis_int(xd)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*ld,\n", depth * 4, __xl_b2i(xd));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*ld,\n", (depth + 1) * 4, __xl_b2i(xd));
             }else if (__xl_typeis_uint(xd)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lu,\n", depth * 4, __xl_b2u(xd));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lu,\n", (depth + 1) * 4, __xl_b2u(xd));
             }else if (__xl_typeis_real(xd)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", depth * 4, __xl_b2f(xd));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", (depth + 1) * 4, __xl_b2f(xd));
             }else if (__xl_typeis_str(xd)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_b2o(xd));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_b2o(xd));
             }else if (__xl_typeis_bin(xd)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: size[%lu],\n", (depth + 1) * 4, parser.key, __xl_sizeof_body(xd));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    bin,\n");
             }else if (__xl_typeis_obj(xd)){
                 xl_format(xd, "", depth + 1, buf, pos, size);
             }
@@ -615,7 +615,7 @@ static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64
 
 static xline_t* xl_test(int count)
 {
-    xline_t *xobj, *xlist;
+    xline_t *xobj, *xlist, *xstrlist;
     xline_t *xl = xl_maker();
     char bin[1024];
     xl_add_word(&xl, "api", "test");
@@ -672,7 +672,20 @@ static xline_t* xl_test(int count)
 
     xl_add_obj(&xl, "addlist", &xlist->data);
     
-    // xl_printf(&xl->data);
+
+    xstrlist = xl_maker();
+    for (int i = 0; i < 10; ++i){
+        char str[64] = {0};
+        uint64_t len = slength("hello") + 1;
+        *((xdata_t*)(str)) = __xl_n2b(len, XLINE_TYPE_STR);
+        mcopy(str + 9, "hello", len);
+        xl_list_add(&xstrlist, (xdata_t*)str);
+    }
+    // xl_printf(&xstrlist->data);
+
+    xl_add_obj(&xl, "strlist", &xstrlist->data);
+
+    xl_printf(&xl->data);
 
     // xl_free(&xl);
     xl_free(&xobj);
