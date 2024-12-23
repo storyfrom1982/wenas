@@ -923,14 +923,14 @@ static void msger_loop(void *ptr)
     __xcheck(rpack == NULL);
     rpack->head.len = 0;
 
-    msger->timer = 10000000UL; // 10 毫秒
+    msger->timer = 100000000UL; // 10 毫秒
 
     while (msger->running)
     {
     for (sid = 0; sid < 2; sid++)
     {
         addr = addrs[sid];
-        ((uint64_t*)addr)[0] = ((uint64_t*)addr)[1] = ((uint64_t*)addr)[2] = 0;
+        // ((uint64_t*)addr)[0] = ((uint64_t*)addr)[1] = ((uint64_t*)addr)[2] = 0;
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
             if (rpack->head.type == XPACK_TYPE_LOCAL){
@@ -1120,7 +1120,7 @@ XClean:
     return false;
 }
 
-static inline int unicid_compare(const void *a, const void *b)
+static inline int unicid_comp(const void *a, const void *b)
 {
     uint64_t *x = &((xchannel_ptr)a)->ucid[0];
     uint64_t *y = &((xchannel_ptr)b)->ucid[0];
@@ -1183,7 +1183,7 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port)
     msger->sendlist.head.prev = &msger->sendlist.head;
     msger->sendlist.head.next = &msger->sendlist.head;
 
-    avl_tree_init(&msger->peers, unicid_compare, unicid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
+    avl_tree_init(&msger->peers, unicid_comp, unicid_find, sizeof(struct xchannel), AVL_OFFSET(struct xchannel, node));
 
     msger->tid = __xapi->thread_create(msger_loop, msger);
     __xcheck(msger->tid == NULL);

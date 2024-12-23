@@ -132,7 +132,7 @@ XClean:
 
 int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
 {
-    xline_t *msg = xltp_make_req(peer->xltp, "echoo", res_echo);
+    xline_t *msg = xltp_make_req(peer->xltp, "echo", res_echo);
     __xcheck(msg == NULL);
     __xipaddr_ptr addr = __xapi->udp_host_to_addr(host, port);
     __xmsg_set_ipaddr(msg, addr);

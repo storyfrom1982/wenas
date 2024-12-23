@@ -33,7 +33,7 @@ typedef struct xltp {
 
 }xltp_t;
 
-static inline int msgid_compare(const void *a, const void *b)
+static inline int msgid_comp(const void *a, const void *b)
 {
 	return ((xline_t*)a)->id - ((xline_t*)b)->id;
 }
@@ -72,7 +72,7 @@ XClean:
     return NULL;
 }
 
-inline static void xpeer_add_req(xltp_t *xltp, xline_t *msg)
+inline static void xltp_add_req(xltp_t *xltp, xline_t *msg)
 {
     xl_hold(msg);
     msg->next = xltp->msglist.next;
@@ -82,12 +82,12 @@ inline static void xpeer_add_req(xltp_t *xltp, xline_t *msg)
     avl_tree_add(&xltp->msgid_table, msg);
 }
 
-inline static xline_t* xpeer_find_req(xltp_t *xltp, uint64_t rid)
+inline static xline_t* xltp_find_req(xltp_t *xltp, uint64_t rid)
 {
     return avl_tree_find(&xltp->msgid_table, &rid);
 }
 
-inline static void xpeer_del_req(xltp_t *xltp, xline_t *msg)
+inline static void xltp_del_req(xltp_t *xltp, xline_t *msg)
 {
     avl_tree_remove(&xltp->msgid_table, msg);
     msg->prev->next = msg->next;
@@ -154,12 +154,12 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
     xltp->parser = xl_parser(&msg->data);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == EENDED);
-    req = xpeer_find_req(xltp, rid);
+    req = xltp_find_req(xltp, rid);
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
     cb(msg, xltp->ctx);
-    xpeer_del_req(xltp, req);
+    xltp_del_req(xltp, req);
     return 0;
 XClean:
     return -1;
@@ -192,7 +192,7 @@ static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 {
     xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
     if (msg->type == XPACK_TYPE_REQ){
-        xpeer_del_req(xltp, msg);
+        xltp_del_req(xltp, msg);
     }
     xl_free(&msg);
     return 0;
@@ -201,7 +201,7 @@ static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 static inline int xltp_send(xltp_t *xltp, xline_t *msg)
 {
     if (__xmsg_get_cb(msg) != NULL){
-        xpeer_add_req(xltp, msg);
+        xltp_add_req(xltp, msg);
     }
     if (msg->type == XPACK_TYPE_REQ){
         xmsger_connect(xltp->msger, msg, msg);
@@ -230,18 +230,18 @@ static void xltp_loop(void *ptr)
 
             xltp_back(xltp, msg);
 
-        }else if(msg->flag == XMSG_FLAG_TIMEDOUT){
-
-            xltp_timedout(xltp, msg);
-
         }else if(msg->flag == XMSG_FLAG_SEND){
 
             xltp_send(xltp, msg);
 
+        }else if(msg->flag == XMSG_FLAG_TIMEDOUT){
+
+            xltp_timedout(xltp, msg);
+
         }else if(msg->flag == XMSG_FLAG_BOOT){
 
             if (__xmsg_get_cb(msg) != NULL){
-                xpeer_add_req(xltp, msg);
+                xltp_add_req(xltp, msg);
             }
             __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
             // __xapi->udp_addr_to_host(addr, xltp->ip, &xltp->port);
@@ -319,7 +319,7 @@ xltp_t* xltp_create(xapi_ctx_ptr ctx)
     xltp->msglist.prev = &xltp->msglist;
     xltp->msglist.next = &xltp->msglist;
 
-    avl_tree_init(&xltp->msgid_table, msgid_compare, msgid_find, sizeof(xline_t), AVL_OFFSET(xline_t, node));
+    avl_tree_init(&xltp->msgid_table, msgid_comp, msgid_find, sizeof(xline_t), AVL_OFFSET(xline_t, node));
 
     xltp->mpipe = xpipe_create(sizeof(void*) * 1024, "RECV PIPE");
     __xcheck(xltp->mpipe == NULL);
@@ -364,6 +364,15 @@ void xltp_free(xltp_t **pptr)
                 xl_free(&msg);
             }
             xpipe_free(&xltp->mpipe);
+        }
+
+        xline_t *next, *msg = xltp->msglist.next;
+        while (msg != &xltp->msglist){
+            next = msg->next;
+            msg->prev->next = msg->next;
+            msg->next->prev = msg->prev;
+            xl_free(&msg);
+            msg = next;
         }
 
         avl_tree_clear(&xltp->msgid_table, NULL);
