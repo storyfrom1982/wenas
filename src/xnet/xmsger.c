@@ -736,8 +736,8 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         __xcheck(xmsg_fixed(msg) != 0);
 
-        channel->ctx = __xmsg_get_xltp(msg);
         channel->addr = __xmsg_get_ipaddr(msg);
+        channel->ctx = __xmsg_get_channel(msg);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
             channel->sock = channel->msger->sock[1];
@@ -882,17 +882,16 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
-                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
-                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                         if (channel->ctx != NULL){
                             if (channel->msg != NULL){
-                                __xmsg_set_xltp(channel->msg, channel->ctx);
+                                __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                                        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                                 msger->cb->on_message_timeout(msger->cb, channel, channel->msg);
                                 channel->msg = NULL;
                             }else {
-                                xline_t *msg = xl_maker();
-                                __xmsg_set_xltp(msg, channel->ctx);
-                                msger->cb->on_message_timeout(msger->cb, channel, msg);
+                                __xlogd("REQ TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                                        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
+                                msger->cb->on_message_timeout(msger->cb, channel, (xline_t*)channel->ctx);
                             }
                         }else {
                             xchannel_free(channel);
@@ -1105,10 +1104,11 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, xline_t *msg)
+bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(msg == NULL);
+    __xmsg_set_channel(msg, ctx);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = msg->type;
@@ -1249,11 +1249,6 @@ void xmsger_free(xmsger_ptr *pptr)
 
     __xlogd("xmsger_free exit\n");
 }
-
-// bool xchannel_get_keepalive(xchannel_ptr channel)
-// {
-//     return channel->keepalive;
-// }
 
 const char* xchannel_get_ip(xchannel_ptr channel)
 {

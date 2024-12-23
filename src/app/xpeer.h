@@ -3,6 +3,7 @@
 
 #include "xnet/xmsg.h"
 
+typedef struct xapi_ctx xpeer_t;
 
 int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port);
 int xpeer_bootstrap(xpeer_t *peer);

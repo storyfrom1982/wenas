@@ -12,7 +12,6 @@
 #define XPACK_TYPE_HELLO    0x03
 #define XPACK_TYPE_MSG      0x04
 #define XPACK_TYPE_BYE      0x05
-// #define XPACK_TYPE_ONL      0x06
 #define XPACK_TYPE_FLUSH    0xF0
 #define XPACK_TYPE_LOCAL    0xF1
 
@@ -23,19 +22,15 @@ typedef struct xchannel* xchannel_ptr;
 
 typedef struct xmsgercb {
     void *ctx;
-    // void (*on_connection_to_peer)(struct xmsgercb*, xchannel_ptr channel);
-    // void (*on_connection_from_peer)(struct xmsgercb*, xchannel_ptr channel);
-    int (*on_message_from_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
     int (*on_message_to_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
+    int (*on_message_from_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
     int (*on_message_timeout)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
-    // void (*on_disconnection)(struct xmsgercb*, xchannel_ptr channel);
-    
 }*xmsgercb_ptr;
 
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port);
 extern void xmsger_free(xmsger_ptr *pptr);
-extern bool xmsger_connect(xmsger_ptr msger, xline_t *msg);
+extern bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg);
 extern bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_send(xmsger_ptr msger, xline_t *msg);
 extern bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
