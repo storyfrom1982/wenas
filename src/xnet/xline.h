@@ -687,7 +687,7 @@ static xline_t* xl_test(int count)
 
     xl_printf(&xl->data);
 
-    // xl_free(&xl);
+    xl_free(&xstrlist);
     xl_free(&xobj);
     xl_free(&xlist);
 

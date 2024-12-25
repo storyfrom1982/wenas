@@ -95,7 +95,7 @@ inline static void xltp_del_req(xltp_t *xltp, xline_t *msg)
     xl_free(&msg);
 }
 
-static int on_message_timeout(xmsgercb_ptr cb, xchannel_ptr channel, xline_t *msg)
+static int on_message_timedout(xmsgercb_ptr cb, xchannel_ptr channel, xline_t *msg)
 {
     __xcheck(channel == NULL);
     msg->flag = XMSG_FLAG_TIMEDOUT;
@@ -314,7 +314,7 @@ xltp_t* xltp_create(xapi_ctx_ptr ctx)
     listener->ctx = xltp;
     listener->on_message_to_peer = on_message_to_peer;
     listener->on_message_from_peer = on_message_from_peer;
-    listener->on_message_timeout = on_message_timeout;
+    listener->on_message_timedout = on_message_timedout;
 
     xltp->msglist.prev = &xltp->msglist;
     xltp->msglist.next = &xltp->msglist;

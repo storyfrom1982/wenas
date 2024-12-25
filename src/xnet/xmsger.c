@@ -835,7 +835,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                                 channel->timedout = true;
                                 __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                                msger->cb->on_message_timeout(msger->cb, channel, spack->msg);
+                                msger->cb->on_message_timedout(msger->cb, channel, spack->msg);
                             }
                             break;
 
@@ -886,12 +886,12 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             if (channel->msg != NULL){
                                 __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                                msger->cb->on_message_timeout(msger->cb, channel, channel->msg);
+                                msger->cb->on_message_timedout(msger->cb, channel, channel->msg);
                                 channel->msg = NULL;
                             }else {
                                 __xlogd("REQ TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                                msger->cb->on_message_timeout(msger->cb, channel, (xline_t*)channel->ctx);
+                                msger->cb->on_message_timedout(msger->cb, channel, (xline_t*)channel->ctx);
                             }
                         }else {
                             xchannel_free(channel);

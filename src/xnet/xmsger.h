@@ -24,7 +24,7 @@ typedef struct xmsgercb {
     void *ctx;
     int (*on_message_to_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
     int (*on_message_from_peer)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
-    int (*on_message_timeout)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
+    int (*on_message_timedout)(struct xmsgercb*, xchannel_ptr channel, xline_t *msg);
 }*xmsgercb_ptr;
 
 
