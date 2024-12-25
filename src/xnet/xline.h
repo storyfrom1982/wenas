@@ -125,8 +125,7 @@ typedef struct xline {
     uint64_t id;
     uint8_t type;
     uint8_t flag;
-    // void *cb, *ctx;
-    void *args[4];
+    void *ctx[4];
     struct avl_node node;
     struct xline *prev, *next;
     uint64_t spos, range;
@@ -145,7 +144,7 @@ static inline xline_t* xl_creator(uint64_t size)
     obj->size = size;
     obj->wpos = 0;
     obj->rpos = 0;
-    obj->args[0] = obj->args[1] = obj->args[2] = obj->args[3] = NULL;
+    obj->ctx[0] = obj->ctx[1] = obj->ctx[2] = obj->ctx[3] = NULL;
     obj->prev = obj->next = NULL;
     obj->ptr = obj->data.b + XDATA_SIZE;
     return obj;
@@ -685,7 +684,7 @@ static xline_t* xl_test(int count)
 
     xl_add_obj(&xl, "strlist", &xstrlist->data);
 
-    xl_printf(&xl->data);
+    // xl_printf(&xl->data);
 
     xl_free(&xstrlist);
     xl_free(&xobj);

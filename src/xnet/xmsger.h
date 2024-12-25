@@ -18,6 +18,7 @@
 
 typedef struct xmsger* xmsger_ptr;
 typedef struct xchannel* xchannel_ptr;
+typedef struct xchannel_ctx* xchannel_ctx_ptr;
 
 
 typedef struct xmsgercb {
@@ -30,9 +31,9 @@ typedef struct xmsgercb {
 
 extern xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port);
 extern void xmsger_free(xmsger_ptr *pptr);
-extern bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg);
-extern bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg);
-extern bool xmsger_send(xmsger_ptr msger, xline_t *msg);
+extern bool xmsger_connect(xmsger_ptr msger, xchannel_ctx_ptr ctx, xline_t *msg);
+extern bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
+extern bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg);
 extern bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
 
 extern const char* xchannel_get_ip(xchannel_ptr channel);

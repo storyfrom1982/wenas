@@ -12,15 +12,15 @@
 typedef struct xapi_ctx* xapi_ctx_ptr;
 typedef int(*xapi_cb_ptr)(xline_t *msg, xapi_ctx_ptr ctx);
 
-#define __xmsg_get_cb(msg)                  (xapi_cb_ptr)(msg)->args[0]
-#define __xmsg_get_ctx(msg)                 (xapi_ctx_ptr)(msg)->args[1]
-#define __xmsg_get_ipaddr(msg)              (__xipaddr_ptr)(msg)->args[2]
-#define __xmsg_get_channel(msg)             (xchannel_ptr)(msg)->args[3]
+#define __xmsg_get_cb(msg)                  (xapi_cb_ptr)(msg)->ctx[0]
+#define __xmsg_get_ctx(msg)                 (xapi_ctx_ptr)(msg)->ctx[1]
+#define __xmsg_get_ipaddr(msg)              (__xipaddr_ptr)(msg)->ctx[2]
+#define __xmsg_get_channel(msg)             (xchannel_ptr)(msg)->ctx[3]
 
-#define __xmsg_set_cb(msg, cb)              (msg)->args[0] = (cb)
-#define __xmsg_set_ctx(msg, ctx)            (msg)->args[1] = (ctx)
-#define __xmsg_set_ipaddr(msg, addr)        (msg)->args[2] = (addr)
-#define __xmsg_set_channel(msg, channel)    (msg)->args[3] = (channel)
+#define __xmsg_set_cb(msg, cb)              (msg)->ctx[0] = (cb)
+#define __xmsg_set_ctx(msg, ctx)            (msg)->ctx[1] = (ctx)
+#define __xmsg_set_ipaddr(msg, addr)        (msg)->ctx[2] = (addr)
+#define __xmsg_set_channel(msg, channel)    (msg)->ctx[3] = (channel)
 
 
 

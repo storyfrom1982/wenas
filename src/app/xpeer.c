@@ -116,7 +116,7 @@ XClean:
 
 static int req_hello(xpeer_t *peer)
 {
-    xline_t *msg = xltp_make_req(peer->xltp, "hello", res_hello);
+    xline_t *msg = xltp_make_req(peer->xltp, "hello", res_hello, peer);
     __xcheck(msg == NULL);
     xl_add_word(&msg, "host", peer->ip);
     xl_add_uint(&msg, "port", peer->port);
@@ -133,7 +133,7 @@ XClean:
 
 int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
 {
-    xline_t *msg = xltp_make_req(peer->xltp, "echo", res_echo);
+    xline_t *msg = xltp_make_req(peer->xltp, "echo", res_echo, peer);
     __xcheck(msg == NULL);
     __xipaddr_ptr addr = __xapi->udp_host_to_addr(host, port);
     __xmsg_set_ipaddr(msg, addr);
@@ -153,7 +153,7 @@ XClean:
 
 int xpeer_bootstrap(xpeer_t *peer)
 {
-    xline_t *msg = xltp_make_req(peer->xltp, "boot", res_boot);
+    xline_t *msg = xltp_make_req(peer->xltp, "boot", res_boot, peer);
     __xcheck(msg == NULL);
     uint8_t uuid[32];
     xl_add_bin(&msg, "uuid", uuid, 32);

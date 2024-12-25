@@ -1052,12 +1052,11 @@ XClean:
     __xlogd("xmsger_loop exit\n");
 }
 
-bool xmsger_send(xmsger_ptr msger, xline_t *msg)
+bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
 {
     __xcheck(msger == NULL);
-    __xcheck(msg == NULL);
-    xchannel_ptr channel = __xmsg_get_channel(msg);
     __xcheck(channel == NULL);
+    __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
         msg->type = XPACK_TYPE_MSG;
         __xcheck(xmsg_fixed(msg) != 0);
@@ -1088,10 +1087,12 @@ XClean:
     return false;
 }
 
-bool xmsger_disconnect(xmsger_ptr msger, xline_t *msg)
+bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
 {
     __xcheck(msger == NULL);
+    __xcheck(channel == NULL);
     __xcheck(msg == NULL);
+    __xmsg_set_channel(msg, channel);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = msg->type;
@@ -1104,7 +1105,7 @@ XClean:
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, void *ctx, xline_t *msg)
+bool xmsger_connect(xmsger_ptr msger, xchannel_ctx_ptr ctx, xline_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(msg == NULL);

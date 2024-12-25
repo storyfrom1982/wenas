@@ -56,11 +56,12 @@ static inline int msgid_find(const void *a, const void *b)
 //     return NULL;
 // }
 
-xline_t* xltp_make_req(xltp_t *xltp, const char *api, xapi_cb_ptr cb)
+xline_t* xltp_make_req(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
     __xmsg_set_cb(msg, cb);
+    __xmsg_set_ctx(msg, ctx);
     msg->id = __atom_add(xltp->rid, 1);
     __xcheck(xl_add_word(&msg, "api", api) == EENDED);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == EENDED);
@@ -151,6 +152,7 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
     static uint64_t rid;
     static xline_t *req;
     static xapi_cb_ptr cb;
+    static xapi_ctx_ptr ctx;
     xltp->parser = xl_parser(&msg->data);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == EENDED);
@@ -158,7 +160,8 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
-    cb(msg, xltp->ctx);
+    ctx = __xmsg_get_ctx(req);
+    cb(msg, ctx);
     xltp_del_req(xltp, req);
     return 0;
 XClean:
@@ -204,9 +207,9 @@ static inline int xltp_send(xltp_t *xltp, xline_t *msg)
         xltp_add_req(xltp, msg);
     }
     if (msg->type == XPACK_TYPE_REQ){
-        xmsger_connect(xltp->msger, msg, msg);
+        xmsger_connect(xltp->msger, (xchannel_ctx_ptr)msg, msg);
     }else if (msg->type == XPACK_TYPE_RES){
-        xmsger_disconnect(xltp->msger, msg);
+        xmsger_disconnect(xltp->msger, __xmsg_get_channel(msg), msg);
     }
     return 0;
 }
@@ -247,7 +250,7 @@ static void xltp_loop(void *ptr)
             // __xapi->udp_addr_to_host(addr, xltp->ip, &xltp->port);
             // __xlogd("bootstrap %s:%u\n", xltp->ip, xltp->port);
             __xmsg_set_ipaddr(msg, addr);
-            xmsger_connect(xltp->msger, msg, msg);
+            xmsger_connect(xltp->msger, (xchannel_ctx_ptr)msg, msg);
         }
     }
 
