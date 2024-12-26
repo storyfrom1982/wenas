@@ -105,12 +105,12 @@ XClean:
     return;
 }
 
-bool __xmutex_trylock(__xmutex_ptr ptr)
+static int __xmutex_trylock(__xmutex_ptr ptr)
 {
     __xcheck(ptr == NULL);
     return uv_mutex_trylock(ptr->mutex) == 0;
 XClean:
-    return false;
+    return 0;
 }
 
 static void __xmutex_notify(__xmutex_ptr ptr)
@@ -278,7 +278,7 @@ static int __fs_mkpath(const char* path)
         return -1;
     }
 
-    bool ret = true;
+    int ret = 0;
     uint64_t len = strlen(path);
 
     if (!__fs_isdir(path)){
@@ -431,7 +431,7 @@ XClean:
     return NULL;
 }
 
-bool udp_addr_is_ipv6(__xipaddr_ptr addr)
+int udp_addr_is_ipv6(__xipaddr_ptr addr)
 {
     return ((struct sockaddr*)addr)->sa_family == AF_INET6;
 }

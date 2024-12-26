@@ -50,7 +50,7 @@ typedef struct __xapi_enter {
     __xmutex_ptr (*mutex_create)();
     void (*mutex_free)(__xmutex_ptr mutex);
     void (*mutex_lock)(__xmutex_ptr mutex);
-    bool (*mutex_trylock)(__xmutex_ptr mutex);
+    int (*mutex_trylock)(__xmutex_ptr mutex);
     void (*mutex_unlock)(__xmutex_ptr mutex);
     void (*mutex_wait)(__xmutex_ptr mutex);
     int (*mutex_timedwait)(__xmutex_ptr mutex, uint64_t delay);
@@ -71,7 +71,7 @@ typedef struct __xapi_enter {
     int (*udp_listen)(int sock[2], uint64_t microseconds);
     int (*udp_addrinfo)(char ip[__XAPI_IP_STR_LEN], const char *name);
     int (*udp_addr_to_host)(const __xipaddr_ptr addr, char* ip, uint16_t* port);
-    bool (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
+    int (*udp_addr_is_ipv6)(const __xipaddr_ptr addr);
     __xipaddr_ptr (*udp_any_to_addr)(int ipv6, uint16_t port);
     __xipaddr_ptr (*udp_host_to_addr)(const char *ip, uint16_t port);
     __xipaddr_ptr (*udp_addr_dump)(const __xipaddr_ptr addr);
