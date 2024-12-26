@@ -9,11 +9,11 @@
 #define XMSG_FLAG_TIMEDOUT      0x03
 #define XMSG_FLAG_BOOT          0x04
 
-typedef struct xapi_ctx* xapi_ctx_ptr;
-typedef int(*xapi_cb_ptr)(xline_t *msg, xapi_ctx_ptr ctx);
+typedef struct xmsg_ctx* xmsg_ctx_ptr;
+typedef int(*xmsg_cb_ptr)(xline_t *msg, xmsg_ctx_ptr ctx);
 
-#define __xmsg_get_cb(msg)                  (xapi_cb_ptr)(msg)->ctx[0]
-#define __xmsg_get_ctx(msg)                 (xapi_ctx_ptr)(msg)->ctx[1]
+#define __xmsg_get_cb(msg)                  (xmsg_cb_ptr)(msg)->ctx[0]
+#define __xmsg_get_ctx(msg)                 (xmsg_ctx_ptr)(msg)->ctx[1]
 #define __xmsg_get_ipaddr(msg)              (__xipaddr_ptr)(msg)->ctx[2]
 #define __xmsg_get_channel(msg)             (xchannel_ptr)(msg)->ctx[3]
 

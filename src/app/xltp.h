@@ -7,13 +7,14 @@
 
 typedef struct xltp xltp_t;
 
-xline_t* xltp_make_req(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx);
-
 int xltp_request(xltp_t *xltp, xline_t *msg);
 int xltp_respose(xltp_t *xltp, xline_t *msg);
-int xltp_register(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx);
+
+xline_t* xltp_make_req(xltp_t *xltp, const char *api, xmsg_cb_ptr cb, xmsg_ctx_ptr ctx);
+int xltp_make_api(xltp_t *xltp, const char *api, xmsg_cb_ptr cb, xmsg_ctx_ptr ctx);
+
 int xltp_bootstrap(xltp_t *xltp, xline_t *msg);
-xltp_t* xltp_create(xapi_ctx_ptr ctx);
+xltp_t* xltp_create(xmsg_ctx_ptr ctx);
 void xltp_free(xltp_t **pptr);
 
 

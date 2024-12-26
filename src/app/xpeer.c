@@ -4,7 +4,7 @@
 
 #include "xltp.h"
 
-typedef struct xapi_ctx {
+typedef struct xmsg_ctx {
     bool running;
     xltp_t *xltp;
     uint16_t port;
@@ -29,23 +29,14 @@ XClean:
     return NULL;
 }
 
-static int res_hello(xline_t *res, xapi_ctx_ptr peer)
+static int res_hello(xline_t *res, xmsg_ctx_ptr peer)
 {
     peer->parser = xl_parser(&res->data);
     xl_printf(&res->data);
     return 0;
 }
 
-static int res_echo(xline_t *res, xapi_ctx_ptr peer)
-{
-    peer->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
-    return 0;
-XClean:
-    return -1;
-}
-
-static int res_boot(xline_t *res, xapi_ctx_ptr peer)
+static int res_echo(xline_t *res, xmsg_ctx_ptr peer)
 {
     peer->parser = xl_parser(&res->data);
     xl_printf(&res->data);
@@ -54,7 +45,16 @@ XClean:
     return -1;
 }
 
-static int api_hello(xline_t *msg, xapi_ctx_ptr peer)
+static int res_boot(xline_t *res, xmsg_ctx_ptr peer)
+{
+    peer->parser = xl_parser(&res->data);
+    xl_printf(&res->data);
+    return 0;
+XClean:
+    return -1;
+}
+
+static int api_hello(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
@@ -73,7 +73,7 @@ XClean:
     return -1;
 }
 
-static int api_echo(xline_t *msg, xapi_ctx_ptr peer)
+static int api_echo(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
@@ -93,7 +93,7 @@ XClean:
     return -1;
 }
 
-static int api_boot(xline_t *msg, xapi_ctx_ptr peer)
+static int api_boot(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
@@ -171,9 +171,9 @@ xpeer_t* xpeer_create()
     xpeer_t *peer = (xpeer_t*)calloc(1, sizeof(xpeer_t));
     __xcheck(peer == NULL);
     peer->xltp = xltp_create(peer);
-    __xcheck(xltp_register(peer->xltp, "echo", api_echo, peer) != 0);
-    __xcheck(xltp_register(peer->xltp, "hello", api_hello, peer) != 0);
-    __xcheck(xltp_register(peer->xltp, "boot", api_boot, peer) != 0);
+    __xcheck(xltp_make_api(peer->xltp, "echo", api_echo, peer) != 0);
+    __xcheck(xltp_make_api(peer->xltp, "hello", api_hello, peer) != 0);
+    __xcheck(xltp_make_api(peer->xltp, "boot", api_boot, peer) != 0);
     return peer;
 XClean:
     if (peer){

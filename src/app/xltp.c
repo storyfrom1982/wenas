@@ -8,14 +8,14 @@
 #include <xnet/xbuf.h>
 #include <xlib/avlmini.h>
 
-// typedef struct xapi_ctx {
+// typedef struct xmsg_ctx {
 //     struct xltp *xltp;
 //     xchannel_ptr channel;
 // }xmsg_ctx_t;
 
 typedef struct xltp_api {
-    xapi_cb_ptr cb;
-    xapi_ctx_ptr ctx;
+    xmsg_cb_ptr cb;
+    xmsg_ctx_ptr ctx;
 }xltp_api_t;
 
 typedef struct xltp {
@@ -23,7 +23,7 @@ typedef struct xltp {
     char ip[46];
     __atom_bool runnig;
     __atom_size rid;
-    xapi_ctx_ptr ctx;
+    xmsg_ctx_ptr ctx;
     xline_t parser;
     // __xipaddr_ptr addr;
     xmsger_ptr msger;
@@ -61,7 +61,7 @@ static inline int msgid_find(const void *a, const void *b)
 //     return NULL;
 // }
 
-xline_t* xltp_make_req(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx)
+xline_t* xltp_make_req(xltp_t *xltp, const char *api, xmsg_cb_ptr cb, xmsg_ctx_ptr ctx)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
@@ -156,8 +156,8 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
 {
     static uint64_t rid;
     static xline_t *req;
-    static xapi_cb_ptr cb;
-    static xapi_ctx_ptr ctx;
+    static xmsg_cb_ptr cb;
+    static xmsg_ctx_ptr ctx;
     xltp->parser = xl_parser(&msg->data);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == EENDED);
@@ -299,7 +299,7 @@ XClean:
     return -1;
 }
 
-int xltp_register(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx)
+int xltp_make_api(xltp_t *xltp, const char *api, xmsg_cb_ptr cb, xmsg_ctx_ptr ctx)
 {
     __xcheck(xltp == NULL || api == NULL || cb == NULL || ctx == NULL);
     xltp_api_t *xapi = (xltp_api_t*)malloc(sizeof(xltp_api_t));
@@ -312,7 +312,7 @@ XClean:
     return -1;
 }
 
-xltp_t* xltp_create(xapi_ctx_ptr ctx)
+xltp_t* xltp_create(xmsg_ctx_ptr ctx)
 {
     xltp_t *xltp = (xltp_t*)calloc(1, sizeof(struct xltp));
 
