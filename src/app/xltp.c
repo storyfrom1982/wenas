@@ -13,6 +13,11 @@
 //     xchannel_ptr channel;
 // }xmsg_ctx_t;
 
+typedef struct xltp_api {
+    xapi_cb_ptr cb;
+    xapi_ctx_ptr ctx;
+}xltp_api_t;
+
 typedef struct xltp {
     uint16_t port;
     char ip[46];
@@ -135,13 +140,13 @@ XClean:
 static inline int recv_request(xltp_t *xltp, xline_t *msg)
 {
     static char *api;
-    static xapi_cb_ptr cb;
+    static xltp_api_t *xapi;
     xltp->parser = xl_parser(&msg->data);
     api = xl_find_word(&xltp->parser, "api");
     __xcheck(api == NULL);
-    cb = xtree_find(xltp->api, api, slength(api));
-    __xcheck(cb == NULL);
-    cb(msg, xltp->ctx);
+    xapi = xtree_find(xltp->api, api, slength(api));
+    __xcheck(xapi == NULL);
+    xapi->cb(msg, xapi->ctx);
     return 0;
 XClean:
     return -1;
@@ -294,10 +299,14 @@ XClean:
     return -1;
 }
 
-int xltp_register(xltp_t *xltp, const char *api, xapi_cb_ptr cb)
+int xltp_register(xltp_t *xltp, const char *api, xapi_cb_ptr cb, xapi_ctx_ptr ctx)
 {
-    __xcheck(xltp == NULL || api == NULL || cb == NULL);
-    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), cb) == NULL);
+    __xcheck(xltp == NULL || api == NULL || cb == NULL || ctx == NULL);
+    xltp_api_t *xapi = (xltp_api_t*)malloc(sizeof(xltp_api_t));
+    __xcheck(xapi == NULL);
+    xapi->cb = cb;
+    xapi->ctx = ctx;
+    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), xapi) == NULL);
     return 0;
 XClean:
     return -1;
@@ -339,6 +348,12 @@ XClean:
     return NULL;
 }
 
+static void xapi_clear(void *xapi)
+{
+    if (xapi){
+        free(xapi);
+    }
+}
 
 void xltp_free(xltp_t **pptr)
 {
@@ -381,7 +396,7 @@ void xltp_free(xltp_t **pptr)
         avl_tree_clear(&xltp->msgid_table, NULL);
 
         if (xltp->api){
-            xtree_clear(xltp->api, NULL);
+            xtree_clear(xltp->api, xapi_clear);
             xtree_free(&xltp->api);
         }
 

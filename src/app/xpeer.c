@@ -171,9 +171,9 @@ xpeer_t* xpeer_create()
     xpeer_t *peer = (xpeer_t*)calloc(1, sizeof(xpeer_t));
     __xcheck(peer == NULL);
     peer->xltp = xltp_create(peer);
-    __xcheck(xltp_register(peer->xltp, "echo", api_echo) != 0);
-    __xcheck(xltp_register(peer->xltp, "hello", api_hello) != 0);
-    __xcheck(xltp_register(peer->xltp, "boot", api_boot) != 0);
+    __xcheck(xltp_register(peer->xltp, "echo", api_echo, peer) != 0);
+    __xcheck(xltp_register(peer->xltp, "hello", api_hello, peer) != 0);
+    __xcheck(xltp_register(peer->xltp, "boot", api_boot, peer) != 0);
     return peer;
 XClean:
     if (peer){
