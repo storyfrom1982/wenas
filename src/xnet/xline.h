@@ -125,7 +125,7 @@ typedef struct xline {
     uint64_t id;
     uint8_t type;
     uint8_t flag;
-    void *ctx[4];
+    void *args[4];
     struct avl_node node;
     struct xline *prev, *next;
     uint64_t spos, range;
@@ -138,16 +138,16 @@ typedef struct xline {
 
 static inline xline_t* xl_creator(uint64_t size)
 {
-    xline_t* obj = (xline_t*)malloc(sizeof(xline_t) + size);
-    __xcheck(obj == NULL);
-    obj->ref = 1;
-    obj->size = size;
-    obj->wpos = 0;
-    obj->rpos = 0;
-    obj->ctx[0] = obj->ctx[1] = obj->ctx[2] = obj->ctx[3] = NULL;
-    obj->prev = obj->next = NULL;
-    obj->ptr = obj->data.b + XDATA_SIZE;
-    return obj;
+    xline_t* xl = (xline_t*)malloc(sizeof(xline_t) + size);
+    __xcheck(xl == NULL);
+    xl->ref = 1;
+    xl->size = size;
+    xl->wpos = 0;
+    xl->rpos = 0;
+    xl->args[0] = xl->args[1] = xl->args[2] = xl->args[3] = NULL;
+    xl->prev = xl->next = NULL;
+    xl->ptr = xl->data.b + XDATA_SIZE;
+    return xl;
 XClean:
     return NULL;
 }
@@ -165,6 +165,11 @@ static inline void xl_hold(xline_t *xl)
 static inline void xl_fixed(xline_t *xl)
 {
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+}
+
+static inline void xl_clear(xline_t *xl)
+{
+    xl->wpos = xl->rpos = 0;
 }
 
 static inline void xl_free(xline_t **pptr)

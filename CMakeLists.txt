@@ -68,7 +68,7 @@ set(kzx_sources
     src/xlib/xsha256.c
     src/xnet/uuid.c
     src/app/xltp.c
-    src/app/xpeer.c
+    # src/app/xpeer.c
 )
 
 set(kzx_defines "")

@@ -1,4 +1,4 @@
-#include "app/xpeer.h"
+#include "app/xltp.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
 
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
-    xpeer_t *peer = xpeer_create();
+    xltp_t *peer = xltp_create(1);
     __xcheck(peer == NULL);
 
 
@@ -46,10 +46,10 @@ int main(int argc, char *argv[])
         sscanf(input, "%s", command);
 
         if (strcmp(command, "echo") == 0) {
-            xpeer_echo(peer, ip, port);
+            xltp_echo(peer, ip, port);
 
         } else if (strcmp(command, "boot") == 0) {
-            xpeer_bootstrap(peer);
+            // xpeer_bootstrap(peer);
 
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
         mclear(command, 256);
     }
 
-    xpeer_free(&peer);
+    xltp_free(&peer);
 
     xlog_recorder_close();
 

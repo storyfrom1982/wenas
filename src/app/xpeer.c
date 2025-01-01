@@ -131,18 +131,33 @@ XClean:
     return -1;
 }
 
-int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
+int req_echo(xline_t *msg, xmsg_ctx_ptr ctx)
 {
-    xline_t *msg = xltp_make_req(peer->xltp, "echo", res_echo, peer);
-    __xcheck(msg == NULL);
-    __xipaddr_ptr addr = __xapi->udp_host_to_addr(host, port);
-    __xmsg_set_ipaddr(msg, addr);
-    xl_add_word(&msg, "host", host);
-    xl_add_uint(&msg, "port", port);    
+    xpeer_t *peer = (xpeer_t *)ctx;
+    xl_clear(msg);
+    __xmsg_set_cb(msg, res_echo);
+    __xmsg_set_ctx(msg, ctx);
+    xl_add_word(&msg, "api", "echo");
+    xl_add_uint(&msg, "rid", 0);
     xline_t *test = xl_test(10);
     xl_add_obj(&msg, "test", &test->data);
     xl_free(&test);
     __xcheck(xltp_request(peer->xltp, msg) != 0);
+    return 0;
+XClean:
+    return -1;
+}
+
+int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port)
+{
+    // xline_t *msg = xltp_make_req(peer->xltp, "echo", res_echo, peer);
+    xline_t *msg = xl_maker();
+    __xcheck(msg == NULL);
+    __xipaddr_ptr addr = __xapi->udp_host_to_addr(host, port);
+    __xmsg_set_ipaddr(msg, addr);
+    xl_add_ptr(&msg, "cb", req_echo);
+    xl_add_ptr(&msg, "ctx", peer);
+    xltp_post(peer->xltp, msg);
     return 0;
 XClean:
     if (msg != NULL){
@@ -171,9 +186,6 @@ xpeer_t* xpeer_create()
     xpeer_t *peer = (xpeer_t*)calloc(1, sizeof(xpeer_t));
     __xcheck(peer == NULL);
     peer->xltp = xltp_create(peer);
-    __xcheck(xltp_make_api(peer->xltp, "echo", api_echo, peer) != 0);
-    __xcheck(xltp_make_api(peer->xltp, "hello", api_hello, peer) != 0);
-    __xcheck(xltp_make_api(peer->xltp, "boot", api_boot, peer) != 0);
     return peer;
 XClean:
     if (peer){

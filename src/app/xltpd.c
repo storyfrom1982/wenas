@@ -1,18 +1,18 @@
-#include "xpeer.h"
+#include "xltp.h"
 #include <unistd.h>
 
 int main(int argc, char *argv[])
 {
     xlog_recorder_open("./tmp/xltpd/log", NULL);
 
-    xpeer_t *peer = xpeer_create();
+    xltp_t *peer = xltp_create(0);
     __xcheck(peer == NULL);
 
     while (1){
         sleep(1);
     }
 
-    xpeer_free(&peer);
+    xltp_free(&peer);
 
     xlog_recorder_close();
 

@@ -92,7 +92,6 @@ struct xchannel {
     uint16_t cid;
     uint64_t ucid[3];
     __xipaddr_ptr addr;
-    void *ctx;
 
     // bool keepalive;
     // bool connected;
@@ -101,7 +100,7 @@ struct xchannel {
     // __atom_bool disconnecting;
     __atom_size pos, len;
 
-    xline_t *msg;
+    xline_t *msg, *req;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -469,6 +468,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                     // 更新消息长度
                     xl_fixed(channel->msg);
                     // 通知用户已收到一个完整的消息
+                    __xmsg_set_ipaddr(channel->msg, channel->addr);
                     channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
                     channel->msg = NULL;
                     // 更新时间戳
@@ -736,8 +736,8 @@ static inline bool xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         __xcheck(xmsg_fixed(msg) != 0);
 
+        channel->req = msg;
         channel->addr = __xmsg_get_ipaddr(msg);
-        channel->ctx = __xmsg_get_channel(msg);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
             channel->sock = channel->msger->sock[1];
@@ -882,7 +882,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
-                        if (channel->ctx != NULL){
+                        if (channel->req != NULL){
                             if (channel->msg != NULL){
                                 __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
@@ -891,7 +891,7 @@ static inline void xmsger_send_all(xmsger_ptr msger)
                             }else {
                                 __xlogd("REQ TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                         __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                                msger->cb->on_message_timedout(msger->cb, channel, (xline_t*)channel->ctx);
+                                msger->cb->on_message_timedout(msger->cb, channel, channel->req);
                             }
                         }else {
                             xchannel_free(channel);
@@ -1052,7 +1052,7 @@ XClean:
     __xlogd("xmsger_loop exit\n");
 }
 
-bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
+int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
@@ -1064,13 +1064,13 @@ bool xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
         __atom_add(channel->len, msg->wpos);
         channel->msgbuf->buf[__serialbuf_wpos(channel->msgbuf)] = msg;
         __atom_add(channel->msgbuf->wpos, 1);
-        return true;
+        return 0;
     }
 XClean:
-    return false;
+    return -1;
 }
 
-bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
+int xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
 {
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
@@ -1082,43 +1082,40 @@ bool xmsger_flush(xmsger_ptr msger, xchannel_ptr channel)
     pack.len = 0;
     *((uint64_t*)(&pack.flags[8])) = (uint64_t)channel;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
-    return true;
+    return 0;
 XClean:
-    return false;
+    return -1;
 }
 
-bool xmsger_disconnect(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
+int xmsger_disconnect(xmsger_ptr msger, xline_t *msg)
 {
     __xcheck(msger == NULL);
-    __xcheck(channel == NULL);
     __xcheck(msg == NULL);
-    __xmsg_set_channel(msg, channel);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = msg->type;
     pack.len = 0;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)msg;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
-    return true;
+    return 0;
 XClean:
-    return false;
+    return -1;
 
 }
 
-bool xmsger_connect(xmsger_ptr msger, xchannel_ctx_ptr ctx, xline_t *msg)
+int xmsger_connect(xmsger_ptr msger, xline_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(msg == NULL);
-    __xmsg_set_channel(msg, ctx);
     struct xhead pack;
     pack.type = XPACK_TYPE_LOCAL;
     pack.ack.type = msg->type;
     pack.len = 0;
     *((uint64_t*)(&pack.flags[0])) = (uint64_t)msg;
     __xcheck(__xapi->udp_local_send(msger->sock[2], msger->addr, &pack, XHEAD_SIZE) != XHEAD_SIZE);
-    return true;
+    return 0;
 XClean:
-    return false;
+    return -1;
 }
 
 static inline int unicid_comp(const void *a, const void *b)
@@ -1251,22 +1248,22 @@ void xmsger_free(xmsger_ptr *pptr)
     __xlogd("xmsger_free exit\n");
 }
 
-const char* xchannel_get_ip(xchannel_ptr channel)
-{
-    return __xapi->udp_addr_ip(channel->addr);
-}
+// const char* xchannel_get_ip(xchannel_ptr channel)
+// {
+//     return __xapi->udp_addr_ip(channel->addr);
+// }
 
-uint16_t xchannel_get_port(xchannel_ptr channel)
-{
-    return __xapi->udp_addr_port(channel->addr);
-}
+// uint16_t xchannel_get_port(xchannel_ptr channel)
+// {
+//     return __xapi->udp_addr_port(channel->addr);
+// }
 
-void* xchannel_get_ctx(xchannel_ptr channel)
-{
-    return channel->ctx;
-}
+// void* xchannel_get_ctx(xchannel_ptr channel)
+// {
+//     return channel->ctx;
+// }
 
-void xchannel_set_ctx(xchannel_ptr channel, void *ctx)
-{
-    channel->ctx = ctx;
-}
+// void xchannel_set_ctx(xchannel_ptr channel, void *ctx)
+// {
+//     channel->ctx = ctx;
+// }
