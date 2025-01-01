@@ -241,9 +241,10 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
     pipe->mutex = __xapi->mutex_create();
     __xcheck(pipe->mutex == NULL);
 
+    pipe->breaker = 0;
     pipe->reader = pipe->writer = 0;
-    pipe->breaker = false;
-    pipe->rlock = pipe->wlock = false;
+    pipe->rlock = pipe->wlock = 0;
+    pipe->rblock = pipe->wblock = 0;
 
     return pipe;
 
