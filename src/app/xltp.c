@@ -214,8 +214,8 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
     }else if (msg->type == XPACK_TYPE_RES){
         recv_respnos(xltp, msg);
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+        xl_free(&msg);
     }
-    xl_free(&msg);    
     return 0;
 }
 
@@ -439,6 +439,7 @@ int req_boot(xltp_t *tp, xline_t *msg)
     msg = xltp_make_req(tp, msg, "boot", res_boot);
     __xcheck(msg == NULL);
     __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
+    // __xipaddr_ptr addr = __xapi->udp_host_to_addr("192.168.1.7", 9256);
     __xmsg_set_ipaddr(msg, addr);
     xline_t *test = xl_test(10);
     xl_add_obj(&msg, "test", &test->data);
