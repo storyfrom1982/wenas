@@ -8,10 +8,11 @@
 #define XMSG_FLAG_BACK          0x02
 #define XMSG_FLAG_TIMEDOUT      0x03
 
-typedef int(*xmsgcb_ptr)(xline_t *msg, void *ctx);
+typedef struct xltp* xmsgctx_ptr;
+typedef int(*xmsgcb_ptr)(xline_t *msg, xmsgctx_ptr ctx);
 
 #define __xmsg_get_cb(msg)                  (xmsgcb_ptr)(msg)->args[0]
-#define __xmsg_get_ctx(msg)                 (msg)->args[1]
+#define __xmsg_get_ctx(msg)                 (xmsgctx_ptr)(msg)->args[1]
 #define __xmsg_get_ipaddr(msg)              (__xipaddr_ptr)(msg)->args[2]
 #define __xmsg_get_channel(msg)             (xchannel_ptr)(msg)->args[3]
 
