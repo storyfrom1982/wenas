@@ -119,7 +119,10 @@ static inline xline_t* xltp_make_req(xltp_t *xltp, xline_t *msg, const char *api
     xmsg_ctx_t *ctx = xltp_make_ctx(xltp, cb, NULL);
     __xcheck(ctx == NULL);
     __xmsg_set_ctx(msg, ctx);
-    msg->id = __atom_add(xltp->rid, 1);
+    if (++xltp->rid == 0){
+        xltp->rid++;
+    }
+    msg->id = xltp->rid;
     __xcheck(xl_add_word(&msg, "api", api) == EENDED);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == EENDED);
     return msg;
@@ -233,25 +236,19 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 {
     xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    if (msg->type == XPACK_TYPE_REQ){
-        xltp_del_req(xltp, msg);
+    if (msg->id != 0){
+        xline_t *req = xltp_find_req(xltp, msg->id);
+        __xcheck(req == NULL);
+        xltp_del_req(xltp, req);
+    }
+    if (__xmsg_get_ctx(msg) != NULL){
+        // TODO 释放上下文
     }
     xl_free(&msg);
     return 0;
+XClean:
+    return -1;
 }
-
-// static inline int xltp_send(xltp_t *xltp, xline_t *msg)
-// {
-//     if (__xmsg_get_cb(msg) != NULL){
-//         xltp_add_req(xltp, msg);
-//     }
-//     if (msg->type == XPACK_TYPE_REQ){
-//         xmsger_connect(xltp->msger, (xchannel_ctx_ptr)msg, msg);
-//     }else if (msg->type == XPACK_TYPE_RES){
-//         xmsger_disconnect(xltp->msger, __xmsg_get_channel(msg), msg);
-//     }
-//     return 0;
-// }
 
 static void xltp_loop(void *ptr)
 {
@@ -282,13 +279,7 @@ static void xltp_loop(void *ptr)
 
         }else if(msg->flag == XMSG_FLAG_TIMEDOUT){
 
-            // xltp_timedout(xltp, msg);
-            __xcheck(xmsger_flush(xltp->msger, __xmsg_get_channel(msg)) != 0);
-            if (msg->type == XPACK_TYPE_REQ){
-                xltp_del_req(xltp, msg);
-            }
-            xl_free(&msg);
-
+            xltp_timedout(xltp, msg);
         }
     }
 
@@ -412,8 +403,8 @@ static int api_boot(xline_t *msg, xmsg_ctx_ptr ctx)
     uint16_t port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
     __xcheck(xl_add_word(&msg, "ip", ip) == EENDED);
     __xcheck(xl_add_uint(&msg, "port", port) == EENDED);
-    uint8_t uuid[8192];
-    __xcheck(xl_add_bin(&msg, "uuid", uuid, 8192) == EENDED);
+    uint8_t uuid[32];
+    __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == EENDED);
     __xcheck(xl_add_uint(&msg, "code", 200) == EENDED);
     __xcheck(xltp_respose(ctx->xltp, msg) != 0);
     return 0;

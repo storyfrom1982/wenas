@@ -38,8 +38,8 @@ extern int xmsger_flush(xmsger_ptr msger, xchannel_ptr channel);
 
 // extern const char* xchannel_get_ip(xchannel_ptr channel);
 // extern uint16_t xchannel_get_port(xchannel_ptr channel);
-// extern void* xchannel_get_ctx(xchannel_ptr channel);
-// extern void xchannel_set_ctx(xchannel_ptr channel, void*);
+extern void* xchannel_get_ctx(xchannel_ptr channel);
+extern void xchannel_set_ctx(xchannel_ptr channel, void*);
 
 
 #endif //__XMSGER_H__
