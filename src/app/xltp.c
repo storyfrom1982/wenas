@@ -137,12 +137,7 @@ XClean:
 
 int xltp_make_api(xltp_t *xltp, const char *api, xmsgcb_ptr cb)
 {
-    __xcheck(xltp == NULL || api == NULL || cb == NULL);
-    // xmsg_ctx_t *ctx = (xmsg_ctx_t*)malloc(sizeof(xmsg_ctx_t));
-    // __xcheck(ctx == NULL);
-    // ctx->cb = cb;
-    // ctx->xltp = xltp;
-    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), xltp) == NULL);
+    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), cb) == NULL);
     return 0;
 XClean:
     return -1;
@@ -434,8 +429,8 @@ int req_boot(xltp_t *tp, xline_t *msg)
 {
     msg = xltp_make_req(tp, msg, "boot", res_boot);
     __xcheck(msg == NULL);
-    __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
-    // __xipaddr_ptr addr = __xapi->udp_host_to_addr("192.168.1.7", 9256);
+    // __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
+    __xipaddr_ptr addr = __xapi->udp_host_to_addr("192.168.1.7", 9256);
     __xmsg_set_ipaddr(msg, addr);
     xline_t *test = xl_test(10);
     xl_add_obj(&msg, "test", &test->data);
