@@ -217,7 +217,7 @@ static inline uint64_t xl_add_obj_begin(xline_t **pptr, const char *key)
     xl->wpos += XDATA_SIZE;
     return xl->wpos - XDATA_SIZE;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline void xl_add_obj_end(xline_t **pptr, uint64_t pos)
@@ -254,7 +254,7 @@ static inline uint64_t xl_add_word(xline_t **pptr, const char *key, const char *
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_str(xline_t **pptr, const char *key, const char *str, size_t size)
@@ -273,7 +273,7 @@ static inline uint64_t xl_add_str(xline_t **pptr, const char *key, const char *s
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_bin(xline_t **pptr, const char *key, const void *bin, uint64_t size)
@@ -294,7 +294,7 @@ static inline uint64_t xl_add_bin(xline_t **pptr, const char *key, const void *b
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_obj(xline_t **pptr, const char *key, xdata_t *xd)
@@ -314,7 +314,7 @@ static inline uint64_t xl_add_obj(xline_t **pptr, const char *key, xdata_t *xd)
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_int(xline_t **pptr, const char *key, int64_t i64)
@@ -331,7 +331,7 @@ static inline uint64_t xl_add_int(xline_t **pptr, const char *key, int64_t i64)
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_uint(xline_t **pptr, const char *key, uint64_t u64)
@@ -348,7 +348,7 @@ static inline uint64_t xl_add_uint(xline_t **pptr, const char *key, uint64_t u64
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_float(xline_t **pptr, const char *key, double f64)
@@ -365,7 +365,7 @@ static inline uint64_t xl_add_float(xline_t **pptr, const char *key, double f64)
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_add_ptr(xline_t **pptr, const char *key, void *ptr)
@@ -383,7 +383,7 @@ static inline uint64_t xl_add_ptr(xline_t **pptr, const char *key, void *ptr)
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_list_add(xline_t **pptr, xdata_t *xd)
@@ -400,7 +400,7 @@ static inline uint64_t xl_list_add(xline_t **pptr, xdata_t *xd)
     xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_LIST);
     return xl->wpos;
 XClean:
-    return EENDED;
+    return XNULL;
 }
 
 static inline xdata_t* xl_list_next(xline_t *xl)
@@ -466,7 +466,7 @@ static inline int64_t xl_find_int(xline_t *xl, const char *key)
     if (val){
         return __xl_b2i(val);
     }
-    return EENDED;
+    return XNULL;
 }
 
 static inline uint64_t xl_find_uint(xline_t *xl, const char *key)
@@ -475,7 +475,7 @@ static inline uint64_t xl_find_uint(xline_t *xl, const char *key)
     if (val){
         return __xl_b2u(val);
     }
-    return EENDED;
+    return XNULL;
 }
 
 static inline double xl_find_float(xline_t *xl, const char *key)
@@ -484,7 +484,7 @@ static inline double xl_find_float(xline_t *xl, const char *key)
     if (val){
         return __xl_b2f(val);
     }
-    return (double)EENDED;
+    return (double)XNULL;
 }
 
 static inline char* xl_find_word(xline_t *xl, const char *key)

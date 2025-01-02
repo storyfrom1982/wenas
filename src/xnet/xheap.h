@@ -68,7 +68,7 @@ static inline size_t xheap_push(xheap_ptr h, xheapnode_ptr node)
         h->array[i]->pos = i;
         if (i <= 0){
             __xloge("Index out of bounds: %llu\n", i);
-            return EENDED;
+            return XNULL;
         }
         return i;
     }
