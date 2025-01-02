@@ -304,15 +304,14 @@ XClean:
     return -1;
 }
 
-static inline int xltp_post(xltp_t *xltp, xline_t *msg)
-{
-    __xcheck(xltp == NULL || msg == NULL);
-    msg->flag = XMSG_FLAG_POST;
-    __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-    return 0;
-XClean:
-    return -1;
-}
+// static inline int xltp_post(xltp_t *xltp, xline_t *msg)
+// {
+//     msg->flag = XMSG_FLAG_POST;
+//     __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+//     return 0;
+// XClean:
+//     return -1;
+// }
 
 
 ////////////////////////////////////////////////////////////////////
@@ -362,15 +361,15 @@ XClean:
     return -1;
 }
 
-int xltp_echo(xltp_t *tp, const char *ip, uint16_t port)
+int xltp_echo(xltp_t *xltp, const char *ip, uint16_t port)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
+    msg->flag = XMSG_FLAG_POST;
     __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-    __xmsg_set_cb(msg, req_echo);
     __xmsg_set_ipaddr(msg, addr);
-    // xl_add_ptr(&msg, "cb", req_echo);
-    xltp_post(tp, msg);
+    __xmsg_set_cb(msg, req_echo);
+    __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:
     if (msg != NULL){
@@ -432,14 +431,13 @@ XClean:
     return -1;
 }
 
-static inline int xltp_bootstrap(xltp_t *tp)
+static inline int xltp_bootstrap(xltp_t *xltp)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
+    msg->flag = XMSG_FLAG_POST;
     __xmsg_set_cb(msg, req_boot);
-    // xl_add_ptr(&msg, "cb", req_boot);
-    // xl_add_ptr(&msg, "ctx", tp);
-    xltp_post(tp, msg);
+    __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:
     if (msg != NULL){
