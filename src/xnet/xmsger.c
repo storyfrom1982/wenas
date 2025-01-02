@@ -206,7 +206,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
     channel->back_delay = 50000000UL;
-    channel->rid = XNULL;
+    channel->rid = XEEND;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -471,6 +471,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                     // 更新消息长度
                     xl_fixed(channel->msg);
                     // 通知用户已收到一个完整的消息
+                    __xmsg_set_ctx(channel->msg, channel->ctx);
                     __xmsg_set_ipaddr(channel->msg, channel->addr);
                     channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
                     channel->msg = NULL;
@@ -740,6 +741,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xcheck(xmsg_fixed(msg) != 0);
 
         channel->rid = msg->id;
+        channel->ctx = __xmsg_get_ctx(msg);
         channel->addr = __xmsg_get_ipaddr(msg);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
@@ -888,7 +890,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         __xlogd("CHANNEL TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) RID(%lu) CTX(%X)\n", 
                                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid,
                                 channel->rid, channel->ctx);
-                        if (channel->rid == XNULL && channel->ctx == NULL){
+                        if (channel->rid == XEEND && channel->ctx == NULL){
                             // 连接尚未建立，直接释放即可
                             xchannel_free(channel);
                         }else {
