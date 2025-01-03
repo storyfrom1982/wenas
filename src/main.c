@@ -48,8 +48,8 @@ int main(int argc, char *argv[])
         if (strcmp(command, "echo") == 0) {
             xltp_echo(peer, ip, port);
 
-        } else if (strcmp(command, "boot") == 0) {
-            // xpeer_bootstrap(peer);
+        } else if (strcmp(command, "put") == 0) {
+            xltp_put(peer, ip, port);
 
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");

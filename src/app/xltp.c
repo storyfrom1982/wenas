@@ -80,11 +80,10 @@ XClean:
     return -1;
 }
 
-static inline xltp_ctx_t* xltp_make_ctx(xltp_t *xltp, xmsgcb_ptr cb, xchannel_ptr channel)
+static inline xltp_ctx_t* xltp_make_ctx(xltp_t *xltp, xchannel_ptr channel)
 {
     xltp_ctx_t* ctx = (xltp_ctx_t*)malloc(sizeof(xltp_ctx_t));
     __xcheck(ctx == NULL);
-    // ctx->cb = cb;
     ctx->xltp = xltp;
     ctx->channel = channel;
     ctx->next = &xltp->ctxlist;
@@ -158,9 +157,6 @@ inline static void xltp_del_req(xltp_t *xltp, xline_t *msg)
     avl_tree_remove(&xltp->msgid_table, msg);
     msg->prev->next = msg->next;
     msg->next->prev = msg->prev;
-    if (__xmsg_get_ctx(msg)){
-        xltp_del_ctx(__xmsg_get_ctx(msg));
-    }
     xl_free(&msg);
 }
 
@@ -186,6 +182,7 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
     static uint64_t rid;
     static xline_t *req;
     static xmsgcb_ptr cb;
+    static xmsgctx_ptr ctx;
     xltp->parser = xl_parser(&msg->data);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == XEEND);
@@ -193,8 +190,10 @@ static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
-    if(__xmsg_get_ctx(req) != NULL){
-        cb(msg, __xmsg_get_ctx(req));
+    ctx = xchannel_get_ctx(__xmsg_get_channel(msg));
+    if(ctx != NULL){
+        cb(msg, ctx);
+        xltp_del_ctx(ctx);
     }else {
         cb(msg, xltp);
     }
@@ -229,14 +228,15 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 
 static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 {
+    xmsgctx_ptr ctx = xchannel_get_ctx(__xmsg_get_channel(msg));
     xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
     if (msg->id != XEEND){
         xline_t *req = xltp_find_req(xltp, msg->id);
         __xcheck(req == NULL);
         xltp_del_req(xltp, req);
     }
-    if (__xmsg_get_ctx(msg) != NULL){
-        // TODO 释放上下文
+    if (ctx != NULL){
+        xltp_del_ctx(ctx);
     }
     xl_free(&msg);
     return 0;
@@ -450,6 +450,74 @@ XClean:
 //// 
 ////////////////////////////////////////////////////////////////////
 
+static int api_put(xline_t *msg, xltp_t *xltp)
+{
+    // __xcheck(msg == NULL);
+    // __xcheck(ctx == NULL);
+    xl_printf(&msg->data);
+    xl_clear(msg);
+    __xmsg_set_ctx(msg, NULL);
+    __xcheck(xl_add_uint(&msg, "rid", msg->id) == XEEND);
+    const char *ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
+    uint16_t port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
+    __xcheck(xl_add_word(&msg, "ip", ip) == XEEND);
+    __xcheck(xl_add_uint(&msg, "port", port) == XEEND);
+    uint8_t uuid[32];
+    __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XEEND);
+    __xcheck(xl_add_uint(&msg, "code", 200) == XEEND);
+    __xcheck(xltp_respose(xltp, msg) != 0);
+    return 0;
+XClean:
+    if (msg != NULL){
+        xl_free(&msg);
+    }
+    return -1;
+}
+
+static int res_put(xline_t *res, xmsgctx_ptr ctx)
+{
+    xltp_ctx_t *put = (xltp_ctx_t *)ctx;
+    put->xltp->parser = xl_parser(&res->data);
+    xl_printf(&res->data);
+    return 0;
+XClean:
+    return -1;
+}
+
+static int req_put(xline_t *msg, xltp_t *xltp)
+{
+    msg = xltp_make_req(xltp, msg, "put", res_put);
+    __xcheck(msg == NULL);
+    xltp_ctx_t *ctx = xltp_make_ctx(xltp, NULL);
+    __xcheck(ctx == NULL);
+    __xmsg_set_ctx(msg, ctx);
+    __xcheck(xltp_request(xltp, msg) != 0);
+    return 0;
+XClean:
+    return -1;
+}
+
+int xltp_put(xltp_t *xltp, const char *ip, uint16_t port)
+{
+    xline_t *msg = xl_maker();
+    __xcheck(msg == NULL);
+    msg->flag = XMSG_FLAG_POST;
+    __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
+    __xmsg_set_ipaddr(msg, addr);
+    __xmsg_set_cb(msg, req_put);
+    __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    return 0;
+XClean:
+    if (msg != NULL){
+        xl_free(&msg);
+    }
+    return -1;
+}
+
+////////////////////////////////////////////////////////////////////
+//// 
+////////////////////////////////////////////////////////////////////
+
 xltp_t* xltp_create(int boot)
 {
     xltp_t *xltp = (xltp_t*)calloc(1, sizeof(struct xltp));
@@ -484,6 +552,7 @@ xltp_t* xltp_create(int boot)
     __xcheck(xltp->api == NULL);
     __xcheck(xltp_make_api(xltp, "echo", api_echo) != 0);
     __xcheck(xltp_make_api(xltp, "boot", api_boot) != 0);
+    __xcheck(xltp_make_api(xltp, "put", api_put) != 0);
 
     if (boot){
         xltp_bootstrap(xltp);
