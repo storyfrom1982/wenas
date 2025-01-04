@@ -457,29 +457,29 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
 
         do {
 
+            // 如果当前接收缓冲区为空，证明这个包是新消息的第一个包
+            if (channel->msg == NULL){
+                channel->msg = xl_creator(pack->head.range * XBODY_SIZE);
+                __xcheck(channel->msg == NULL);
+                channel->msg->type = pack->head.type;
+                channel->msg->range = pack->head.range;
+            }
             if (pack->head.len > 0){
-                // 如果当前接收缓冲区为空，证明这个包是新消息的第一个包
-                if (channel->msg == NULL){
-                    channel->msg = xl_creator(pack->head.range * XBODY_SIZE);
-                    __xcheck(channel->msg == NULL);
-                    channel->msg->type = pack->head.type;
-                }
                 mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
                 channel->msg->wpos += pack->head.len;
-                // 收到了一个完整的消息
-                if (channel->msg->size - channel->msg->wpos < XBODY_SIZE){
-                    // 更新消息长度
-                    xl_fixed(channel->msg);
-                    // 通知用户已收到一个完整的消息
-                    __xmsg_set_ctx(channel->msg, channel->ctx);
-                    __xmsg_set_ipaddr(channel->msg, channel->addr);
-                    channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
-                    channel->msg = NULL;
-                    // 更新时间戳
-                    channel->timestamp = __xapi->clock();
-                }
             }
-
+            // 收到了一个完整的消息
+            if (--channel->msg->range == 0 /*|| channel->msg->size - channel->msg->wpos < XBODY_SIZE*/){
+                // 更新消息长度
+                xl_fixed(channel->msg);
+                // 通知用户已收到一个完整的消息
+                __xmsg_set_ctx(channel->msg, channel->ctx);
+                __xmsg_set_ipaddr(channel->msg, channel->addr);
+                channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
+                channel->msg = NULL;
+                // 更新时间戳
+                channel->timestamp = __xapi->clock();
+            }
             // 处理过的缓冲区置空
             channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)] = NULL;
             // 更新读索引
@@ -733,7 +733,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 {
     xline_t *msg = (xline_t*)(*(uint64_t*)&head->flags[0]);
 
-    if (head->ack.type == XPACK_TYPE_REQ || head->ack.type == XPACK_TYPE_HELLO){
+    if (head->ack.type == XPACK_TYPE_REQ){
 
         xchannel_ptr channel = xchannel_create(msger, XPACK_SERIAL_RANGE);
         __xcheck(channel == NULL);
@@ -770,7 +770,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xlogd("<CONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
-    }else if (head->ack.type == XPACK_TYPE_RES || head->ack.type == XPACK_TYPE_BYE){
+    }else if (head->ack.type == XPACK_TYPE_BYE){
 
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
@@ -963,7 +963,7 @@ static void msger_loop(void *ptr)
 
             if (channel){
 
-                if (rpack->head.type == XPACK_TYPE_MSG) {
+                if (rpack->head.type == XPACK_TYPE_MSG || rpack->head.type == XPACK_TYPE_RES) {
 
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     if (__serialbuf_sendable(channel->sendbuf) > 0){
@@ -976,13 +976,13 @@ static void msger_loop(void *ptr)
 
                     xchannel_recv_ack(channel, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE || rpack->head.type == XPACK_TYPE_RES){
+                }else if (rpack->head.type == XPACK_TYPE_BYE){
 
                     // 收到完整的消息后会断开连接
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);                    
 
-                }else if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
+                }else if (rpack->head.type == XPACK_TYPE_REQ){
 
                     // 检查是否为重传的包或者 serial range 是否一致
                     if (rpack->head.resend > 0 || rpack->head.ack.pos == channel->recvbuf->range){
@@ -1001,7 +1001,7 @@ static void msger_loop(void *ptr)
             } else {
 
                 // 收到对方发起的请求
-                if (rpack->head.type == XPACK_TYPE_REQ || rpack->head.type == XPACK_TYPE_HELLO){
+                if (rpack->head.type == XPACK_TYPE_REQ){
 
                     // 创建连接
                     channel = xchannel_create(msger, rpack->head.ack.pos);
@@ -1022,7 +1022,7 @@ static void msger_loop(void *ptr)
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
 
-                }else if (rpack->head.type == XPACK_TYPE_RES || rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_BYE){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);

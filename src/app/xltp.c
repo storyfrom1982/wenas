@@ -8,11 +8,13 @@
 #include <xnet/xbuf.h>
 #include <xlib/avlmini.h>
 
-typedef struct xltp_ctx {
+typedef struct xltp_put {
+    uint64_t rid;
     struct xltp *xltp;
     xchannel_ptr channel;
-    struct xltp_ctx *prev, *next;
-}xltp_ctx_t;
+    xmsgcb_ptr cb;
+    struct xltp_put *prev, *next;
+}xltp_put_t;
 
 typedef struct xltp {
     uint16_t port;
@@ -30,7 +32,7 @@ typedef struct xltp {
     xline_t msglist;
     struct avl_tree msgid_table;
 
-    xltp_ctx_t ctxlist;
+    xltp_put_t ctxlist;
 
 }xltp_t;
 
@@ -80,12 +82,14 @@ XClean:
     return -1;
 }
 
-static inline xltp_ctx_t* xltp_make_ctx(xltp_t *xltp, xchannel_ptr channel)
+static inline xltp_put_t* xltp_make_ctx(xltp_t *xltp, xchannel_ptr channel, xmsgcb_ptr cb, uint64_t rid)
 {
-    xltp_ctx_t* ctx = (xltp_ctx_t*)malloc(sizeof(xltp_ctx_t));
+    xltp_put_t* ctx = (xltp_put_t*)malloc(sizeof(xltp_put_t));
     __xcheck(ctx == NULL);
     ctx->xltp = xltp;
     ctx->channel = channel;
+    ctx->cb = cb;
+    ctx->rid = rid;
     ctx->next = &xltp->ctxlist;
     ctx->prev = xltp->ctxlist.prev;
     ctx->next->prev = ctx;
@@ -100,7 +104,7 @@ XClean:
 
 static inline void xltp_del_ctx(xmsgctx_ptr xltp)
 {
-    xltp_ctx_t *ctx = (xltp_ctx_t*)xltp;
+    xltp_put_t *ctx = (xltp_put_t*)xltp;
     if (ctx){
         ctx->prev->next = ctx->next;
         ctx->next->prev = ctx->prev;
@@ -160,7 +164,7 @@ inline static void xltp_del_req(xltp_t *xltp, xline_t *msg)
     xl_free(&msg);
 }
 
-static inline int recv_request(xltp_t *xltp, xline_t *msg)
+static inline int xltp_recv_req(xltp_t *xltp, xline_t *msg)
 {
     static char *api;
     static xmsgcb_ptr cb;
@@ -177,7 +181,7 @@ XClean:
     return -1;
 }
 
-static inline int recv_respnos(xltp_t *xltp, xline_t *msg)
+static inline int xltp_recv_res(xltp_t *xltp, xline_t *msg)
 {
     static uint64_t rid;
     static xline_t *req;
@@ -206,11 +210,15 @@ XClean:
 static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
 {
     if (msg->type == XPACK_TYPE_REQ){
-        recv_request(xltp, msg);
-    }else if (msg->type == XPACK_TYPE_RES){
-        recv_respnos(xltp, msg);
+        xltp_recv_req(xltp, msg);
+    }else if (msg->type == XPACK_TYPE_BYE){
+        if (msg->wpos > 0){
+            xltp_recv_res(xltp, msg);
+        }
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
+    }else if (msg->type == XPACK_TYPE_RES){
+        xltp_recv_res(xltp, msg);
     }
     return 0;
 }
@@ -283,7 +291,7 @@ XClean:
     return;
 }
 
-int xltp_request(xltp_t *xltp, xline_t *msg)
+static inline int xltp_send_req(xltp_t *xltp, xline_t *msg)
 {
     __xcheck(xltp == NULL || msg == NULL);
     msg->type = XPACK_TYPE_REQ;
@@ -294,26 +302,24 @@ XClean:
     return -1;
 }
 
-int xltp_respose(xltp_t *xltp, xline_t *msg)
+static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
 {
-    __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_RES;
-    xmsger_disconnect(xltp->msger, msg);
+    msg->flag = XPACK_TYPE_RES;
+    xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
     return 0;
 XClean:
     return -1;
 }
 
-// static inline int xltp_post(xltp_t *xltp, xline_t *msg)
-// {
-//     msg->flag = XMSG_FLAG_POST;
-//     __xcheck(xpipe_write(xltp->mpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-//     return 0;
-// XClean:
-//     return -1;
-// }
-
-
+static inline int xltp_send_bye(xltp_t *xltp, xline_t *msg)
+{
+    __xcheck(xltp == NULL || msg == NULL);
+    msg->type = XPACK_TYPE_BYE;
+    xmsger_disconnect(xltp->msger, msg);
+    return 0;
+XClean:
+    return -1;
+}
 ////////////////////////////////////////////////////////////////////
 //// 
 ////////////////////////////////////////////////////////////////////
@@ -333,7 +339,7 @@ static int api_echo(xline_t *msg, xltp_t *xltp)
     xl_add_obj(&msg, "test", &test->data);
     xl_free(&test);
     xl_add_uint(&msg, "code", 200);
-    xltp_respose(xltp, msg);
+    xltp_send_bye(xltp, msg);
     return 0;
 XClean:
     return -1;
@@ -355,7 +361,7 @@ static int req_echo(xline_t *msg, xltp_t *xltp)
     xline_t *test = xl_test(10);
     xl_add_obj(&msg, "test", &test->data);
     xl_free(&test);    
-    __xcheck(xltp_request(xltp, msg) != 0);
+    __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
 XClean:
     return -1;
@@ -397,7 +403,7 @@ static int api_boot(xline_t *msg, xltp_t *xltp)
     uint8_t uuid[32];
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XEEND);
     __xcheck(xl_add_uint(&msg, "code", 200) == XEEND);
-    __xcheck(xltp_respose(xltp, msg) != 0);
+    __xcheck(xltp_send_bye(xltp, msg) != 0);
     return 0;
 XClean:
     if (msg != NULL){
@@ -425,7 +431,7 @@ static int req_boot(xline_t *msg, xltp_t *xltp)
     xline_t *test = xl_test(10);
     xl_add_obj(&msg, "test", &test->data);
     xl_free(&test);
-    __xcheck(xltp_request(xltp, msg) != 0);
+    __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
 XClean:
     return -1;
@@ -450,11 +456,26 @@ XClean:
 //// 
 ////////////////////////////////////////////////////////////////////
 
+static int recv_put(xline_t *msg, xltp_put_t *put)
+{
+    return 0;
+}
+
+static int send_put(xline_t *msg, xltp_put_t *put)
+{
+    put->xltp->parser = xl_parser(&msg->data);
+    xl_printf(&msg->data);
+    return 0;
+}
+
 static int api_put(xline_t *msg, xltp_t *xltp)
 {
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
     xl_printf(&msg->data);
+    xltp_put_t *put = xltp_make_ctx(xltp, __xmsg_get_channel(msg), recv_put, msg->id);
+    __xcheck(put == NULL);
+    xchannel_set_ctx(__xmsg_get_channel(msg), put);
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XEEND);
@@ -465,7 +486,9 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     uint8_t uuid[32];
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XEEND);
     __xcheck(xl_add_uint(&msg, "code", 200) == XEEND);
-    __xcheck(xltp_respose(xltp, msg) != 0);
+    xltp_send_res(xltp, msg);
+    // xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
+    // __xcheck(xltp_respose(xltp, msg) != 0);
     return 0;
 XClean:
     if (msg != NULL){
@@ -474,11 +497,13 @@ XClean:
     return -1;
 }
 
-static int res_put(xline_t *res, xmsgctx_ptr ctx)
+static int res_put(xline_t *res, xltp_t *xltp)
 {
-    xltp_ctx_t *put = (xltp_ctx_t *)ctx;
-    put->xltp->parser = xl_parser(&res->data);
+    // xltp_put_t *ctx = (xltp_put_t *)xchannel_get_ctx(__xmsg_get_channel(res));
+    xltp->parser = xl_parser(&res->data);
     xl_printf(&res->data);
+    xl_clear(res);
+    xltp_send_bye(xltp, res);
     return 0;
 XClean:
     return -1;
@@ -488,10 +513,10 @@ static int req_put(xline_t *msg, xltp_t *xltp)
 {
     msg = xltp_make_req(xltp, msg, "put", res_put);
     __xcheck(msg == NULL);
-    xltp_ctx_t *ctx = xltp_make_ctx(xltp, NULL);
+    xltp_put_t *ctx = xltp_make_ctx(xltp, NULL, send_put, msg->id);
     __xcheck(ctx == NULL);
     __xmsg_set_ctx(msg, ctx);
-    __xcheck(xltp_request(xltp, msg) != 0);
+    __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
 XClean:
     return -1;
