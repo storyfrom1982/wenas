@@ -304,7 +304,7 @@ XClean:
 
 static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
 {
-    msg->flag = XPACK_TYPE_RES;
+    msg->type = XPACK_TYPE_RES;
     xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
     return 0;
 XClean:
