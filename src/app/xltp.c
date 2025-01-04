@@ -194,13 +194,14 @@ static inline int xltp_recv_res(xltp_t *xltp, xline_t *msg)
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
-    ctx = xchannel_get_ctx(__xmsg_get_channel(msg));
-    if(ctx != NULL){
-        cb(msg, ctx);
-        xltp_del_ctx(ctx);
-    }else {
-        cb(msg, xltp);
-    }
+    // ctx = xchannel_get_ctx(__xmsg_get_channel(msg));
+    // if(ctx != NULL){
+    //     cb(msg, ctx);
+    //     xltp_del_ctx(ctx);
+    // }else {
+    //     cb(msg, xltp);
+    // }
+    cb(msg, xltp);
     xltp_del_req(xltp, req);
     return 0;
 XClean:
@@ -227,7 +228,7 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 {
     if (msg->type == XPACK_TYPE_REQ){
         
-    }else if (msg->type == XPACK_TYPE_RES){
+    }else if (msg->type == XPACK_TYPE_BYE){
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
     }
     xl_free(&msg);
@@ -473,9 +474,9 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
     xl_printf(&msg->data);
-    xltp_put_t *put = xltp_make_ctx(xltp, __xmsg_get_channel(msg), recv_put, msg->id);
-    __xcheck(put == NULL);
-    xchannel_set_ctx(__xmsg_get_channel(msg), put);
+    // xltp_put_t *put = xltp_make_ctx(xltp, __xmsg_get_channel(msg), recv_put, msg->id);
+    // __xcheck(put == NULL);
+    // xchannel_set_ctx(__xmsg_get_channel(msg), put);
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XEEND);
@@ -513,9 +514,9 @@ static int req_put(xline_t *msg, xltp_t *xltp)
 {
     msg = xltp_make_req(xltp, msg, "put", res_put);
     __xcheck(msg == NULL);
-    xltp_put_t *ctx = xltp_make_ctx(xltp, NULL, send_put, msg->id);
-    __xcheck(ctx == NULL);
-    __xmsg_set_ctx(msg, ctx);
+    // xltp_put_t *ctx = xltp_make_ctx(xltp, NULL, send_put, msg->id);
+    // __xcheck(ctx == NULL);
+    // __xmsg_set_ctx(msg, ctx);
     __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
 XClean:
