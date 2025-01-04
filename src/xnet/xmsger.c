@@ -1067,7 +1067,7 @@ int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
     __xcheck(channel == NULL);
     __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
-        msg->type = XPACK_TYPE_MSG;
+        // msg->type = XPACK_TYPE_MSG;
         __xcheck(xmsg_fixed(msg) != 0);
         __atom_add(msger->len, msg->wpos);
         __atom_add(channel->len, msg->wpos);
