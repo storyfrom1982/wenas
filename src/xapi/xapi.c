@@ -168,8 +168,9 @@ static __xfile_t __fs_open(const char* path, int flags, int mode)
 {
     uv_fs_t open_req;
     //flags UV_FS_O_WRONLY | UV_FS_O_APPEND, UV_FS_O_RDWR | UV_FS_O_CREAT
-    //mode S_IWUSR | S_IRUSR
-    __xfile_t fd = uv_fs_open(NULL, &open_req, path, flags, mode, NULL);
+    // mode S_IWUSR | S_IRUSR
+    // TODO
+    __xfile_t fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDWR, mode, NULL);
     uv_fs_req_cleanup(&open_req);
     return fd;
 }

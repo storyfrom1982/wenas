@@ -90,7 +90,7 @@ typedef struct __xapi_enter {
     int (*fs_mkpath)(const char* path);
     int (*fs_remove)(const char* path);
     int (*fs_rename)(const char* path, const char* to);
-    int (*fs_size)(const char* path);
+    uint64_t (*fs_size)(const char* path);
 
     __xfile_t (*fs_open)(const char* path, int flags, int mode);
     int (*fs_close)(__xfile_t);

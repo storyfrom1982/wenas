@@ -181,7 +181,7 @@ struct xmsger {
 static inline int xmsg_fixed(xline_t *msg)
 {
     __xcheck(msg == NULL);
-    msg->spos = 0;
+    msg->rpos = msg->spos = 0;
     if (msg->wpos > 0){
         msg->range = (msg->wpos / XBODY_SIZE);
         if (msg->range * XBODY_SIZE < msg->wpos){

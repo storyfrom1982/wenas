@@ -3,7 +3,7 @@
 
 #include "xnet/xmsg.h"
 
-typedef struct xltp_put xpeer_t;
+typedef struct xltp_io xpeer_t;
 
 int xpeer_echo(xpeer_t *peer, const char *host, uint16_t port);
 int xpeer_bootstrap(xpeer_t *peer);

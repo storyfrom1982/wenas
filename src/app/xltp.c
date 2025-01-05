@@ -8,13 +8,13 @@
 #include <xnet/xbuf.h>
 #include <xlib/avlmini.h>
 
-typedef struct xltp_put {
-    uint64_t rid;
+typedef struct xltp_io {
+    __xfile_t fd;
+    uint64_t pos, size;
     struct xltp *xltp;
     xchannel_ptr channel;
-    xmsgcb_ptr cb;
-    struct xltp_put *prev, *next;
-}xltp_put_t;
+    struct xltp_io *prev, *next;
+}xltp_io_t;
 
 typedef struct xltp {
     uint16_t port;
@@ -32,7 +32,7 @@ typedef struct xltp {
     xline_t msglist;
     struct avl_tree msgid_table;
 
-    xltp_put_t ctxlist;
+    xltp_io_t ctxlist;
 
 }xltp_t;
 
@@ -48,11 +48,14 @@ static inline int msgid_find(const void *a, const void *b)
 
 static int on_message_to_peer(xmsgercb_ptr cb, xchannel_ptr channel, xline_t *msg)
 {
+    __xlogd("on_message_to_peer enter\n");
     msg->flag = XMSG_FLAG_BACK;
     __xmsg_set_channel(msg, channel);
     __xcheck(xpipe_write(((xltp_t*)(cb->ctx))->msgpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    __xlogd("on_message_to_peer exit\n");
     return 0;
 XClean:
+    __xlogd("on_message_to_peer failed\n");
     xl_free(&msg);
     return -1;
 }
@@ -82,18 +85,23 @@ XClean:
     return -1;
 }
 
-static inline xltp_put_t* xltp_make_ctx(xltp_t *xltp, xchannel_ptr channel, xmsgcb_ptr cb, uint64_t rid)
+static inline xltp_io_t* xltp_make_ctx(xltp_t *xltp, char *path)
 {
-    xltp_put_t* ctx = (xltp_put_t*)malloc(sizeof(xltp_put_t));
+    xltp_io_t* ctx = (xltp_io_t*)malloc(sizeof(xltp_io_t));
     __xcheck(ctx == NULL);
     ctx->xltp = xltp;
-    ctx->channel = channel;
-    ctx->cb = cb;
-    ctx->rid = rid;
+    ctx->channel = NULL;
     ctx->next = &xltp->ctxlist;
     ctx->prev = xltp->ctxlist.prev;
     ctx->next->prev = ctx;
     ctx->prev->next = ctx;
+    ctx->fd = __xapi->fs_open(path, 0, 0644);
+    __xcheck(ctx->fd < 0);
+    ctx->pos = 0;
+    ctx->size = __xapi->fs_tell(ctx->fd);
+    __xlogd("file size = %lu\n", ctx->size);
+    ctx->size = __xapi->fs_size(path);
+    __xlogd("file size == %lu\n", ctx->size);
     return ctx;
 XClean:
     if (ctx){
@@ -104,10 +112,13 @@ XClean:
 
 static inline void xltp_del_ctx(xmsgctx_ptr xltp)
 {
-    xltp_put_t *ctx = (xltp_put_t*)xltp;
+    xltp_io_t *ctx = (xltp_io_t*)xltp;
     if (ctx){
         ctx->prev->next = ctx->next;
         ctx->next->prev = ctx->prev;
+        if (ctx->fd > 0){
+            __xapi->fs_close(ctx->fd);
+        }
         free(ctx);
     }
 }
@@ -162,6 +173,37 @@ inline static void xltp_del_req(xltp_t *xltp, xline_t *msg)
     msg->prev->next = msg->next;
     msg->next->prev = msg->prev;
     xl_free(&msg);
+}
+
+
+static inline int xltp_send_req(xltp_t *xltp, xline_t *msg)
+{
+    __xcheck(xltp == NULL || msg == NULL);
+    msg->type = XPACK_TYPE_REQ;
+    xltp_add_req(xltp, msg);
+    xmsger_connect(xltp->msger, msg);
+    return 0;
+XClean:
+    return -1;
+}
+
+static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
+{
+    msg->type = XPACK_TYPE_RES;
+    xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
+    return 0;
+XClean:
+    return -1;
+}
+
+static inline int xltp_send_bye(xltp_t *xltp, xline_t *msg)
+{
+    __xcheck(xltp == NULL || msg == NULL);
+    msg->type = XPACK_TYPE_BYE;
+    xmsger_disconnect(xltp->msger, msg);
+    return 0;
+XClean:
+    return -1;
 }
 
 static inline int xltp_recv_req(xltp_t *xltp, xline_t *msg)
@@ -220,19 +262,41 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_RES){
         xltp_recv_res(xltp, msg);
+    }else if (msg->type == XPACK_TYPE_MSG){
+        __xlogd("recv msg -----\n");
+        xl_free(&msg);
     }
     return 0;
 }
 
 static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 {
+    __xlogd("xltp_back enter\n");
     if (msg->type == XPACK_TYPE_REQ){
         
     }else if (msg->type == XPACK_TYPE_BYE){
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+    }else if (msg->type == XPACK_TYPE_MSG){
+        xltp_io_t *io = xchannel_get_ctx(__xmsg_get_channel(msg));
+        __xcheck(io == NULL);
+        io->pos += msg->wpos;
+        __xlogd("put file pos=%lu size=%lu\n", io->pos, io->size);
+        if (io->pos == io->size){
+            xl_clear(msg);
+            xltp_send_bye(xltp, msg);
+            xltp_del_ctx(io);
+        }else {
+            xl_hold(msg);
+            msg->flag = XMSG_FLAG_STREAM;
+            __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        }
     }
     xl_free(&msg);
+    __xlogd("xltp_back exit\n");
     return 0;
+XClean:
+    __xlogd("xltp_back failed\n");
+    return -1;
 }
 
 static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
@@ -296,13 +360,20 @@ static void xltp_io_loop(void *ptr)
 {
     __xlogd("xltp_io_loop enter\n");
 
+    int rret = 0;
+    uint64_t *flen = 1024 * 8;
     xline_t *msg;
+    xline_t *frame;
     xmsgcb_ptr cb;
+    xltp_io_t *io;
     xltp_t *xltp = (xltp_t*)ptr;
 
     while (xltp->runnig)
     {
         __xcheck(xpipe_read(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+
+        io = xchannel_get_ctx(__xmsg_get_channel(msg));
+        __xcheck(io == NULL);
 
         if (msg->flag == XMSG_FLAG_READY){
 
@@ -310,8 +381,23 @@ static void xltp_io_loop(void *ptr)
 
         }else if(msg->flag == XMSG_FLAG_STREAM){
 
-            
+            if (msg->size == flen){
+                frame = msg;
+            }else {
+                xl_free(&msg);
+                frame = xl_creator(flen);
+                __xcheck(frame == NULL);
+            }
 
+            rret = __xapi->fs_read(io->fd, frame->ptr, flen);
+            if (rret > 0){
+                frame->wpos = rret;
+                frame->type = XPACK_TYPE_MSG;
+                xmsger_send(io->xltp->msger, __xmsg_get_channel(msg), frame);
+            }else {
+                // __xapi->fs_close(io->fd);
+                // xltp_send_bye(io->xltp, frame);
+            }
         }
     }
 
@@ -322,35 +408,6 @@ XClean:
     return;
 }
 
-static inline int xltp_send_req(xltp_t *xltp, xline_t *msg)
-{
-    __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_REQ;
-    xltp_add_req(xltp, msg);
-    xmsger_connect(xltp->msger, msg);
-    return 0;
-XClean:
-    return -1;
-}
-
-static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
-{
-    msg->type = XPACK_TYPE_RES;
-    xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
-    return 0;
-XClean:
-    return -1;
-}
-
-static inline int xltp_send_bye(xltp_t *xltp, xline_t *msg)
-{
-    __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_BYE;
-    xmsger_disconnect(xltp->msger, msg);
-    return 0;
-XClean:
-    return -1;
-}
 ////////////////////////////////////////////////////////////////////
 //// 
 ////////////////////////////////////////////////////////////////////
@@ -487,12 +544,12 @@ XClean:
 //// 
 ////////////////////////////////////////////////////////////////////
 
-static int recv_put(xline_t *msg, xltp_put_t *put)
+static int recv_put(xline_t *msg, xltp_io_t *put)
 {
     return 0;
 }
 
-static int send_put(xline_t *msg, xltp_put_t *put)
+static int send_put(xline_t *msg, xltp_io_t *put)
 {
     put->xltp->parser = xl_parser(&msg->data);
     xl_printf(&msg->data);
@@ -530,11 +587,14 @@ XClean:
 
 static int res_put(xline_t *res, xltp_t *xltp)
 {
-    // xltp_put_t *ctx = (xltp_put_t *)xchannel_get_ctx(__xmsg_get_channel(res));
+    xltp_io_t *ctx = (xltp_io_t *)xchannel_get_ctx(__xmsg_get_channel(res));
     xltp->parser = xl_parser(&res->data);
     xl_printf(&res->data);
-    xl_clear(res);
-    xltp_send_bye(xltp, res);
+    // xl_clear(res);
+    // xltp_send_bye(xltp, res);
+    // xltp_del_ctx(ctx);
+    res->flag = XMSG_FLAG_STREAM;
+    __xcheck(xpipe_write(xltp->iopipe, &res, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:
     return -1;
@@ -556,6 +616,9 @@ static int req_put(xline_t *msg, xltp_t *xltp)
     xltp->parser = xl_parser(&msg->data);
     const char *file = xl_find_word(&xltp->parser, "file");
     __xcheck(file == NULL);
+    xltp_io_t *ctx = xltp_make_ctx(xltp, file);
+    __xcheck(ctx == NULL);
+    __xmsg_set_ctx(msg, ctx);
     __xcheck(!__xapi->fs_isfile(file));
     int64_t len = __xapi->fs_size(file);
     uint64_t filelen = __xl_sizeof_body(xltp->parser.val) - 1;
@@ -572,9 +635,6 @@ static int req_put(xline_t *msg, xltp_t *xltp)
     xl_add_word(&msg, "name", name);
     xl_add_word(&msg, "path", spath);
     xl_add_int(&msg, "len", len);
-    // xltp_put_t *ctx = xltp_make_ctx(xltp, NULL, send_put, msg->id);
-    // __xcheck(ctx == NULL);
-    // __xmsg_set_ctx(msg, ctx);
     __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
 XClean:

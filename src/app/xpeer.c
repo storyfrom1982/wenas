@@ -4,7 +4,7 @@
 
 #include "xltp.h"
 
-typedef struct xltp_put {
+typedef struct xltp_io {
     bool running;
     xltp_t *xltp;
     uint16_t port;
