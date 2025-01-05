@@ -599,12 +599,13 @@ struct __xapi_enter posix_api_enter = {
     .udp_addr_port = udp_addr_port,
 #endif    
 
-    .fs_mkpath = __fs_mkpath,
     .fs_isdir = __fs_isdir,
+    .fs_isfile = __fs_isfile,
+    .fs_mkpath = __fs_mkpath,
     .fs_rmdir = __fs_rmdir,
     .fs_rename = __fs_rename,
-    .fs_isfile = __fs_isfile,
     .fs_remove = __fs_remove,
+    .fs_size = __fs_size,
 
     .fs_open = __fs_open,
     .fs_close = __fs_close,

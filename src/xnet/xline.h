@@ -132,6 +132,7 @@ typedef struct xline {
     uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *ptr;
+    xdata_t *val;
     xdata_t data;
 }xline_t;
 
@@ -428,18 +429,18 @@ static inline xdata_t* xl_next(xline_t *xl)
 
 static inline xdata_t* xl_find(xline_t *xl, const char *key)
 {
-    xdata_t *val = NULL;
+    // xdata_t *val = NULL;
     uint64_t rpos = xl->rpos;
 
     while (xl->rpos < xl->wpos) {
         xl->key = xl->ptr + xl->rpos;
         xl->rpos += (xl->key[0] + 1);
-        val = (xdata_t*)(xl->ptr + xl->rpos);
-        xl->rpos += __xl_sizeof_line(val);
+        xl->val = (xdata_t*)(xl->ptr + xl->rpos);
+        xl->rpos += __xl_sizeof_line(xl->val);
         if (slength(key) + 1 == xl->key[0]
             && mcompare(key, xl->key + 1, xl->key[0]) == 0){
             xl->key++;
-            return val;
+            return xl->val;
         }
     }
 
@@ -448,12 +449,12 @@ static inline xdata_t* xl_find(xline_t *xl, const char *key)
     while (xl->rpos < rpos) {
         xl->key = xl->ptr + xl->rpos;
         xl->rpos += (xl->key[0] + 1);
-        val = (xdata_t*)(xl->ptr + xl->rpos);
-        xl->rpos += __xl_sizeof_line(val);
+        xl->val = (xdata_t*)(xl->ptr + xl->rpos);
+        xl->rpos += __xl_sizeof_line(xl->val);
         if (slength(key) + 1 == xl->key[0]
             && mcompare(key, xl->key + 1, xl->key[0]) == 0){
             xl->key++;
-            return val;
+            return xl->val;
         }
     }
 

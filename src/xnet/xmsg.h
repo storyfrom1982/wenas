@@ -7,6 +7,8 @@
 #define XMSG_FLAG_POST          0x01
 #define XMSG_FLAG_BACK          0x02
 #define XMSG_FLAG_TIMEDOUT      0x03
+#define XMSG_FLAG_READY         0x04
+#define XMSG_FLAG_STREAM        0x05
 
 typedef struct xltp* xmsgctx_ptr;
 typedef int(*xmsgcb_ptr)(xline_t *msg, xmsgctx_ptr ctx);
