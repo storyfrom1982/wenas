@@ -70,6 +70,13 @@ static void xlio_loop(void *ptr)
                     xl_free(&frame);
                 }
             }
+
+        }else if (stream->flag == XAPI_FS_FLAG_WRITE){
+
+            if(msg->flag == XMSG_FLAG_STREAM){
+                __xcheck(__xapi->fs_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
+            }
+            xl_free(&msg);
         }
     }
 
@@ -147,8 +154,10 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_t
 {
     xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(stream == NULL);
-    __xcheck(!__xapi->fs_isfile(file_path));
-    stream->fd = __xapi->fs_open(file_path, XAPI_FS_FLAG_READ, 0644);
+    if (stream_type == XAPI_FS_FLAG_READ){
+        __xcheck(!__xapi->fs_isfile(file_path));
+    }
+    stream->fd = __xapi->fs_open(file_path, stream_type, 0644);
     __xcheck(stream->fd < 0);
     stream->flag = stream_type;
     stream->pos = 0;
@@ -200,6 +209,10 @@ XClean:
 
 int xlio_stream_write(xlio_stream_t *ios, xline_t *frame)
 {
+    frame->flag = XMSG_FLAG_STREAM;
+    __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
+    return 0;
+XClean:
     return -1;
 }
 

@@ -230,7 +230,6 @@ static inline int xltp_recv_res(xltp_t *xltp, xline_t *msg)
     static uint64_t rid;
     static xline_t *req;
     static xmsgcb_ptr cb;
-    static xmsgctx_ptr ctx;
     xltp->parser = xl_parser(&msg->data);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == XNONE);
@@ -238,13 +237,6 @@ static inline int xltp_recv_res(xltp_t *xltp, xline_t *msg)
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
-    // ctx = xchannel_get_ctx(__xmsg_get_channel(msg));
-    // if(ctx != NULL){
-    //     cb(msg, ctx);
-    //     xltp_del_ctx(ctx);
-    // }else {
-    //     cb(msg, xltp);
-    // }
     cb(msg, xltp);
     xltp_del_req(xltp, req);
     return 0;
@@ -260,15 +252,26 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         if (msg->wpos > 0){
             xltp_recv_res(xltp, msg);
         }
+        xlio_stream_t *ios = xchannel_get_ctx(__xmsg_get_channel(msg));
+        if (ios != NULL){
+            xlio_stream_free(ios);
+        }        
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_RES){
         xltp_recv_res(xltp, msg);
     }else if (msg->type == XPACK_TYPE_MSG){
         __xlogd("recv msg -----\n");
-        xl_free(&msg);
+        xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
+        __xcheck(ios == NULL);
+        __xcheck(xlio_stream_write(ios, msg) != 0);
     }
     return 0;
+XClean:
+    if (msg){
+        xl_free(&msg);
+    }
+    return -1;
 }
 
 static inline int xltp_back(xltp_t *xltp, xline_t *msg)
@@ -498,12 +501,21 @@ XClean:
 
 static int api_put(xline_t *msg, xltp_t *xltp)
 {
-    // __xcheck(msg == NULL);
-    // __xcheck(ctx == NULL);
     xl_printf(&msg->data);
-    // xltp_put_t *put = xltp_make_ctx(xltp, __xmsg_get_channel(msg), recv_put, msg->id);
-    // __xcheck(put == NULL);
-    // xchannel_set_ctx(__xmsg_get_channel(msg), put);
+    xltp->parser = xl_parser(&msg->data);
+    const char *name = xl_find_word(&xltp->parser, "name");
+    __xcheck(name == NULL);
+    const char *path = xl_find_word(&xltp->parser, "path");
+    __xcheck(path == NULL);
+    if (!__xapi->fs_isdir(path)){
+        __xcheck(__xapi->fs_mkpath(path) != 0);
+    }
+    char file_path[1024] = {0};
+    __xapi->snprintf(file_path, 1024, "%s/%s", path, name);
+    xlio_stream_t *ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_WRITE);
+    __xcheck(ios == NULL);
+    xchannel_set_ctx(__xmsg_get_channel(msg), ios);
+
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
