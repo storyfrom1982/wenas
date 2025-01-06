@@ -939,7 +939,7 @@ static void msger_loop(void *ptr)
     for (sid = 0; sid < 2; sid++)
     {
         addr = addrs[sid];
-        // ((uint64_t*)addr)[0] = ((uint64_t*)addr)[1] = ((uint64_t*)addr)[2] = 0;
+        ((uint64_t*)addr)[0] = ((uint64_t*)addr)[1] = ((uint64_t*)addr)[2] = 0; // ubuntu-20.04 需要清零
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
             if (rpack->head.type == XPACK_TYPE_LOCAL){
