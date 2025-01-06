@@ -3,8 +3,8 @@
 
 #include "xnet/xmsger.h"
 
-#define XLIO_STREAM_TYPE_READ        0x01
-#define XLIO_STREAM_TYPE_WRITE       0x02
+// #define XLIO_STREAM_TYPE_READ        0x01
+// #define XLIO_STREAM_TYPE_WRITE       0x02
 
 typedef struct xlio xlio_t;
 typedef struct xlio_stream xlio_stream_t;

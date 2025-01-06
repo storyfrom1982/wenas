@@ -16,10 +16,12 @@
 #define MICRO_SECONDS       1000000ULL
 #define NANO_SECONDS        1000000000ULL
 
-#define __XAPI_TIMEDOUT             1
-#define __XAPI_MAP_FAILED           ((void *) -1)
-#define __XAPI_IP_STR_LEN           46
+#define XAPI_FS_FLAG_READ       0x01
+#define XAPI_FS_FLAG_WRITE      0x02
 
+#define __XAPI_TIMEDOUT         1
+#define __XAPI_MAP_FAILED       ((void *) -1)
+#define __XAPI_IP_STR_LEN       46
 
 
 typedef int __xfile_t;

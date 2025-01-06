@@ -206,7 +206,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
     channel->back_delay = 50000000UL;
-    channel->rid = XEEND;
+    channel->rid = XNONE;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -890,7 +890,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         __xlogd("CHANNEL TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) RID(%lu) CTX(%X)\n", 
                                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid,
                                 channel->rid, channel->ctx);
-                        if (channel->rid == XEEND && channel->ctx == NULL){
+                        if (channel->rid == XNONE && channel->ctx == NULL){
                             // 连接尚未建立，直接释放即可
                             xchannel_free(channel);
                         }else {

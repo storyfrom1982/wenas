@@ -3,7 +3,7 @@
 #include "xpipe.h"
 
 typedef struct xlio_stream {
-    int type;
+    int flag;
     __xfile_t fd;
     uint64_t pos, size;
     struct xlio *io;
@@ -24,10 +24,10 @@ static void xlio_loop(void *ptr)
 {
     __xlogd("xlio_loop >>>>---------------> enter\n");
 
-    int rret = 0;
-    uint64_t *flen = 1280 * 128; //160KB
+    int ret = 0;
     xline_t *msg;
     xline_t *frame;
+    uint64_t framelen = 1280 * 128; //160KB
     xmsgcb_ptr cb;
     xlio_stream_t *stream;
     xlio_t *io = (xlio_t*)ptr;
@@ -39,18 +39,18 @@ static void xlio_loop(void *ptr)
         stream = xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(stream == NULL);
 
-        if (stream->type == XLIO_STREAM_TYPE_READ){
+        if (stream->flag == XAPI_FS_FLAG_READ){
 
             if (msg->flag == XMSG_FLAG_READY){
 
                 xl_free(&msg);
 
                 for (size_t i = 0; i < 3; i++){
-                    frame = xl_creator(flen);
+                    frame = xl_creator(framelen);
                     __xcheck(frame == NULL);
-                    rret = __xapi->fs_read(stream->fd, frame->ptr, flen);
-                    if (rret > 0){
-                        frame->wpos = rret;
+                    ret = __xapi->fs_read(stream->fd, frame->ptr, framelen);
+                    if (ret > 0){
+                        frame->wpos = ret;
                         frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                     }
@@ -60,10 +60,10 @@ static void xlio_loop(void *ptr)
             }else if(msg->flag == XMSG_FLAG_STREAM){
 
                 frame = msg;
-                __xcheck(frame->size != flen);
-                rret = __xapi->fs_read(stream->fd, frame->ptr, flen);
-                if (rret > 0){
-                    frame->wpos = rret;
+                __xcheck(frame->size != framelen);
+                ret = __xapi->fs_read(stream->fd, frame->ptr, framelen);
+                if (ret > 0){
+                    frame->wpos = ret;
                     frame->type = XPACK_TYPE_MSG;
                     __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                 }else {
@@ -148,9 +148,9 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_t
     xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(stream == NULL);
     __xcheck(!__xapi->fs_isfile(file_path));
-    stream->fd = __xapi->fs_open(file_path, 0, 0644);
+    stream->fd = __xapi->fs_open(file_path, XAPI_FS_FLAG_READ, 0644);
     __xcheck(stream->fd < 0);
-    stream->type = stream_type;
+    stream->flag = stream_type;
     stream->pos = 0;
     stream->size = __xapi->fs_size(file_path);
     __xlogd("file size == %lu\n", stream->size);
@@ -208,7 +208,7 @@ uint64_t xlio_stream_length(xlio_stream_t *ios)
     if (ios){
         return ios->size;
     }
-    return XEEND;
+    return XNONE;
 }
 
 uint64_t xlio_stream_update(xlio_stream_t *ios, uint64_t size)

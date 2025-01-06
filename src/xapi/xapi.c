@@ -166,11 +166,16 @@ XClean:
 
 static __xfile_t __fs_open(const char* path, int flags, int mode)
 {
+    __xfile_t fd;
     uv_fs_t open_req;
     //flags UV_FS_O_WRONLY | UV_FS_O_APPEND, UV_FS_O_RDWR | UV_FS_O_CREAT
     // mode S_IWUSR | S_IRUSR
-    // TODO
-    __xfile_t fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDWR, mode, NULL);
+    if (flags == XAPI_FS_FLAG_WRITE){
+        fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, mode, NULL);
+    }else if (flags == XAPI_FS_FLAG_READ){
+        fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDONLY, mode, NULL);
+    }
+    
     uv_fs_req_cleanup(&open_req);
     return fd;
 }
