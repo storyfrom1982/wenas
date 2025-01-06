@@ -7,13 +7,6 @@
 
 typedef struct xltp xltp_t;
 
-// int xltp_request(xltp_t *xltp, xline_t *msg);
-// int xltp_respose(xltp_t *xltp, xline_t *msg);
-
-// int xltp_make_api(xltp_t *xltp, const char *api, xmsg_cb_ptr cb);
-
-// int xltp_post(xltp_t *xltp, xline_t *msg);
-
 int xltp_put(xltp_t *xltp, const char *file, const char *path, const char *ip, uint16_t port);
 int xltp_echo(xltp_t *tp, const char *ip, uint16_t port);
 xltp_t* xltp_create(int boot);

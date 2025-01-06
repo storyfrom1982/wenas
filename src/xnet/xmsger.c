@@ -1,7 +1,7 @@
 #include "xmsger.h"
 
 #include "xtree.h"
-#include "xbuf.h"
+#include "xpipe.h"
 
 #include "xlib/avlmini.h"
 
@@ -217,9 +217,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->sendbuf->range = channel->serial_range;
     channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = 0;
 
-    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xline_t*) * 8);
+    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xline_t*) * 4);
     __xcheck(channel->msgbuf == NULL);
-    channel->msgbuf->range = 8;
+    channel->msgbuf->range = 4;
 
     channel->flushlist.len = 0;
     channel->flushlist.head.prev = &channel->flushlist.head;

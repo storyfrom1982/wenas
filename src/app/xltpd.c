@@ -1,4 +1,4 @@
-#include "xltp.h"
+#include "xnet/xltp.h"
 #include <unistd.h>
 
 int main(int argc, char *argv[])
