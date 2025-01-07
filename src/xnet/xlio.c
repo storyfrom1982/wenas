@@ -71,7 +71,7 @@ static void xlio_loop(void *ptr)
                 }
             }
 
-        }else if (stream->flag == XAPI_FS_FLAG_WRITE){
+        }else if (stream->flag == XAPI_FS_FLAG_WRITE || stream->flag == XAPI_FS_FLAG_CREATE){
 
             if(msg->flag == XMSG_FLAG_STREAM){
                 __xcheck(__xapi->fs_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
