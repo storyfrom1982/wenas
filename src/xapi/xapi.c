@@ -174,6 +174,8 @@ static __xfile_t __fs_open(const char* path, int flags, int mode)
         fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, mode, NULL);
     }else if (flags == XAPI_FS_FLAG_READ){
         fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_RDONLY, mode, NULL);
+    }else if (flags == XAPI_FS_FLAG_CREATE){
+        fd = uv_fs_open(NULL, &open_req, path, UV_FS_O_CREAT | O_TRUNC, mode, NULL);
     }
     
     uv_fs_req_cleanup(&open_req);

@@ -512,7 +512,7 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     }
     char file_path[1024] = {0};
     __xapi->snprintf(file_path, 1024, "%s/%s", path, name);
-    xlio_stream_t *ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_WRITE);
+    xlio_stream_t *ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_CREATE);
     __xcheck(ios == NULL);
     xchannel_set_ctx(__xmsg_get_channel(msg), ios);
 

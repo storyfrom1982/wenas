@@ -18,6 +18,7 @@
 
 #define XAPI_FS_FLAG_READ       0x01
 #define XAPI_FS_FLAG_WRITE      0x02
+#define XAPI_FS_FLAG_CREATE     0x04
 
 #define __XAPI_TIMEDOUT         1
 #define __XAPI_MAP_FAILED       ((void *) -1)

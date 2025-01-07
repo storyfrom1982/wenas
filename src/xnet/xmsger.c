@@ -811,7 +811,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         {
             // readable 是已经写入缓冲区还尚未发送的包
             // 缓冲区中少于 3 个包时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-            if (__serialbuf_readable(channel->sendbuf) < 3){
+            if (__serialbuf_readable(channel->sendbuf) < channel->sendbuf->range >> 1){
                 xchannel_send_pack(channel);
             }
 

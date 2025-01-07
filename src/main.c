@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
             xltp_echo(peer, ip, port);
 
         } else if (strcmp(command, "put") == 0) {
-            xltp_put(peer, "/Users/liyongkang/develop/Kangzixin/build/xltpd", "wenas", ip, port);
+            xltp_put(peer, "./build/xltpd", "wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
         } else if (strcmp(command, "exit") == 0) {
