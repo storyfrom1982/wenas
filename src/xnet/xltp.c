@@ -251,6 +251,8 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
     }else if (msg->type == XPACK_TYPE_BYE){
         if (msg->wpos > 0){
             xltp_recv_res(xltp, msg);
+        }else {
+            xl_free(&msg);
         }
         xlio_stream_t *ios = xchannel_get_ctx(__xmsg_get_channel(msg));
         if (ios != NULL){
