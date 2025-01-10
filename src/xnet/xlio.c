@@ -75,6 +75,8 @@ static void xlio_loop(void *ptr)
 
             if(msg->flag == XMSG_FLAG_STREAM){
                 __xcheck(__xapi->fs_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
+            }else if(msg->flag == XMSG_FLAG_STREAM){
+
             }
             xl_free(&msg);
         }
@@ -152,10 +154,13 @@ void xlio_free(xlio_t **pptr)
 
 xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_type)
 {
+    __xlogd("file path == %s\n", file_path);
     xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(stream == NULL);
     if (stream_type == XAPI_FS_FLAG_READ){
         __xcheck(!__xapi->fs_isfile(file_path));
+    }else {
+
     }
     stream->fd = __xapi->fs_open(file_path, stream_type, 0644);
     __xcheck(stream->fd < 0);

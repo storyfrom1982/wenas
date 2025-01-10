@@ -8,6 +8,7 @@
 typedef struct xltp xltp_t;
 
 int xltp_put(xltp_t *xltp, const char *local_file_path, const char *remote_directory, const char *ip, uint16_t port);
+int xltp_get(xltp_t *xltp, const char *remote_file_path, const char *local_directory, const char *ip, uint16_t port);
 int xltp_echo(xltp_t *tp, const char *ip, uint16_t port);
 xltp_t* xltp_create(int boot);
 void xltp_free(xltp_t **pptr);

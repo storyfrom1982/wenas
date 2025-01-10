@@ -52,6 +52,10 @@ int main(int argc, char *argv[])
             xltp_put(peer, "./build/xltpd", "wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
+        } else if (strcmp(command, "get") == 0) {
+            xltp_get(peer, "./wenas/xltpd", "./tmp/wenas", ip, port);
+            // xltp_put(peer, "xltpd", ip, port);
+
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
             break;
