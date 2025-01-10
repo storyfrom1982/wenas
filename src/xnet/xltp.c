@@ -257,9 +257,9 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
             xlio_stream_free(ios);
         }        
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-        xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_RES){
         xltp_recv_res(xltp, msg);
+        xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_MSG){
         __xlogd("recv msg -----\n");
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
@@ -704,6 +704,7 @@ static int res_get(xline_t *res, xltp_t *xltp)
     __xcheck(ios == NULL);
     xltp->parser = xl_parser(&res->data);
     xl_printf(&res->data);
+    xl_free(&res);
     return 0;
 XClean:
     return -1;
@@ -725,7 +726,7 @@ static int req_get(xline_t *msg, xltp_t *xltp)
     remote_path = xl_find_word(&xltp->parser, "file");
     __xcheck(remote_path == NULL);
     file_path_len = __xl_sizeof_body(xltp->parser.val) - 1;
-    
+
     local_dir = xl_find_word(&xltp->parser, "dir");
     __xcheck(local_dir == NULL);
     if (!__xapi->fs_isdir(local_dir)){
@@ -833,7 +834,7 @@ xltp_t* xltp_create(int boot)
     __xcheck(xltp_make_api(xltp, "get", api_get) != 0);
 
     if (boot){
-        xltp_bootstrap(xltp);
+        // xltp_bootstrap(xltp);
     }
 
     return xltp;
