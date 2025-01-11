@@ -189,19 +189,19 @@ XClean:
     return -1;
 }
 
-static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
+static inline int xltp_send_msg(xltp_t *xltp, xline_t *msg)
 {
-    msg->type = XPACK_TYPE_RES;
+    msg->type = XPACK_TYPE_MSG;
     xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
     return 0;
 XClean:
     return -1;
 }
 
-static inline int xltp_send_bye(xltp_t *xltp, xline_t *msg)
+static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
 {
     __xcheck(xltp == NULL || msg == NULL);
-    msg->type = XPACK_TYPE_BYE;
+    msg->type = XPACK_TYPE_RES;
     xmsger_disconnect(xltp->msger, msg);
     return 0;
 XClean:
@@ -244,11 +244,26 @@ XClean:
     return -1;
 }
 
+static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
+{
+    static char *api;
+    static xmsgcb_ptr cb;
+    xltp->parser = xl_parser(&msg->data);
+    api = xl_find_word(&xltp->parser, "api");
+    __xcheck(api == NULL);
+    cb = xtree_find(xltp->api, api, slength(api));
+    __xcheck(cb == NULL);
+    cb(msg, xltp);
+    return 0;
+XClean:
+    return -1;
+}
+
 static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
 {
     if (msg->type == XPACK_TYPE_REQ){
         xltp_recv_req(xltp, msg);
-    }else if (msg->type == XPACK_TYPE_BYE){
+    }else if (msg->type == XPACK_TYPE_RES){
         if (msg->wpos > 0){
             xltp_recv_res(xltp, msg);
         }else {
@@ -259,10 +274,10 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
             xlio_stream_free(ios);
         }        
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    }else if (msg->type == XPACK_TYPE_RES){
-        xltp_recv_res(xltp, msg);
-        xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_MSG){
+        xltp_recv_msg(xltp, msg);
+        xl_free(&msg);
+    }else if (msg->type == XPACK_TYPE_BIN){
         __xlogd("recv msg -----\n");
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(ios == NULL);
@@ -281,16 +296,16 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
     __xlogd("xltp_back enter\n");
     if (msg->type == XPACK_TYPE_REQ){
         
-    }else if (msg->type == XPACK_TYPE_BYE){
+    }else if (msg->type == XPACK_TYPE_RES){
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    }else if (msg->type == XPACK_TYPE_MSG){
+    }else if (msg->type == XPACK_TYPE_BIN){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(ios == NULL);
         // ios->pos += msg->wpos;
         // __xlogd("put file pos=%lu size=%lu\n", ios->pos, ios->size);
         if (xlio_stream_update(ios, msg->wpos) == 0){
             xl_clear(msg);
-            xltp_send_bye(xltp, msg);
+            xltp_send_res(xltp, msg);
             xlio_stream_free(ios);
             // xltp_del_ctx(ios);
         }else {
@@ -369,6 +384,25 @@ XClean:
 //// 
 ////////////////////////////////////////////////////////////////////
 
+static int api_res(xline_t *msg, xltp_t *xltp)
+{
+    static uint64_t rid;
+    static xline_t *req;
+    static xmsgcb_ptr cb;
+    // xltp->parser = xl_parser(&msg->data);
+    rid = xl_find_uint(&xltp->parser, "rid");
+    __xcheck(rid == XNONE);
+    req = xltp_find_req(xltp, rid);
+    __xcheck(req == NULL);
+    cb = __xmsg_get_cb(req);
+    __xcheck(cb == NULL);
+    cb(msg, xltp);
+    xltp_del_req(xltp, req);
+    return 0;
+XClean:
+    return -1;
+}
+
 static int api_echo(xline_t *msg, xltp_t *xltp)
 {
     // __xcheck(msg == NULL);
@@ -384,7 +418,7 @@ static int api_echo(xline_t *msg, xltp_t *xltp)
     xl_add_obj(&msg, "test", &test->data);
     xl_free(&test);
     xl_add_uint(&msg, "code", 200);
-    xltp_send_bye(xltp, msg);
+    xltp_send_res(xltp, msg);
     return 0;
 XClean:
     return -1;
@@ -448,7 +482,7 @@ static int api_boot(xline_t *msg, xltp_t *xltp)
     uint8_t uuid[32];
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
-    __xcheck(xltp_send_bye(xltp, msg) != 0);
+    __xcheck(xltp_send_res(xltp, msg) != 0);
     return 0;
 XClean:
     if (msg != NULL){
@@ -530,6 +564,7 @@ static int api_put(xline_t *msg, xltp_t *xltp)
 
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
+    __xcheck(xl_add_word(&msg, "api", "res") == XNONE);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
     ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
     port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
@@ -537,7 +572,7 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     __xcheck(xl_add_uint(&msg, "port", port) == XNONE);
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
-    xltp_send_res(xltp, msg);
+    xltp_send_msg(xltp, msg);
     return 0;
 
 XClean:
@@ -675,6 +710,7 @@ static int api_get(xline_t *msg, xltp_t *xltp)
 
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
+    __xcheck(xl_add_word(&msg, "api", "res") == XNONE);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
     ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
     port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
@@ -682,7 +718,7 @@ static int api_get(xline_t *msg, xltp_t *xltp)
     __xcheck(xl_add_uint(&msg, "port", port) == XNONE);
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
-    xltp_send_res(xltp, msg);
+    xltp_send_msg(xltp, msg);
 
     xlio_stream_ready(ios, ready);
     return 0;
@@ -834,6 +870,7 @@ xltp_t* xltp_create(int boot)
     __xcheck(xltp_make_api(xltp, "boot", api_boot) != 0);
     __xcheck(xltp_make_api(xltp, "put", api_put) != 0);
     __xcheck(xltp_make_api(xltp, "get", api_get) != 0);
+    __xcheck(xltp_make_api(xltp, "res", api_res) != 0);
 
     if (boot){
         // xltp_bootstrap(xltp);

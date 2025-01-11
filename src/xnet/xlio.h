@@ -12,6 +12,7 @@ typedef struct xlio_stream xlio_stream_t;
 xlio_t* xlio_create(xmsger_ptr msger);
 void xlio_free(xlio_t **pptr);
 
+// xlio_stream_t* xlio_stream_maker(xlio_t *xlio, const char *file_path, int stream_type, uint64_t rid);
 xlio_stream_t* xlio_stream_maker(xlio_t *xlio, const char *file_path, int stream_type);
 void xlio_stream_free(xlio_stream_t *ios);
 int xlio_stream_ready(xlio_stream_t *ios, xline_t *frame);

@@ -437,7 +437,7 @@ static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr p
 
     // 设置 flag
     pack->head.type = XPACK_TYPE_ACK;
-    pack->head.ack.type = XPACK_TYPE_BYE;
+    pack->head.ack.type = XPACK_TYPE_RES;
     // 设置 acks，通知发送端已经接收了所有包
     pack->head.ack.pos = pack->head.sn + 1;
     pack->head.ack.sn = pack->head.ack.pos;
@@ -770,7 +770,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xlogd("<CONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
-    }else if (head->ack.type == XPACK_TYPE_BYE){
+    }else if (head->ack.type == XPACK_TYPE_RES){
 
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
@@ -963,7 +963,7 @@ static void msger_loop(void *ptr)
 
             if (channel){
 
-                if (rpack->head.type == XPACK_TYPE_MSG || rpack->head.type == XPACK_TYPE_RES) {
+                if (rpack->head.type == XPACK_TYPE_BIN || rpack->head.type == XPACK_TYPE_MSG) {
 
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     if (__serialbuf_sendable(channel->sendbuf) > 0){
@@ -976,7 +976,7 @@ static void msger_loop(void *ptr)
 
                     xchannel_recv_ack(channel, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_RES){
 
                     // 收到完整的消息后会断开连接
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
@@ -1022,7 +1022,7 @@ static void msger_loop(void *ptr)
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_RES){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);
@@ -1067,7 +1067,7 @@ int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
     __xcheck(channel == NULL);
     __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
-        // msg->type = XPACK_TYPE_MSG;
+        // msg->type = XPACK_TYPE_BIN;
         __xcheck(xmsg_fixed(msg) != 0);
         __atom_add(msger->len, msg->wpos);
         __atom_add(channel->len, msg->wpos);

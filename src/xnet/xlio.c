@@ -51,7 +51,7 @@ static void xlio_loop(void *ptr)
                     ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
                     if (ret > 0){
                         frame->wpos = ret;
-                        frame->type = XPACK_TYPE_MSG;
+                        frame->type = XPACK_TYPE_BIN;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                     }
                 }
@@ -64,7 +64,7 @@ static void xlio_loop(void *ptr)
                 ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
                 if (ret > 0){
                     frame->wpos = ret;
-                    frame->type = XPACK_TYPE_MSG;
+                    frame->type = XPACK_TYPE_BIN;
                     __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                 }else {
                     xl_free(&frame);
