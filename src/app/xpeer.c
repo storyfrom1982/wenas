@@ -20,7 +20,7 @@ static inline xline_t* xpeer_make_res(xpeer_t *peer, xline_t *req)
 {
     req->wpos = 0;
     __xmsg_set_cb(req, NULL);
-    peer->parser = xl_parser(&req->data);
+    peer->parser = xl_parser(&req->line);
     __xcheck((req->id = xl_find_uint(&peer->parser, "rid")) == XERR);
     __xcheck(xl_add_uint(&req, "rid", req->id) == XERR);
     xl_hold(req);
@@ -31,15 +31,15 @@ XClean:
 
 static int res_hello(xline_t *res, xmsg_ctx_ptr peer)
 {
-    peer->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    peer->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     return 0;
 }
 
 static int res_echo(xline_t *res, xmsg_ctx_ptr peer)
 {
-    peer->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    peer->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     return 0;
 XClean:
     return -1;
@@ -47,8 +47,8 @@ XClean:
 
 static int res_boot(xline_t *res, xmsg_ctx_ptr peer)
 {
-    peer->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    peer->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     return 0;
 XClean:
     return -1;
@@ -58,7 +58,7 @@ static int api_hello(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
-    xl_printf(&msg->data);
+    xl_printf(&msg->line);
     xline_t *res = xpeer_make_res(peer, msg);
     __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
@@ -77,13 +77,13 @@ static int api_echo(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
-    xl_printf(&msg->data);
+    xl_printf(&msg->line);
     xline_t *res = xpeer_make_res(peer, msg);
     __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
     xl_add_uint(&res, "port", xchannel_get_port(__xmsg_get_channel(msg)));
     xline_t *test = xl_test(10);
-    xl_add_obj(&msg, "test", &test->data);
+    xl_add_obj(&msg, "test", &test->line);
     xl_free(&test);
     xl_add_uint(&res, "code", 200);
     // TODO 这里有可能会阻塞，xpeer 需要运行自己的线程
@@ -97,7 +97,7 @@ static int api_boot(xline_t *msg, xmsg_ctx_ptr peer)
 {
     __xcheck(msg == NULL);
     __xcheck(peer == NULL);
-    xl_printf(&msg->data);
+    xl_printf(&msg->line);
     xline_t *res = xpeer_make_res(peer, msg);
     __xcheck(res == NULL);
     xl_add_word(&res, "host", xchannel_get_ip(__xmsg_get_channel(msg)));
@@ -140,7 +140,7 @@ int req_echo(xline_t *msg, xmsg_ctx_ptr ctx)
     xl_add_word(&msg, "api", "echo");
     xl_add_uint(&msg, "rid", 0);
     xline_t *test = xl_test(10);
-    xl_add_obj(&msg, "test", &test->data);
+    xl_add_obj(&msg, "test", &test->line);
     xl_free(&test);
     __xcheck(xltp_request(peer->xltp, msg) != 0);
     return 0;

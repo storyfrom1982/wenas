@@ -14,11 +14,11 @@ enum {
     XLINE_TYPE_LIST = 0x40  //列表
 };
 
-#define XDATA_SIZE      9
+#define XLINE_SIZE      9
 
-typedef struct xdata {
-    uint8_t b[XDATA_SIZE];
-}xdata_t;
+typedef struct xbyte {
+    uint8_t b[XLINE_SIZE];
+}xbyte_t;
 
 union xreal {
     double f;
@@ -29,7 +29,7 @@ union xreal {
 #ifdef __LITTLE_ENDIAN__
 
 #define __xl_n2b(n, type) \
-        (struct xdata){ \
+        (struct xbyte){ \
             (type), \
             (((char*)&(n))[0]), (((char*)&(n))[1]), \
             (((char*)&(n))[2]), (((char*)&(n))[3]), \
@@ -42,28 +42,28 @@ union xreal {
 #define __xl_f2b(n) __xl_n2b(n, XLINE_TYPE_REAL)
 
 
-#define __xl_b2n(d, type) \
-        ( (type)(d)->b[8] << 56 | (type)(d)->b[7] << 48 | (type)(d)->b[6] << 40 | (type)(d)->b[5] << 32 \
-        | (type)(d)->b[4] << 24 | (type)(d)->b[3] << 16 | (type)(d)->b[2] << 8 | (type)(d)->b[1] )
+#define __xl_b2n(l, type) \
+        ( (type)(l)->b[8] << 56 | (type)(l)->b[7] << 48 | (type)(l)->b[6] << 40 | (type)(l)->b[5] << 32 \
+        | (type)(l)->b[4] << 24 | (type)(l)->b[3] << 16 | (type)(l)->b[2] << 8 | (type)(l)->b[1] )
 
-static inline double __xl_b2float(xdata_t *d)
+static inline double __xl_b2float(xbyte_t *l)
 {
     union xreal f;
-    f.b[0] = d->b[1];
-    f.b[1] = d->b[2];
-    f.b[2] = d->b[3];
-    f.b[3] = d->b[4];
-    f.b[4] = d->b[5];
-    f.b[5] = d->b[6];
-    f.b[6] = d->b[7];
-    f.b[7] = d->b[8];
+    f.b[0] = l->b[1];
+    f.b[1] = l->b[2];
+    f.b[2] = l->b[3];
+    f.b[3] = l->b[4];
+    f.b[4] = l->b[5];
+    f.b[5] = l->b[6];
+    f.b[6] = l->b[7];
+    f.b[7] = l->b[8];
     return f.f;
 }
 
 #else //__LITTLE_ENDIAN__
 
 #define __xl_n2b(n, type) \
-        (struct xdata){ \
+        (struct xbyte){ \
             type, \
             (((char*)&(n))[7]), (((char*)&(n))[6]), \
             (((char*)&(n))[5]), (((char*)&(n))[4]), \
@@ -76,21 +76,21 @@ static inline double __xl_b2float(xdata_t *d)
 #define __xl_f2b(n) __xl_n2b(n, XLINE_TYPE_REAL)
 
 
-#define __xl_b2n(d, type) \
-        ( (type)(d)->b[1] << 56 | (type)(d)->b[2] << 48 | (type)(d)->b[3] << 40 | (type)(d)->b[4] << 32 \
-        | (type)(d)->b[5] << 24 | (type)(d)->b[6] << 16 | (type)(d)->b[7] << 8 | (type)(d)->b[8] )
+#define __xl_b2n(l, type) \
+        ( (type)(l)->b[1] << 56 | (type)(l)->b[2] << 48 | (type)(l)->b[3] << 40 | (type)(l)->b[4] << 32 \
+        | (type)(l)->b[5] << 24 | (type)(l)->b[6] << 16 | (type)(l)->b[7] << 8 | (type)(l)->b[8] )
 
-static inline double __xl_b2float(xdata_t *d)
+static inline double __xl_b2float(xbyte_t *l)
 {
     union xreal f;
-    f.b[0] = d->b[8];
-    f.b[1] = d->b[7];
-    f.b[2] = d->b[6];
-    f.b[3] = d->b[5];
-    f.b[4] = d->b[4];
-    f.b[5] = d->b[3];
-    f.b[6] = d->b[2];
-    f.b[7] = d->b[1];
+    f.b[0] = l->b[8];
+    f.b[1] = l->b[7];
+    f.b[2] = l->b[6];
+    f.b[3] = l->b[5];
+    f.b[4] = l->b[4];
+    f.b[5] = l->b[3];
+    f.b[6] = l->b[2];
+    f.b[7] = l->b[1];
     return f.f;
 }
 
@@ -99,7 +99,7 @@ static inline double __xl_b2float(xdata_t *d)
 #define __xl_b2i(l)                 (__xl_b2n(l, int64_t))
 #define __xl_b2u(l)                 (__xl_b2n(l, uint64_t))
 #define __xl_b2f(l)                 (__xl_b2float(l))
-#define __xl_b2o(l)                 ((void*)&(l)->b[XDATA_SIZE])
+#define __xl_b2o(l)                 ((void*)&(l)->b[XLINE_SIZE])
 
 #define __xl_typeis_int(l)          ((l)->b[0] == XLINE_TYPE_INT)
 #define __xl_typeis_uint(l)         ((l)->b[0] == XLINE_TYPE_UINT)
@@ -111,9 +111,9 @@ static inline double __xl_b2float(xdata_t *d)
 #define __xl_typeis_obj(l)          ((l)->b[0] == XLINE_TYPE_OBJ)
 #define __xl_typeis_list(l)         ((l)->b[0] == XLINE_TYPE_LIST)
 
-#define __xl_sizeof_head(l)         (__xl_typeis_num(l) ? 1 : XDATA_SIZE)
+#define __xl_sizeof_head(l)         (__xl_typeis_num(l) ? 1 : XLINE_SIZE)
 #define __xl_sizeof_body(l)         (__xl_typeis_num(l) ? 8 : __xl_b2u((l)))
-#define __xl_sizeof_line(l)         (__xl_typeis_num(l) ? XDATA_SIZE : __xl_b2u((l)) + XDATA_SIZE)
+#define __xl_sizeof_line(l)         (__xl_typeis_num(l) ? XLINE_SIZE : __xl_b2u((l)) + XLINE_SIZE)
 
 
 // #define XLINE_MAKER_SIZE            (1024 * 16)
@@ -132,8 +132,8 @@ typedef struct xline {
     uint64_t wpos, rpos, size;
     uint8_t *key;
     uint8_t *ptr;
-    xdata_t *val;
-    xdata_t data;
+    xbyte_t *val;
+    xbyte_t line;
 }xline_t;
 
 
@@ -147,7 +147,7 @@ static inline xline_t* xl_creator(uint64_t size)
     xl->rpos = 0;
     xl->args[0] = xl->args[1] = xl->args[2] = xl->args[3] = NULL;
     xl->prev = xl->next = NULL;
-    xl->ptr = xl->data.b + XDATA_SIZE;
+    xl->ptr = xl->line.b + XLINE_SIZE;
     return xl;
 XClean:
     return NULL;
@@ -165,7 +165,7 @@ static inline void xl_hold(xline_t *xl)
 
 static inline void xl_fixed(xline_t *xl)
 {
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
 }
 
 static inline void xl_clear(xline_t *xl)
@@ -198,7 +198,7 @@ static inline void xl_free(xline_t **pptr)
         xl = (xline_t*)malloc(sizeof(xline_t) + xl->size); \
         __xcheck(xl == NULL); \
         mcopy(xl, (*pptr), sizeof(xline_t) + (*pptr)->wpos); \
-        xl->ptr = xl->data.b + XDATA_SIZE; \
+        xl->ptr = xl->line.b + XLINE_SIZE; \
         xl->size = (*pptr)->size; \
         free((*pptr)); \
         *pptr = xl; \
@@ -208,23 +208,23 @@ static inline uint64_t xl_add_obj_begin(xline_t **pptr, const char *key)
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = (key != NULL ? keylen + 2 + XDATA_SIZE : XDATA_SIZE);
+    uint64_t newlen = (key != NULL ? keylen + 2 + XLINE_SIZE : XLINE_SIZE);
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     if (key != NULL){
         __xl_fill_key(xl, key, keylen);
     }
-    xl->wpos += XDATA_SIZE;
-    return xl->wpos - XDATA_SIZE;
+    xl->wpos += XLINE_SIZE;
+    return xl->wpos - XLINE_SIZE;
 XClean:
     return XNONE;
 }
 
 static inline void xl_add_obj_end(xline_t **pptr, uint64_t pos)
 {
-    uint64_t len = (*pptr)->wpos - pos - XDATA_SIZE;
-    *((xdata_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
+    uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
+    *((xbyte_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
 }
 
 static inline uint64_t xl_add_list_begin(xline_t **pptr, const char *key)
@@ -234,8 +234,8 @@ static inline uint64_t xl_add_list_begin(xline_t **pptr, const char *key)
 
 static inline void xl_add_list_end(xline_t **pptr, uint64_t pos)
 {
-    uint64_t len = (*pptr)->wpos - pos - XDATA_SIZE;
-    *((xdata_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
+    uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
+    *((xbyte_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
 }
 
 static inline uint64_t xl_add_word(xline_t **pptr, const char *key, const char *word)
@@ -243,16 +243,16 @@ static inline uint64_t xl_add_word(xline_t **pptr, const char *key, const char *
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
     uint64_t wordlen = slength(word) + 1;
-    uint64_t newlen = keylen + 2 + XDATA_SIZE + wordlen;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE + wordlen;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_n2b(wordlen, XLINE_TYPE_STR);
-    xl->wpos += XDATA_SIZE;
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_n2b(wordlen, XLINE_TYPE_STR);
+    xl->wpos += XLINE_SIZE;
     mcopy(xl->ptr + xl->wpos, word, wordlen);
     xl->wpos += wordlen;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -262,16 +262,16 @@ static inline uint64_t xl_add_str(xline_t **pptr, const char *key, const char *s
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE + size;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_n2b(size, XLINE_TYPE_STR);
-    xl->wpos += XDATA_SIZE;
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_n2b(size, XLINE_TYPE_STR);
+    xl->wpos += XLINE_SIZE;
     mcopy(xl->ptr + xl->wpos, str, size);
     xl->wpos += size;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -281,29 +281,29 @@ static inline uint64_t xl_add_bin(xline_t **pptr, const char *key, const void *b
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE + size;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_n2b(size, XLINE_TYPE_BIN);
-    xl->wpos += XDATA_SIZE;
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_n2b(size, XLINE_TYPE_BIN);
+    xl->wpos += XLINE_SIZE;
     if (bin != NULL){
         mcopy(xl->ptr + xl->wpos, bin, size);
     }
     xl->wpos += size;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
 }
 
-static inline uint64_t xl_add_obj(xline_t **pptr, const char *key, xdata_t *xd)
+static inline uint64_t xl_add_obj(xline_t **pptr, const char *key, xbyte_t *xd)
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
     uint64_t size = __xl_sizeof_line(xd);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE + size;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
@@ -312,7 +312,7 @@ static inline uint64_t xl_add_obj(xline_t **pptr, const char *key, xdata_t *xd)
         mcopy(xl->ptr + xl->wpos, xd->b, size);
     }
     xl->wpos += size;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -322,14 +322,14 @@ static inline uint64_t xl_add_int(xline_t **pptr, const char *key, int64_t i64)
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_i2b(i64);
-    xl->wpos += XDATA_SIZE;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_i2b(i64);
+    xl->wpos += XLINE_SIZE;
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -339,14 +339,14 @@ static inline uint64_t xl_add_uint(xline_t **pptr, const char *key, uint64_t u64
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_u2b(u64);
-    xl->wpos += XDATA_SIZE;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_u2b(u64);
+    xl->wpos += XLINE_SIZE;
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -356,14 +356,14 @@ static inline uint64_t xl_add_float(xline_t **pptr, const char *key, double f64)
 {
     xline_t *xl = *pptr;
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_f2b(f64);
-    xl->wpos += XDATA_SIZE;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_f2b(f64);
+    xl->wpos += XLINE_SIZE;
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
@@ -374,20 +374,20 @@ static inline uint64_t xl_add_ptr(xline_t **pptr, const char *key, void *ptr)
     xline_t *xl = *pptr;
     uint64_t u64 = (uint64_t)(ptr);
     uint64_t keylen = slength(key);
-    uint64_t newlen = keylen + 2 + XDATA_SIZE;
+    uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((xl->size - xl->wpos) < newlen){
         __xl_realloc(xl, pptr, newlen);
     }
     __xl_fill_key(xl, key, keylen);
-    *((xdata_t*)(xl->ptr + xl->wpos)) = __xl_u2b(u64);
-    xl->wpos += XDATA_SIZE;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
+    *((xbyte_t*)(xl->ptr + xl->wpos)) = __xl_u2b(u64);
+    xl->wpos += XLINE_SIZE;
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_OBJ);
     return xl->wpos;
 XClean:
     return XNONE;
 }
 
-static inline uint64_t xl_list_add(xline_t **pptr, xdata_t *xd)
+static inline uint64_t xl_list_add(xline_t **pptr, xbyte_t *xd)
 {
     xline_t *xl = *pptr;
     uint64_t size = __xl_sizeof_line(xd);
@@ -398,44 +398,44 @@ static inline uint64_t xl_list_add(xline_t **pptr, xdata_t *xd)
         mcopy(xl->ptr + xl->wpos, xd->b, size);
     }
     xl->wpos += size;
-    xl->data = __xl_n2b(xl->wpos, XLINE_TYPE_LIST);
+    xl->line = __xl_n2b(xl->wpos, XLINE_TYPE_LIST);
     return xl->wpos;
 XClean:
     return XNONE;
 }
 
-static inline xdata_t* xl_list_next(xline_t *xl)
+static inline xbyte_t* xl_list_next(xline_t *xl)
 {
     if (xl->rpos < xl->wpos){
-        xdata_t *ptr = (xdata_t*)(xl->ptr + xl->rpos);
+        xbyte_t *ptr = (xbyte_t*)(xl->ptr + xl->rpos);
         xl->rpos += __xl_sizeof_line(ptr);
         return ptr;
     }
     return NULL;
 }
 
-static inline xdata_t* xl_next(xline_t *xl)
+static inline xbyte_t* xl_next(xline_t *xl)
 {
     if (xl->rpos < xl->wpos){
         xl->key = xl->ptr + xl->rpos;
         xl->rpos += (xl->key[0] + 1);
         xl->key++;
-        xdata_t *val = (xdata_t*)(xl->ptr + xl->rpos);
+        xbyte_t *val = (xbyte_t*)(xl->ptr + xl->rpos);
         xl->rpos += __xl_sizeof_line(val);
         return val;
     }
     return NULL;
 }
 
-static inline xdata_t* xl_find(xline_t *xl, const char *key)
+static inline xbyte_t* xl_find(xline_t *xl, const char *key)
 {
-    // xdata_t *val = NULL;
+    // xbyte_t *val = NULL;
     uint64_t rpos = xl->rpos;
 
     while (xl->rpos < xl->wpos) {
         xl->key = xl->ptr + xl->rpos;
         xl->rpos += (xl->key[0] + 1);
-        xl->val = (xdata_t*)(xl->ptr + xl->rpos);
+        xl->val = (xbyte_t*)(xl->ptr + xl->rpos);
         xl->rpos += __xl_sizeof_line(xl->val);
         if (slength(key) + 1 == xl->key[0]
             && mcompare(key, xl->key + 1, xl->key[0]) == 0){
@@ -449,7 +449,7 @@ static inline xdata_t* xl_find(xline_t *xl, const char *key)
     while (xl->rpos < rpos) {
         xl->key = xl->ptr + xl->rpos;
         xl->rpos += (xl->key[0] + 1);
-        xl->val = (xdata_t*)(xl->ptr + xl->rpos);
+        xl->val = (xbyte_t*)(xl->ptr + xl->rpos);
         xl->rpos += __xl_sizeof_line(xl->val);
         if (slength(key) + 1 == xl->key[0]
             && mcompare(key, xl->key + 1, xl->key[0]) == 0){
@@ -463,7 +463,7 @@ static inline xdata_t* xl_find(xline_t *xl, const char *key)
 
 static inline int64_t xl_find_int(xline_t *xl, const char *key)
 {
-    xdata_t *val = xl_find(xl, key);
+    xbyte_t *val = xl_find(xl, key);
     if (val){
         return __xl_b2i(val);
     }
@@ -472,7 +472,7 @@ static inline int64_t xl_find_int(xline_t *xl, const char *key)
 
 static inline uint64_t xl_find_uint(xline_t *xl, const char *key)
 {
-    xdata_t *val = xl_find(xl, key);
+    xbyte_t *val = xl_find(xl, key);
     if (val){
         return __xl_b2u(val);
     }
@@ -481,7 +481,7 @@ static inline uint64_t xl_find_uint(xline_t *xl, const char *key)
 
 static inline double xl_find_float(xline_t *xl, const char *key)
 {
-    xdata_t *val = xl_find(xl, key);
+    xbyte_t *val = xl_find(xl, key);
     if (val){
         return __xl_b2f(val);
     }
@@ -490,7 +490,7 @@ static inline double xl_find_float(xline_t *xl, const char *key)
 
 static inline char* xl_find_word(xline_t *xl, const char *key)
 {
-    xdata_t *val = xl_find(xl, key);
+    xbyte_t *val = xl_find(xl, key);
     if (val){
         return (char*)__xl_b2o(val);
     }
@@ -499,14 +499,14 @@ static inline char* xl_find_word(xline_t *xl, const char *key)
 
 static inline void* xl_find_ptr(xline_t *xl, const char *key)
 {
-    xdata_t *val = xl_find(xl, key);
+    xbyte_t *val = xl_find(xl, key);
     if (val){
         return (void *)(__xl_b2u(val));
     }
     return NULL;
 }
 
-static xline_t xl_parser(xdata_t *xd)
+static xline_t xl_parser(xbyte_t *xd)
 {
     xline_t parser = {0};
     parser.rpos = 0;
@@ -515,7 +515,7 @@ static xline_t xl_parser(xdata_t *xd)
     return parser;
 }
 
-static void xl_format(xdata_t *xd, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
+static void xl_format(xbyte_t *xd, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
 {
     xline_t parser = xl_parser(xd);
 
@@ -631,7 +631,7 @@ static xline_t* xl_test(int count)
     xl_add_int(&xl, "int", -123456789);
     xl_add_uint(&xl, "uint", 123456789);
     xl_add_float(&xl, "float", 123456789.123);
-    // xl_printf(&xl->data);
+    // xl_printf(&xl->line);
 
     uint64_t obj_pos = xl_add_obj_begin(&xl, "obj");
         xl_add_word(&xl, "word", "hello word");
@@ -641,7 +641,7 @@ static xline_t* xl_test(int count)
         xl_add_uint(&xl, "uint", 123456789);
         xl_add_float(&xl, "float", 123456789.123);
     xl_add_obj_end(&xl, obj_pos);
-    // xl_printf(&xl->data);
+    // xl_printf(&xl->line);
 
     uint64_t list_pos = xl_add_list_begin(&xl, "list");
     for (int i = 0; i < 3; ++i){
@@ -655,7 +655,7 @@ static xline_t* xl_test(int count)
         xl_add_obj_end(&xl, tmp_pos);
     }
     xl_add_list_end(&xl, list_pos);
-    // xl_printf(&xl->data);
+    // xl_printf(&xl->line);
 
     xobj = xl_maker();
     xl_add_word(&xobj, "word", "hello word");
@@ -664,33 +664,33 @@ static xline_t* xl_test(int count)
     xl_add_int(&xobj, "int", -123456789);
     xl_add_uint(&xobj, "uint", 123456789);
     xl_add_float(&xobj, "float", 123456789.123);
-    xl_add_obj(&xl, "addobj", &xobj->data);
+    xl_add_obj(&xl, "addobj", &xobj->line);
     
-    // xl_printf(&xl->data);
+    // xl_printf(&xl->line);
 
     xlist = xl_maker();
     for (int i = 0; i < 10; ++i){
         double f = i * 0.1f;
         xl_list_add(&xlist, &__xl_f2b(f));
     }
-    // xl_printf(&xlist->data);
+    // xl_printf(&xlist->line);
 
-    xl_add_obj(&xl, "addlist", &xlist->data);
+    xl_add_obj(&xl, "addlist", &xlist->line);
     
 
     xstrlist = xl_maker();
     for (int i = 0; i < 10; ++i){
         char str[64] = {0};
         uint64_t len = slength("hello") + 1;
-        *((xdata_t*)(str)) = __xl_n2b(len, XLINE_TYPE_STR);
+        *((xbyte_t*)(str)) = __xl_n2b(len, XLINE_TYPE_STR);
         mcopy(str + 9, "hello", len);
-        xl_list_add(&xstrlist, (xdata_t*)str);
+        xl_list_add(&xstrlist, (xbyte_t*)str);
     }
-    // xl_printf(&xstrlist->data);
+    // xl_printf(&xstrlist->line);
 
-    xl_add_obj(&xl, "strlist", &xstrlist->data);
+    xl_add_obj(&xl, "strlist", &xstrlist->line);
 
-    // xl_printf(&xl->data);
+    // xl_printf(&xl->line);
 
     xl_free(&xstrlist);
     xl_free(&xobj);

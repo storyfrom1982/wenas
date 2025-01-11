@@ -212,7 +212,7 @@ static inline int xltp_recv_req(xltp_t *xltp, xline_t *msg)
 {
     static char *api;
     static xmsgcb_ptr cb;
-    xltp->parser = xl_parser(&msg->data);
+    xltp->parser = xl_parser(&msg->line);
     api = xl_find_word(&xltp->parser, "api");
     __xcheck(api == NULL);
     msg->id = xl_find_uint(&xltp->parser, "rid");
@@ -230,7 +230,7 @@ static inline int xltp_recv_res(xltp_t *xltp, xline_t *msg)
     static uint64_t rid;
     static xline_t *req;
     static xmsgcb_ptr cb;
-    xltp->parser = xl_parser(&msg->data);
+    xltp->parser = xl_parser(&msg->line);
     rid = xl_find_uint(&xltp->parser, "rid");
     __xcheck(rid == XNONE);
     req = xltp_find_req(xltp, rid);
@@ -248,7 +248,7 @@ static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
 {
     static char *api;
     static xmsgcb_ptr cb;
-    xltp->parser = xl_parser(&msg->data);
+    xltp->parser = xl_parser(&msg->line);
     api = xl_find_word(&xltp->parser, "api");
     __xcheck(api == NULL);
     cb = xtree_find(xltp->api, api, slength(api));
@@ -407,7 +407,7 @@ static int api_echo(xline_t *msg, xltp_t *xltp)
 {
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
-    xl_printf(&msg->data);
+    xl_printf(&msg->line);
     xl_clear(msg);
     xl_add_uint(&msg, "rid", msg->id);
     const char *ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
@@ -415,7 +415,7 @@ static int api_echo(xline_t *msg, xltp_t *xltp)
     __xcheck(xl_add_word(&msg, "ip", ip) == XNONE);
     __xcheck(xl_add_uint(&msg, "port", port) == XNONE);
     xline_t *test = xl_test(10);
-    xl_add_obj(&msg, "test", &test->data);
+    xl_add_obj(&msg, "test", &test->line);
     xl_free(&test);
     xl_add_uint(&msg, "code", 200);
     xltp_send_res(xltp, msg);
@@ -426,8 +426,8 @@ XClean:
 
 static int res_echo(xline_t *res, xltp_t *xltp)
 {
-    xltp->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    xltp->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     return 0;
 XClean:
     return -1;
@@ -438,7 +438,7 @@ static int req_echo(xline_t *msg, xltp_t *xltp)
     msg = xltp_make_req(xltp, msg, "echo", res_echo);
     __xcheck(msg == NULL);
     xline_t *test = xl_test(10);
-    xl_add_obj(&msg, "test", &test->data);
+    xl_add_obj(&msg, "test", &test->line);
     xl_free(&test);    
     __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
@@ -471,7 +471,7 @@ static int api_boot(xline_t *msg, xltp_t *xltp)
 {
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
-    xl_printf(&msg->data);
+    xl_printf(&msg->line);
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
     __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
@@ -493,8 +493,8 @@ XClean:
 
 static int res_boot(xline_t *res, xltp_t *xltp)
 {
-    xltp->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    xltp->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     return 0;
 XClean:
     return -1;
@@ -508,7 +508,7 @@ static int req_boot(xline_t *msg, xltp_t *xltp)
     // __xipaddr_ptr addr = __xapi->udp_host_to_addr("192.168.1.7", 9256);
     __xmsg_set_ipaddr(msg, addr);
     xline_t *test = xl_test(10);
-    xl_add_obj(&msg, "test", &test->data);
+    xl_add_obj(&msg, "test", &test->line);
     xl_free(&test);
     __xcheck(xltp_send_req(xltp, msg) != 0);
     return 0;
@@ -546,8 +546,8 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     char file_path[2048];
     xlio_stream_t *ios;
 
-    xl_printf(&msg->data);
-    xltp->parser = xl_parser(&msg->data);
+    xl_printf(&msg->line);
+    xltp->parser = xl_parser(&msg->line);
     file = xl_find_word(&xltp->parser, "file");
     __xcheck(file == NULL);
     dir = xl_find_word(&xltp->parser, "dir");
@@ -589,8 +589,8 @@ static int res_put(xline_t *res, xltp_t *xltp)
 {
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(res));
     __xcheck(ios == NULL);
-    xltp->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    xltp->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     xlio_stream_ready(ios, res);
     return 0;
 XClean:
@@ -619,7 +619,7 @@ static int req_put(xline_t *msg, xltp_t *xltp)
     xline_t *req = xl_maker();
     __xcheck(req == NULL);
 
-    xltp->parser = xl_parser(&msg->data);
+    xltp->parser = xl_parser(&msg->line);
     file_path = xl_find_word(&xltp->parser, "file");
     __xcheck(file_path == NULL);
     file_path_len = __xl_sizeof_body(xltp->parser.val) - 1;
@@ -698,8 +698,8 @@ static int api_get(xline_t *msg, xltp_t *xltp)
         ready->args[i] = msg->args[i];
     }
 
-    xl_printf(&msg->data);
-    xltp->parser = xl_parser(&msg->data);
+    xl_printf(&msg->line);
+    xltp->parser = xl_parser(&msg->line);
     file_path = xl_find_word(&xltp->parser, "file");
     __xcheck(file_path == NULL);
     __xcheck(!__xapi->fs_file_exist(file_path));
@@ -740,8 +740,8 @@ static int res_get(xline_t *res, xltp_t *xltp)
 {
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(res));
     __xcheck(ios == NULL);
-    xltp->parser = xl_parser(&res->data);
-    xl_printf(&res->data);
+    xltp->parser = xl_parser(&res->line);
+    xl_printf(&res->line);
     xl_free(&res);
     return 0;
 XClean:
@@ -760,7 +760,7 @@ static int req_get(xline_t *msg, xltp_t *xltp)
     xline_t *req = xl_maker();
     __xcheck(req == NULL);
 
-    xltp->parser = xl_parser(&msg->data);
+    xltp->parser = xl_parser(&msg->line);
     remote_path = xl_find_word(&xltp->parser, "file");
     __xcheck(remote_path == NULL);
     file_path_len = __xl_sizeof_body(xltp->parser.val) - 1;
