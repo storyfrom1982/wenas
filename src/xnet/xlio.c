@@ -48,7 +48,7 @@ static void xlio_loop(void *ptr)
                 for (size_t i = 0; i < 3; i++){
                     frame = xl_creator(framelen);
                     __xcheck(frame == NULL);
-                    ret = __xapi->fs_read(stream->fd, frame->ptr, framelen);
+                    ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
                     if (ret > 0){
                         frame->wpos = ret;
                         frame->type = XPACK_TYPE_MSG;
@@ -61,7 +61,7 @@ static void xlio_loop(void *ptr)
 
                 frame = msg;
                 __xcheck(frame->size != framelen);
-                ret = __xapi->fs_read(stream->fd, frame->ptr, framelen);
+                ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
                 if (ret > 0){
                     frame->wpos = ret;
                     frame->type = XPACK_TYPE_MSG;
@@ -74,7 +74,7 @@ static void xlio_loop(void *ptr)
         }else if (stream->flag == XAPI_FS_FLAG_WRITE || stream->flag == XAPI_FS_FLAG_CREATE){
 
             if(msg->flag == XMSG_FLAG_STREAM){
-                __xcheck(__xapi->fs_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
+                __xcheck(__xapi->fs_file_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
             }else if(msg->flag == XMSG_FLAG_STREAM){
 
             }
@@ -158,15 +158,15 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_t
     xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(stream == NULL);
     if (stream_type == XAPI_FS_FLAG_READ){
-        __xcheck(!__xapi->fs_isfile(file_path));
+        __xcheck(!__xapi->fs_file_exist(file_path));
     }else {
 
     }
-    stream->fd = __xapi->fs_open(file_path, stream_type, 0644);
+    stream->fd = __xapi->fs_file_open(file_path, stream_type, 0644);
     __xcheck(stream->fd < 0);
     stream->flag = stream_type;
     stream->pos = 0;
-    stream->size = __xapi->fs_size(file_path);
+    stream->size = __xapi->fs_file_size(file_path);
     __xlogd("file size == %lu\n", stream->size);
     stream->io = io;
     stream->channel = NULL;
@@ -188,7 +188,7 @@ void xlio_stream_free(xlio_stream_t *ios)
         ios->prev->next = ios->next;
         ios->next->prev = ios->prev;
         if (ios->fd > 0){
-            __xapi->fs_close(ios->fd);
+            __xapi->fs_file_close(ios->fd);
         }
         free(ios);
     }

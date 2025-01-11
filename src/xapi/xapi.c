@@ -163,8 +163,67 @@ XClean:
 #include <limits.h>
 #include <sys/stat.h>
 
+__xdir_ptr __fs_dir_open(const char* path)
+{
+    uv_dir_t *dir = NULL;
+    uv_fs_t opendir_req;
+    __xcheck(uv_fs_opendir(NULL, &opendir_req, path, NULL) == UV_ENOTDIR);
+    __xcheck(opendir_req.ptr == NULL);
+    dir = (uv_dir_t*)opendir_req.ptr;
+XClean:
+    uv_fs_req_cleanup(&opendir_req);
+    return dir;
+}
 
-static __xfile_t __fs_open(const char* path, int flags, int mode)
+int __fs_dir_read(__xdir_ptr xdir, int(*cb)(const char *name, void *ctx), void *ctx)
+{
+    int ret;
+    uv_fs_t readdir_req;
+    uv_dirent_t dirents[1];
+    uv_dir_t *dir = (uv_dir_t*)xdir;
+    dir->dirents = dirents;
+    dir->nentries = (sizeof(dirents) / sizeof(dirents[0]));
+    ret = uv_fs_readdir(NULL, &readdir_req, dir, NULL);
+    if ((ret != 0)){
+        cb(dirents[0].name, ctx);
+    }
+    uv_fs_req_cleanup(&readdir_req);
+    return ret;
+}
+
+void __fs_dir_close(__xdir_ptr dir)
+{
+    uv_fs_t closedir_req;
+    uv_fs_closedir(NULL, &closedir_req, (uv_dir_t*)dir, NULL);
+    uv_fs_req_cleanup(&closedir_req);
+}
+
+static int __fs_dir_exist(const char* path)
+{
+    uv_fs_t stat_req;
+    int r = uv_fs_stat(NULL, &stat_req, path, NULL);
+    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFDIR);
+    uv_fs_req_cleanup(&stat_req);
+    return r;
+}
+
+static int __fs_dir_maker(const char* path)
+{
+    uv_fs_t mkdir_req;
+    int r = uv_fs_mkdir(NULL, &mkdir_req, path, 0755, NULL);
+    uv_fs_req_cleanup(&mkdir_req);
+    return r;
+}
+
+static int __fs_dir_remove(const char* path)
+{
+    uv_fs_t rmdir_req;
+    int r = uv_fs_rmdir(NULL, &rmdir_req, path, NULL);
+    uv_fs_req_cleanup(&rmdir_req);
+    return r;
+}
+
+static __xfile_t __fs_file_open(const char* path, int flags, int mode)
 {
     __xfile_t fd;
     uv_fs_t open_req;
@@ -182,7 +241,7 @@ static __xfile_t __fs_open(const char* path, int flags, int mode)
     return fd;
 }
 
-static int __fs_close(__xfile_t fd)
+static int __fs_file_close(__xfile_t fd)
 {
     uv_fs_t close_req;
     int r = uv_fs_close(NULL, &close_req, fd, NULL);
@@ -190,7 +249,7 @@ static int __fs_close(__xfile_t fd)
     return r;
 }
 
-static int __fs_write(__xfile_t fd, void *data, unsigned int size)
+static int __fs_file_write(__xfile_t fd, void *data, unsigned int size)
 {
     uv_fs_t write_req;
     uv_buf_t iov = uv_buf_init(data, size);
@@ -199,7 +258,7 @@ static int __fs_write(__xfile_t fd, void *data, unsigned int size)
     return r;
 }
 
-static int __fs_read(__xfile_t fd, void *buf, unsigned int size)
+static int __fs_file_read(__xfile_t fd, void *buf, unsigned int size)
 {
     uv_fs_t read_req;
     uv_buf_t iov = uv_buf_init(buf, size);
@@ -208,17 +267,17 @@ static int __fs_read(__xfile_t fd, void *buf, unsigned int size)
     return r;
 }
 
-static int64_t __fs_tell(__xfile_t fd)
+static int64_t __fs_file_tell(__xfile_t fd)
 {
     return lseek(fd, 0, SEEK_CUR);
 }
 
-static int64_t __fs_lseek(__xfile_t fd, int64_t offset, int32_t whence)
+static int64_t __fs_file_seek(__xfile_t fd, int64_t offset, int32_t whence)
 {
     return lseek(fd, offset, SEEK_SET);
 }
 
-static uint64_t __fs_size(const char* filename)
+static uint64_t __fs_file_size(const char* filename)
 {
     uv_fs_t stat_req;
     uint64_t size = 0;
@@ -230,7 +289,7 @@ static uint64_t __fs_size(const char* filename)
     return size;
 }
 
-static int __fs_isfile(const char* filepath)
+static int __fs_file_exist(const char* filepath)
 {
     uv_fs_t stat_req;
     int r = uv_fs_stat(NULL, &stat_req, filepath, NULL);
@@ -239,32 +298,7 @@ static int __fs_isfile(const char* filepath)
     return r;
 }
 
-static int __fs_isdir(const char* path)
-{
-    uv_fs_t stat_req;
-    int r = uv_fs_stat(NULL, &stat_req, path, NULL);
-    r = (r == 0 && ((uv_stat_t*)stat_req.ptr)->st_mode & S_IFDIR);
-    uv_fs_req_cleanup(&stat_req);
-    return r;
-}
-
-static int __fs_mkdir(const char* path)
-{
-    uv_fs_t mkdir_req;
-    int r = uv_fs_mkdir(NULL, &mkdir_req, path, 0755, NULL);
-    uv_fs_req_cleanup(&mkdir_req);
-    return r;
-}
-
-static int __fs_rmdir(const char* path)
-{
-    uv_fs_t rmdir_req;
-    int r = uv_fs_rmdir(NULL, &rmdir_req, path, NULL);
-    uv_fs_req_cleanup(&rmdir_req);
-    return r;
-}
-
-static int __fs_remove(const char* path)
+static int __fs_file_remove(const char* path)
 {
     uv_fs_t req;
     int r = uv_fs_unlink(NULL, &req, path, NULL);
@@ -272,15 +306,15 @@ static int __fs_remove(const char* path)
     return r;
 }
 
-static int __fs_rename(const char* path, const char* to)
+static int __fs_path_rename(const char* path, const char* new_path)
 {
     uv_fs_t rename_req;
-    int r = uv_fs_rename(NULL, &rename_req, path, to, NULL);
+    int r = uv_fs_rename(NULL, &rename_req, path, new_path, NULL);
     uv_fs_req_cleanup(&rename_req);
     return r;
 }
 
-static int __fs_mkpath(const char* path)
+static int __fs_path_maker(const char* path)
 {
     if (path == NULL || path[0] == '\0'){
         return -1;
@@ -289,7 +323,7 @@ static int __fs_mkpath(const char* path)
     int ret = 0;
     uint64_t len = strlen(path);
 
-    if (!__fs_isdir(path)){
+    if (!__fs_dir_exist(path)){
         char buf[PATH_MAX] = {0};
         snprintf(buf, PATH_MAX, "%s", path);
         if(buf[len - 1] == '/'){
@@ -298,8 +332,8 @@ static int __fs_mkpath(const char* path)
         for(char *p = buf + 1; *p; p++){
             if(*p == '/') {
                 *p = '\0';
-                if (!__fs_isdir(buf)){
-                    ret = __fs_mkdir(buf);
+                if (!__fs_dir_exist(buf)){
+                    ret = __fs_dir_maker(buf);
                     if (ret != 0){
                         break;
                     }
@@ -308,7 +342,7 @@ static int __fs_mkpath(const char* path)
             }
         }
         if (ret == 0){
-            ret = __fs_mkdir(buf);
+            ret = __fs_dir_maker(buf);
         }
     }
 
@@ -602,25 +636,27 @@ struct __xapi_enter posix_api_enter = {
     .udp_addr_is_ipv6 = udp_addr_is_ipv6,
     .udp_addrinfo = udp_addrinfo,
     .udp_addr_dump = udp_addr_dump,
-#ifdef __XDEBUG__
     .udp_addr_ip = udp_addr_ip,
     .udp_addr_port = udp_addr_port,
-#endif    
 
-    .fs_isdir = __fs_isdir,
-    .fs_isfile = __fs_isfile,
-    .fs_mkpath = __fs_mkpath,
-    .fs_rmdir = __fs_rmdir,
-    .fs_rename = __fs_rename,
-    .fs_remove = __fs_remove,
-    .fs_size = __fs_size,
-
-    .fs_open = __fs_open,
-    .fs_close = __fs_close,
-    .fs_tell = __fs_tell,
-    .fs_write = __fs_write,
-    .fs_read = __fs_read,
-    .fs_lseek = __fs_lseek,
+    .fs_dir_open = __fs_dir_open,
+    .fs_dir_read = __fs_dir_read,
+    .fs_dir_close = __fs_dir_close,
+    .fs_dir_exist = __fs_dir_exist,
+    .fs_dir_maker = __fs_dir_maker,
+    .fs_dir_remove = __fs_dir_remove,
+    .fs_file_open = __fs_file_open,
+    .fs_file_close = __fs_file_close,
+    .fs_file_tell = __fs_file_tell,
+    .fs_file_write = __fs_file_write,
+    .fs_file_read = __fs_file_read,
+    .fs_file_seek = __fs_file_seek,
+    .fs_file_size = __fs_file_size,
+    .fs_file_exist = __fs_file_exist,
+    .fs_file_remove = __fs_file_remove,
+    
+    .fs_path_maker = __fs_path_maker,
+    .fs_path_rename = __fs_path_rename,
     
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,

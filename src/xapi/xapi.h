@@ -26,6 +26,8 @@
 
 
 typedef int __xfile_t;
+typedef void* __xdir_ptr;
+typedef struct __xfs_enter* __xfs_enter_ptr;
 typedef void* __xthread_ptr;
 typedef struct __xmutex* __xmutex_ptr;
 typedef struct __xipaddr* __xipaddr_ptr;
@@ -82,25 +84,28 @@ typedef struct __xapi_enter {
     uint16_t (*udp_addr_port)(const __xipaddr_ptr addr);
 
 ///////////////////////////////////////////////////////
-///// 文件存储
+///// 文件系统
 ///////////////////////////////////////////////////////
 
+    __xdir_ptr (*fs_dir_open)(const char* path);
+    int (*fs_dir_read)(__xdir_ptr dir, int(*cb)(const char *name, void *ctx), void *ctx);
+    void (*fs_dir_close)(__xdir_ptr dir);
+    int (*fs_dir_exist)(const char* path);
+    int (*fs_dir_maker)(const char* path);
+    int (*fs_dir_remove)(const char* path);
     
-    int (*fs_isdir)(const char* path);
-    int (*fs_isfile)(const char* path);
-    int (*fs_mkdir)(const char* path);
-    int (*fs_rmdir)(const char* path);
-    int (*fs_mkpath)(const char* path);
-    int (*fs_remove)(const char* path);
-    int (*fs_rename)(const char* path, const char* to);
-    uint64_t (*fs_size)(const char* path);
+    __xfile_t (*fs_file_open)(const char* path, int flags, int mode);
+    int (*fs_file_close)(__xfile_t);
+    int (*fs_file_write)(__xfile_t, void* data, unsigned int size);
+    int (*fs_file_read)(__xfile_t, void* buf, unsigned int size);
+    int64_t (*fs_file_tell)(__xfile_t);
+    int64_t (*fs_file_seek)(__xfile_t, int64_t offset, int whence);
+    uint64_t (*fs_file_size)(const char* path);
+    int (*fs_file_exist)(const char* path);
+    int (*fs_file_remove)(const char* path);
 
-    __xfile_t (*fs_open)(const char* path, int flags, int mode);
-    int (*fs_close)(__xfile_t);
-    int (*fs_write)(__xfile_t, void* data, unsigned int size);
-    int (*fs_read)(__xfile_t, void* buf, unsigned int size);
-    int64_t (*fs_tell)(__xfile_t);
-    int64_t (*fs_lseek)(__xfile_t, int64_t offset, int whence);
+    int (*fs_path_maker)(const char* path);
+    int (*fs_path_rename)(const char* path, const char* new_path);
 
 ///////////////////////////////////////////////////////
 ///// 内存管理

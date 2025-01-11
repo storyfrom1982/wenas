@@ -62,7 +62,7 @@ bool __ex_check_file(const char* path)
 
 /// get file size in bytes
 /// return file size
-uint64_t __fs_size(const char* filename)
+uint64_t __fs_file_size(const char* filename)
 {
 	struct stat st;
 	if (0 == stat(filename, &st) && (st.st_mode & S_IFREG))

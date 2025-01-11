@@ -518,8 +518,8 @@ static int api_put(xline_t *msg, xltp_t *xltp)
     __xcheck(file == NULL);
     dir = xl_find_word(&xltp->parser, "dir");
     __xcheck(dir == NULL);
-    if (!__xapi->fs_isdir(dir)){
-        __xcheck(__xapi->fs_mkpath(dir) != 0);
+    if (!__xapi->fs_dir_exist(dir)){
+        __xcheck(__xapi->fs_path_maker(dir) != 0);
     }
     
     n = __xapi->snprintf(file_path, 2048, "%s/%s", dir, file);
@@ -667,7 +667,7 @@ static int api_get(xline_t *msg, xltp_t *xltp)
     xltp->parser = xl_parser(&msg->data);
     file_path = xl_find_word(&xltp->parser, "file");
     __xcheck(file_path == NULL);
-    __xcheck(!__xapi->fs_isfile(file_path));
+    __xcheck(!__xapi->fs_file_exist(file_path));
     
     ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_READ);
     __xcheck(ios == NULL);
@@ -731,8 +731,8 @@ static int req_get(xline_t *msg, xltp_t *xltp)
 
     local_dir = xl_find_word(&xltp->parser, "dir");
     __xcheck(local_dir == NULL);
-    if (!__xapi->fs_isdir(local_dir)){
-        __xcheck(__xapi->fs_mkpath(local_dir) != 0);
+    if (!__xapi->fs_dir_exist(local_dir)){
+        __xcheck(__xapi->fs_path_maker(local_dir) != 0);
     }
 
     file_name = remote_path + file_path_len;

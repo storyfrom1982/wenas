@@ -71,7 +71,7 @@ void xlog_recorder_close()
     __xlogi(">>>>-------------->\n");
 
     if (gloger->fd){
-        __xapi->fs_close(gloger->fd);
+        __xapi->fs_file_close(gloger->fd);
     }
 
     mclear(gloger, sizeof(global_logrecorder));
@@ -93,8 +93,8 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
 
     gloger->cb = cb;
 
-    if (!__xapi->fs_isdir(path)){
-        __xcheck(__xapi->fs_mkpath(path) == -1);
+    if (!__xapi->fs_dir_exist(path)){
+        __xcheck(__xapi->fs_path_maker(path) == -1);
     }
 
     int n = snprintf(gloger->log0, __log_path_max_len - 1, "%s/0.log", path);
@@ -102,7 +102,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
     n = snprintf(gloger->log1, __log_path_max_len - 1, "%s/1.log", path);
     gloger->log0[n] = '\0';
 
-    gloger->fd = __xapi->fs_open(gloger->log0, XAPI_FS_FLAG_WRITE, 0644);
+    gloger->fd = __xapi->fs_file_open(gloger->log0, XAPI_FS_FLAG_WRITE, 0644);
     __xcheck(gloger->fd == -1);
 
     __xlogi(">>>>-------------->\n");
@@ -114,7 +114,7 @@ int xlog_recorder_open(const char *path, __xlog_cb cb)
 XClean:
 
     if (gloger->fd){
-        __xapi->fs_close(gloger->fd);
+        __xapi->fs_file_close(gloger->fd);
         gloger->fd = 0;
     }
 
@@ -155,14 +155,14 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
 
     if (gloger->fd){
         __atom_lock(gloger->lock);
-        __xapi->fs_write(gloger->fd, text, n);
-        if (__xapi->fs_tell(gloger->fd) > __log_file_size){
-            __xapi->fs_close(gloger->fd);
-            if (__xapi->fs_isfile(gloger->log1)){
-                __xapi->fs_remove(gloger->log1);
+        __xapi->fs_file_write(gloger->fd, text, n);
+        if (__xapi->fs_file_tell(gloger->fd) > __log_file_size){
+            __xapi->fs_file_close(gloger->fd);
+            if (__xapi->fs_file_exist(gloger->log1)){
+                __xapi->fs_file_remove(gloger->log1);
             }
-            __xapi->fs_rename(gloger->log0, gloger->log1);
-            gloger->fd = __xapi->fs_open(gloger->log0, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, 0644);
+            __xapi->fs_path_rename(gloger->log0, gloger->log1);
+            gloger->fd = __xapi->fs_file_open(gloger->log0, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, 0644);
             // __xcheck(gloger->fd == -1);
         }
         __atom_unlock(gloger->lock);
