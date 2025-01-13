@@ -10,11 +10,11 @@
 #define XMSG_FLAG_READY         0x04
 #define XMSG_FLAG_STREAM        0x05
 
-typedef struct xltp* xmsgctx_ptr;
-typedef int(*xmsgcb_ptr)(xline_t *msg, xmsgctx_ptr ctx);
+typedef struct xltp xltp_t;
+typedef int(*xmsgcb_ptr)(xltp_t*, xline_t *msg, void *ctx);
 
 #define __xmsg_get_cb(msg)                  (xmsgcb_ptr)(msg)->args[0]
-#define __xmsg_get_ctx(msg)                 (xmsgctx_ptr)(msg)->args[1]
+#define __xmsg_get_ctx(msg)                 (msg)->args[1]
 #define __xmsg_get_ipaddr(msg)              (__xipaddr_ptr)(msg)->args[2]
 #define __xmsg_get_channel(msg)             (xchannel_ptr)(msg)->args[3]
 
