@@ -105,7 +105,7 @@ typedef struct __xapi_enter {
     int (*fs_file_remove)(const char* path);
 
     int (*fs_path_maker)(const char* path);
-    int (*fs_path_scanner)(const char* path, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx);
+    int (*fs_path_scanner)(const char* path, int name_pos, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx);
     int (*fs_path_rename)(const char* path, const char* new_path);
     int (*fs_path_cwd)(char* buf, size_t *size);
 

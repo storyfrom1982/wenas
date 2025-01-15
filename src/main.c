@@ -1,6 +1,7 @@
 #include "xnet/xltp.h"
 #include <stdio.h>
 #include <string.h>
+#include "xnet/xlio.h"
 
 
 static int scandir_cb(const char *name, int type, uint64_t size, void **ctx)
@@ -73,11 +74,17 @@ int main(int argc, char *argv[])
             size_t cwd_size = 1024;
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
-            xline_t *dirlist = xl_maker();
-            uint64_t pos = xl_add_list_begin(&dirlist, "list");
-            __xapi->fs_path_scanner(cwd_path, scandir_cb, (void**)&dirlist);
-            xl_add_list_end(&dirlist, pos);
+            // xline_t *dirlist = xl_maker();
+            // uint64_t pos = xl_add_list_begin(&dirlist, "list");
+            // int name_pos = 0;
+            // while (cwd_path[cwd_size - name_pos -1] != '/')
+            // {
+            //     name_pos++;
+            // }
+            // __xapi->fs_path_scanner(cwd_path, cwd_size - name_pos, scandir_cb, (void**)&dirlist);
+            // xl_add_list_end(&dirlist, pos);
             // xl_printf(&dirlist->line);
+            xline_t *dirlist = xlio_list_dir(cwd_path);
             xline_t xllist = xl_parser(&dirlist->line);
             xbyte_t *dlist = xl_find(&xllist, "list");
             xllist = xl_parser(dlist);
@@ -85,6 +92,7 @@ int main(int argc, char *argv[])
             while ((xd = xl_list_next(&xllist)) != NULL){
                 xl_printf(xd);
             }
+            __xlogd("dir size = %lu\n", dirlist->range);
             xl_free(&dirlist);
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");

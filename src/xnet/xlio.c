@@ -152,6 +152,42 @@ void xlio_free(xlio_t **pptr)
     }
 }
 
+static int scandir_cb(const char *name, int type, uint64_t size, void **ctx)
+{
+    xline_t **frame = (xline_t**)ctx;
+    uint64_t pos = xl_add_obj_begin(frame, NULL);
+    __xcheck(pos == XNONE);
+    __xcheck(xl_add_word(frame, "path", name) == XNONE);
+    __xcheck(xl_add_int(frame, "type", type) == XNONE);
+    __xcheck(xl_add_uint(frame, "size", size) == XNONE);
+    xl_add_obj_end(frame, pos);
+    (*frame)->range += size;
+    return 0;
+XClean:
+    return -1;
+}
+
+xline_t* xlio_list_dir(const char *path)
+{
+    int path_len = slength(path);
+    int name_pos = 0;
+    while (path[path_len - name_pos - 1] != '/'){
+        name_pos++;
+    }
+    xline_t *dirlist = xl_maker();
+    __xcheck(dirlist == NULL);
+    uint64_t pos = xl_add_list_begin(&dirlist, "list");
+    __xcheck(pos == XNONE);
+    __xcheck(__xapi->fs_path_scanner(path, path_len - name_pos, scandir_cb, (void**)&dirlist) != 0);
+    xl_add_list_end(&dirlist, pos);
+    return dirlist;
+XClean:
+    if (dirlist != NULL){
+        xl_free(&dirlist);
+    }
+    return NULL;
+}
+
 xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_type)
 {
     __xlogd("file path == %s\n", file_path);

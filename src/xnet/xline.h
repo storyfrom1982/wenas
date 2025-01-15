@@ -143,8 +143,7 @@ static inline xline_t* xl_creator(uint64_t size)
     __xcheck(xl == NULL);
     xl->ref = 1;
     xl->size = size;
-    xl->wpos = 0;
-    xl->rpos = 0;
+    xl->wpos = xl->rpos = xl->spos = xl->range = 0;
     xl->args[0] = xl->args[1] = xl->args[2] = xl->args[3] = NULL;
     xl->prev = xl->next = NULL;
     xl->ptr = xl->line.b + XLINE_SIZE;
@@ -178,6 +177,7 @@ static inline void xl_free(xline_t **pptr)
     if (pptr && *pptr){
         if (__atom_sub((*pptr)->ref, 1) == 0){
             free((*pptr));
+            *pptr = NULL;
         }
     }
 }

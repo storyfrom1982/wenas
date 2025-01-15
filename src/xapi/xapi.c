@@ -349,12 +349,12 @@ static int __fs_path_maker(const char* path)
     return ret;
 }
 
-int __fs_path_scanner(const char *path, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx)
+int __fs_path_scanner(const char *path, int name_pos, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx)
 {
     uv_fs_t req;
     uv_dirent_t dent;
     __xcheck(uv_fs_scandir(NULL, &req, path, 0, NULL) < 0);
-    __xcheck(cb(path, 0, 0, ctx) != 0);
+    __xcheck(cb(path + name_pos, 0, 0, ctx) != 0);
 
     while (uv_fs_scandir_next(&req, &dent) != UV_EOF){
         if (!((dent.name[0] == '.' && dent.name[1] == '\0') || (dent.name[0] == '.' && dent.name[1] == '.' && dent.name[2] == '\0'))){
@@ -369,9 +369,9 @@ int __fs_path_scanner(const char *path, int(*cb)(const char *name, int type, uin
                     size = stat_req.statbuf.st_size;
                 }
                 uv_fs_req_cleanup(&stat_req);
-                __xcheck(cb(full_path, 1, size, ctx) != 0);
+                __xcheck(cb(full_path + name_pos, 1, size, ctx) != 0);
             }else if (dent.type == UV_DIRENT_DIR){
-                __xcheck(__fs_path_scanner(full_path, cb, ctx) != 0);
+                __xcheck(__fs_path_scanner(full_path, name_pos, cb, ctx) != 0);
             }
         }
     }
