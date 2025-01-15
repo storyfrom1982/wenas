@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
             size_t cwd_size = 1024;
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
-            // xline_t *dirlist = xl_maker();
+            xline_t *dirlist = xl_maker();
             // uint64_t pos = xl_add_list_begin(&dirlist, "list");
             // int name_pos = 0;
             // while (cwd_path[cwd_size - name_pos -1] != '/')
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
             // __xapi->fs_path_scanner(cwd_path, cwd_size - name_pos, scandir_cb, (void**)&dirlist);
             // xl_add_list_end(&dirlist, pos);
             // xl_printf(&dirlist->line);
-            xline_t *dirlist = xlio_list_dir(cwd_path);
+            xlio_path_scanner(cwd_path, &dirlist);
             xline_t xllist = xl_parser(&dirlist->line);
             xbyte_t *dlist = xl_find(&xllist, "list");
             xllist = xl_parser(dlist);

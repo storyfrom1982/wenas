@@ -5,6 +5,11 @@
 typedef struct xlio_stream {
     int flag;
     __xfile_t fd;
+    xline_t *dir;
+    xline_t parser;
+    xbyte_t *dlist;
+    uint64_t *list_size;
+    const char *path;
     uint64_t pos, size;
     struct xlio *io;
     xchannel_ptr channel;
@@ -25,6 +30,7 @@ static void xlio_loop(void *ptr)
     __xlogd("xlio_loop >>>>---------------> enter\n");
 
     int ret = 0;
+    xline_t parser;
     xline_t *msg;
     xline_t *frame;
     uint64_t framelen = 1280 * 128; //160KB
@@ -46,12 +52,44 @@ static void xlio_loop(void *ptr)
                 xl_free(&msg);
 
                 for (size_t i = 0; i < 3; i++){
-                    frame = xl_creator(framelen);
-                    __xcheck(frame == NULL);
-                    ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
-                    if (ret > 0){
-                        frame->wpos = ret;
-                        frame->type = XPACK_TYPE_BIN;
+
+                    if (stream->fd > -1){
+                        frame = xl_creator(framelen);
+                        __xcheck(frame == NULL);                        
+                        ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
+                        if (ret > 0){
+                            frame->wpos = ret;
+                            frame->type = XPACK_TYPE_BIN;
+                            __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
+                        }else {
+                            __xapi->fs_file_close(stream->fd);
+                            stream->fd = -1;
+                            stream->pos = 0;
+                            stream->size = 0;
+                            continue;
+                        }
+
+                    }else {
+
+                        frame = xl_creator(framelen);
+                        __xcheck(frame == NULL);
+                        xbyte_t *obj = xl_list_next(&stream->parser);
+                        __xcheck(obj == NULL);
+                        parser = xl_parser(obj);
+                        const char *name = xl_find_word(&parser, "path");
+                        int64_t isfile = xl_find_int(&parser, "type");
+                        stream->size = xl_find_uint(&parser, "size");
+                        xl_add_word(&frame, "path", name);
+                        xl_add_int(&frame, "type", isfile);
+                        xl_add_uint(&frame, "size", stream->size);
+                        if (isfile){
+                            int full_path_len = slength(stream->path) + slength(name) + 2;
+                            char full_path[full_path_len];                
+                            __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
+                            stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
+                            __xcheck(stream->fd < 0);
+                        }
+                        frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                     }
                 }
@@ -61,22 +99,68 @@ static void xlio_loop(void *ptr)
 
                 frame = msg;
                 __xcheck(frame->size != framelen);
-                ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
-                if (ret > 0){
-                    frame->wpos = ret;
-                    frame->type = XPACK_TYPE_BIN;
-                    __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
-                }else {
-                    xl_free(&frame);
+                if (stream->fd > 0){
+                    ret = __xapi->fs_file_read(stream->fd, frame->ptr, framelen);
+                    if (ret > 0){
+                        frame->wpos = ret;
+                        frame->type = XPACK_TYPE_BIN;
+                        __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
+                    }else {
+                        __xapi->fs_file_close(stream->fd);
+                        stream->fd = -1;
+                        stream->pos = 0;
+                        stream->size = 0;
+                    }
                 }
+                xbyte_t *obj = xl_list_next(&stream->parser);
+                __xcheck(obj == NULL);
+                parser = xl_parser(obj);
+                const char *name = xl_find_word(&parser, "path");
+                int64_t isfile = xl_find_int(&parser, "type");
+                stream->size = xl_find_uint(&parser, "size");
+                xl_add_word(&frame, "path", name);
+                xl_add_int(&frame, "type", isfile);
+                xl_add_uint(&frame, "size", stream->size);
+                if (isfile){
+                    int full_path_len = slength(stream->path) + slength(name) + 2;
+                    char full_path[full_path_len];                
+                    __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
+                    stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
+                    __xcheck(stream->fd < 0);
+                }
+                frame->type = XPACK_TYPE_MSG;
+                __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);                
             }
 
         }else if (stream->flag == XAPI_FS_FLAG_WRITE || stream->flag == XAPI_FS_FLAG_CREATE){
 
             if(msg->flag == XMSG_FLAG_STREAM){
                 __xcheck(__xapi->fs_file_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
-            }else if(msg->flag == XMSG_FLAG_STREAM){
-
+                stream->pos += msg->wpos;
+                if (stream->pos == stream->size){
+                    __xapi->fs_file_close(stream->fd);
+                    stream->fd = -1;
+                    stream->pos = 0;
+                    stream->size = 0;
+                }
+            }else if(msg->flag == XMSG_FLAG_READY){
+                __xcheck(stream->fd != -1);
+                xbyte_t *obj = xl_list_next(&stream->parser);
+                __xcheck(obj == NULL);
+                // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
+                parser = xl_parser(obj);
+                const char *name = xl_find_word(&parser, "path");
+                int64_t isfile = xl_find_int(&parser, "type");
+                stream->size = xl_find_uint(&parser, "size");
+                int full_path_len = slength(stream->path) + slength(name) + 2;
+                char full_path[full_path_len];                
+                __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
+                if (isfile){
+                    stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
+                    __xcheck(stream->fd < 0);
+                }else {
+                    __xapi->fs_path_maker(full_path);
+                }
             }
             xl_free(&msg);
         }
@@ -167,43 +251,42 @@ XClean:
     return -1;
 }
 
-xline_t* xlio_list_dir(const char *path)
+int xlio_path_scanner(const char *path, xline_t **frame)
 {
     int path_len = slength(path);
     int name_pos = 0;
     while (path[path_len - name_pos - 1] != '/'){
         name_pos++;
     }
-    xline_t *dirlist = xl_maker();
-    __xcheck(dirlist == NULL);
-    uint64_t pos = xl_add_list_begin(&dirlist, "list");
+    uint64_t pos = xl_add_list_begin(frame, "list");
     __xcheck(pos == XNONE);
-    __xcheck(__xapi->fs_path_scanner(path, path_len - name_pos, scandir_cb, (void**)&dirlist) != 0);
-    xl_add_list_end(&dirlist, pos);
-    return dirlist;
-XClean:
-    if (dirlist != NULL){
-        xl_free(&dirlist);
+    if (__xapi->fs_dir_exist(path)){
+        __xcheck(__xapi->fs_path_scanner(path, path_len - name_pos, scandir_cb, (void**)frame) != 0);
+    }else if (__xapi->fs_file_exist(path)){
+        __xcheck(scandir_cb(path + (path_len - name_pos), 1, __xapi->fs_file_size(path), (void**)frame) != 0);
     }
-    return NULL;
+    xl_add_list_end(frame, pos);
+    __xcheck(xl_add_int(frame, "len", (*frame)->range) == XNONE);
+    return 0;
+XClean:
+    return -1;
 }
 
-xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *file_path, int stream_type)
+xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
 {
-    __xlogd("file path == %s\n", file_path);
     xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(stream == NULL);
-    if (stream_type == XAPI_FS_FLAG_READ){
-        __xcheck(!__xapi->fs_file_exist(file_path));
-    }else {
-
-    }
-    stream->fd = __xapi->fs_file_open(file_path, stream_type, 0644);
-    __xcheck(stream->fd < 0);
     stream->flag = stream_type;
+    stream->dir = frame;
+    stream->parser = xl_parser(&frame->line);
+    stream->path = xl_find_word(&stream->parser, "path");
+    stream->dlist = xl_find(&stream->parser, "list");
+    stream->list_size = xl_find_uint(&stream->parser, "len");
+    stream->parser = xl_parser(stream->dlist);
+    
+    stream->fd = -1;
     stream->pos = 0;
-    stream->size = __xapi->fs_file_size(file_path);
-    __xlogd("file size == %lu\n", stream->size);
+    stream->size = 0;
     stream->io = io;
     stream->channel = NULL;
     stream->next = &io->streamlist;
