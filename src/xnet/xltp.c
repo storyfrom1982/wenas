@@ -412,6 +412,7 @@ static int api_res(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(req == NULL);
     cb = __xmsg_get_cb(req);
     __xcheck(cb == NULL);
+    __xmsg_set_ctx(msg, req);
     cb(xltp, msg, ctx);
     // xltp_del_req(xltp, req);
     xl_free(&req);

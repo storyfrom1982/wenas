@@ -258,6 +258,11 @@ int xlio_path_scanner(const char *path, xline_t **frame)
     while (path[path_len - name_pos - 1] != '/'){
         name_pos++;
     }
+    int full_path_len = (path_len - name_pos) + 1;
+    char full_path[full_path_len];
+    mcopy(full_path, path, full_path_len);
+    full_path[full_path_len-1] = '\0';
+    xl_add_word(frame, "full", full_path);
     uint64_t pos = xl_add_list_begin(frame, "list");
     __xcheck(pos == XNONE);
     if (__xapi->fs_dir_exist(path)){
@@ -279,7 +284,14 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
     stream->flag = stream_type;
     stream->dir = frame;
     stream->parser = xl_parser(&frame->line);
-    stream->path = xl_find_word(&stream->parser, "path");
+    if (stream_type == XAPI_FS_FLAG_READ){
+        stream->path = xl_find_word(&stream->parser, "full");
+    }else {
+        stream->path = xl_find_word(&stream->parser, "path");
+        if (!__xapi->fs_dir_exist(stream->path)){
+            __xapi->fs_path_maker(stream->path);
+        }
+    }
     stream->dlist = xl_find(&stream->parser, "list");
     stream->list_size = xl_find_uint(&stream->parser, "len");
     stream->parser = xl_parser(stream->dlist);
