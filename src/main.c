@@ -2,6 +2,18 @@
 #include <stdio.h>
 #include <string.h>
 
+
+static int scandir_cb(const char *name, int type, uint64_t size, void **ctx)
+{
+    xline_t **frame = (xline_t**)ctx;
+    uint64_t pos = xl_add_obj_begin(frame, NULL);
+    xl_add_word(frame, "path", name);
+    xl_add_int(frame, "type", type);
+    xl_add_uint(frame, "size", size);
+    xl_add_obj_end(frame, pos);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     const char *hostname = "xltp.net";
@@ -56,6 +68,24 @@ int main(int argc, char *argv[])
             xltp_get(peer, "./wenas/xltpd", "./tmp/wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
+        } else if (strcmp(command, "scan") == 0) {
+
+            size_t cwd_size = 1024;
+            char cwd_path[cwd_size];
+            __xapi->fs_path_cwd(cwd_path, &cwd_size);
+            xline_t *dirlist = xl_maker();
+            uint64_t pos = xl_add_list_begin(&dirlist, "list");
+            __xapi->fs_path_scanner(cwd_path, scandir_cb, (void**)&dirlist);
+            xl_add_list_end(&dirlist, pos);
+            // xl_printf(&dirlist->line);
+            xline_t xllist = xl_parser(&dirlist->line);
+            xbyte_t *dlist = xl_find(&xllist, "list");
+            xllist = xl_parser(dlist);
+            xbyte_t *xd;
+            while ((xd = xl_list_next(&xllist)) != NULL){
+                xl_printf(xd);
+            }
+            xl_free(&dirlist);
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
             break;

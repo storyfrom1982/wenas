@@ -349,6 +349,48 @@ static int __fs_path_maker(const char* path)
     return ret;
 }
 
+int __fs_path_scanner(const char *path, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx)
+{
+    uv_fs_t req;
+    uv_dirent_t dent;
+    __xcheck(uv_fs_scandir(NULL, &req, path, 0, NULL) < 0);
+    __xcheck(cb(path, 0, 0, ctx) != 0);
+
+    while (uv_fs_scandir_next(&req, &dent) != UV_EOF){
+        if (!((dent.name[0] == '.' && dent.name[1] == '\0') || (dent.name[0] == '.' && dent.name[1] == '.' && dent.name[2] == '\0'))){
+            uint64_t size = 0;
+            int full_path_len = strlen(path) + strlen(dent.name) + 2;
+            char full_path[full_path_len];
+            // printf("parent=%s###name=%s\n", path, dent.name);
+            snprintf(full_path, full_path_len, "%s/%s\0", path, dent.name);
+            if (dent.type == UV_DIRENT_FILE) {
+                uv_fs_t stat_req;
+                if (uv_fs_stat(NULL, &stat_req, full_path, NULL) == 0){
+                    size = stat_req.statbuf.st_size;
+                }
+                uv_fs_req_cleanup(&stat_req);
+                __xcheck(cb(full_path, 1, size, ctx) != 0);
+            }else if (dent.type == UV_DIRENT_DIR){
+                __xcheck(__fs_path_scanner(full_path, cb, ctx) != 0);
+            }
+        }
+    }
+
+    uv_fs_req_cleanup(&req);
+    return 0;
+XClean:
+    uv_fs_req_cleanup(&req);
+    return -1;
+}
+
+int __fs_path_cwd(char* buf, size_t *size)
+{
+    __xcheck(uv_cwd(buf, size) != 0);
+    return 0;
+XClean:
+    return -1;
+}
+
 #include "sockutil.h"
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -656,7 +698,9 @@ struct __xapi_enter posix_api_enter = {
     .fs_file_remove = __fs_file_remove,
     
     .fs_path_maker = __fs_path_maker,
+    .fs_path_scanner = __fs_path_scanner,
     .fs_path_rename = __fs_path_rename,
+    .fs_path_cwd = __fs_path_cwd,
     
     .mmap = __ex_mmap,
     .munmap = __ex_munmap,
