@@ -140,6 +140,10 @@ static void xlio_loop(void *ptr)
                             __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
                             stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
                             __xcheck(stream->fd < 0);
+                            if (stream->size == 0){
+                                __xapi->fs_file_close(stream->fd);
+                                stream->fd = -1;
+                            }
                         }
                         frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
@@ -178,6 +182,10 @@ static void xlio_loop(void *ptr)
                     if (isfile){
                         stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
                         __xcheck(stream->fd < 0);
+                        if (stream->size == 0){
+                            __xapi->fs_file_close(stream->fd);
+                            stream->fd = -1;
+                        }
                     }else {
                         __xapi->fs_path_maker(full_path);
                     }
