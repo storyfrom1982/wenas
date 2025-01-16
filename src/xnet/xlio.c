@@ -107,14 +107,20 @@ static void xlio_loop(void *ptr)
                 frame = msg;
                 __xcheck(frame->size != framelen);
                 if (stream->fd > 0){
+                    uint64_t len = stream->size - stream->pos;
                     if (stream->pos < stream->size){
-                        ret = __xapi->fs_file_read(stream->fd, frame->ptr, frame->size);
+                        if (len > frame->size){
+                            ret = __xapi->fs_file_read(stream->fd, frame->ptr, frame->size);
+                        }else {
+                            ret = __xapi->fs_file_read(stream->fd, frame->ptr, len);
+                        }
                         __xcheck(ret < 0);
                         frame->wpos = ret;
                         frame->type = XPACK_TYPE_BIN;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
                         stream->pos += frame->wpos;
                         stream->list_pos += frame->wpos;
+                        __xlogd("-------------list size= %lu list pos = %lu\n", stream->list_size, stream->list_pos);
                         if (stream->pos == stream->size){
                             __xapi->fs_file_close(stream->fd);
                             stream->fd = -1;

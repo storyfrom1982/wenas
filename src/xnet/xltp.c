@@ -208,9 +208,11 @@ XClean:
 
 static inline int xltp_send_bye(xltp_t *xltp, xline_t *msg)
 {
+    __xlogd("xltp_send_bye enter\n");
     __xcheck(xltp == NULL || msg == NULL);
     msg->type = XPACK_TYPE_BYE;
     xmsger_disconnect(xltp->msger, msg);
+    __xlogd("xltp_send_bye exit\n");
     return 0;
 XClean:
     return -1;
@@ -284,6 +286,7 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
     if (msg->type == XPACK_TYPE_REQ){
         xltp_recv_req(xltp, msg);
     }else if (msg->type == XPACK_TYPE_BYE){
+        __xlogd("xltp_recv ---------------- bye enter\n");
         if (msg->wpos > 0){
             xltp_recv_res(xltp, msg);
         }
@@ -293,9 +296,12 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         }        
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
+        __xlogd("xltp_recv ---------------- bye exit\n");
     }else if (msg->type == XPACK_TYPE_RES){
+        __xlogd("xltp_recv ---------------- res enter\n");
         xltp_recv_res(xltp, msg);
         xl_free(&msg);
+        __xlogd("xltp_recv ---------------- res exit\n");
     }else if (msg->type == XPACK_TYPE_MSG){
         __xlogd("xltp_recv ---------------- msg enter\n");
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
@@ -328,22 +334,22 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 
     }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
-        __xcheck(ios == NULL);
-        // ios->pos += msg->wpos;
-        // __xlogd("put file pos=%lu size=%lu\n", ios->pos, ios->size);
-        if (xlio_stream_update(ios, msg->wpos) == 0){
-            __xlogd("xltp_back final\n");
-            xl_clear(msg);
-            xltp_send_bye(xltp, msg);
-            xlio_stream_free(ios);
-            // xltp_del_ctx(ios);
-        }else {
-            __xlogd("xltp_back read enter\n");
-            xl_hold(msg);
-            xlio_stream_read(ios, msg);
-            __xlogd("xltp_back read exit\n");
-            // msg->flag = XMSG_FLAG_STREAM;
-            // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        if (ios != NULL){
+            if (xlio_stream_update(ios, msg->wpos) == 0){
+                __xlogd("xltp_back final\n");
+                xl_clear(msg);
+                xl_hold(msg);
+                xlio_stream_free(ios);
+                xchannel_set_ctx(__xmsg_get_channel(msg), NULL);
+                xltp_send_bye(xltp, msg);
+            }else {
+                __xlogd("xltp_back read enter\n");
+                xl_hold(msg);
+                xlio_stream_read(ios, msg);
+                __xlogd("xltp_back read exit\n");
+                // msg->flag = XMSG_FLAG_STREAM;
+                // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+            }
         }
     }
     xl_free(&msg);

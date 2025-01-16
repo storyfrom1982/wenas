@@ -770,7 +770,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xlogd("<CONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
-    }else if (head->ack.type == XPACK_TYPE_RES){
+    }else if (head->ack.type == XPACK_TYPE_BYE){
 
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
