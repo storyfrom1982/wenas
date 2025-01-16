@@ -73,7 +73,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
     }else {
         
         xl_clear(frame);
-        uint64_t list_begin_pos = xl_add_list_begin(&frame, NULL);
+        uint64_t list_begin_pos = xl_add_list_begin(&frame, "list");
 
         do {
 
@@ -207,6 +207,8 @@ static void xlio_loop(void *ptr)
                 xl_printf(&msg->line);
                 __xcheck(stream->fd != -1);
                 stream->parser = xl_parser(&msg->line);
+                xbyte_t *objlist = xl_find(&stream->parser, "list");
+                stream->parser = xl_parser(objlist);
                 while ((stream->obj = xl_list_next(&stream->parser)) != NULL)
                 {
                     xl_printf(stream->obj);
