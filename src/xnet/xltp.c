@@ -290,13 +290,16 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_MSG){
+        __xlogd("xltp_recv ---------------- msg enter\n");
         xltp_recv_msg(xltp, msg);
         xl_free(&msg);
+        __xlogd("xltp_recv ---------------- msg exit\n");
     }else if (msg->type == XPACK_TYPE_BIN){
-        __xlogd("recv msg -----\n");
+        __xlogd("xltp_recv -------- bin enter\n");
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(ios == NULL);
         __xcheck(xlio_stream_write(ios, msg) != 0);
+        __xlogd("xltp_recv -------- bin exit\n");
     }
     return 0;
 XClean:
