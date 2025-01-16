@@ -11,6 +11,7 @@
 #define XPACK_TYPE_MSG      0x02
 #define XPACK_TYPE_BIN      0x03
 #define XPACK_TYPE_RES      0x04
+#define XPACK_TYPE_BYE      0x05
 #define XPACK_TYPE_FLUSH    0xF0
 #define XPACK_TYPE_LOCAL    0xF1
 

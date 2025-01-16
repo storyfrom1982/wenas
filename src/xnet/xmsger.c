@@ -976,7 +976,7 @@ static void msger_loop(void *ptr)
 
                     xchannel_recv_ack(channel, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_RES){
+                }else if (rpack->head.type == XPACK_TYPE_RES || rpack->head.type == XPACK_TYPE_BYE){
 
                     // 收到完整的消息后会断开连接
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
@@ -1022,7 +1022,7 @@ static void msger_loop(void *ptr)
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
 
-                }else if (rpack->head.type == XPACK_TYPE_RES){
+                }else if (rpack->head.type == XPACK_TYPE_BYE){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);
