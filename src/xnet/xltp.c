@@ -313,19 +313,22 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
         
     }else if (msg->type == XPACK_TYPE_RES){
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    }else if (msg->type == XPACK_TYPE_BIN){
+    }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(ios == NULL);
         // ios->pos += msg->wpos;
         // __xlogd("put file pos=%lu size=%lu\n", ios->pos, ios->size);
         if (xlio_stream_update(ios, msg->wpos) == 0){
+            __xlogd("xltp_back final\n");
             xl_clear(msg);
             xltp_send_res(xltp, msg);
             xlio_stream_free(ios);
             // xltp_del_ctx(ios);
         }else {
+            __xlogd("xltp_back read enter\n");
             xl_hold(msg);
             xlio_stream_read(ios, msg);
+            __xlogd("xltp_back read exit\n");
             // msg->flag = XMSG_FLAG_STREAM;
             // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
         }
