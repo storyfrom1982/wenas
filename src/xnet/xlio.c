@@ -8,7 +8,7 @@ typedef struct xlio_stream {
     xline_t *dir;
     xline_t parser;
     xbyte_t *dlist;
-    uint64_t *list_size;
+    uint64_t list_pos, list_size;
     const char *path;
     uint64_t pos, size;
     struct xlio *io;
@@ -61,6 +61,7 @@ static void xlio_loop(void *ptr)
                             frame->wpos = ret;
                             frame->type = XPACK_TYPE_BIN;
                             __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
+                            stream->list_pos += frame->wpos;
                         }else {
                             __xapi->fs_file_close(stream->fd);
                             stream->fd = -1;
@@ -105,6 +106,7 @@ static void xlio_loop(void *ptr)
                         frame->wpos = ret;
                         frame->type = XPACK_TYPE_BIN;
                         __xcheck(xmsger_send(io->msger, __xmsg_get_channel(msg), frame) != 0);
+                        stream->list_pos += frame->wpos;
                     }else {
                         __xapi->fs_file_close(stream->fd);
                         stream->fd = -1;
@@ -137,6 +139,7 @@ static void xlio_loop(void *ptr)
             if(msg->flag == XMSG_FLAG_STREAM){
                 __xcheck(__xapi->fs_file_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
                 stream->pos += msg->wpos;
+                stream->list_pos += msg->wpos;
                 if (stream->pos == stream->size){
                     __xapi->fs_file_close(stream->fd);
                     stream->fd = -1;
@@ -296,6 +299,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
     stream->list_size = xl_find_uint(&stream->parser, "len");
     stream->parser = xl_parser(stream->dlist);
     
+    stream->list_pos = 0;
     stream->fd = -1;
     stream->pos = 0;
     stream->size = 0;
@@ -320,6 +324,9 @@ void xlio_stream_free(xlio_stream_t *ios)
         ios->next->prev = ios->prev;
         if (ios->fd > 0){
             __xapi->fs_file_close(ios->fd);
+        }
+        if (ios->dir){
+            xl_free(&ios->dir);
         }
         free(ios);
     }

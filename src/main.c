@@ -62,7 +62,11 @@ int main(int argc, char *argv[])
             xltp_echo(peer, ip, port);
 
         } else if (strcmp(command, "put") == 0) {
-            xltp_put(peer, "./build/xltpd", "wenas", ip, port);
+            size_t cwd_size = 1024;
+            char cwd_path[cwd_size];
+            __xapi->fs_path_cwd(cwd_path, &cwd_size);
+            xltp_put(peer, cwd_path, "wenas", ip, port);
+            // xltp_put(peer, "./build/xltpd", "wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
         } else if (strcmp(command, "get") == 0) {

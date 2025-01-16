@@ -650,7 +650,6 @@ static int req_put(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(req == NULL);
     __xcheck(xl_add_word(&req, "path", remote_path) == XNONE);
     __xcheck(xlio_path_scanner(local_path, &req) != 0);
-    xl_hold(req);
     __xmsg_set_ipaddr(req, __xmsg_get_ipaddr(msg));
     __xcheck(xltp_send_req(xltp, req) != 0);
     xl_free(&msg);
