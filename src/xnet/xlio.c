@@ -159,20 +159,21 @@ static void xlio_loop(void *ptr)
             }else if(msg->flag == XMSG_FLAG_READY){
                 __xcheck(stream->fd != -1);
                 xbyte_t *obj = xl_list_next(&stream->parser);
-                __xcheck(obj == NULL);
-                // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
-                parser = xl_parser(obj);
-                const char *name = xl_find_word(&parser, "path");
-                int64_t isfile = xl_find_int(&parser, "type");
-                stream->size = xl_find_uint(&parser, "size");
-                int full_path_len = slength(stream->path) + slength(name) + 2;
-                char full_path[full_path_len];                
-                __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
-                if (isfile){
-                    stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
-                    __xcheck(stream->fd < 0);
-                }else {
-                    __xapi->fs_path_maker(full_path);
+                if (obj != NULL){
+                    // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
+                    parser = xl_parser(obj);
+                    const char *name = xl_find_word(&parser, "path");
+                    int64_t isfile = xl_find_int(&parser, "type");
+                    stream->size = xl_find_uint(&parser, "size");
+                    int full_path_len = slength(stream->path) + slength(name) + 2;
+                    char full_path[full_path_len];                
+                    __xapi->snprintf(full_path, full_path_len, "%s/%s\0", stream->path, name);
+                    if (isfile){
+                        stream->fd = __xapi->fs_file_open(full_path, stream->flag, 0644);
+                        __xcheck(stream->fd < 0);
+                    }else {
+                        __xapi->fs_path_maker(full_path);
+                    }
                 }
             }
             xl_free(&msg);
