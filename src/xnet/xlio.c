@@ -226,8 +226,10 @@ static void xlio_loop(void *ptr)
                             stream->fd = -1;
                         }else {
                             xbyte_t *bin = xl_find(&parser, "data");
+                            __xlogd("find data = %p\n", bin);
                             if (bin != NULL){
                                 uint64_t data_len = __xl_sizeof_body(bin);
+                                __xlogd("find data len = %lu\n", data_len);
                                 __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
                                 stream->pos += data_len;
                                 stream->list_pos += data_len;
