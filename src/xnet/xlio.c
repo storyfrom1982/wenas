@@ -206,7 +206,7 @@ static void xlio_loop(void *ptr)
             }else if(msg->flag == XMSG_FLAG_READY){
                 xl_printf(&msg->line);
                 __xcheck(stream->fd != -1);
-                parser = xl_parser(&msg->line);
+                stream->parser = xl_parser(&msg->line);
                 while ((stream->obj = xl_list_next(&stream->parser)) != NULL)
                 {
                     xl_printf(stream->obj);
