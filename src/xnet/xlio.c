@@ -49,7 +49,7 @@ static void xlio_loop(void *ptr)
 
             if (msg->flag == XMSG_FLAG_READY){
 
-                xl_free(&msg);
+                // xl_free(&msg);
 
                 for (size_t i = 0; i < 3; i++){
 
@@ -98,6 +98,8 @@ static void xlio_loop(void *ptr)
                     }
                 }
 
+                xl_free(&msg);
+
 
             }else if(msg->flag == XMSG_FLAG_STREAM){
 
@@ -123,10 +125,12 @@ static void xlio_loop(void *ptr)
                 }else {
                     xbyte_t *obj = xl_list_next(&stream->parser);
                     if (obj != NULL){
+                        xl_printf(obj);
                         parser = xl_parser(obj);
                         const char *name = xl_find_word(&parser, "path");
                         int64_t isfile = xl_find_int(&parser, "type");
                         stream->size = xl_find_uint(&parser, "size");
+                        xl_clear(frame);
                         xl_add_word(&frame, "path", name);
                         xl_add_int(&frame, "type", isfile);
                         xl_add_uint(&frame, "size", stream->size);
@@ -147,6 +151,7 @@ static void xlio_loop(void *ptr)
         }else if (stream->flag == XAPI_FS_FLAG_WRITE || stream->flag == XAPI_FS_FLAG_CREATE){
 
             if(msg->flag == XMSG_FLAG_STREAM){
+                __xcheck(stream->fd == -1);
                 __xcheck(__xapi->fs_file_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
                 stream->pos += msg->wpos;
                 stream->list_pos += msg->wpos;
@@ -157,9 +162,11 @@ static void xlio_loop(void *ptr)
                     stream->size = 0;
                 }
             }else if(msg->flag == XMSG_FLAG_READY){
+                xl_printf(&msg->line);
                 __xcheck(stream->fd != -1);
                 xbyte_t *obj = xl_list_next(&stream->parser);
                 if (obj != NULL){
+                    xl_printf(obj);
                     // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
                     parser = xl_parser(obj);
                     const char *name = xl_find_word(&parser, "path");

@@ -294,7 +294,6 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_MSG){
-        xl_printf(&msg->line);
         xltp_recv_msg(xltp, msg);
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_BIN){
