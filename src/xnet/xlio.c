@@ -174,6 +174,8 @@ static void xlio_loop(void *ptr)
                     }else {
                         __xapi->fs_path_maker(full_path);
                     }
+                }else {
+                    __xloge("------------------list end of\n");
                 }
             }
             xl_free(&msg);
@@ -345,10 +347,13 @@ void xlio_stream_free(xlio_stream_t *ios)
 
 int xlio_stream_ready(xlio_stream_t *ios, xline_t *frame)
 {
+    __xlogd("xlio_stream_ready enter\n");
     frame->flag = XMSG_FLAG_READY;
     __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
+    __xlogd("xlio_stream_ready exit\n");
     return 0;
 XClean:
+    __xlogd("xlio_stream_ready error\n");
     return -1;
 }
 

@@ -256,11 +256,14 @@ XClean:
 
 static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
 {
+    __xlogd("xltp_recv_msg ---------------- enter\n");
     static char *api;
     static xmsgcb_ptr cb;
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
     if (ios != NULL){
+        __xlogd("xltp_recv_msg ---------------- stream write enter\n");
         xlio_stream_ready(ios, msg);
+        __xlogd("xltp_recv_msg ---------------- stream write exit\n");
     }else {
         xltp->parser = xl_parser(&msg->line);
         api = xl_find_word(&xltp->parser, "api");
@@ -269,9 +272,10 @@ static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
         __xcheck(cb == NULL);
         cb(xltp, msg, NULL);
     }
-
+    __xlogd("xltp_recv_msg ---------------- exit\n");
     return 0;
 XClean:
+    __xlogd("xltp_recv_msg ---------------- error\n");
     return -1;
 }
 
@@ -290,10 +294,9 @@ static inline int xltp_recv(xltp_t *xltp, xline_t *msg)
         xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
         xl_free(&msg);
     }else if (msg->type == XPACK_TYPE_MSG){
-        __xlogd("xltp_recv ---------------- msg enter\n");
+        xl_printf(&msg->line);
         xltp_recv_msg(xltp, msg);
         xl_free(&msg);
-        __xlogd("xltp_recv ---------------- msg exit\n");
     }else if (msg->type == XPACK_TYPE_BIN){
         __xlogd("xltp_recv -------- bin enter\n");
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
