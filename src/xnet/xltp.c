@@ -197,20 +197,22 @@ XClean:
     return -1;
 }
 
-static inline int xltp_send_msg(xltp_t *xltp, xline_t *msg)
-{
-    msg->type = XPACK_TYPE_MSG;
-    xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
-    return 0;
-XClean:
-    return -1;
-}
+// static inline int xltp_send_msg(xltp_t *xltp, xline_t *msg)
+// {
+//     msg->type = XPACK_TYPE_MSG;
+//     xmsger_send(xltp->msger, __xmsg_get_channel(msg), msg);
+//     return 0;
+// XClean:
+//     return -1;
+// }
 
 static inline int xltp_send_res(xltp_t *xltp, xline_t *msg)
 {
     __xcheck(xltp == NULL || msg == NULL);
     msg->type = XPACK_TYPE_RES;
-    xmsger_disconnect(xltp->msger, msg);
+    if (xchannel_get_ctx(__xmsg_get_channel(msg)) == NULL){
+        xmsger_disconnect(xltp->msger, msg);
+    }
     return 0;
 XClean:
     return -1;
@@ -317,7 +319,9 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
     if (msg->type == XPACK_TYPE_REQ){
         
     }else if (msg->type == XPACK_TYPE_RES){
-        xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+        if (xchannel_get_ctx(__xmsg_get_channel(msg)) == NULL){
+            xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+        }
     }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         __xcheck(ios == NULL);
@@ -599,7 +603,7 @@ static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(xl_add_uint(&res, "port", port) == XNONE);
     __xcheck(xl_add_bin(&res, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&res, "code", 200) == XNONE);
-    xltp_send_msg(xltp, res);
+    xltp_send_res(xltp, res);
     return 0;
 
 XClean:
@@ -734,7 +738,7 @@ static int api_get(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(xl_add_uint(&msg, "port", port) == XNONE);
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
-    xltp_send_msg(xltp, msg);
+    xltp_send_res(xltp, msg);
 
     xlio_stream_ready(ios, ready);
     return 0;
