@@ -280,7 +280,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
             channel->msger->len -= (channel->msgbuf->buf[i]->wpos - channel->msgbuf->buf[i]->rpos);
             // xl 加了引用计数，这里需要释放一次
             xl_free(&channel->msgbuf->buf[i]);
-            channel->msgbuf->buf[i] = NULL;
+            // channel->msgbuf->buf[i] = NULL;
         }
     }
 
@@ -288,7 +288,12 @@ static inline void xchannel_clear(xchannel_ptr channel)
     if (channel->msg != NULL){
         __xlogd("xchannel_clear msg recv buf\n");
         xl_free(&channel->msg);
-        channel->msg = NULL;
+        // channel->msg = NULL;
+    }
+
+    if (channel->req != NULL){
+        __xlogd("xchannel_clear req\n");
+        xl_free(&channel->req);
     }
     
     __xlogd("xchannel_clear exit\n");
