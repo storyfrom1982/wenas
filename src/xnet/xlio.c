@@ -248,6 +248,11 @@ static void xlio_loop(void *ptr)
                     }
                 }
             }
+            if (stream->list_pos == stream->list_size){
+                xl_hold(msg);
+                msg->type = XPACK_TYPE_BYE;
+                __xcheck(xmsger_disconnect(stream->io->msger, msg) != 0);
+            }
             xl_free(&msg);
         }
     }

@@ -335,16 +335,17 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
     }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
         if (ios != NULL){
-            if (xlio_stream_update(ios, msg->wpos) == 0){
-                __xlogd("xltp_back final\n");
-                xl_clear(msg);
-                xl_hold(msg);
-                xlio_stream_free(ios);
-                xchannel_set_ctx(__xmsg_get_channel(msg), NULL);
-                xltp_send_bye(xltp, msg);
-            }else {
+            // if (xlio_stream_update(ios, msg->wpos) == 0){
+            //     __xlogd("xltp_back final\n");
+            //     xl_clear(msg);
+            //     xl_hold(msg);
+            //     xlio_stream_free(ios);
+            //     xchannel_set_ctx(__xmsg_get_channel(msg), NULL);
+            //     xltp_send_bye(xltp, msg);
+            // }else 
+            xl_hold(msg);
+            if (xlio_stream_update(ios, msg->wpos) > 0){
                 __xlogd("xltp_back read enter\n");
-                xl_hold(msg);
                 xlio_stream_read(ios, msg);
                 __xlogd("xltp_back read exit\n");
                 // msg->flag = XMSG_FLAG_STREAM;
