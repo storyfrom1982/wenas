@@ -778,7 +778,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
         __xlogd("<CONNECT> IP=[%s] PORT=[%u] CID[%u]\n", 
                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
 
-    }else if (head->ack.type == XPACK_TYPE_BYE){
+    }else if (head->ack.type == XPACK_TYPE_RES){
 
         xchannel_ptr channel = __xmsg_get_channel(msg);
         __xcheck(channel == NULL);
@@ -984,7 +984,7 @@ static void msger_loop(void *ptr)
 
                     xchannel_recv_ack(channel, rpack);
 
-                }else if (rpack->head.type == XPACK_TYPE_RES || rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_RES){
 
                     // 收到完整的消息后会断开连接
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
@@ -1030,7 +1030,7 @@ static void msger_loop(void *ptr)
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
                     xchannel_send_ack(channel);
 
-                }else if (rpack->head.type == XPACK_TYPE_BYE){
+                }else if (rpack->head.type == XPACK_TYPE_RES){
 
                     // 被动端收到重复的 BYE，回复最后的 ACK
                     xchannel_send_final(msger->sock[sid], addr, rpack);

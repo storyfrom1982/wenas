@@ -3,7 +3,7 @@
 #include "xpipe.h"
 
 #define MSGBUF_RANGE    4
-#define MSGBUF_SIZE     1280 * 128 //160KB
+#define MSGBUF_SIZE     1280 * 1024 //1.25MB
 
 typedef struct xmsgbuf {
     uint8_t range, spos, rpos, wpos;
@@ -251,7 +251,7 @@ static void xlio_loop(void *ptr)
             if (stream->list_pos == stream->list_size){
                 xl_clear(msg);
                 xl_hold(msg);
-                msg->type = XPACK_TYPE_BYE;
+                msg->type = XPACK_TYPE_RES;
                 __xcheck(xmsger_disconnect(stream->io->msger, msg) != 0);
             }
             xl_free(&msg);
