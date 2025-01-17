@@ -335,7 +335,7 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 
     }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
-        if (ios != NULL){
+        if (ios != NULL && ios == __xmsg_get_ctx(msg)){
             // if (xlio_stream_update(ios, msg->wpos) == 0){
             //     __xlogd("xltp_back final\n");
             //     xl_clear(msg);

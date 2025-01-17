@@ -395,6 +395,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
     for (size_t i = 0; i < MSGBUF_RANGE; i++){
         stream->buf.buf[i] = xl_creator(MSGBUF_SIZE);
         __xcheck(stream->buf.buf[i] == NULL);
+        __xmsg_set_ctx(stream->buf.buf[i], stream);
     }
 
     stream->list_pos = 0;
