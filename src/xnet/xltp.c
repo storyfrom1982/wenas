@@ -268,12 +268,19 @@ static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
         xlio_stream_ready(ios, msg);
         __xlogd("xltp_recv_msg ---------------- stream write exit\n");
     }else {
-        xltp->parser = xl_parser(&msg->line);
-        api = xl_find_word(&xltp->parser, "api");
-        __xcheck(api == NULL);
-        cb = xtree_find(xltp->api, api, slength(api));
-        __xcheck(cb == NULL);
-        cb(xltp, msg, NULL);
+        xline_t *req = xchannel_get_req(__xmsg_get_channel(msg));
+        if (req != NULL){
+            cb = __xmsg_get_cb(req);
+            __xcheck(cb == NULL);
+            cb(xltp, msg, NULL);
+        }else {
+            xltp->parser = xl_parser(&msg->line);
+            api = xl_find_word(&xltp->parser, "api");
+            __xcheck(api == NULL);
+            cb = xtree_find(xltp->api, api, slength(api));
+            __xcheck(cb == NULL);
+            cb(xltp, msg, NULL);
+        }
     }
     __xlogd("xltp_recv_msg ---------------- exit\n");
     return 0;
