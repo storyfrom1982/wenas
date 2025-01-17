@@ -90,7 +90,7 @@ struct xchannel {
     // uint16_t port;
 
     void *ctx;
-    uint64_t rid;
+    // uint64_t rid;
     uint16_t cid;
     uint64_t ucid[3];
     __xipaddr_ptr addr;
@@ -103,6 +103,7 @@ struct xchannel {
     __atom_size pos, len;
 
     xline_t *msg;
+    xline_t *req;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -206,7 +207,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->serial_range = serial_range;
     channel->timestamp = __xapi->clock();
     channel->back_delay = 50000000UL;
-    channel->rid = XNONE;
+    // channel->rid = XNONE;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -473,7 +474,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 // 更新消息长度
                 xl_fixed(channel->msg);
                 // 通知用户已收到一个完整的消息
-                __xmsg_set_ctx(channel->msg, channel->ctx);
+                // __xmsg_set_ctx(channel->msg, channel->ctx);
                 __xmsg_set_ipaddr(channel->msg, channel->addr);
                 channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
                 channel->msg = NULL;
@@ -740,8 +741,10 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         __xcheck(xmsg_fixed(msg) != 0);
 
-        channel->rid = msg->id;
-        channel->ctx = __xmsg_get_ctx(msg);
+        // channel->rid = msg->id;
+        // channel->ctx = __xmsg_get_ctx(msg);
+        xl_hold(msg);
+        channel->req = msg;
         channel->addr = __xmsg_get_ipaddr(msg);
 
         if (__xapi->udp_addr_is_ipv6(channel->addr)){
@@ -887,19 +890,19 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
-                        __xlogd("CHANNEL TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) RID(%lu) CTX(%X)\n", 
-                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid,
-                                channel->rid, channel->ctx);
-                        if (channel->rid == XNONE && channel->ctx == NULL){
+                        __xlogd("CHANNEL TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) CTX(%X)\n", 
+                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, channel->req);
+                        if (channel->req != NULL){
+                            // 连接已经建立，需要回收资源
+                            // xline_t *msg = xl_maker();
+                            // __xcheck(msg == NULL);
+                            // msg->id = channel->rid;
+                            // __xmsg_set_ctx(msg, channel->ctx);
+                            msger->cb->on_message_timedout(msger->cb, channel, channel->req);
+                            channel->req = NULL;
+                        }else {
                             // 连接尚未建立，直接释放即可
                             xchannel_free(channel);
-                        }else {
-                            // 连接已经建立，需要回收资源
-                            xline_t *msg = xl_maker();
-                            __xcheck(msg == NULL);
-                            msg->id = channel->rid;
-                            __xmsg_set_ctx(msg, channel->ctx);
-                            msger->cb->on_message_timedout(msger->cb, channel, msg);
                         }
                     }
                 }
@@ -1266,6 +1269,11 @@ void xmsger_free(xmsger_ptr *pptr)
 // {
 //     return __xapi->udp_addr_port(channel->addr);
 // }
+
+xline_t* xchannel_get_req(xchannel_ptr channel)
+{
+    return channel->req;
+}
 
 void* xchannel_get_ctx(xchannel_ptr channel)
 {
