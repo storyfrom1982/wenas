@@ -613,7 +613,7 @@ static void xl_format(xbyte_t *xd, const char *key, int depth, char *buf, uint64
         uint64_t len = __xl_sizeof_line(xd) * 2; \
         char buf[len]; \
         xl_format((xd), "", 1, buf, &pos, len); \
-        __xlogi("\n####################################\n%s####################################\n", buf); \
+        if (pos < 1024 * 7) __xlogi("\n####################################\n%s####################################\n", buf); \
     }while(0)
 
 

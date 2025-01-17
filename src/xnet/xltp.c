@@ -640,7 +640,7 @@ static int res_put(xltp_t *xltp, xline_t *res, void *ctx)
     xlio_stream_t *ios = NULL;
     xltp->parser = xl_parser(&res->line);
     xl_printf(&res->line);
-    xline_t *req = __xmsg_get_ctx(res);
+    xline_t *req = xchannel_get_req( __xmsg_get_channel(res));
     xl_hold(req);
     ios = xlio_stream_maker(xltp->io, req, XAPI_FS_FLAG_READ);
     __xcheck(ios == NULL);
