@@ -98,6 +98,27 @@ int main(int argc, char *argv[])
             }
             __xlogd("dir size = %lu\n", dirlist->range);
             xl_free(&dirlist);
+
+        } else if (strcmp(command, "dir") == 0) {
+
+            size_t cwd_size = 1024;
+            char cwd_path[cwd_size];
+            __xapi->fs_path_cwd(cwd_path, &cwd_size);
+            // int path_len = slength(cwd_path);
+            int dir_name_pos = 0;
+            while (cwd_path[cwd_size - dir_name_pos - 1] != '/'){
+                dir_name_pos++;
+            }
+            dir_name_pos = cwd_size - dir_name_pos;
+            __xfs_scanner_ptr scanner = __xapi->fs_scanner_open(cwd_path);
+            __xfs_item_ptr item;
+            while ((item = __xapi->fs_scanner_read(scanner)) != NULL)
+            {
+                __xlogd("scanner --- type(%d) size:%lu %s\n", item->type, item->size, item->path + dir_name_pos);
+            }
+            __xapi->fs_scanner_close(scanner);
+            
+
         } else if (strcmp(command, "exit") == 0) {
             __xlogi("再见！\n");
             break;

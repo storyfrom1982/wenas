@@ -24,10 +24,19 @@
 #define __XAPI_MAP_FAILED       ((void *) -1)
 #define __XAPI_IP_STR_LEN       46
 
+#define __XAPI_FS_ITEM_TYPE_DIR      0
+#define __XAPI_FS_ITEM_TYPE_FILE     1
+
+typedef struct __xfs_item {
+    int type;
+    const char *path;
+    uint64_t size;
+}*__xfs_item_ptr;
 
 typedef int __xfile_t;
 typedef void* __xdir_ptr;
 typedef struct __xfs_enter* __xfs_enter_ptr;
+typedef struct __xfs_scanner* __xfs_scanner_ptr;
 typedef void* __xthread_ptr;
 typedef struct __xmutex* __xmutex_ptr;
 typedef struct __xipaddr* __xipaddr_ptr;
@@ -108,6 +117,10 @@ typedef struct __xapi_enter {
     int (*fs_path_scanner)(const char* path, int name_pos, int(*cb)(const char *name, int type, uint64_t size, void **ctx), void **ctx);
     int (*fs_path_rename)(const char* path, const char* new_path);
     int (*fs_path_cwd)(char* buf, size_t *size);
+
+    __xfs_scanner_ptr (*fs_scanner_open)(const char *path);
+    void (*fs_scanner_close)(__xfs_scanner_ptr scanner);
+    __xfs_item_ptr (*fs_scanner_read)(__xfs_scanner_ptr scanner);
 
 ///////////////////////////////////////////////////////
 ///// 内存管理

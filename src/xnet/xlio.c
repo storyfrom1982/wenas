@@ -88,6 +88,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
                 const char *name = xl_find_word(&parser, "path");
                 int64_t isfile = xl_find_int(&parser, "type");
                 stream->size = xl_find_uint(&parser, "size");
+                __xlogd("send file ================= %s\n", name);
 
                 uint64_t obj_begin_pos = xl_add_obj_begin(&frame, NULL);
 
@@ -357,11 +358,36 @@ int xlio_path_scanner(const char *path, xline_t **frame)
     xl_add_word(frame, "full", full_path);
     uint64_t pos = xl_add_list_begin(frame, "list");
     __xcheck(pos == XNONE);
+#if 0
     if (__xapi->fs_dir_exist(path)){
         __xcheck(__xapi->fs_path_scanner(path, path_len - name_pos, scandir_cb, (void**)frame) != 0);
     }else if (__xapi->fs_file_exist(path)){
         __xcheck(scandir_cb(path + (path_len - name_pos), 1, __xapi->fs_file_size(path), (void**)frame) != 0);
     }
+#else
+
+    uint64_t root_pos = xl_add_obj_begin(frame, NULL);
+    __xcheck(root_pos == XNONE);
+    __xcheck(xl_add_word(frame, "path", path + (path_len - name_pos)) == XNONE);
+    __xcheck(xl_add_int(frame, "type", 0) == XNONE);
+    __xcheck(xl_add_uint(frame, "size", 0) == XNONE);
+    xl_add_obj_end(frame, root_pos);
+
+    __xfs_item_ptr item;
+    __xfs_scanner_ptr scanner = __xapi->fs_scanner_open(path);
+    while ((item = __xapi->fs_scanner_read(scanner)) != NULL)
+    {
+        // __xlogd("scanner --- type(%d) size:%lu %s\n", item->type, item->size, item->path + (path_len - name_pos));
+        uint64_t pos = xl_add_obj_begin(frame, NULL);
+        __xcheck(pos == XNONE);
+        __xcheck(xl_add_word(frame, "path", item->path + (path_len - name_pos)) == XNONE);
+        __xcheck(xl_add_int(frame, "type", item->type) == XNONE);
+        __xcheck(xl_add_uint(frame, "size", item->size) == XNONE);
+        xl_add_obj_end(frame, pos);
+        (*frame)->range += item->size;
+    }
+    __xapi->fs_scanner_close(scanner);
+#endif
     xl_add_list_end(frame, pos);
     __xcheck(xl_add_int(frame, "len", (*frame)->range) == XNONE);
     return 0;
