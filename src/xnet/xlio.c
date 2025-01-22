@@ -376,10 +376,10 @@ static void xlio_loop(void *ptr)
                                 const char *name = xl_find_word(&parser, "path");
                                 int64_t isfile = xl_find_int(&parser, "type");
                                 stream->size = xl_find_uint(&parser, "size");
-                                int full_path_len = slength(stream->path) + slength(name) + 2;
+                                int full_path_len = slength(stream->uri) + slength(name) + 2;
                                 char full_path[full_path_len];                
                                 __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
-                                __xlogd("download fiel = %s\n", full_path);
+                                __xlogd("download file = %s\n", full_path);
                                 if (isfile){
                                     stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_CREATE, 0644);
                                     __xcheck(stream->fd < 0);
