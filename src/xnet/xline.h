@@ -555,7 +555,7 @@ static void xl_format(xbyte_t *xd, const char *key, int depth, char *buf, uint64
     if (__xl_typeis_obj(xd)){
 
         while ((xd = xl_next(&parser)) != NULL){
-            
+
             if (__xl_typeis_int(xd)){
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %ld,\n", (depth + 1) * 4, parser.key, __xl_b2i(xd));
             }else if (__xl_typeis_uint(xd)){
@@ -634,7 +634,7 @@ static void xl_format(xbyte_t *xd, const char *key, int depth, char *buf, uint64
         uint64_t len = __xl_sizeof_line(xd) * 2; \
         char buf[len]; \
         xl_format((xd), "", 1, buf, &pos, len); \
-        if (pos < 1024 * 7) __xlogi("\n####################################\n%s####################################\n", buf); \
+        if (pos < 1024 * 1024) __xlogi("\n####################################\n%s####################################\n", buf); \
     }while(0)
 
 

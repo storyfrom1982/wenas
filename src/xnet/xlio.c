@@ -160,7 +160,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t **in, xline_t **ou
     uint64_t pos = xl_add_list_begin(out, "list");
     while ((ios->obj = xl_list_next(&ios->parser)) != NULL)
     {
-        xl_printf(ios->obj);
+        // xl_printf(ios->obj);
         // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
         xline_t parser = xl_parser(ios->obj);
         int64_t isfile = xl_find_int(&parser, "type");
@@ -177,12 +177,13 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t **in, xline_t **ou
             int full_path_len = slength(ios->uri) + slength(name) + 2;
             char full_path[full_path_len];
             __xapi->snprintf(full_path, full_path_len, "%s/%s\0", ios->uri, name);
-            __xlogd("mkpath === %s\n", full_path);
+            // __xlogd("mkpath === %s\n", full_path);
             __xapi->fs_path_maker(full_path);
         }
     }
     xl_add_list_end(out, pos);
     // xl_fixed(*out);
+    __xlogd("========================= checklist\n");
     xl_printf(&(*out)->line);
     return 0;
 XClean:
@@ -204,7 +205,7 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xline_t **frame)
                 // __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                 return 0;
             }
-            __xlogd("scanner --- type(%d) size:%lu %s\n", ios->item->type, ios->item->size, ios->item->path + ios->dir_name_pos);
+            // __xlogd("scanner --- type(%d) size:%lu %s\n", ios->item->type, ios->item->size, ios->item->path + ios->dir_name_pos);
             uint64_t pos = xl_add_obj_begin(frame, NULL);
             __xcheck(pos == XNONE);
             __xcheck(xl_add_int(frame, "type", ios->item->type) == XNONE);
@@ -285,6 +286,7 @@ static void xlio_loop(void *ptr)
 
                             if (__serialbuf_readable(&stream->buf)){
                                 frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                                xl_clear(frame);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
                                 stream->buf.rpos++;
@@ -522,11 +524,17 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
         __xcheck(ios->scanner == NULL);
         xlio_scan_dir(ios, &frame);
     }
+
+    __xlogd("list size = %lu\n", frame->wpos);
     xl_printf(&frame->line);
+
+    xlio_check_list(ios, &frame, &ios->buf.buf[1]);
+    __xlogd("list ---- size = %lu\n", ios->buf.buf[1]->wpos);
+    xl_printf(&ios->buf.buf[1]->line);
+
     ios->list_frame = frame;
     frame->type = XPACK_TYPE_MSG;
-    // xlio_api_upload(ios->io, frame);
-    __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
+    // __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
     return 0;
 XClean:
     if (frame != NULL){
