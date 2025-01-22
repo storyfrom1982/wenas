@@ -65,7 +65,8 @@ int main(int argc, char *argv[])
             size_t cwd_size = 1024;
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
-            xltp_put(peer, cwd_path, "wenas", ip, port);
+            __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
+            xltp_put(peer, cwd_path, "wenas", addr);
             // xltp_put(peer, "./build/xltpd", "wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
@@ -114,7 +115,7 @@ int main(int argc, char *argv[])
             __xfs_item_ptr item;
             while ((item = __xapi->fs_scanner_read(scanner)) != NULL)
             {
-                __xlogd("scanner --- type(%d) size:%lu %s\n", item->type, item->size, item->path + dir_name_pos);
+                __xlogd("scanner --- type(%d) size:%lu path_len:%d %s\n", item->type, item->size, item->path_len, item->path + dir_name_pos);
             }
             __xapi->fs_scanner_close(scanner);
             

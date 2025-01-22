@@ -166,6 +166,7 @@ XClean:
 // 定义链表节点
 typedef struct StackNode {
     struct StackNode* next;  // 指向下一个节点的指针
+    int path_len;
     char path[1];            // 柔性数组，存储路径
 } StackNode;
 
@@ -180,9 +181,10 @@ void stack_init(Stack* stack) {
 }
 
 // 压入路径到栈中
-void stack_push(Stack* stack, const char* path) {
-    size_t path_len = strlen(path) + 1; // 计算路径长度（包括终止符）
+void stack_push(Stack* stack, const char* path, int path_len) {
+    // size_t path_len = strlen(path) + 1; // 计算路径长度（包括终止符）
     StackNode* node = (StackNode*)malloc(sizeof(StackNode) + path_len); // 动态分配节点内存
+    node->path_len = path_len;
     memcpy(node->path, path, path_len); // 复制路径到节点
     node->next = stack->top;            // 新节点的 next 指向当前栈顶
     stack->top = node;                  // 更新栈顶为新节点
@@ -227,7 +229,7 @@ __xfs_scanner_ptr traverser_init(const char* start_path) {
     __xfs_scanner_ptr traverser = malloc(sizeof(struct __xfs_scanner));
     __xcheck(traverser == NULL);
     stack_init(&traverser->stack); // 初始化栈
-    stack_push(&traverser->stack, start_path); // 将起始路径压入栈
+    stack_push(&traverser->stack, start_path, strlen(start_path)+1); // 将起始路径压入栈
     traverser->current_dir = NULL;
     traverser->current_path = NULL;
     return traverser;
@@ -262,6 +264,11 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
             // 打开目录
             __xcheck(uv_fs_opendir(NULL, &traverser->open_req, traverser->current_path->path, NULL) < 0);
             traverser->current_dir = (uv_dir_t*)traverser->open_req.ptr;
+            traverser->item.path = traverser->current_path->path;
+            traverser->item.path_len = traverser->current_path->path_len;
+            traverser->item.type = __XAPI_FS_ITEM_TYPE_DIR;
+            traverser->item.size = 0;
+            return &traverser->item; // 返回当前路径
         }
 
         // 读取目录条目
@@ -285,21 +292,24 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
         }
 
         // 构造完整路径
-        snprintf(traverser->full_path, FS_PATH_MAX_LEN, "%s/%s\0", traverser->current_path->path, traverser->dirents[0].name);
+        int path_len = snprintf(traverser->full_path, FS_PATH_MAX_LEN, "%s/%s", traverser->current_path->path, traverser->dirents[0].name);
+        __xcheck(path_len >= FS_PATH_MAX_LEN);
+        if (path_len >= FS_PATH_MAX_LEN){
+            // TODO 检测path长度是否越界，如果越界，需要重新分配内存
+        }
 
         if (traverser->dirents[0].type == UV_DIRENT_DIR) {
             // 如果是目录，将路径压入栈
-            stack_push(&traverser->stack, traverser->full_path);
-            traverser->item.type = __XAPI_FS_ITEM_TYPE_DIR;
-            traverser->item.size = 0;
+            stack_push(&traverser->stack, traverser->full_path, path_len + 1);
+            uv_fs_req_cleanup(&traverser->read_req); // 清理读取请求
         }else {
             traverser->item.type = __XAPI_FS_ITEM_TYPE_FILE;
             traverser->item.size = __xapi->fs_file_size(traverser->full_path);
+            uv_fs_req_cleanup(&traverser->read_req); // 清理读取请求
+            traverser->item.path = traverser->full_path;
+            traverser->item.path_len = path_len + 1;
+            return &traverser->item; // 返回当前路径
         }
-
-        uv_fs_req_cleanup(&traverser->read_req); // 清理读取请求
-        traverser->item.path = traverser->full_path;
-        return &traverser->item; // 返回当前路径
     }
 
 XClean:
@@ -310,6 +320,7 @@ XClean:
         traverser->current_dir = NULL;
     }
     if (traverser->current_path) {
+        __xlogd("len=%d path = %s\n", traverser->current_path->path_len, traverser->current_path->path);
         free(traverser->current_path);
         traverser->current_path = NULL;
     }

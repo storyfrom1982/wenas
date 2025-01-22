@@ -29,6 +29,7 @@
 
 typedef struct __xfs_item {
     int type;
+    int path_len;
     const char *path;
     uint64_t size;
 }*__xfs_item_ptr;

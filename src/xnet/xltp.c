@@ -265,7 +265,7 @@ static inline int xltp_recv_msg(xltp_t *xltp, xline_t *msg)
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
     if (ios != NULL){
         __xlogd("xltp_recv_msg ---------------- stream write enter\n");
-        xlio_stream_ready(ios, msg);
+        xlio_stream_write(ios, msg);
         __xlogd("xltp_recv_msg ---------------- stream write exit\n");
     }else {
         xline_t *req = xchannel_get_req(__xmsg_get_channel(msg));
@@ -585,6 +585,7 @@ XClean:
 
 static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
 {
+    // return xlio_api_upload(xltp->io, msg);
     int n;
     const char *ip;
     uint16_t port;
@@ -609,7 +610,7 @@ static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
     
     // n = __xapi->snprintf(file_path, 2048, "%s/%s", dir, file);
     // file_path[n] = '\0';
-    ios = xlio_stream_maker(xltp->io, msg, XAPI_FS_FLAG_CREATE);
+    ios = xlio_stream_maker(xltp->io, msg, IOSTREAM_TYPE_DOWNLOAD);
     __xcheck(ios == NULL);
     xchannel_set_ctx(__xmsg_get_channel(msg), ios);
 
@@ -642,11 +643,11 @@ static int res_put(xltp_t *xltp, xline_t *res, void *ctx)
     xl_printf(&res->line);
     xline_t *req = xchannel_get_req( __xmsg_get_channel(res));
     xl_hold(req);
-    ios = xlio_stream_maker(xltp->io, req, XAPI_FS_FLAG_READ);
+    ios = xlio_stream_maker(xltp->io, req, IOSTREAM_TYPE_UPLOAD);
     __xcheck(ios == NULL);
     // __xmsg_set_ctx(req, ios);
     xchannel_set_ctx(__xmsg_get_channel(res), ios);
-    xlio_stream_ready(ios, res);
+    // xlio_stream_ready(ios, res);
     return 0;
 XClean:
     return -1;
@@ -666,6 +667,18 @@ XClean:
 
 static int req_put(xltp_t *xltp, xline_t *msg, void *ctx)
 {
+    // 1 解析 URL
+    // 2 解析用户类型，设备/好友/临时通信
+    // 3 获取用户IP地址，IPv6/IPv4
+    // 4 检用户状态，是否在线，是否需要穿透
+    // 5 确保能建立连接
+    // 以上的连通性检测，应该在调用 PUT 之前完成。提供 connect 接口，在 connected 回调中继续相关任务。
+    // PUT 只负责创建流
+    // 1 解析资源类型，文件/媒体流
+    // 2 创建流
+    // 3 发送请求，创建通道
+    // 4 接收应答，连接成功
+
     const char *local_path;
     const char *remote_path;
     // xlio_stream_t *ios = NULL;
@@ -680,10 +693,11 @@ static int req_put(xltp_t *xltp, xline_t *msg, void *ctx)
     xl_add_word(&req, "api", "put");
     __xmsg_set_cb(req, res_put);
     __xcheck(xl_add_word(&req, "path", remote_path) == XNONE);
-    __xcheck(xlio_path_scanner(local_path, &req) != 0);
+    __xcheck(xl_add_ptr(&req, "ctx", msg) == XNONE);
+    // __xcheck(xlio_path_scanner(local_path, &req) != 0);
     __xmsg_set_ipaddr(req, __xmsg_get_ipaddr(msg));
     __xcheck(xltp_send_req(xltp, req) != 0);
-    xl_free(&msg);
+    // xl_free(&msg);
     return 0;
 XClean:
     // if (ios != NULL){
@@ -698,22 +712,23 @@ XClean:
     return -1;
 }
 
-int xltp_put(xltp_t *xltp, const char *local_path, const char *remote_path, const char *ip, uint16_t port)
+// file://uuid/path
+int xltp_put(xltp_t *xltp, const char *path, const char *url, __xipaddr_ptr ipaddr)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
     msg->flag = XMSG_FLAG_POST;
-    __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-    __xmsg_set_ipaddr(msg, addr);
+    __xmsg_set_ipaddr(msg, ipaddr);
     __xmsg_set_cb(msg, req_put);
-    xl_add_word(&msg, "lpath", local_path);
-    xl_add_word(&msg, "rpath", remote_path);
+    xl_add_word(&msg, "lpath", path);
+    xl_add_word(&msg, "rpath", url);
     __xcheck(xpipe_write(xltp->msgpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    // xlio_upload(xltp->io, path, url, ipaddr);
     return 0;
 XClean:
-    if (msg != NULL){
-        xl_free(&msg);
-    }
+    // if (msg != NULL){
+    //     xl_free(&msg);
+    // }
     return -1;
 }
 
@@ -743,7 +758,7 @@ static int api_get(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(file_path == NULL);
     __xcheck(!__xapi->fs_file_exist(file_path));
     
-    ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_READ);
+    ios = xlio_stream_maker(xltp->io, msg, XAPI_FS_FLAG_READ);
     __xcheck(ios == NULL);
     xchannel_set_ctx(__xmsg_get_channel(msg), ios);
 
@@ -759,7 +774,7 @@ static int api_get(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
     xltp_send_res(xltp, msg);
 
-    xlio_stream_ready(ios, ready);
+    // xlio_stream_ready(ios, ready);
     return 0;
 
 XClean:
@@ -815,7 +830,7 @@ static int req_get(xltp_t *xltp, xline_t *msg, void *ctx)
 
     n = __xapi->snprintf(file_path, 2048, "%s/%s", local_dir, file_name);
     file_path[n] = '\0';
-    ios = xlio_stream_maker(xltp->io, file_path, XAPI_FS_FLAG_CREATE);
+    ios = xlio_stream_maker(xltp->io, msg, XAPI_FS_FLAG_CREATE);
     __xcheck(ios == NULL);
 
     xline_t *req = xl_maker();
