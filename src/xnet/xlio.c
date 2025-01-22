@@ -183,6 +183,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t **in, xline_t **ou
     }
     xl_add_list_end(out, pos);
     // xl_fixed(*out);
+    xl_printf(&(*out)->line);
     return 0;
 XClean:
     return -1;
@@ -283,8 +284,9 @@ static void xlio_loop(void *ptr)
                         if (mtype == XLIO_STREAM_SYN_LIST){
 
                             if (__serialbuf_readable(&stream->buf)){
+                                frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
-                                xl_printf(&stream->buf.buf[__serialbuf_rpos(&stream->buf)]->line);
+                                xl_printf(&frame->line);
                                 stream->buf.rpos++;
                             }
 
