@@ -188,6 +188,7 @@ void stack_push(Stack* stack, const char* path, int path_len) {
     memcpy(node->path, path, path_len); // 复制路径到节点
     node->next = stack->top;            // 新节点的 next 指向当前栈顶
     stack->top = node;                  // 更新栈顶为新节点
+    // __xlogd("push path = %s\n", node->path);
 }
 
 // 从栈中弹出路径
@@ -196,8 +197,8 @@ StackNode* stack_pop(Stack* stack) {
         return NULL; // 栈为空
     }
     StackNode* node = stack->top; // 获取栈顶节点
-    const char* path = node->path; // 获取路径
     stack->top = node->next;      // 更新栈顶为下一个节点
+    // __xlogd("pop path = %s\n", node->path);
     return node;
 }
 
@@ -268,6 +269,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
             traverser->item.path_len = traverser->current_path->path_len;
             traverser->item.type = __XAPI_FS_ITEM_TYPE_DIR;
             traverser->item.size = 0;
+            // __xlogd("dir = %s size = %lu\n", traverser->item.path, traverser->item.path_len);
             return &traverser->item; // 返回当前路径
         }
 
@@ -305,6 +307,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
         }else {
             traverser->item.type = __XAPI_FS_ITEM_TYPE_FILE;
             traverser->item.size = __xapi->fs_file_size(traverser->full_path);
+            // __xlogd("file = %s size = %lu\n", traverser->full_path, path_len + 1);
             uv_fs_req_cleanup(&traverser->read_req); // 清理读取请求
             traverser->item.path = traverser->full_path;
             traverser->item.path_len = path_len + 1;
