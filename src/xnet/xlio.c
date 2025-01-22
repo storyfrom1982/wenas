@@ -287,9 +287,12 @@ static void xlio_loop(void *ptr)
                             if (__serialbuf_readable(&stream->buf)){
                                 frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                                 xl_clear(frame);
+                                xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
                                 stream->buf.rpos++;
+                                frame->type = XPACK_TYPE_MSG;
+                                __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                             }
 
                         }else if (mtype == XLIO_STREAM_PUT_LIST){
@@ -355,12 +358,12 @@ static void xlio_loop(void *ptr)
                         }
                     }
 
-                    if (stream->list_pos == stream->list_size){
-                        xl_clear(msg);
-                        xl_hold(msg);
-                        msg->type = XPACK_TYPE_RES;
-                        __xcheck(xmsger_disconnect(stream->io->msger, msg) != 0);
-                    }
+                    // if (stream->list_pos == stream->list_size){
+                    //     xl_clear(msg);
+                    //     xl_hold(msg);
+                    //     msg->type = XPACK_TYPE_RES;
+                    //     __xcheck(xmsger_disconnect(stream->io->msger, msg) != 0);
+                    // }
 
                     xl_free(&msg);
                 }
@@ -528,13 +531,13 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
     __xlogd("list size = %lu\n", frame->wpos);
     xl_printf(&frame->line);
 
-    xlio_check_list(ios, &frame, &ios->buf.buf[1]);
-    __xlogd("list ---- size = %lu\n", ios->buf.buf[1]->wpos);
-    xl_printf(&ios->buf.buf[1]->line);
+    // xlio_check_list(ios, &frame, &ios->buf.buf[1]);
+    // __xlogd("list ---- size = %lu\n", ios->buf.buf[1]->wpos);
+    // xl_printf(&ios->buf.buf[1]->line);
 
     ios->list_frame = frame;
     frame->type = XPACK_TYPE_MSG;
-    // __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
+    __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
     return 0;
 XClean:
     if (frame != NULL){
