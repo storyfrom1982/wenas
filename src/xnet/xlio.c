@@ -284,8 +284,8 @@ static void xlio_loop(void *ptr)
 
                             if (__serialbuf_readable(&stream->buf)){
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
-                                stream->buf.rpos++;
                                 xl_printf(&stream->buf.buf[__serialbuf_rpos(&stream->buf)]->line);
+                                stream->buf.rpos++;
                             }
 
                         }else if (mtype == XLIO_STREAM_PUT_LIST){
@@ -524,7 +524,7 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
     ios->list_frame = frame;
     frame->type = XPACK_TYPE_MSG;
     // xlio_api_upload(ios->io, frame);
-    __xcheck(xmsger_send(ios->io->msger, __xmsg_get_channel(frame), frame) != 0);
+    __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
     return 0;
 XClean:
     if (frame != NULL){
