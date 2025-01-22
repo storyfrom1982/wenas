@@ -753,6 +753,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
         __xmsg_set_cb(post, xlio_post_download);
     }
     __xmsg_set_ctx(post, stream);
+    __xmsg_set_channel(post, stream->channel);
     __xcheck(xpipe_write(io->pipe, &post, __sizeof_ptr) != __sizeof_ptr);
     return stream;
 XClean:
