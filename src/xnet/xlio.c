@@ -270,6 +270,7 @@ static void xlio_loop(void *ptr)
 
                     if (mtype == XLIO_STREAM_GET_LIST){
 
+                        xl_hold(msg);
                         msg->prev = &stream->list_frame;
                         msg->next = stream->list_frame.prev;
                         msg->prev->next = msg;
@@ -688,8 +689,10 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
     __xcheck(stream == NULL);
     mclear(stream, sizeof(xlio_stream_t));
     stream->channel = __xmsg_get_channel(frame);
+    xchannel_set_ctx(stream->channel, stream);
     stream->flag = stream_type;
     stream->dir = frame;
+    xl_hold(stream->dir);
 
     stream->buf.range = MSGBUF_RANGE;
     stream->buf.wpos = stream->buf.range;
@@ -743,7 +746,8 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
     stream->list_frame.prev = &stream->list_frame;
     stream->list_frame.next = &stream->list_frame;
 
-    xline_t *post = stream->buf.buf[0];
+    xline_t *post = xl_maker();
+    
     post->flag = XMSG_FLAG_POST;
     __xmsg_set_ipaddr(post, __xmsg_get_channel(frame));
     if (stream->flag == IOSTREAM_TYPE_UPLOAD){
