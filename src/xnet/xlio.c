@@ -254,11 +254,11 @@ static void xlio_loop(void *ptr)
     {
         __xcheck(xpipe_read(io->pipe, &msg, __sizeof_ptr) != __sizeof_ptr);
 
-        if (msg->flag == XMSG_FLAG_RECV){
+        stream = xchannel_get_ctx(__xmsg_get_channel(msg));
+        __xcheck(stream == NULL);
+        // stream->channel = __xmsg_get_channel(msg);
 
-            stream = xchannel_get_ctx(__xmsg_get_channel(msg));
-            __xcheck(stream == NULL);
-            stream->channel = __xmsg_get_channel(msg);
+        if (msg->flag == XMSG_FLAG_RECV){
 
             if (stream->flag == IOSTREAM_TYPE_UPLOAD){
 
