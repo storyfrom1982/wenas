@@ -575,10 +575,8 @@ struct __xipaddr {
         struct sockaddr_in6 v6;
     };
     socklen_t addrlen;
-#ifdef __XDEBUG__
     char ip[46];
     uint16_t port;
-#endif
 };
 
 static int udp_open(int ipv6, int reuse, int nonblock)
