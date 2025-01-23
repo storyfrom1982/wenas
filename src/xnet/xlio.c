@@ -356,6 +356,7 @@ static void xlio_loop(void *ptr)
                             }else {
                                 xl_hold(msg);
                                 xl_printf(&msg->line);
+                                __xlogd("debug frame list %p:%p\n", stream->list_frame.prev, stream->list_frame.next);
                                 msg->next = &stream->list_frame;
                                 msg->prev = stream->list_frame.prev;
                                 msg->prev->next = msg;
@@ -365,7 +366,7 @@ static void xlio_loop(void *ptr)
                                 xline_t *temp = stream->list_frame.next;
                                 while (temp != &stream->list_frame)
                                 {
-                                    __xlogd("debug frame list\n");
+                                    __xlogd("debug frame list %p\n", temp);
                                     xl_printf(&temp->line);
                                     temp = temp->next;
                                 }
@@ -596,11 +597,15 @@ void xlio_free(xlio_t **pptr)
 // {
 //     return 0;
 // }
+
 static int xlio_post_download(xltp_t *tp, xline_t *msg, void *ctx)
 {
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
     ios->parser = xl_parser(&ios->dir->line);
     ios->uri = xl_find_word(&ios->parser, "path");
+    if (ios->list_frame.next == NULL || ios->list_frame.prev == NULL){
+        __xloge("list error\n");
+    }
     return 0;
 }
 
