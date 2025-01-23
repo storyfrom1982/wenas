@@ -344,7 +344,7 @@ static void xlio_loop(void *ptr)
                                 // xl_printf(&msg->line);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
-                                __xlogd("xlio_loop >>>>---------------> msg size = %lu\n", msg->wpos);
+                                __xlogd("xlio_loop >>>>---------------> msg size = %lu\n", frame->wpos);
                                 stream->buf.rpos++;
                                 frame->type = XPACK_TYPE_MSG;
                                 __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
