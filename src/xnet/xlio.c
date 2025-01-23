@@ -347,6 +347,7 @@ static void xlio_loop(void *ptr)
                                 frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                                 xl_clear(frame);
                                 xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
+                                xl_printf(&msg->line);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
                                 stream->buf.rpos++;
