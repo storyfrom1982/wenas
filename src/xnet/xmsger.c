@@ -974,9 +974,10 @@ static void msger_loop(void *ptr)
                 if (rpack->head.type == XPACK_TYPE_BIN || rpack->head.type == XPACK_TYPE_MSG) {
 
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
-                    if (__serialbuf_sendable(channel->sendbuf) > 0){
-                        xchannel_send_pack(channel);
-                    }else {
+                    // if (__serialbuf_sendable(channel->sendbuf) > 0){
+                    //     xchannel_send_pack(channel);
+                    // }else 
+                    {
                         xchannel_send_ack(channel);
                     }
 

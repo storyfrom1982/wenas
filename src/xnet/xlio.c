@@ -214,7 +214,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t **in, xline_t **ou
     xl_add_list_end(out, pos);
     // xl_fixed(*out);
     __xlogd("========================= checklist\n");
-    xl_printf(&(*out)->line);
+    // xl_printf(&(*out)->line);
     return 0;
 XClean:
     return -1;
