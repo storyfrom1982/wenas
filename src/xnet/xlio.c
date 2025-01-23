@@ -366,7 +366,7 @@ static void xlio_loop(void *ptr)
                                 xline_t *temp = stream->list_frame.next;
                                 while (temp != &stream->list_frame)
                                 {
-                                    __xlogd("debug frame list %p\n", temp);
+                                    __xlogd("debug frame list ref=%lu ---> %p\n", temp->ref, temp);
                                     xl_printf(&temp->line);
                                     temp = temp->next;
                                 }
