@@ -353,6 +353,14 @@ static void xlio_loop(void *ptr)
                                 stream->buf.rpos++;
                                 frame->type = XPACK_TYPE_MSG;
                                 __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                            }else {
+                                xl_hold(msg);
+                                xl_printf(&msg->line);
+                                msg->prev = stream->list_frame.prev;
+                                msg->next = &stream->list_frame;
+                                msg->prev->next = msg;
+                                msg->next->prev = msg;
+                                stream->list_frame_count++;
                             }
 
                         }else if (mtype == XLIO_STREAM_PUT_LIST){
@@ -471,6 +479,26 @@ static void xlio_loop(void *ptr)
 
             }else {
 
+                stream->buf.wpos++;
+                xl_clear(msg);
+
+                if (stream->list_frame.next != &stream->list_frame){ 
+                    xline_t *listmsg = stream->list_frame.next;
+                    listmsg->next->prev = listmsg->prev;
+                    listmsg->prev->next = listmsg->next;
+                    stream->list_frame_count--;
+
+                    frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                    xl_clear(frame);
+                    xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
+                    xl_printf(&msg->line);
+                    xlio_check_list(stream, &listmsg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
+                    xl_printf(&frame->line);
+                    stream->buf.rpos++;
+                    frame->type = XPACK_TYPE_MSG;
+                    __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                    xl_free(&listmsg);
+                }
             }
         }
 
