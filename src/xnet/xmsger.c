@@ -356,7 +356,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         pack->head.range = msg->range;
         mcopy(pack->body, msg->ptr + msg->spos, pack->head.len);
         msg->spos += pack->head.len;
-        __xlogd("====================== pack len = %u msg wpos = %lu spos = %lu range = %u\n", pack->head.len, channel->msg->wpos, channel->msg->spos, channel->msg->range);
+        __xlogd("====================== debug msg pack len = %u msg wpos = %lu spos = %lu range = %u\n", pack->head.len, msg->wpos, msg->spos, msg->range);
         msg->range--;
 
         pack->channel = channel;
@@ -470,13 +470,13 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 __xcheck(channel->msg == NULL);
                 channel->msg->type = pack->head.type;
                 channel->msg->range = pack->head.range;
-                __xlogd("======================     msg range = %u\n", channel->msg->range);
+                __xlogd("======================     msg range = %lu\n", channel->msg->range);
             }
             if (pack->head.len > 0){
                 mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
                 channel->msg->wpos += pack->head.len;
             }
-            __xlogd("======================  packet len = %u msg range = %u size = %lu wpos = %lu\n", pack->head.len, channel->msg->range, channel->msg->size, channel->msg->wpos);
+            __xlogd("======================  packet len = %u msg range = %lu size = %lu wpos = %lu\n", pack->head.len, channel->msg->range, channel->msg->size, channel->msg->wpos);
             // 收到了一个完整的消息
             if (--channel->msg->range == 0 /*|| channel->msg->size - channel->msg->wpos < XBODY_SIZE*/){
                 // 更新消息长度
