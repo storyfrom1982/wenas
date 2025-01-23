@@ -355,8 +355,6 @@ static void xlio_loop(void *ptr)
                                 __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                             }else {
                                 xl_hold(msg);
-                                xl_hold(msg);
-                                xl_hold(msg);
                                 xl_printf(&msg->line);
                                 __xlogd("debug frame list %p:%p\n", stream->list_frame.prev, stream->list_frame.next);
                                 msg->next = &stream->list_frame;
@@ -423,8 +421,6 @@ static void xlio_loop(void *ptr)
                             }
                         
                         }
-
-                        xl_free(&msg);
 
                     }else if (msg->type == XPACK_TYPE_BIN){
                         __xcheck(stream->fd == -1);
