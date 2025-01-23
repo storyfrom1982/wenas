@@ -486,9 +486,9 @@ static void xlio_loop(void *ptr)
                 stream->buf.wpos++;
                 xl_clear(msg);
 
-                if (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){ 
-                    __xlogd("xlio_loop >>>>---------------> list count %lu\n", stream->list_frame_count);
+                __xlogd("xlio_loop >>>>---------------> list count %lu\n", stream->list_frame_count);
 
+                if (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){ 
                     xline_t *listmsg = stream->list_frame.next;
                     listmsg->prev->next = listmsg->next;
                     listmsg->next->prev = listmsg->prev;

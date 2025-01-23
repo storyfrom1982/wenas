@@ -335,7 +335,7 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
 
     }else if (msg->type == XPACK_TYPE_BIN || msg->type == XPACK_TYPE_MSG){
         xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
-        if (ios != NULL && ios == __xmsg_get_ctx(msg)){
+        if (ios != NULL){
             // if (xlio_stream_update(ios, msg->wpos) == 0){
             //     __xlogd("xltp_back final\n");
             //     xl_clear(msg);
@@ -345,13 +345,14 @@ static inline int xltp_back(xltp_t *xltp, xline_t *msg)
             //     xltp_send_bye(xltp, msg);
             // }else 
             xl_hold(msg);
-            if (xlio_stream_update(ios, msg->wpos) > 0){
-                __xlogd("xltp_back read enter\n");
-                xlio_stream_read(ios, msg);
-                __xlogd("xltp_back read exit\n");
-                // msg->flag = XMSG_FLAG_STREAM;
-                // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-            }
+            xlio_stream_read(ios, msg);
+            // if (xlio_stream_update(ios, msg->wpos) > 0){
+            //     __xlogd("xltp_back read enter\n");
+            //     xlio_stream_read(ios, msg);
+            //     __xlogd("xltp_back read exit\n");
+            //     // msg->flag = XMSG_FLAG_STREAM;
+            //     // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+            // }
         }
     }
     xl_free(&msg);
