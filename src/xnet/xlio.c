@@ -93,7 +93,6 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
 
         do {
 
-
             if ((stream->obj != NULL)){
 
                 xl_printf(stream->obj);
@@ -308,21 +307,16 @@ static void xlio_loop(void *ptr)
                         stream->list_frame_count++;
                         __xlogd("xlio_loop >>>>---------------> stream->list_frame_count=%lu\n", stream->list_frame_count);
 
-                        if (stream->list_frame_count < 2 && stream->scanner != NULL){
-                            __xlogd("xlio_loop >>>>---------------> 3\n");
-                            if (__serialbuf_readable(&stream->buf)){
-                                frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
-                                xl_clear(frame);
-                                xl_add_int(&frame, "type", XLIO_STREAM_SYN_LIST);
-                                __xcheck(xlio_scan_dir(stream, &frame) != 0);
-                                stream->buf.rpos++;
-                                // xl_printf(&frame->line);
-                                frame->type = XPACK_TYPE_MSG;
-                                __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
-                            }
+                        if (stream->scanner != NULL && __serialbuf_readable(&stream->buf)){
+                            frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                            xl_clear(frame);
+                            xl_add_int(&frame, "type", XLIO_STREAM_SYN_LIST);
+                            __xcheck(xlio_scan_dir(stream, &frame) != 0);
+                            stream->buf.rpos++;
+                            // xl_printf(&frame->line);
+                            frame->type = XPACK_TYPE_MSG;
+                            __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                         }
-
-                        __xlogd("xlio_loop >>>>---------------> 4\n");
 
                         while (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){
                             frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
@@ -441,10 +435,10 @@ static void xlio_loop(void *ptr)
                     //     msg->type = XPACK_TYPE_RES;
                     //     __xcheck(xmsger_disconnect(stream->io->msger, msg) != 0);
                     // }
-
-                    xl_free(&msg);
                 }
             }
+
+            xl_free(&msg);
 
         }else if (msg->flag == XMSG_FLAG_POST){
 
@@ -611,6 +605,7 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
 {
     xline_t *frame = NULL;
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
+    xl_free(&msg);
 
     ios->parser = xl_parser(&ios->dir->line);
     msg = xl_find_ptr(&ios->parser, "ctx");
@@ -618,10 +613,7 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
     ios->path = xl_find_word(&parser, "lpath");
     ios->uri = xl_find_word(&parser, "rpath");
     __xlogd("local uri %s remote uri %s\n", ios->path, ios->uri);
-    // xl_free(&msg);
-    
-    
-    // xl_add_word(&frame, "uri", ios->uri);
+    xl_free(&msg);
 
     int path_len = slength(ios->path);
     ios->dir_name_pos = 0;
