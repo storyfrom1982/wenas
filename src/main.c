@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
     __xcheck(peer == NULL);
 
 
-    const char *cip = "192.168.1.7";
+    const char *cip = "192.168.1.4";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
     // const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
