@@ -290,12 +290,12 @@ static void xlio_loop(void *ptr)
                 if (msg->type == XPACK_TYPE_MSG){
 
                     parser = xl_parser(&msg->line);
+                    xl_printf(&msg->line);
                     int64_t mtype = xl_find_int(&parser, "type");
+                    __xlogd("xlio_loop >>>>---------------> msg size = %lu type=%ld\n", msg->wpos, mtype);
                     __xcheck(mtype != XLIO_STREAM_GET_LIST);
 
                     if (mtype == XLIO_STREAM_GET_LIST){
-
-                        __xlogd("xlio_loop >>>>---------------> 2\n");
 
                         xl_hold(msg);
                         // xl_printf(&msg->line);
@@ -344,6 +344,7 @@ static void xlio_loop(void *ptr)
                                 // xl_printf(&msg->line);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
+                                __xlogd("xlio_loop >>>>---------------> msg size = %lu\n", msg->wpos);
                                 stream->buf.rpos++;
                                 frame->type = XPACK_TYPE_MSG;
                                 __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
@@ -457,7 +458,7 @@ static void xlio_loop(void *ptr)
                 stream->buf.wpos++;
                 xl_clear(msg);
 
-                __xlogd("xlio_loop >>>>---------------> scanner=%p\n", stream->scanner);
+                __xlogd("xlio_loop >>>>---------------> scanner=%p list count = %lu\n", stream->scanner, stream->list_frame_count);
 
                 if (stream->list_frame_count < 2 && stream->scanner != NULL){
                     __xlogd("xlio_loop >>>>---------------> 6\n");
@@ -498,6 +499,7 @@ static void xlio_loop(void *ptr)
                     xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
                     xlio_check_list(stream, &listmsg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                     xl_printf(&frame->line);
+                    __xlogd("xlio_loop >>>>---------------> msg size = %lu\n", frame->wpos);
                     stream->buf.rpos++;
                     frame->type = XPACK_TYPE_MSG;
                     __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
