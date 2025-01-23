@@ -208,7 +208,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t **in, xline_t **ou
             int full_path_len = slength(ios->uri) + slength(name) + 2;
             char full_path[full_path_len];
             __xapi->snprintf(full_path, full_path_len, "%s/%s\0", ios->uri, name);
-            // __xlogd("mkpath === %s\n", full_path);
+            __xlogd("mkpath === %s\n", full_path);
             __xapi->fs_path_maker(full_path);
         }
     }
