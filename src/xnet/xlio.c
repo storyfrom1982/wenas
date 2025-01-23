@@ -356,11 +356,20 @@ static void xlio_loop(void *ptr)
                             }else {
                                 xl_hold(msg);
                                 xl_printf(&msg->line);
-                                msg->prev = stream->list_frame.prev;
                                 msg->next = &stream->list_frame;
+                                msg->prev = stream->list_frame.prev;
                                 msg->prev->next = msg;
                                 msg->next->prev = msg;
                                 stream->list_frame_count++;
+
+                                xline_t *temp = stream->list_frame.next;
+                                while (temp != &stream->list_frame)
+                                {
+                                    __xlogd("debug frame list\n");
+                                    xl_printf(&temp->line);
+                                    temp = temp->next;
+                                }
+                                
                             }
 
                         }else if (mtype == XLIO_STREAM_PUT_LIST){
@@ -477,17 +486,19 @@ static void xlio_loop(void *ptr)
                     }
                 }
 
-            }else {
+            }else if (stream->flag == IOSTREAM_TYPE_DOWNLOAD){
 
                 stream->buf.wpos++;
                 xl_clear(msg);
 
                 if (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){ 
                     __xlogd(" download back 1\n");
+                    __xlogd("xlio_send_file >>>>---------------> list count %lu\n", stream->list_frame_count);
 
                     xline_t *listmsg = stream->list_frame.next;
-                    listmsg->next->prev = listmsg->prev;
+                    __xlogd(" download back listmsg->next=%p prev=%p\n", listmsg->next, listmsg->prev);
                     listmsg->prev->next = listmsg->next;
+                    listmsg->next->prev = listmsg->prev;
                     stream->list_frame_count--;
                     __xlogd(" download back 2\n");
                     frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
