@@ -147,7 +147,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
                 xl_add_obj_end(&frame, obj_begin_pos);
             }
 
-            __xlogd("xlio_send_file >>>>---------------> list count %lu\n", stream->list_frame_count);
+            // __xlogd("xlio_send_file >>>>---------------> list count %lu\n", stream->list_frame_count);
             if (stream->list_parser.rpos == stream->list_parser.wpos && stream->list_frame.next != &stream->list_frame){
                 xl_free(&stream->current_frame);
                 stream->current_frame = stream->list_frame.next;
@@ -155,10 +155,10 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
                 stream->current_frame->next->prev = stream->current_frame->prev;
                 stream->list_frame_count--;
                 xl_printf(&stream->current_frame->line);
+                __xlogd("xlio_send_file >>>>---------------> stream->list_frame_count=%lu\n", stream->list_frame_count);
                 stream->parser = xl_parser(&stream->current_frame->line);
                 xbyte_t *listobj= xl_find(&stream->parser, "list");
                 stream->list_parser = xl_parser(listobj);                
-                __xlogd("xlio_send_file >>>>---------------> stream->list_frame_count=%lu\n", stream->list_frame_count);
             }else {
                 xl_free(&stream->current_frame);
                 stream->current_frame = NULL;
@@ -298,14 +298,14 @@ static void xlio_loop(void *ptr)
                         __xlogd("xlio_loop >>>>---------------> 2\n");
 
                         xl_hold(msg);
-                        xl_printf(&msg->line);
+                        // xl_printf(&msg->line);
 
                         msg->prev = stream->list_frame.prev;
                         msg->next = &stream->list_frame;
                         msg->prev->next = msg;
                         msg->next->prev = msg;
                         stream->list_frame_count++;
-                        __xlogd("xlio_loop >>>>---------------> stream->list_frame_count=%lu\n", stream->list_frame_count);
+                        __xlogd("xlio_loop >>>>------+++---------> stream->list_frame_count=%lu\n", stream->list_frame_count);
 
                         if (stream->scanner != NULL && __serialbuf_readable(&stream->buf)){
                             frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
@@ -341,7 +341,7 @@ static void xlio_loop(void *ptr)
                                 frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                                 xl_clear(frame);
                                 xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
-                                xl_printf(&msg->line);
+                                // xl_printf(&msg->line);
                                 xlio_check_list(stream, &msg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
                                 xl_printf(&frame->line);
                                 stream->buf.rpos++;
@@ -349,21 +349,21 @@ static void xlio_loop(void *ptr)
                                 __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                             }else {
                                 xl_hold(msg);
-                                xl_printf(&msg->line);
-                                __xlogd("debug frame list %p:%p\n", stream->list_frame.prev, stream->list_frame.next);
+                                // xl_printf(&msg->line);
+                                // __xlogd("debug frame list %p:%p\n", stream->list_frame.prev, stream->list_frame.next);
                                 msg->next = &stream->list_frame;
                                 msg->prev = stream->list_frame.prev;
                                 msg->prev->next = msg;
                                 msg->next->prev = msg;
                                 stream->list_frame_count++;
 
-                                xline_t *temp = stream->list_frame.next;
-                                while (temp != &stream->list_frame)
-                                {
-                                    __xlogd("debug frame list ref=%lu ---> %p\n", temp->ref, temp);
-                                    xl_printf(&temp->line);
-                                    temp = temp->next;
-                                }
+                                // xline_t *temp = stream->list_frame.next;
+                                // while (temp != &stream->list_frame)
+                                // {
+                                //     __xlogd("debug frame list ref=%lu ---> %p\n", temp->ref, temp);
+                                //     xl_printf(&temp->line);
+                                //     temp = temp->next;
+                                // }
                                 
                             }
 
@@ -465,7 +465,7 @@ static void xlio_loop(void *ptr)
                         xl_add_int(&frame, "type", XLIO_STREAM_SYN_LIST);
                         __xcheck(xlio_scan_dir(stream, &frame) != 0);
                         stream->buf.rpos++;
-                        xl_printf(&frame->line);
+                        // xl_printf(&frame->line);
                         frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                     }
@@ -485,30 +485,21 @@ static void xlio_loop(void *ptr)
                 xl_clear(msg);
 
                 if (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){ 
-                    __xlogd(" download back 1\n");
                     __xlogd("xlio_send_file >>>>---------------> list count %lu\n", stream->list_frame_count);
 
                     xline_t *listmsg = stream->list_frame.next;
-                    __xlogd(" download back listmsg->next=%p prev=%p\n", listmsg->next, listmsg->prev);
                     listmsg->prev->next = listmsg->next;
                     listmsg->next->prev = listmsg->prev;
                     stream->list_frame_count--;
-                    __xlogd(" download back 2\n");
                     frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                     xl_clear(frame);
-                    __xlogd(" download back 3\n");
                     xl_add_int(&frame, "type", XLIO_STREAM_GET_LIST);
-                    __xlogd(" download back 4\n");
                     xlio_check_list(stream, &listmsg, &stream->buf.buf[__serialbuf_rpos(&stream->buf)]);
-                    __xlogd(" download back 5\n");
                     xl_printf(&frame->line);
-                    __xlogd(" download back 6\n");
                     stream->buf.rpos++;
                     frame->type = XPACK_TYPE_MSG;
                     __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
-                    __xlogd(" download back 7\n");
                     xl_free(&listmsg);
-                    __xlogd(" download back 8\n");
                 }
             }
         }
