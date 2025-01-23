@@ -357,6 +357,8 @@ static void xlio_loop(void *ptr)
                                 msg->next->prev = msg;
                                 stream->list_frame_count++;
 
+                                __xlogd("xlio_loop >>>>---------------> list count %lu\n", stream->list_frame_count);
+
                                 // xline_t *temp = stream->list_frame.next;
                                 // while (temp != &stream->list_frame)
                                 // {
@@ -485,7 +487,7 @@ static void xlio_loop(void *ptr)
                 xl_clear(msg);
 
                 if (stream->list_frame.next != &stream->list_frame && __serialbuf_readable(&stream->buf)){ 
-                    __xlogd("xlio_send_file >>>>---------------> list count %lu\n", stream->list_frame_count);
+                    __xlogd("xlio_loop >>>>---------------> list count %lu\n", stream->list_frame_count);
 
                     xline_t *listmsg = stream->list_frame.next;
                     listmsg->prev->next = listmsg->next;
