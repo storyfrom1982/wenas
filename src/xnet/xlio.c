@@ -333,6 +333,7 @@ static void xlio_loop(void *ptr)
                 }else if (stream->status == XLIO_STREAM_UPLOAD_LIST){
 
                     xl_printf(&msg->line);
+                    __xlogd("ip=%s:%u\n", __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)), __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)));
                     __xcheck(stream->fd != -1);
                     stream->parser = xl_parser(&msg->line);
                     xbyte_t *objlist = xl_find(&stream->parser, "list");
@@ -413,7 +414,7 @@ static void xlio_loop(void *ptr)
             xl_clear(msg);
 
             if (stream->flag == IOSTREAM_TYPE_UPLOAD){
-                if (stream->obj != NULL){
+                if (stream->obj != NULL || stream->fd != -1){
                     if (__serialbuf_readable(&stream->buf)){
                         frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                         xlio_send_file(stream, frame);
