@@ -299,10 +299,10 @@ static void xlio_loop(void *ptr)
 
                     xbyte_t *list = xl_find(&parser, "list");
                     __xcheck(__serialbuf_readable(&stream->buf) == 0);
-                    xl_clear(frame);
                     if (__xl_sizeof_body(list) > 0){    
                         stream->parser = xl_parser(list);
                         frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                        xl_clear(frame);
                         xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST);
                         xlio_check_list(stream, &msg, &frame);
                         // xl_printf(&frame->line);
