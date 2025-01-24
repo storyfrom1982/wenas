@@ -138,7 +138,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
                         __xcheck(ret < 0);
                         stream->file_pos += len;
                         stream->list_pos += len;
-                        __xlogd("-------------size= %lu pos = %lu\n", stream->file_size, stream->file_pos);
+                        __xlogd("-------------list size= %lu list pos = %lu\n", stream->list_size, stream->list_pos);
                         if (stream->file_pos == stream->file_size){
                             __xapi->fs_file_close(stream->fd);
                             stream->fd = -1;
@@ -275,7 +275,7 @@ static void xlio_loop(void *ptr)
             if (msg->type == XPACK_TYPE_MSG){
 
                 parser = xl_parser(&msg->line);
-                xl_printf(&msg->line);
+                // xl_printf(&msg->line);
                 int64_t api = xl_find_int(&parser, "api");
 
                 if (api == XLIO_STREAM_REQ_LIST){
@@ -371,13 +371,12 @@ static void xlio_loop(void *ptr)
                                 stream->fd = -1;
                             }else {
                                 xbyte_t *bin = xl_find(&parser, "data");
-                                __xlogd("find data = %p\n", bin);
                                 if (bin != NULL){
                                     uint64_t data_len = __xl_sizeof_body(bin);
-                                    __xlogd("find data len = %lu\n", data_len);
                                     __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
                                     stream->file_pos += data_len;
                                     stream->list_pos += data_len;
+                                    __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
                                     if (stream->file_pos == stream->file_size){
                                         __xapi->fs_file_close(stream->fd);
                                         stream->fd = -1;
@@ -398,6 +397,7 @@ static void xlio_loop(void *ptr)
                 __xcheck(__xapi->fs_file_write(stream->fd, msg->ptr, msg->wpos) != msg->wpos);
                 stream->file_pos += msg->wpos;
                 stream->list_pos += msg->wpos;
+                __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
                 if (stream->file_pos == stream->file_size){
                     __xapi->fs_file_close(stream->fd);
                     stream->fd = -1;
