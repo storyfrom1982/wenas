@@ -600,20 +600,13 @@ static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
     port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
 
     xl_printf(&msg->line);
-    // xltp->parser = xl_parser(&msg->line);
-    // file = xl_find_word(&xltp->parser, "file");
-    // __xcheck(file == NULL);
-    // dir = xl_find_word(&xltp->parser, "dir");
-    // __xcheck(dir == NULL);
-    // if (!__xapi->fs_dir_exist(dir)){
-    //     __xcheck(__xapi->fs_path_maker(dir) != 0);
-    // }
-    
-    // n = __xapi->snprintf(file_path, 2048, "%s/%s", dir, file);
-    // file_path[n] = '\0';
-    ios = xlio_stream_maker(xltp->io, msg, IOSTREAM_TYPE_DOWNLOAD);
+    xltp->parser = xl_parser(&msg->line);
+    const char *uri = xl_find_word(&xltp->parser, "uri");
+    __xcheck(uri == NULL);
+    ios = xlio_stream_maker(xltp->io, uri, IOSTREAM_TYPE_DOWNLOAD);
     __xcheck(ios == NULL);
     xchannel_set_ctx(__xmsg_get_channel(msg), ios);
+    xl_free(&msg);
 
     xline_t *res = xl_maker();
     __xmsg_set_channel(res, __xmsg_get_channel(msg));
@@ -638,17 +631,15 @@ XClean:
 
 static int res_put(xltp_t *xltp, xline_t *res, void *ctx)
 {
-    // xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(res));
+    xline_t *req = NULL;
     xlio_stream_t *ios = NULL;
     xltp->parser = xl_parser(&res->line);
     xl_printf(&res->line);
-    xline_t *req = xchannel_get_req( __xmsg_get_channel(res));
+    req = xchannel_get_req( __xmsg_get_channel(res));
     xl_hold(req);
-    ios = xlio_stream_maker(xltp->io, req, IOSTREAM_TYPE_UPLOAD);
+    ios = __xmsg_get_ctx(req);
     __xcheck(ios == NULL);
-    // __xmsg_set_ctx(req, ios);
-    xchannel_set_ctx(__xmsg_get_channel(res), ios);
-    // xlio_stream_ready(ios, res);
+    xlio_stream_upload(ios, req);
     return 0;
 XClean:
     return -1;
@@ -680,30 +671,31 @@ static int req_put(xltp_t *xltp, xline_t *msg, void *ctx)
     // 3 发送请求，创建通道
     // 4 接收应答，连接成功
 
-    const char *local_path;
-    const char *remote_path;
-    // xlio_stream_t *ios = NULL;
+    const char *src;
+    const char *uri;
+    xline_t *req = NULL;
+    xlio_stream_t *ios = NULL;
     xltp->parser = xl_parser(&msg->line);
-    local_path = xl_find_word(&xltp->parser, "lpath");
-    __xcheck(local_path == NULL);
-    remote_path = xl_find_word(&xltp->parser, "rpath");
-    __xcheck(remote_path == NULL);
-    xline_t *req = xl_maker();
+    src = xl_find_word(&xltp->parser, "src");
+    __xcheck(src == NULL);
+    uri = xl_find_word(&xltp->parser, "uri");
+    __xcheck(uri == NULL);
+    ios = xlio_stream_maker(xltp->io, src, IOSTREAM_TYPE_UPLOAD);
+    __xcheck(ios == NULL);
+    req = xl_maker();
     __xcheck(req == NULL);
-    // req = xltp_make_req(xltp, req, "put", res_put);
-    xl_add_word(&req, "api", "put");
+    __xmsg_set_ctx(req, ios);
     __xmsg_set_cb(req, res_put);
-    __xcheck(xl_add_word(&req, "path", remote_path) == XNONE);
-    __xcheck(xl_add_ptr(&req, "ctx", msg) == XNONE);
-    // __xcheck(xlio_path_scanner(local_path, &req) != 0);
     __xmsg_set_ipaddr(req, __xmsg_get_ipaddr(msg));
+    __xcheck(xl_add_word(&req, "api", "put") == XNONE);
+    __xcheck(xl_add_word(&req, "uri", uri) == XNONE);
     __xcheck(xltp_send_req(xltp, req) != 0);
-    // xl_free(&msg);
+    xl_free(&msg);
     return 0;
 XClean:
-    // if (ios != NULL){
-    //     xlio_stream_free(ios);
-    // }
+    if (ios != NULL){
+        xlio_stream_free(ios);
+    }
     if (req != NULL){
         xl_free(&req);
     }
@@ -714,15 +706,15 @@ XClean:
 }
 
 // file://uuid/path
-int xltp_put(xltp_t *xltp, const char *path, const char *url, __xipaddr_ptr ipaddr)
+int xltp_put(xltp_t *xltp, const char *src, const char *uri, __xipaddr_ptr ipaddr)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
     msg->flag = XMSG_FLAG_POST;
     __xmsg_set_ipaddr(msg, ipaddr);
     __xmsg_set_cb(msg, req_put);
-    xl_add_word(&msg, "lpath", path);
-    xl_add_word(&msg, "rpath", url);
+    xl_add_word(&msg, "src", src);
+    xl_add_word(&msg, "uri", uri);
     __xcheck(xpipe_write(xltp->msgpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     // xlio_upload(xltp->io, path, url, ipaddr);
     return 0;

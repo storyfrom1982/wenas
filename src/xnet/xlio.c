@@ -24,6 +24,8 @@ typedef struct xmsgbuf {
 typedef struct xlio_stream {
     int flag;
     __xfile_t fd;
+    int is_dir;
+    int is_resend;
     xline_t *dir;
     uint16_t list_frame_count;
     xline_t list_frame;
@@ -33,10 +35,12 @@ typedef struct xlio_stream {
     xbyte_t *obj;
     xbyte_t *dlist;
     uint64_t list_pos, list_size;
-    const char *path;
-    char fpath[1024];
-    const char *uri;
-    int dir_name_pos;
+    // const char *path;
+    // char fpath[2048];
+    char uri[2048];
+    int uri_len;
+    int src_name_len;
+    int src_name_pos;
     uint64_t pos, size;
     struct xlio *io;
     xchannel_ptr channel;
@@ -115,9 +119,9 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
                 xl_add_uint(&frame, "size", stream->size);
 
                 if (isfile){
-                    int full_path_len = slength(stream->path) + slength(name) + 2;
+                    int full_path_len = stream->uri_len + slength(name) + 2;
                     char full_path[full_path_len];                
-                    __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->fpath, name);
+                    __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name + (stream->src_name_len+1));
                     __xlogd("send file ================= %s ---- %s\n", full_path, name);
                     stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_READ, 0644);
                     __xcheck(stream->fd < 0);
@@ -240,7 +244,7 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xline_t **frame)
             uint64_t pos = xl_add_obj_begin(frame, NULL);
             __xcheck(pos == XNONE);
             __xcheck(xl_add_int(frame, "type", ios->item->type) == XNONE);
-            __xcheck(xl_add_word(frame, "path", ios->item->path + ios->dir_name_pos) == XNONE);
+            __xcheck(xl_add_word(frame, "path", ios->item->path + ios->src_name_len) == XNONE);
             __xcheck(xl_add_uint(frame, "size", ios->item->size) == XNONE);
             xl_add_obj_end(frame, pos);
             ios->list_size += ios->item->size;
@@ -297,8 +301,11 @@ static void xlio_loop(void *ptr)
 
                     if (mtype == XLIO_STREAM_GET_LIST){
 
+                        __xlogd("xlio_loop >>>>---------------> 2\n");
+
                         xl_hold(msg);
                         // xl_printf(&msg->line);
+                        __xlogd("xlio_loop >>>>---------------> 3\n");
 
                         msg->prev = stream->list_frame.prev;
                         msg->next = &stream->list_frame;
@@ -589,7 +596,7 @@ static int xlio_post_download(xltp_t *tp, xline_t *msg, void *ctx)
 {
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
     ios->parser = xl_parser(&ios->dir->line);
-    ios->uri = xl_find_word(&ios->parser, "path");
+    // ios->uri = xl_find_word(&ios->parser, "path");
     if (ios->list_frame.next == NULL || ios->list_frame.prev == NULL){
         __xloge("list error\n");
     }
@@ -600,33 +607,29 @@ static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
 {
     xline_t *frame = NULL;
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
-    xl_free(&msg);
+    // xl_free(&msg);
 
-    ios->parser = xl_parser(&ios->dir->line);
-    msg = xl_find_ptr(&ios->parser, "ctx");
-    xline_t parser = xl_parser(&msg->line);
-    ios->path = xl_find_word(&parser, "lpath");
-    ios->uri = xl_find_word(&parser, "rpath");
-    __xlogd("local uri %s remote uri %s\n", ios->path, ios->uri);
-    xl_free(&msg);
+    // ios->parser = xl_parser(&ios->dir->line);
+    // msg = xl_find_ptr(&ios->parser, "ctx");
+    // xline_t parser = xl_parser(&msg->line);
+    // ios->path = xl_find_word(&parser, "lpath");
+    // ios->uri = xl_find_word(&parser, "rpath");
+    // __xlogd("local uri %s remote uri %s\n", ios->path, ios->uri);
+    // xl_free(&msg);
 
-    int path_len = slength(ios->path);
-    ios->dir_name_pos = 0;
-    while (ios->path[path_len - ios->dir_name_pos - 1] != '/'){
-        ios->dir_name_pos++;
-    }
+    // int path_len = slength(ios->path);
+    // ios->src_name_len = 0;
+    // while (ios->path[path_len - ios->src_name_len - 1] != '/'){
+    //     ios->src_name_len++;
+    // }
     
-    ios->dir_name_pos = path_len - ios->dir_name_pos;
-    mcopy(ios->fpath, ios->path, ios->dir_name_pos - 1);
+    // ios->src_name_len = path_len - ios->src_name_len;
+    // mcopy(ios->fpath, ios->path, ios->src_name_len - 1);
 
-    __xlogd("item size = %p\n", ios->item);
-    if (__xapi->fs_file_exist(ios->path)){
-        __xlogd("item is file\n");
-    }else if (__xapi->fs_dir_exist(ios->path)){
+    if (ios->is_dir){
         __xlogd("item is dir\n");
-        ios->scanner = __xapi->fs_scanner_open(ios->path);
+        ios->scanner = __xapi->fs_scanner_open(ios->uri);
         __xcheck(ios->scanner == NULL);
-
         while (__serialbuf_readable(&ios->buf) > 0 && ios->scanner != NULL){
             xline_t *frame = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
             xl_clear(frame);
@@ -646,61 +649,15 @@ XClean:
     return -1;
 }
 
-int xlio_api_upload(xlio_t *io, xline_t *req)
+int xlio_stream_upload(xlio_stream_t *ios, xline_t *frame)
 {
-    xlio_stream_t* ios = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
-    __xcheck(ios == NULL);
-    mclear(ios, sizeof(xlio_stream_t));
-    ios->io = io;
-    ios->channel = __xmsg_get_channel(req);
-    ios->flag = IOSTREAM_TYPE_DOWNLOAD;
-    xline_t parser = xl_parser(&req->line);
-    ios->uri = strdup(xl_find_word(&parser, "uri"));
-
-    // xline_t *in = xl_creator(MSGBUF_SIZE);
-    xline_t *out = xl_creator(MSGBUF_SIZE);
-    xl_add_int(&out, "type", XLIO_STREAM_GET_LIST);
-    xlio_check_list(ios, &req, &out);
-    xl_printf(&out->line);
-    // parser = xl_parser(&out->line);
-    // xbyte_t *lobj;
-    // while (lobj = xl_list_next(&parser))
-    // {
-    //     xl_printf(lobj);
-    // }
-    out->type = XPACK_TYPE_MSG;
-    __xcheck(xmsger_send(ios->io->msger, ios->channel, out) != 0);
-    
-    return 0;
-XClean:
-    return -1;
-}
-
-int xlio_upload(xlio_t *io, const char *local_uri, const char *remote_uri, __xipaddr_ptr ipaddr)
-{
-    xlio_stream_t* ios = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
-    __xcheck(ios == NULL);
-    mclear(ios, sizeof(xlio_stream_t));
-    ios->io = io;
-    ios->flag = IOSTREAM_TYPE_UPLOAD;
-    xline_t *frame = xl_creator(MSGBUF_SIZE);
-    __xcheck(frame == NULL);
-    __xmsg_set_ipaddr(frame, ipaddr);
-    __xmsg_set_cb(frame, xlio_post_upload);
-    __xmsg_set_ctx(frame, ios);
-    ios->dir = frame;
     frame->flag = XMSG_FLAG_POST;
-    __xcheck(xl_add_word(&frame, "local_uri", local_uri) == XNONE);
-    __xcheck(xl_add_word(&frame, "remote_uri", remote_uri) == XNONE);
-    __xcheck(xpipe_write(io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
+    __xmsg_set_cb(frame, xlio_post_upload);
+    ios->channel = __xmsg_get_channel(frame);
+    __xmsg_set_ctx(frame, ios);
+    __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:
-    if (ios != NULL){
-        free(ios);
-    }
-    if (frame != NULL){
-        xl_free(&frame);
-    }
     return -1;
 }
 
@@ -770,85 +727,63 @@ XClean:
     return -1;
 }
 
-xlio_stream_t* xlio_stream_maker(xlio_t *io, xline_t *frame, int stream_type)
+xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
 {
-    xlio_stream_t* stream = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
-    __xcheck(stream == NULL);
-    mclear(stream, sizeof(xlio_stream_t));
-    stream->channel = __xmsg_get_channel(frame);
-    xchannel_set_ctx(stream->channel, stream);
-    stream->flag = stream_type;
-    stream->dir = frame;
-    xl_hold(stream->dir);
+    xlio_stream_t* ios = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
+    __xcheck(ios == NULL);
+    mclear(ios, sizeof(xlio_stream_t));
+    ios->flag = stream_type;
 
-    stream->buf.range = MSGBUF_RANGE;
-    stream->buf.wpos = stream->buf.range;
-    stream->buf.rpos = stream->buf.spos = 0;
-    for (size_t i = 0; i < MSGBUF_RANGE; i++){
-        stream->buf.buf[i] = xl_creator(MSGBUF_SIZE);
-        __xcheck(stream->buf.buf[i] == NULL);
-        __xmsg_set_ctx(stream->buf.buf[i], stream);
-    }
-
-    // stream->parser = xl_parser(&frame->line);
-    // if (stream_type == IOSTREAM_TYPE_UPLOAD){
-    //     xline_t *ctx = xl_find_ptr(&stream->parser, "ctx");
-    //     xline_t parser = xl_parser(&ctx->line);
-    //     stream->path = xl_find_word(&parser, "lpath");
-    //     xl_free(&ctx);
-    // }else if (stream_type == IOSTREAM_TYPE_DOWNLOAD){
-    //     stream->path = xl_find_word(&stream->parser, "path");
-    //     if (!__xapi->fs_dir_exist(stream->path)){
-    //         __xapi->fs_path_maker(stream->path);
-    //     }
-    //     // TODO 检测是否为断点续传
-    //     // 如果目录存在，则是断点续传
-    // }
-    // stream->dlist = xl_find(&stream->parser, "list");
-    // stream->list_size = xl_find_uint(&stream->parser, "len");
-    // stream->parser = xl_parser(stream->dlist);
-
-    // int path_len = slength(stream->path);
-    // stream->dir_name_pos = 0;
-    // while (stream->path[path_len - stream->dir_name_pos - 1] != '/'){
-    //     stream->dir_name_pos++;
-    // }
-    // stream->dir_name_pos = path_len - stream->dir_name_pos;
-    // stream->scanner = __xapi->fs_scanner_open(stream->path);
-    // __xcheck(stream->scanner == NULL);
-
-    // stream->list_frame = xl_creator(1024);
-    // __xcheck(stream->list_frame == NULL);
-
-    stream->list_pos = 0;
-    stream->fd = -1;
-    stream->pos = 0;
-    stream->size = 0;
-    stream->io = io;
-    stream->next = &io->streamlist;
-    stream->prev = io->streamlist.prev;
-    stream->next->prev = stream;
-    stream->prev->next = stream;
-
-    stream->list_frame.prev = &stream->list_frame;
-    stream->list_frame.next = &stream->list_frame;
-
-    xline_t *post = xl_maker();
-    
-    post->flag = XMSG_FLAG_POST;
-    __xmsg_set_ipaddr(post, __xmsg_get_channel(frame));
-    if (stream->flag == IOSTREAM_TYPE_UPLOAD){
-        __xmsg_set_cb(post, xlio_post_upload);
+    if (__xapi->fs_file_exist(uri)){
+        ios->is_dir = 0;
+        if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
+            ios->is_resend = 1;
+        }
+    }else if (__xapi->fs_dir_exist(uri)){
+        ios->is_dir = 1;
+        if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
+            ios->is_resend = 1;
+        }
     }else {
-        __xcheck(stream->flag != IOSTREAM_TYPE_DOWNLOAD);
-        __xmsg_set_cb(post, xlio_post_download);
+        __xcheck((ios->flag == IOSTREAM_TYPE_UPLOAD));
     }
-    __xmsg_set_ctx(post, stream);
-    __xmsg_set_channel(post, stream->channel);
-    __xcheck(xpipe_write(io->pipe, &post, __sizeof_ptr) != __sizeof_ptr);
-    return stream;
+
+    ios->uri_len = slength(uri);
+    while (uri[ios->uri_len-1] == '/'){
+        ios->uri_len--;
+    }
+    mcopy(ios->uri, uri, ios->uri_len);
+    ios->src_name_len = 0;
+    while (ios->src_name_len < ios->uri_len 
+            && ios->uri[ios->uri_len - ios->src_name_len - 1] != '/'){
+        ios->src_name_len++;
+    }
+    ios->src_name_pos = ios->uri_len - ios->src_name_len;
+
+    ios->buf.range = MSGBUF_RANGE;
+    ios->buf.wpos = ios->buf.range;
+    ios->buf.rpos = ios->buf.spos = 0;
+    for (size_t i = 0; i < MSGBUF_RANGE; i++){
+        ios->buf.buf[i] = xl_creator(MSGBUF_SIZE);
+        __xcheck(ios->buf.buf[i] == NULL);
+        __xmsg_set_ctx(ios->buf.buf[i], ios);
+    }
+
+    ios->list_pos = 0;
+    ios->fd = -1;
+    ios->pos = 0;
+    ios->size = 0;
+    ios->io = io;
+    ios->next = &io->streamlist;
+    ios->prev = io->streamlist.prev;
+    ios->next->prev = ios;
+    ios->prev->next = ios;
+
+    ios->list_frame.prev = &ios->list_frame;
+    ios->list_frame.next = &ios->list_frame;
+    return ios;
 XClean:
-    xlio_stream_free(stream);
+    xlio_stream_free(ios);
     return NULL;
 }
 

@@ -17,14 +17,13 @@ typedef struct xlio_stream xlio_stream_t;
 
 xlio_t* xlio_create(xmsger_ptr msger);
 void xlio_free(xlio_t **pptr);
-int xlio_api_upload(xlio_t *io, xline_t *req);
-int xlio_upload(xlio_t *io, const char *local_uri, const char *remote_uri, __xipaddr_ptr ipaddr);
+int xlio_stream_upload(xlio_stream_t *ios, xline_t *frame);
 int xlio_path_scanner(const char *path, xline_t **frame);
 
 // #define XLIO_STREAM_TYPE_SEND       0
 // #define XLIO_STREAM_TYPE_RECV       1
 
-xlio_stream_t* xlio_stream_maker(xlio_t *xlio, xline_t *frame, int stream_type);
+xlio_stream_t* xlio_stream_maker(xlio_t *xlio, const char *uri, int stream_type);
 void xlio_stream_free(xlio_stream_t *ios);
 int xlio_stream_post(xlio_stream_t *ios, xline_t *frame);
 int xlio_stream_read(xlio_stream_t *ios, xline_t *frame);
