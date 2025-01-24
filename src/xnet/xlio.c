@@ -300,7 +300,7 @@ static void xlio_loop(void *ptr)
                         stream->parser = xl_parser(list);
                         frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                         xl_clear(frame);
-                        xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST);
+                        xl_add_int(&frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
                         xlio_check_list(stream, &msg, &frame);
                         xl_printf(&frame->line);
                         frame->type = XPACK_TYPE_MSG;
@@ -315,6 +315,7 @@ static void xlio_loop(void *ptr)
                 }else if (stream->status == XLIO_STREAM_DOWNLOAD_LIST){
 
                     xl_hold(msg);
+                    xl_printf(&msg->line);
                     stream->current_frame = msg;
                     xbyte_t *list = xl_find(&parser, "list");
                     if (__xl_sizeof_body(list) > 0){
