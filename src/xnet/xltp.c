@@ -605,8 +605,7 @@ static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(uri == NULL);
     ios = xlio_stream_maker(xltp->io, uri, IOSTREAM_TYPE_DOWNLOAD);
     __xcheck(ios == NULL);
-    xchannel_set_ctx(__xmsg_get_channel(msg), ios);
-    xl_free(&msg);
+    xchannel_set_ctx(__xmsg_get_channel(msg), ios);    
 
     xline_t *res = xl_maker();
     __xmsg_set_channel(res, __xmsg_get_channel(msg));
@@ -617,6 +616,8 @@ static int api_put(xltp_t *xltp, xline_t *msg, void *ctx)
     __xcheck(xl_add_bin(&res, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&res, "code", 200) == XNONE);
     xltp_send_msg(xltp, res);
+    // xl_free(&msg);
+    xlio_stream_download(ios, msg);
     return 0;
 
 XClean:
