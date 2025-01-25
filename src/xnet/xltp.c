@@ -631,10 +631,10 @@ static int res_put(xltp_t *xltp, xline_t *res, void *ctx)
     xltp->parser = xl_parser(&res->line);
     xl_printf(&res->line);
     req = xchannel_get_req( __xmsg_get_channel(res));
-    xl_hold(req);
     ios = __xmsg_get_ctx(req);
     __xcheck(ios == NULL);
     xlio_stream_upload(ios, req);
+    xl_free(&res);
     return 0;
 XClean:
     return -1;
@@ -925,12 +925,12 @@ XClean:
     return NULL;
 }
 
-// static void xapi_clear(void *xapi)
-// {
-//     if (xapi){
-//         free(xapi);
-//     }
-// }
+static void xapi_clear(void *xapi)
+{
+    if (xapi){
+        // free(xapi);
+    }
+}
 
 void xltp_free(xltp_t **pptr)
 {
@@ -977,7 +977,7 @@ void xltp_free(xltp_t **pptr)
         avl_tree_clear(&xltp->msgid_table, NULL);
 
         if (xltp->api){
-            xtree_clear(xltp->api, NULL);
+            xtree_clear(xltp->api, xapi_clear);
             xtree_free(&xltp->api);
         }
 
