@@ -310,8 +310,12 @@ static void xlio_loop(void *ptr)
                     frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                     xl_clear(frame);
                     xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST);
+                    xl_add_uint(&frame, "size", 0);
                     if (stream->scanner != NULL){
                         __xcheck(xlio_scan_dir(stream, &frame) != 0);
+                        parser = xl_parser(&frame->line);
+                        xbyte_t *size = xl_find(&parser, "size");
+                        *size = __xl_u2b(stream->list_size);
                     }else {
                         uint64_t pos = xl_add_list_begin(&frame, "list");
                         xl_add_list_end(&frame, pos);
@@ -330,7 +334,11 @@ static void xlio_loop(void *ptr)
                         frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                         xl_clear(frame);
                         xl_add_int(&frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
+                        xl_add_uint(&frame, "size", 0);
                         xlio_check_list(stream, &msg, &frame);
+                        parser = xl_parser(&frame->line);
+                        xbyte_t *size = xl_find(&parser, "size");
+                        *size = __xl_u2b(stream->list_size);
                         xl_printf(&frame->line);
                         frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
@@ -346,6 +354,7 @@ static void xlio_loop(void *ptr)
                     xl_hold(msg);
                     xl_printf(&msg->line);
                     stream->current_frame = msg;
+                    stream->list_size = xl_find_uint(&parser, "size");
                     xbyte_t *list = xl_find(&parser, "list");
                     if (__xl_sizeof_body(list) > 0){
                         stream->list_parser = xl_parser(list);
@@ -441,6 +450,7 @@ static void xlio_loop(void *ptr)
 
             if (stream->flag == IOSTREAM_TYPE_UPLOAD){
                 if (stream->current_frame != NULL){
+                    //TODO list size 需要从对方发过来的下载列表中获取
                     if (stream->list_pos < stream->list_size){
                         __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
                         if (__serialbuf_readable(&stream->buf)){
