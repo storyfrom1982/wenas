@@ -21,11 +21,15 @@ int main(int argc, char *argv[])
     uint16_t port = 9256;
     char ip[46] = {0};
 
+    size_t cwd_size = 1024;
+    char cwd_path[cwd_size];
+    __xapi->fs_path_cwd(cwd_path, &cwd_size);
+    __xlogd("pwd======%s\n", cwd_path);
+
     xlog_recorder_open("./tmp/xpeer/log", NULL);
 
     xltp_t *peer = xltp_create(1);
     __xcheck(peer == NULL);
-
 
     // const char *cip = "192.168.1.7";
     // const char *cip = "120.78.155.213";
@@ -77,9 +81,6 @@ int main(int argc, char *argv[])
 
         } else if (strcmp(command, "scan") == 0) {
 
-            size_t cwd_size = 1024;
-            char cwd_path[cwd_size];
-            __xapi->fs_path_cwd(cwd_path, &cwd_size);
             xline_t *dirlist = xl_maker();
             // uint64_t pos = xl_add_list_begin(&dirlist, "list");
             // int name_pos = 0;

@@ -106,6 +106,8 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
         xl_add_obj_end(&frame, obj_begin_pos);
         xl_add_list_end(&frame, list_begin_pos);
 
+        xl_printf(&frame->line);
+
         frame->type = XPACK_TYPE_MSG;
         __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
 
@@ -366,6 +368,7 @@ static void xlio_loop(void *ptr)
                         stream->list_parser = xl_parser(list);
                         while (stream->list_pos < stream->list_size && __serialbuf_readable(&stream->buf)){
                             frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                            xl_clear(frame);
                             xlio_send_file(stream, frame);
                             stream->buf.rpos++;
                         }
