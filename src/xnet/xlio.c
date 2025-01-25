@@ -472,6 +472,7 @@ static void xlio_loop(void *ptr)
 
             stream->buf.wpos++;
             xl_clear(msg);
+            __xlogd("----- buf rpos = %u wpos = %u readable = %u\n", __serialbuf_wpos(&stream->buf), __serialbuf_rpos(&stream->buf), __serialbuf_readable(&stream->buf));
 
             if (stream->flag == IOSTREAM_TYPE_UPLOAD){
                 if (stream->current_frame != NULL){
