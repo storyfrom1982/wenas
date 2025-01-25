@@ -376,6 +376,7 @@ static void xlio_loop(void *ptr)
                         xl_hold(msg);
                         stream->list_parser = xl_parser(list);
                         while (stream->list_pos < stream->list_size && __serialbuf_readable(&stream->buf)){
+                            __xlogd("buf rpos = %u wpos = %u readable = %u\n", __serialbuf_wpos(&stream->buf), __serialbuf_rpos(&stream->buf), __serialbuf_readable(&stream->buf));
                             frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
                             frame->id = stream->buf.rpos;
                             xl_clear(frame);
