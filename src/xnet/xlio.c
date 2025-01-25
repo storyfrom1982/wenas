@@ -68,6 +68,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
 
         __xcheck(stream->obj == NULL);
         xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
+        xl_add_int(&frame, "id", frame->id);
         uint64_t list_begin_pos = xl_add_list_begin(&frame, "list");
 
         xline_t parser = xl_parser(stream->obj);
@@ -115,6 +116,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xline_t *frame)
     }else {
 
         xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
+        xl_add_int(&frame, "id", frame->id);
         uint64_t list_begin_pos = xl_add_list_begin(&frame, "list");
 
         do {
@@ -375,6 +377,7 @@ static void xlio_loop(void *ptr)
                         stream->list_parser = xl_parser(list);
                         while (stream->list_pos < stream->list_size && __serialbuf_readable(&stream->buf)){
                             frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+                            frame->id = stream->buf.rpos;
                             xl_clear(frame);
                             xlio_send_file(stream, frame);
                             stream->buf.rpos++;

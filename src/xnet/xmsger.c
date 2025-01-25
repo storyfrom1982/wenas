@@ -484,6 +484,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 // 通知用户已收到一个完整的消息
                 // __xmsg_set_ctx(channel->msg, channel->ctx);
                 __xmsg_set_ipaddr(channel->msg, channel->addr);
+                xl_printf(&channel->msg->line);
                 channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
                 channel->msg = NULL;
                 // 更新时间戳
