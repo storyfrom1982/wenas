@@ -81,26 +81,26 @@ int main(int argc, char *argv[])
 
         } else if (strcmp(command, "scan") == 0) {
 
-            xline_t *dirlist = xl_maker();
-            // uint64_t pos = xl_add_list_begin(&dirlist, "list");
-            // int name_pos = 0;
-            // while (cwd_path[cwd_size - name_pos -1] != '/')
-            // {
-            //     name_pos++;
+            // xline_t *dirlist = xl_maker();
+            // // uint64_t pos = xl_add_list_begin(&dirlist, "list");
+            // // int name_pos = 0;
+            // // while (cwd_path[cwd_size - name_pos -1] != '/')
+            // // {
+            // //     name_pos++;
+            // // }
+            // // __xapi->fs_path_scanner(cwd_path, cwd_size - name_pos, scandir_cb, (void**)&dirlist);
+            // // xl_add_list_end(&dirlist, pos);
+            // // xl_printf(&dirlist->line);
+            // xlio_path_scanner(cwd_path, &dirlist);
+            // xline_t xllist = xl_parser(&dirlist->line);
+            // xbyte_t *dlist = xl_find(&xllist, "list");
+            // xllist = xl_parser(dlist);
+            // xbyte_t *xd;
+            // while ((xd = xl_list_next(&xllist)) != NULL){
+            //     xl_printf(xd);
             // }
-            // __xapi->fs_path_scanner(cwd_path, cwd_size - name_pos, scandir_cb, (void**)&dirlist);
-            // xl_add_list_end(&dirlist, pos);
-            // xl_printf(&dirlist->line);
-            xlio_path_scanner(cwd_path, &dirlist);
-            xline_t xllist = xl_parser(&dirlist->line);
-            xbyte_t *dlist = xl_find(&xllist, "list");
-            xllist = xl_parser(dlist);
-            xbyte_t *xd;
-            while ((xd = xl_list_next(&xllist)) != NULL){
-                xl_printf(xd);
-            }
-            __xlogd("dir size = %lu\n", dirlist->range);
-            xl_free(&dirlist);
+            // __xlogd("dir size = %lu\n", dirlist->range);
+            // xl_free(&dirlist);
 
         } else if (strcmp(command, "dir") == 0) {
 
