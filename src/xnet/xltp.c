@@ -730,7 +730,7 @@ static int api_get(xltp_t *xltp, xline_t *msg, void *ctx)
     const char *ip;
     uint16_t port;
     uint8_t uuid[32];
-    const char *file_path;
+    const char *uri;
     xlio_stream_t *ios;
     xline_t *ready = xl_maker();
     __xcheck(ready == NULL);
@@ -742,27 +742,26 @@ static int api_get(xltp_t *xltp, xline_t *msg, void *ctx)
 
     xl_printf(&msg->line);
     xltp->parser = xl_parser(&msg->line);
-    file_path = xl_find_word(&xltp->parser, "file");
-    __xcheck(file_path == NULL);
-    __xcheck(!__xapi->fs_file_exist(file_path));
+    uri = xl_find_word(&xltp->parser, "uri");
+    __xcheck(uri == NULL);
     
-    ios = xlio_stream_maker(xltp->io, msg, XAPI_FS_FLAG_READ);
+    ios = xlio_stream_maker(xltp->io, uri, XAPI_FS_FLAG_READ);
     __xcheck(ios == NULL);
     xchannel_set_ctx(__xmsg_get_channel(msg), ios);
+    xl_hold(msg);
+    xlio_stream_upload(ios, msg);
 
     xl_clear(msg);
     __xmsg_set_ctx(msg, NULL);
-    __xcheck(xl_add_word(&msg, "api", "res") == XNONE);
-    __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
+    // __xcheck(xl_add_word(&msg, "api", "res") == XNONE);
+    // __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
     ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
     port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
     __xcheck(xl_add_word(&msg, "ip", ip) == XNONE);
     __xcheck(xl_add_uint(&msg, "port", port) == XNONE);
     __xcheck(xl_add_bin(&msg, "uuid", uuid, 32) == XNONE);
     __xcheck(xl_add_uint(&msg, "code", 200) == XNONE);
-    xltp_send_res(xltp, msg);
-
-    // xlio_stream_ready(ios, ready);
+    xltp_send_msg(xltp, msg);
     return 0;
 
 XClean:
@@ -780,10 +779,14 @@ XClean:
 
 static int res_get(xltp_t *xltp, xline_t *res, void *ctx)
 {
-    xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(res));
-    __xcheck(ios == NULL);
+    xline_t *req = NULL;
+    xlio_stream_t *ios = NULL;
     xltp->parser = xl_parser(&res->line);
     xl_printf(&res->line);
+    req = xchannel_get_req( __xmsg_get_channel(res));
+    ios = __xmsg_get_ctx(req);
+    __xcheck(ios == NULL);
+    xlio_stream_download(ios, req);
     xl_free(&res);
     return 0;
 XClean:
@@ -792,33 +795,16 @@ XClean:
 
 static int req_get(xltp_t *xltp, xline_t *msg, void *ctx)
 {
-    int n;
-    const char *local_dir;
-    const char *remote_path;
-    const char *file_name;
-    uint64_t file_path_len;
+    const char *path;
+    const char *uri;
     xlio_stream_t *ios;
-    char file_path[2048];
 
     xltp->parser = xl_parser(&msg->line);
-    remote_path = xl_find_word(&xltp->parser, "file");
-    __xcheck(remote_path == NULL);
-    file_path_len = __xl_sizeof_body(xltp->parser.val) - 1;
-
-    local_dir = xl_find_word(&xltp->parser, "dir");
-    __xcheck(local_dir == NULL);
-    if (!__xapi->fs_dir_exist(local_dir)){
-        __xcheck(__xapi->fs_path_maker(local_dir) != 0);
-    }
-
-    file_name = remote_path + file_path_len;
-    while (file_name > remote_path && *(file_name-1) != '/'){
-        file_name--;
-    }
-
-    n = __xapi->snprintf(file_path, 2048, "%s/%s", local_dir, file_name);
-    file_path[n] = '\0';
-    ios = xlio_stream_maker(xltp->io, msg, XAPI_FS_FLAG_CREATE);
+    uri = xl_find_word(&xltp->parser, "uri");
+    __xcheck(uri == NULL);
+    path = xl_find_word(&xltp->parser, "path");
+    __xcheck(path == NULL);
+    ios = xlio_stream_maker(xltp->io, path, IOSTREAM_TYPE_DOWNLOAD);
     __xcheck(ios == NULL);
 
     xline_t *req = xl_maker();
@@ -828,9 +814,7 @@ static int req_get(xltp_t *xltp, xline_t *msg, void *ctx)
     __xmsg_set_cb(req, res_get);    
     __xmsg_set_ctx(req, ios);
     __xmsg_set_ipaddr(req, __xmsg_get_ipaddr(msg));
-
-    xl_add_word(&req, "file", remote_path);
-    xl_add_int(&req, "len", xlio_stream_length(ios));
+    xl_add_word(&req, "uri", uri);
     __xcheck(xltp_send_req(xltp, req) != 0);
     xl_free(&msg);
     return 0;
@@ -848,16 +832,16 @@ XClean:
     return -1;
 }
 
-int xltp_get(xltp_t *xltp, const char *remote_file_path, const char *local_directory, const char *ip, uint16_t port)
+int xltp_get(xltp_t *xltp, const char *local_path, const char *uri, __xipaddr_ptr ipaddr)
 {
     xline_t *msg = xl_maker();
     __xcheck(msg == NULL);
     msg->flag = XMSG_FLAG_POST;
-    __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-    __xmsg_set_ipaddr(msg, addr);
+    // __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
+    __xmsg_set_ipaddr(msg, ipaddr);
     __xmsg_set_cb(msg, req_get);
-    xl_add_word(&msg, "file", remote_file_path);
-    xl_add_word(&msg, "dir", local_directory);
+    xl_add_word(&msg, "path", local_path);
+    xl_add_word(&msg, "uri", uri);
     __xcheck(xpipe_write(xltp->msgpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
     return 0;
 XClean:
