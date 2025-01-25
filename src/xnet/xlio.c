@@ -708,6 +708,9 @@ int xlio_start_uploader(xlio_t *io, xline_t *req)
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_UPLOAD);
     __xcheck(ios == NULL);
 
+    ios->scanner = __xapi->fs_scanner_open(ios->uri);
+    __xcheck(ios->scanner == NULL);
+
     ios->channel = __xmsg_get_channel(req);
     xchannel_set_ctx(ios->channel, ios);
 
