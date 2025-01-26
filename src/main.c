@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 
         } else if (strcmp(command, "get") == 0) {
             __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-            xltp_get(peer, "./tmp/wenas", "./wenas/Kangzixin", addr, NULL);
+            xltp_get(peer, "/tmp/wenas", "./wenas/Kangzixin", addr, NULL);
             // xltp_put(peer, "xltpd", ip, port);
 
         } else if (strcmp(command, "scan") == 0) {

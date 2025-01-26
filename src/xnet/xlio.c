@@ -3,8 +3,8 @@
 #include "xpipe.h"
 
 #define MSGBUF_RANGE    2
-#define MSGBUF_SIZE     1280 * 1024 //1.25MB
-// #define MSGBUF_SIZE     1280 * 16
+// #define MSGBUF_SIZE     1280 * 1024 //1.25MB
+#define MSGBUF_SIZE     1280 * 16
 
 typedef struct xmsgbuf {
     uint8_t range, spos, rpos, wpos;
@@ -404,65 +404,68 @@ static void xlio_loop(void *ptr)
                         frame->type = XPACK_TYPE_MSG;
                         __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
                         stream->list_pos = stream->list_size = 0;
-                        continue;
-                    }
 
-                    stream->parser = xl_parser(objlist);
-                    __xlogd("write data 0 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                    while ((stream->obj = xl_list_next(&stream->parser)) != NULL)
-                    {
-                        __xlogd("write data 1 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                        xl_printf(stream->obj);
-                        // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
-                        parser = xl_parser(stream->obj);
-                        __xlogd("write data 2 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                        const char *name = xl_find_word(&parser, "path");
-                        int64_t isfile = xl_find_int(&parser, "type");
-                        __xcheck(isfile != 1);
-                        stream->file_size = xl_find_uint(&parser, "size");
-                        uint64_t pos = xl_find_uint(&parser, "pos");
-                        int full_path_len = slength(stream->uri) + slength(name) + 2;
-                        char full_path[full_path_len];                
-                        __xlogd("write data 3 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                        __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
-                        __xlogd("download file = %s\n", full_path);
-                        if (stream->fd == -1){
-                            if (pos == 0){
-                                stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_CREATE, 0644);
-                                __xcheck(stream->fd < 0);
+                    }else {
+
+                        stream->parser = xl_parser(objlist);
+                        __xlogd("write data 0 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
+                        while ((stream->obj = xl_list_next(&stream->parser)) != NULL)
+                        {
+                            __xlogd("write data 1 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
+                            xl_printf(stream->obj);
+                            // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
+                            parser = xl_parser(stream->obj);
+                            __xlogd("write data 2 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
+                            const char *name = xl_find_word(&parser, "path");
+                            int64_t isfile = xl_find_int(&parser, "type");
+                            __xcheck(isfile != 1);
+                            stream->file_size = xl_find_uint(&parser, "size");
+                            uint64_t pos = xl_find_uint(&parser, "pos");
+                            int full_path_len = slength(stream->uri) + slength(name) + 2;
+                            char full_path[full_path_len];                
+                            __xlogd("write data 3 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
+                            __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
+                            __xlogd("download file = %s\n", full_path);
+                            if (stream->fd == -1){
+                                if (pos == 0){
+                                    stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_CREATE, 0644);
+                                    __xcheck(stream->fd < 0);
+                                }else {
+                                    stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_WRITE, 0644);
+                                    __xcheck(stream->fd < 0);
+                                    __xcheck(pos != __xapi->fs_file_tell(stream->fd));
+                                }
                             }else {
-                                stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_WRITE, 0644);
-                                __xcheck(stream->fd < 0);
                                 __xcheck(pos != __xapi->fs_file_tell(stream->fd));
                             }
-                        }else {
-                            __xcheck(pos != __xapi->fs_file_tell(stream->fd));
-                        }
 
-                        if (stream->file_size == 0){
-                            __xapi->fs_file_close(stream->fd);
-                            stream->fd = -1;
-                        }else {
-                            xbyte_t *bin = xl_find(&parser, "data");
-                            if (bin != NULL){
-                                uint64_t data_len = __xl_sizeof_body(bin);
-                                if (data_len > 0){
-                                    __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
-                                    stream->file_pos += data_len;
-                                    stream->list_pos += data_len;
-                                    __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
-                                    if (stream->file_pos == stream->file_size){
-                                        __xlogd("upload 1\n");
-                                        __xapi->fs_file_close(stream->fd);
-                                        stream->fd = -1;
-                                        stream->file_pos = 0;
-                                        stream->file_size = 0;
+                            if (stream->file_size == 0){
+                                __xapi->fs_file_close(stream->fd);
+                                stream->fd = -1;
+                            }else {
+                                xbyte_t *bin = xl_find(&parser, "data");
+                                if (bin != NULL){
+                                    uint64_t data_len = __xl_sizeof_body(bin);
+                                    if (data_len > 0){
+                                        __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
+                                        stream->file_pos += data_len;
+                                        stream->list_pos += data_len;
+                                        __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
+                                        if (stream->file_pos == stream->file_size){
+                                            __xlogd("upload 1\n");
+                                            __xapi->fs_file_close(stream->fd);
+                                            stream->fd = -1;
+                                            stream->file_pos = 0;
+                                            stream->file_size = 0;
+                                        }
                                     }
                                 }
                             }
+                            __xlogd("write data 4 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
                         }
-                        __xlogd("write data 4 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
+                    
                     }
+
                 }
             }
 
@@ -590,81 +593,6 @@ static int xlio_post_download(xltp_t *tp, xline_t *msg, void *ctx)
     frame->type = XPACK_TYPE_MSG;
     __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
     xl_free(&msg);
-    return 0;
-XClean:
-    return -1;
-}
-
-int xlio_stream_download(xlio_stream_t *ios, xline_t *frame)
-{
-    frame->flag = XMSG_FLAG_POST;
-    __xmsg_set_cb(frame, xlio_post_download);
-    ios->channel = __xmsg_get_channel(frame);
-    xchannel_set_ctx(ios->channel, ios);
-    __xmsg_set_ctx(frame, ios);
-    __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
-    return 0;
-XClean:
-    return -1;
-}
-
-static int xlio_post_upload(xltp_t *tp, xline_t *msg, void *ctx)
-{
-    xline_t *frame = NULL;
-    xlio_stream_t *ios = (xlio_stream_t *)ctx;
-    // xl_free(&msg);
-
-    // ios->parser = xl_parser(&ios->dir->line);
-    // msg = xl_find_ptr(&ios->parser, "ctx");
-    // xline_t parser = xl_parser(&msg->line);
-    // ios->path = xl_find_word(&parser, "lpath");
-    // ios->uri = xl_find_word(&parser, "rpath");
-    // __xlogd("local uri %s remote uri %s\n", ios->path, ios->uri);
-    // xl_free(&msg);
-
-    // int path_len = slength(ios->path);
-    // ios->src_name_len = 0;
-    // while (ios->path[path_len - ios->src_name_len - 1] != '/'){
-    //     ios->src_name_len++;
-    // }
-    
-    // ios->src_name_len = path_len - ios->src_name_len;
-    // mcopy(ios->fpath, ios->path, ios->src_name_len - 1);
-
-    if (ios->is_dir){
-        __xlogd("item is dir\n");
-        ios->scanner = __xapi->fs_scanner_open(ios->uri);
-        __xcheck(ios->scanner == NULL);
-        while (__serialbuf_readable(&ios->buf) > 0 && ios->scanner != NULL){
-            xline_t *frame = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
-            xl_clear(frame);
-            xl_add_int(&frame, "type", XLIO_STREAM_RES_LIST);
-            __xcheck(xlio_scan_dir(ios, &frame) != 0);
-            ios->buf.rpos++;
-            xl_printf(&frame->line);
-            frame->type = XPACK_TYPE_MSG;
-            // __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
-        }
-    }
-    return 0;
-XClean:
-    if (frame != NULL){
-        xl_free(&frame);
-    }
-    return -1;
-}
-
-int xlio_stream_upload(xlio_stream_t *ios, xline_t *frame)
-{
-    // frame->flag = XMSG_FLAG_POST;
-    // __xmsg_set_cb(frame, xlio_post_upload);
-    ios->channel = __xmsg_get_channel(frame);
-    xchannel_set_ctx(ios->channel, ios);
-    ios->scanner = __xapi->fs_scanner_open(ios->uri);
-    __xcheck(ios->scanner == NULL);
-    // __xmsg_set_ctx(frame, ios);
-    // __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
-    xl_free(&frame);
     return 0;
 XClean:
     return -1;

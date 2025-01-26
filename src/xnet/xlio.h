@@ -20,12 +20,6 @@ void xlio_free(xlio_t **pptr);
 int xlio_start_downloader(xlio_t *io, xline_t *frame, int response);
 int xlio_start_uploader(xlio_t *io, xline_t *frame, int response);
 
-int xlio_stream_upload(xlio_stream_t *ios, xline_t *frame);
-int xlio_stream_download(xlio_stream_t *ios, xline_t *frame);
-
-// #define XLIO_STREAM_TYPE_SEND       0
-// #define XLIO_STREAM_TYPE_RECV       1
-
 xlio_stream_t* xlio_stream_maker(xlio_t *xlio, const char *uri, int stream_type);
 void xlio_stream_free(xlio_stream_t *ios);
 int xlio_stream_post(xlio_stream_t *ios, xline_t *frame);

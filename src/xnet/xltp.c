@@ -580,38 +580,6 @@ XClean:
 
 static int api_put(xltp_t *xltp, xline_t *req, void *ctx)
 {
-    // // return xlio_api_upload(xltp->io, msg);
-    // int n;
-    // const char *ip;
-    // uint16_t port;
-    // uint8_t uuid[32];
-    // // const char *file;
-    // // const char *dir;
-    // // char file_path[2048];
-    // xlio_stream_t *ios;
-
-    // ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(req));
-    // port = __xapi->udp_addr_port(__xmsg_get_ipaddr(req));
-
-    // xl_printf(&req->line);
-    // xltp->parser = xl_parser(&req->line);
-    // const char *path = xl_find_word(&xltp->parser, "path");
-    // __xcheck(path == NULL);
-    // ios = xlio_stream_maker(xltp->io, path, IOSTREAM_TYPE_DOWNLOAD);
-    // __xcheck(ios == NULL);
-    // xchannel_set_ctx(__xmsg_get_channel(req), ios);    
-
-    // xline_t *res = xl_maker();
-    // __xmsg_set_channel(res, __xmsg_get_channel(req));
-    // // __xcheck(xl_add_word(&res, "api", "res") == XNONE);
-    // // __xcheck(xl_add_uint(&res, "rid", msg->id) == XNONE);
-    // __xcheck(xl_add_word(&res, "ip", ip) == XNONE);
-    // __xcheck(xl_add_uint(&res, "port", port) == XNONE);
-    // __xcheck(xl_add_bin(&res, "uuid", uuid, 32) == XNONE);
-    // __xcheck(xl_add_uint(&res, "code", 200) == XNONE);
-    // xltp_send_msg(xltp, res);
-    // // xl_free(&msg);
-    // xlio_stream_download(ios, req);
     __xcheck(xlio_start_downloader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
@@ -646,18 +614,6 @@ XClean:
     return -1;
 }
 
-// static inline void path_clear(const char *file_path, uint8_t path_len, char *file_name, uint16_t name_len)
-// {
-//     int len = 0;
-//     while (len < path_len && file_path[path_len-len-1] != '/'){
-//         len++;
-//     }
-//     for (size_t i = 0; i < name_len && i < len; i++){
-//         file_name[i] = file_path[path_len-(len-i)];
-//     }
-//     file_name[len] = '\0';
-// }
-
 static int req_put(xltp_t *xltp, xline_t *msg, void *ctx)
 {
     const char *path;
@@ -683,7 +639,6 @@ XClean:
     return -1;
 }
 
-// file://uuid/path
 int xltp_put(xltp_t *xltp, const char *local_uri, const char *remote_path, __xipaddr_ptr ipaddr, void *ctx)
 {
     xline_t *msg = xl_maker();
@@ -708,45 +663,7 @@ XClean:
 ////////////////////////////////////////////////////////////////////
 
 static int api_get(xltp_t *xltp, xline_t *req, void *ctx)
-{
-    // int n;
-    // const char *ip;
-    // uint16_t port;
-    // uint8_t uuid[32];
-    // const char *uri;
-    // xlio_stream_t *ios;
-    // xline_t *ready = xl_maker();
-    // __xcheck(ready == NULL);
-
-    // for (size_t i = 0; i < 4; i++)
-    // {
-    //     ready->args[i] = req->args[i];
-    // }
-
-    // xl_printf(&req->line);
-    // xltp->parser = xl_parser(&req->line);
-    // uri = xl_find_word(&xltp->parser, "uri");
-    // __xcheck(uri == NULL);
-    
-    // ios = xlio_stream_maker(xltp->io, uri, IOSTREAM_TYPE_UPLOAD);
-    // __xcheck(ios == NULL);
-    // xchannel_set_ctx(__xmsg_get_channel(req), ios);
-    // xl_hold(req);
-    // xlio_stream_upload(ios, req);
-
-    // xl_clear(req);
-    // __xmsg_set_ctx(req, NULL);
-    // // __xcheck(xl_add_word(&msg, "api", "res") == XNONE);
-    // // __xcheck(xl_add_uint(&msg, "rid", msg->id) == XNONE);
-    // ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(req));
-    // port = __xapi->udp_addr_port(__xmsg_get_ipaddr(req));
-    // __xcheck(xl_add_word(&req, "ip", ip) == XNONE);
-    // __xcheck(xl_add_uint(&req, "port", port) == XNONE);
-    // __xcheck(xl_add_bin(&req, "uuid", uuid, 32) == XNONE);
-    // __xcheck(xl_add_uint(&req, "code", 200) == XNONE);
-    // xltp_send_msg(xltp, req);
-
-    
+{    
     __xcheck(xlio_start_uploader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
@@ -760,16 +677,14 @@ static int res_get(xltp_t *xltp, xline_t *res, void *ctx)
 {
     xline_t *req = NULL;
     xline_t *msg = NULL;
-    // xlio_stream_t *ios = NULL;
-    // xltp->parser = xl_parser(&res->line);
     xl_printf(&res->line);
     req = xchannel_get_req( __xmsg_get_channel(res));
     __xcheck(req == NULL);
     msg = __xmsg_get_ctx(req);
     __xcheck(msg == NULL);
     __xmsg_set_channel(msg, __xmsg_get_channel(res));
-    xl_free(&res);
     __xcheck(xlio_start_downloader(xltp->io, msg, 0) != 0);
+    xl_free(&res);
     return 0;
 XClean:
     if (res != NULL){
