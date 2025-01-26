@@ -612,7 +612,7 @@ static int api_put(xltp_t *xltp, xline_t *req, void *ctx)
     // xltp_send_msg(xltp, res);
     // // xl_free(&msg);
     // xlio_stream_download(ios, req);
-    __xcheck(xlio_start_uploader(xltp->io, req) != 0);
+    __xcheck(xlio_start_downloader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
     return -1;
@@ -630,7 +630,7 @@ static int res_put(xltp_t *xltp, xline_t *res, void *ctx)
     msg = __xmsg_get_ctx(req);
     __xcheck(msg == NULL);
     __xmsg_set_channel(msg, __xmsg_get_channel(res));
-    xlio_start_uploader(xltp->io, msg);
+    xlio_start_uploader(xltp->io, msg, 0);
     xl_free(&res);
     return 0;
 XClean:
@@ -747,7 +747,7 @@ static int api_get(xltp_t *xltp, xline_t *req, void *ctx)
     // xltp_send_msg(xltp, req);
 
     
-    __xcheck(xlio_start_uploader(xltp->io, req) != 0);
+    __xcheck(xlio_start_uploader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
     if (req != NULL){
@@ -769,7 +769,7 @@ static int res_get(xltp_t *xltp, xline_t *res, void *ctx)
     __xcheck(msg == NULL);
     __xmsg_set_channel(msg, __xmsg_get_channel(res));
     xl_free(&res);
-    __xcheck(xlio_start_downloader(xltp->io, msg) != 0);
+    __xcheck(xlio_start_downloader(xltp->io, msg, 0) != 0);
     return 0;
 XClean:
     if (res != NULL){

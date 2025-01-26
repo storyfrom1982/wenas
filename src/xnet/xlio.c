@@ -670,7 +670,7 @@ XClean:
     return -1;
 }
 
-int xlio_start_downloader(xlio_t *io, xline_t *req)
+int xlio_start_downloader(xlio_t *io, xline_t *req, int response)
 {
     xline_t parser = xl_parser(&req->line);
     const char *uri = xl_find_word(&parser, "path");
@@ -683,12 +683,14 @@ int xlio_start_downloader(xlio_t *io, xline_t *req)
     xchannel_set_ctx(ios->channel, ios);
     __xmsg_set_ctx(req, ios);
 
-    // xline_t *res = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
-    // xl_clear(res);
-    // xl_add_int(&res, "status", 200);
-    // ios->buf.rpos++;
-    // res->type = XPACK_TYPE_MSG;
-    // __xcheck(xmsger_send(ios->io->msger, ios->channel, res) != 0);
+    if (response){
+        xline_t *res = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
+        xl_clear(res);
+        xl_add_int(&res, "status", 200);
+        ios->buf.rpos++;
+        res->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(ios->io->msger, ios->channel, res) != 0);
+    }
 
     req->flag = XMSG_FLAG_POST;
     __xmsg_set_cb(req, xlio_post_download);
@@ -699,7 +701,7 @@ XClean:
     return -1;
 }
 
-int xlio_start_uploader(xlio_t *io, xline_t *req)
+int xlio_start_uploader(xlio_t *io, xline_t *req, int response)
 {
     xline_t parser = xl_parser(&req->line);
     const char *uri = xl_find_word(&parser, "uri");
@@ -714,12 +716,15 @@ int xlio_start_uploader(xlio_t *io, xline_t *req)
     ios->channel = __xmsg_get_channel(req);
     xchannel_set_ctx(ios->channel, ios);
 
-    xline_t *res = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
-    xl_clear(res);
-    xl_add_int(&res, "status", 200);
-    ios->buf.rpos++;
-    res->type = XPACK_TYPE_MSG;
-    __xcheck(xmsger_send(ios->io->msger, ios->channel, res) != 0);
+    if (response){
+        xline_t *res = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
+        xl_clear(res);
+        xl_add_int(&res, "status", 200);
+        ios->buf.rpos++;
+        res->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(ios->io->msger, ios->channel, res) != 0);
+    }
+
     xl_free(&req);
     return 0;
 XClean:
