@@ -360,6 +360,12 @@ XClean:
 static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 {
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
+    if (msg->type == XPACK_TYPE_REQ){
+        xline_t *req = __xmsg_get_ctx(msg);
+        if (req){
+            xl_free(&req);
+        }
+    }
     xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
     // if (msg->id != XNONE){
     //     xline_t *req = xltp_find_req(xltp, msg->id);

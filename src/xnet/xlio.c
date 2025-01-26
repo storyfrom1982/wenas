@@ -724,8 +724,6 @@ XClean:
 void xlio_stream_free(xlio_stream_t *ios)
 {
     if (ios){
-        ios->prev->next = ios->next;
-        ios->next->prev = ios->prev;
         if (ios->fd > 0){
             __xapi->fs_file_close(ios->fd);
         }
@@ -733,13 +731,17 @@ void xlio_stream_free(xlio_stream_t *ios)
             __xapi->fs_scanner_close(ios->scanner);
             ios->scanner = NULL;
         }
+        if (ios->current_frame != NULL){
+            xl_free(&ios->current_frame);
+        }
+        if (ios->prev != NULL && ios->next != NULL){
+            ios->prev->next = ios->next;
+            ios->next->prev = ios->prev;
+        }
         for (size_t i = 0; i < MSGBUF_RANGE; i++){
             if (ios->buf.buf[i] != NULL){
                 xl_free(&ios->buf.buf[i]);
             }
-        }
-        if (ios->current_frame != NULL){
-            xl_free(&ios->current_frame);
         }
         free(ios);
     }
