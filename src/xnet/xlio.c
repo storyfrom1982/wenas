@@ -3,8 +3,8 @@
 #include "xpipe.h"
 
 #define MSGBUF_RANGE    2
-// #define MSGBUF_SIZE     1280 * 1024 //1.25MB
-#define MSGBUF_SIZE     1280 * 16
+#define MSGBUF_SIZE     1280 * 1024 //1.25MB
+// #define MSGBUF_SIZE     1280 * 16
 
 typedef struct xmsgbuf {
     uint8_t range, spos, rpos, wpos;
