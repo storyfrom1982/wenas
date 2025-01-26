@@ -70,13 +70,13 @@ int main(int argc, char *argv[])
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
             __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-            xltp_put(peer, cwd_path, "wenas", addr);
+            xltp_put(peer, cwd_path, "wenas", addr, NULL);
             // xltp_put(peer, "./build/xltpd", "wenas", ip, port);
             // xltp_put(peer, "xltpd", ip, port);
 
         } else if (strcmp(command, "get") == 0) {
             __xipaddr_ptr addr = __xapi->udp_host_to_addr(ip, port);
-            xltp_get(peer, "./tmp/wenas", "./wenas/Kangzixin",addr);
+            xltp_get(peer, "./tmp/wenas", "./wenas/Kangzixin", addr, NULL);
             // xltp_put(peer, "xltpd", ip, port);
 
         } else if (strcmp(command, "scan") == 0) {

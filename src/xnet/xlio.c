@@ -673,7 +673,7 @@ XClean:
 int xlio_start_downloader(xlio_t *io, xline_t *req)
 {
     xline_t parser = xl_parser(&req->line);
-    const char *uri = xl_find_word(&parser, "uri");
+    const char *uri = xl_find_word(&parser, "path");
     __xcheck(uri == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_DOWNLOAD);
@@ -724,6 +724,9 @@ int xlio_start_uploader(xlio_t *io, xline_t *req)
     return 0;
 XClean:
     xlio_stream_free(ios);
+    if (req){
+        xl_free(&req);
+    }    
     return -1;
 }
 
