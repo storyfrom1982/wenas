@@ -600,7 +600,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->threshold++;
                 }
                 xchannel_send_pack(channel);
-            }else if (__serialbuf_sendable(channel->msgbuf) == 0){
+            }else {
                 channel->threshold = channel->serial_range >> 3;
             }
 
