@@ -594,16 +594,18 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
+            
+            xchannel_send_pack(channel);
 
-            if (__serialbuf_sendable(channel->sendbuf) > 0){
-                if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
-                    channel->threshold++;
-                }else {
-                    xchannel_send_pack(channel);
-                }
-            }else {
-                channel->threshold = channel->serial_range >> 3;
-            }
+            // if (__serialbuf_sendable(channel->sendbuf) > 0){
+            //     if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
+            //         channel->threshold++;
+            //     }else {
+            //         xchannel_send_pack(channel);
+            //     }
+            // }else {
+            //     channel->threshold = channel->serial_range >> 3;
+            // }
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
