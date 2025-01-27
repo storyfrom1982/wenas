@@ -596,7 +596,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             if (__serialbuf_sendable(channel->sendbuf) > 0){
-                if (pack->head.resend == 1){
+                if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
                     channel->threshold++;
                 }
                 xchannel_send_pack(channel);
