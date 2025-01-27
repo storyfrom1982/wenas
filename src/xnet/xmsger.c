@@ -414,9 +414,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->timestamp = pack->ts;
             if (channel->flushlist.len > 0){
                 // 均匀发送时间戳，避免一次性重传所有包
-                if (pack->ts < (channel->flushlist.head.prev->ts + (channel->back_delay >> 1))){
+                if (pack->ts < (channel->flushlist.head.prev->ts + channel->back_delay)){
                     // 时间戳设置为前一个 pack 的基础上加往返时间的 1/2
-                    pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
+                    pack->ts = (channel->flushlist.head.prev->ts + channel->back_delay);
                 }
             }
             pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
@@ -908,7 +908,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
                                 // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
-                                if (channel->threshold < (channel->serial_range >> 2)){
+                                if (channel->threshold > (channel->serial_range >> 2)){
                                     channel->threshold--;
                                 }
                             }else {
