@@ -360,6 +360,11 @@ XClean:
 static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
 {
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
+    if (ios != NULL){
+        // TODO 如何确保在释放 channel 之前，释放掉 ios。
+        // TODO 解决释放 channel 时的崩溃。
+        xlio_stream_free(ios);
+    }
     if (msg->type == XPACK_TYPE_REQ){
         xline_t *req = __xmsg_get_ctx(msg);
         if (req){
@@ -367,15 +372,6 @@ static inline int xltp_timedout(xltp_t *xltp, xline_t *msg)
         }
     }
     xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    // if (msg->id != XNONE){
-    //     xline_t *req = xltp_find_req(xltp, msg->id);
-    //     __xcheck(req == NULL);
-    //     // xltp_del_req(xltp, req);
-    //     xl_free(&req);
-    // }
-    if (ios != NULL){
-        xlio_stream_free(ios);
-    }
     xl_free(&msg);
     return 0;
 XClean:
