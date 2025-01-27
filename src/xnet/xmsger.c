@@ -501,8 +501,8 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 // xl_printf(&channel->msg->line);
                 channel->msger->cb->on_message_from_peer(channel->msger->cb, channel, channel->msg);
                 channel->msg = NULL;
-                // 更新时间戳
-                channel->timestamp = __xapi->clock();
+                // // 更新时间戳
+                // channel->timestamp = __xapi->clock();
             }
             // 处理过的缓冲区置空
             channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)] = NULL;
@@ -527,6 +527,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
     //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
     //         (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
+    // 更新时间戳
+    channel->timestamp = __xapi->clock();
+    
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 
         && ((uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos) 
@@ -934,7 +937,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             }else if (channel->pos == channel->len){
 
-                if (__xapi->clock() - channel->timestamp > NANO_SECONDS * 10){
+                if (__xapi->clock() - channel->timestamp > NANO_SECONDS * XCHANNEL_RESEND_LIMIT){
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
