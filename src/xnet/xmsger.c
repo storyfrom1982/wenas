@@ -309,10 +309,15 @@ static inline void xchannel_free(xchannel_ptr channel)
     if (channel->node.parent != &channel->node){
         avl_tree_remove(&channel->msger->peers, channel);
     }
+    __xlogd("xchannel_free >>>>-------------------> 1\n");
     free(channel->recvbuf);
+    __xlogd("xchannel_free >>>>-------------------> 2\n");
     free(channel->sendbuf);
+    __xlogd("xchannel_free >>>>-------------------> 3\n");
     free(channel->msgbuf);
+    __xlogd("xchannel_free >>>>-------------------> 4\n");
     free(channel->addr);
+    __xlogd("xchannel_free >>>>-------------------> 5\n");
     free(channel);
     __xlogd("xchannel_free >>>>-------------------> exit\n");
 }
