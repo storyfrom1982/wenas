@@ -206,7 +206,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = serial_range >> 1;
+    channel->threshold = serial_range >> 3;
     channel->timestamp = __xapi->clock();
     channel->back_delay = 50000000UL;
     // channel->rid = XNONE;
@@ -594,6 +594,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
+
+            if (pack->head.resend == 1){
+                channel->threshold++;
+            }
 
             xchannel_send_pack(channel);
 
