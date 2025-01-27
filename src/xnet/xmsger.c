@@ -472,6 +472,9 @@ static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr p
 
 static inline int xchannel_recv_msg(xchannel_ptr channel)
 {
+    // 更新时间戳
+    channel->timestamp = __xapi->clock();
+
     if (__serialbuf_readable(channel->recvbuf) > 0){
         // 索引已接收的包
         xpack_ptr pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
@@ -527,9 +530,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
     //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
     //         (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
-    // 更新时间戳
-    channel->timestamp = __xapi->clock();
-    
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 
         && ((uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos) 
