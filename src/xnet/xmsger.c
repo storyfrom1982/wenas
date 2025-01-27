@@ -417,13 +417,13 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
-            if (channel->flushlist.len > 0){
-                // 均匀发送时间戳，避免一次性重传所有包
-                if (pack->ts < (channel->flushlist.head.prev->ts + (channel->back_delay >> 1))){
-                    // 时间戳设置为前一个 pack 的基础上加往返时间的 1/2
-                    pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
-                }
-            }
+            // if (channel->flushlist.len > 0){
+            //     // 均匀发送时间戳，避免一次性重传所有包
+            //     if (pack->ts < (channel->flushlist.head.prev->ts + (channel->back_delay >> 1))){
+            //         // 时间戳设置为前一个 pack 的基础上加往返时间的 1/2
+            //         pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
+            //     }
+            // }
             pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
