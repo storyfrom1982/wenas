@@ -583,22 +583,26 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
 
+                // 数据已发送，从待发送数据中减掉这部分长度
+                __atom_add(channel->pos, pack->head.len);
+                __atom_add(channel->msger->pos, pack->head.len);
+
                 if (channel->flush_len == 0){
                     if (__serialbuf_rpos(channel->sendbuf) > 0 && channel->flushlist.len + __serialbuf_rpos(channel->sendbuf) > 8){
                         channel->flush_len = channel->flushlist.len;
                         channel->hz_radio = 1.0f;
-                        channel->threshold = channel->flush_len;
                         __xlogd("1 flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
                     }
                 }else {
-                    channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
-                    channel->hz *= channel->hz_radio;
+                    if (channel->pos != pack->head.len){
+                        channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
+                        channel->hz *= channel->hz_radio;
+                    }else {
+                        channel->flush_len = 0;
+                    }
                     __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
                 }
 
-                // 数据已发送，从待发送数据中减掉这部分长度
-                __atom_add(channel->pos, pack->head.len);
-                __atom_add(channel->msger->pos, pack->head.len);
                 __ring_list_take_out(&channel->flushlist, pack);
             }
 
@@ -884,9 +888,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             //     xchannel_send_pack(channel);
             // }
             if (__xapi->clock() - channel->timestamp >= channel->hz){
-                if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-                    xchannel_send_pack(channel);
-                }
+                xchannel_send_pack(channel);
             }
 
             if (channel->flushlist.len > 0){
