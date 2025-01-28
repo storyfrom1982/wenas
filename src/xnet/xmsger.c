@@ -611,7 +611,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->hz *= channel->hz_radio;
             }
 
-            __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->hz / 1000);
+            __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz / 1000);
 
             // 更新索引
             // index = __serialbuf_rpos(channel->sendbuf);
