@@ -209,7 +209,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = serial_range >> 4;
+    channel->threshold = serial_range >> 3;
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
     channel->hz_radio = 1.0f;
@@ -588,7 +588,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->flush_len == 0){
-                    if (__serialbuf_rpos(channel->sendbuf) > 0 && channel->flushlist.len + __serialbuf_rpos(channel->sendbuf) > 8){
+                    if (channel->flushlist.len >= channel->threshold){
                         channel->flush_len = channel->flushlist.len + 1;
                         channel->hz_radio = 1.0f;
                         __xlogd("1 flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
@@ -596,6 +596,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 }else {
                     if (channel->flushlist.len > 1){
                         channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
+                        if (channel->hz_radio == 1.0f){
+                            channel->hz_radio = 0.9f;
+                        }
                         channel->hz *= channel->hz_radio;
                     }else {
                         channel->flush_len = 0;
@@ -628,7 +631,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             //         xchannel_send_pack(channel);
             //     }
             // }else {
-            //     channel->threshold = channel->serial_range >> 4;
+            //     channel->threshold = channel->serial_range >> 3;
             // }
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
@@ -954,7 +957,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
                                 // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
-                                if (channel->threshold > (channel->serial_range >> 4)){
+                                if (channel->threshold > (channel->serial_range >> 3)){
                                     channel->threshold--;
                                 }
                             }else {
