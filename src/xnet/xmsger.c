@@ -639,7 +639,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->sendbuf->rpos, 1);
 
             // 更新索引
-            // index = __serialbuf_rpos(channel->sendbuf);
+            index = __serialbuf_rpos(channel->sendbuf);
 
             // if (__serialbuf_sendable(channel->sendbuf) > 0){
             //     if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
