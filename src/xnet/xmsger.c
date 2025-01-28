@@ -687,39 +687,40 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
             }
 
-            // ack 与 rpos 的间隔大于一才进行重传
-            if (((rpack->head.ack.sn - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) >= 1){
-                // 使用临时变量
-                uint8_t index = channel->sendbuf->rpos;
-                // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
-                while (index != rpack->head.ack.sn){
-                    // 取出落后的包
-                    pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
-                    // 判断这个包是否已经接收过
-                    if (pack->ts != 0){
-                        // 判断是否进行了重传
-                        if (pack->head.resend < 2){
-                            pack->head.resend++;
-                            // 判断重传的包是否带有 ACK
-                            if (pack->head.ack.type != 0){
-                                // 更新 ACKS
-                                // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
-                                pack->head.ack.pos = channel->recvbuf->wpos;
-                            }
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
-                                    pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
-                            if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                pack->delay *= XCHANNEL_RESEND_STEPPING;
-                            }else {
-                                __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
-                            }
-                        }
-                    }
+            // // ack 与 rpos 的间隔大于一才进行重传
+            // if (((rpack->head.ack.sn - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) >= 1){
+            //     // 使用临时变量
+            //     uint8_t index = channel->sendbuf->rpos;
+            //     // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
+            //     while (index != rpack->head.ack.sn){
+            //         // 取出落后的包
+            //         pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
+            //         // 判断这个包是否已经接收过
+            //         if (pack->ts != 0){
+            //             // 判断是否进行了重传
+            //             if (pack->head.resend < 2){
+            //                 pack->head.resend++;
+            //                 // 判断重传的包是否带有 ACK
+            //                 if (pack->head.ack.type != 0){
+            //                     // 更新 ACKS
+            //                     // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+            //                     pack->head.ack.pos = channel->recvbuf->wpos;
+            //                 }
+            //                 __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+            //                         pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
+            //                         pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
+            //                 if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
+            //                     pack->delay *= XCHANNEL_RESEND_STEPPING;
+            //                 }else {
+            //                     __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
+            //                 }
+            //             }
+            //         }
 
-                    index++;
-                }
-            }
+            //         index++;
+            //     }
+            // }
+        
         }
 
     }else {
