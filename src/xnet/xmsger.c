@@ -907,7 +907,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
             //     xchannel_send_pack(channel);
             // }
-            if (__xapi->clock() - channel->timestamp >= channel->hz){
+            if (__xapi->clock() - channel->timestamp >= channel->hz && __serialbuf_readable(channel->sendbuf) < channel->serial_range - 8){
                 xchannel_send_pack(channel);
             }
 
