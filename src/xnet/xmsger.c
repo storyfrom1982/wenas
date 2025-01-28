@@ -81,6 +81,9 @@ struct xchannel {
 
     uint8_t serial_range;
     uint8_t threshold;
+    uint8_t flush_len;
+    float hz_radio;
+    uint64_t hz;
     uint64_t timestamp;
 
     uint16_t back_times;
@@ -208,6 +211,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->serial_range = serial_range;
     channel->threshold = serial_range >> 4;
     channel->timestamp = __xapi->clock();
+    channel->flush_len = 0;
+    channel->hz_radio = 1.0f;
+    channel->hz = NANO_SECONDS / 10000000UL;
     channel->back_delay = 160000000UL;
     // channel->rid = XNONE;
 
@@ -595,17 +601,29 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             __atom_add(channel->sendbuf->rpos, 1);
 
-            // 更新索引
-            index = __serialbuf_rpos(channel->sendbuf);
-
-            if (__serialbuf_sendable(channel->sendbuf) > 0){
-                if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
-                    channel->threshold++;
-                    xchannel_send_pack(channel);
+            if (channel->flush_len == 0){
+                if (__serialbuf_rpos(channel->sendbuf) > 0 && channel->flushlist.len + __serialbuf_rpos(channel->sendbuf) > 8){
+                    channel->flush_len = channel->flushlist.len;
+                    channel->hz_radio = 1.0f;
                 }
             }else {
-                channel->threshold = channel->serial_range >> 4;
+                channel->hz_radio = channel->flushlist.len / channel->flush_len;
+                channel->hz *= channel->hz_radio;
             }
+
+            __xlogd("hz=%lu\n", channel->hz / 1000);
+
+            // 更新索引
+            // index = __serialbuf_rpos(channel->sendbuf);
+
+            // if (__serialbuf_sendable(channel->sendbuf) > 0){
+            //     if (channel->threshold < (channel->serial_range >> 1) && pack->head.resend == 1){
+            //         channel->threshold++;
+            //         xchannel_send_pack(channel);
+            //     }
+            // }else {
+            //     channel->threshold = channel->serial_range >> 4;
+            // }
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
@@ -861,7 +879,10 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         {
             // readable 是已经写入缓冲区还尚未发送的包
             // 缓冲少于阈值时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+            //     xchannel_send_pack(channel);
+            // }
+            if (__xapi->clock() - channel->timestamp >= channel->hz){
                 xchannel_send_pack(channel);
             }
 
