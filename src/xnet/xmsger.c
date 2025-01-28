@@ -594,7 +594,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         __xlogd("1 flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
                     }
                 }else {
-                    if (channel->pos != pack->head.len){
+                    if (channel->flushlist.len > 1){
                         channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
                         channel->hz *= channel->hz_radio;
                     }else {
