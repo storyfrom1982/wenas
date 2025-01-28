@@ -610,7 +610,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                 channel->flush_count++;
                                 if (channel->flush_count == channel->flush_len){
                                     if (channel->hz > 0){
-                                        channel->hz *= 0.8f;
+                                        channel->hz *= 0.9f;
                                     }
                                     channel->flush_len = 0;
                                 }
