@@ -599,6 +599,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         channel->hz *= channel->hz_radio;
                     }else {
                         channel->flush_len = 0;
+                        channel->hz = 10000000UL;
                     }
                     __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
                 }
