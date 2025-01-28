@@ -603,14 +603,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             if (channel->flushlist.len > channel->flush_len){
                                 channel->flush_count--;
                                 if (channel->flush_count == (channel->flush_len * -1)){
-                                    channel->hz += 1000000UL;
+                                    channel->hz *= 1.1f;
                                     channel->flush_len = 0;
                                 }
                             }else {
                                 channel->flush_count++;
                                 if (channel->flush_count == channel->flush_len){
                                     if (channel->hz > 0){
-                                        channel->hz -= 1000000UL;
+                                        channel->hz *= 0.8f;
                                     }
                                     channel->flush_len = 0;
                                 }
@@ -907,7 +907,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
             //     xchannel_send_pack(channel);
             // }
-            if (__xapi->clock() - channel->timestamp >= channel->hz && __serialbuf_readable(channel->sendbuf) < channel->serial_range - 8){
+            if (__xapi->clock() - channel->timestamp >= channel->hz && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
                 xchannel_send_pack(channel);
             }
 
