@@ -213,7 +213,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
     channel->hz_radio = 1.0f;
-    channel->hz = NANO_SECONDS / 10000000UL;
+    channel->hz = 10000000UL;
     channel->back_delay = 160000000UL;
     // channel->rid = XNONE;
 
@@ -610,9 +610,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             }else {
                 channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
                 channel->hz *= channel->hz_radio;
+                __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
             }
-
-            __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
 
             // 更新索引
             // index = __serialbuf_rpos(channel->sendbuf);
