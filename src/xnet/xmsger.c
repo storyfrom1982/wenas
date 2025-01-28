@@ -45,6 +45,7 @@ typedef struct xhead {
 typedef struct xpack {
     uint64_t ts; // 计算往返耗时
     uint64_t delay; // 累计超时时长
+    uint64_t interval;
     xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -82,6 +83,7 @@ struct xchannel {
     uint8_t serial_range;
     uint8_t threshold;
     uint8_t flush_len;
+    int8_t flush_count;
     float hz_radio;
     uint64_t hz;
     uint64_t timestamp;
@@ -104,7 +106,7 @@ struct xchannel {
     // bool disconnected;
     bool timedout;
     // __atom_bool disconnecting;
-    __atom_size pos, len;
+    __atom_size spos, pos, len;
 
     xline_t *msg;
     xline_t *req;
@@ -212,8 +214,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->threshold = serial_range >> 3;
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
+    channel->flush_count = 0;
     channel->hz_radio = 1.0f;
-    channel->hz = 10000000UL;
+    channel->hz = 4000000UL; // 4 毫秒
     channel->back_delay = 160000000UL;
     // channel->rid = XNONE;
 
@@ -420,6 +423,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录发送次数
             pack->head.resend = 1;
 
+            channel->spos += pack->head.len;
+
+            pack->interval = channel->hz;
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
@@ -587,24 +593,32 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                if (channel->flush_len == 0){
-                    if (channel->flushlist.len >= channel->threshold){
-                        channel->flush_len = channel->flushlist.len + 1;
-                        channel->hz_radio = 1.0f;
-                        __xlogd("1 flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
+                if (channel->spos != channel->len){
+                    if (pack->interval == channel->hz){
+                        if (channel->flush_len == 0){
+                            channel->flush_len = channel->flushlist.len;
+                            channel->flush_count = 1;
+                            __xlogd("1 flush len = %u list len = %u count = %d hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->hz);
+                        }else {
+                            if (channel->flushlist.len > channel->flush_len){
+                                channel->flush_count--;
+                                if (channel->flush_count == (channel->flush_len * -1)){
+                                    channel->hz += 1000000UL;
+                                    channel->flush_len = 0;
+                                }
+                            }else {
+                                channel->flush_count++;
+                                if (channel->flush_count == channel->flush_len){
+                                    channel->hz -= 1000000UL;
+                                    channel->flush_len = 0;
+                                }
+                            }
+                            __xlogd("1 flush len = %u list len = %u count = %d hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->hz);
+                        }
                     }
                 }else {
-                    if (channel->flushlist.len > 1){
-                        channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
-                        if (channel->hz_radio == 1.0f){
-                            channel->hz_radio = 0.9f;
-                        }
-                        channel->hz *= channel->hz_radio;
-                    }else {
-                        channel->flush_len = 0;
-                        channel->hz = 10000000UL;
-                    }
-                    __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
+                    channel->flush_len = 0;
+                    channel->hz = 4000000UL;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
@@ -892,11 +906,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             //     xchannel_send_pack(channel);
             // }
             if (__xapi->clock() - channel->timestamp >= channel->hz){
-                if (channel->flush_len > 0){
-                    xchannel_send_pack(channel);
-                }else if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-                    xchannel_send_pack(channel);
-                }
+                xchannel_send_pack(channel);
             }
 
             if (channel->flushlist.len > 0){
