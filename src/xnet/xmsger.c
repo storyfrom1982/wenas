@@ -605,13 +605,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (__serialbuf_rpos(channel->sendbuf) > 0 && channel->flushlist.len + __serialbuf_rpos(channel->sendbuf) > 8){
                     channel->flush_len = channel->flushlist.len;
                     channel->hz_radio = 1.0f;
+                    __xlogd("1 flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
                 }
             }else {
                 channel->hz_radio = (float)channel->flushlist.len / channel->flush_len;
                 channel->hz *= channel->hz_radio;
             }
 
-            __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz / 1000);
+            __xlogd("flush len = %u list len = %u radio = %f hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->hz_radio, channel->hz);
 
             // 更新索引
             // index = __serialbuf_rpos(channel->sendbuf);
