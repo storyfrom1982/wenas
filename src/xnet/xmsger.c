@@ -644,6 +644,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             // 不使用任何策略， 测试 ipv6
+            __xlogd("recv ack -------------- send pack\n");
             xchannel_send_pack(channel);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
@@ -909,6 +910,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         msger->timer = delay;
                     }
                 }else {
+                    __xlogd("send all -------------- send pack\n");
                     xchannel_send_pack(channel);
                 }
             }
