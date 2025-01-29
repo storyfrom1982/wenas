@@ -213,13 +213,13 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = serial_range >> 3;
+    channel->threshold = serial_range >> 1;
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
     channel->flush_count = 0;
     channel->hz_radio = 1.0f;
     channel->srate = 100000UL; // 0.1 毫秒
-    channel->back_delay = 160000000UL;
+    channel->back_delay = 80000000UL;
     // channel->rid = XNONE;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -618,7 +618,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     }
                 }else {
                     channel->flush_len = 0;
-                    channel->srate = channel->average_rate;
+                    // channel->srate = channel->average_rate;
+                    channel->srate = channel->back_delay / channel->threshold;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
@@ -898,7 +899,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
+            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
                 delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
                 if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
                     xchannel_send_pack(channel);
@@ -908,7 +909,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }
 
             // // 不使用任何策略，测试 ipv6
-            // if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
             //     xchannel_send_pack(channel);
             // }
 
@@ -968,10 +969,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                 if (channel->flushlist.len > 1){
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
-                                }
-                                // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
-                                if (channel->threshold > (channel->serial_range >> 3)){
-                                    channel->threshold--;
                                 }
                             }else {
                                 __xlogd(">>>>------------------------> SEND FAILED\n");
