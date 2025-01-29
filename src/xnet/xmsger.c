@@ -598,7 +598,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         if (channel->flush_len == 0){
                             channel->flush_len = channel->flushlist.len;
                             channel->flush_count = 0;
-                            __xlogd("1 flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                            __xlogd("begin flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
                         }else {
                             if (channel->flushlist.len > channel->flush_len){
                                 channel->flush_count--;
@@ -615,12 +615,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     channel->flush_len = 0;
                                 }
                             }
-                            __xlogd("1 flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                            __xlogd("flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
                         }
                     }
                 }else {
                     channel->flush_len = 0;
-                    // channel->srate = 1000000UL;
+                    if (channel->srate < 100000UL){
+                        channel->srate = 1000000UL;
+                    }
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
