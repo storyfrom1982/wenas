@@ -593,37 +593,35 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                
-
-                // if (channel->spos != channel->len){
-                //     if (pack->srate == channel->srate){
-                //         if (channel->flush_len == 0){
-                //             channel->flush_len = channel->flushlist.len;
-                //             channel->flush_count = 0;
-                //             __xlogd("begin flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
-                //         }else {
-                //             if (channel->flushlist.len > channel->flush_len){
-                //                 channel->flush_count--;
-                //                 if (channel->flush_count == -3){
-                //                     channel->srate *= 1.5f;
-                //                     channel->flush_len = 0;
-                //                 }
-                //             }else {
-                //                 channel->flush_count++;
-                //                 if (channel->flush_count == 3){
-                //                     if (channel->srate > 0){
-                //                         channel->srate *= 0.9f;
-                //                     }
-                //                     channel->flush_len = 0;
-                //                 }
-                //             }
-                //             __xlogd("flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
-                //         }
-                //     }
-                // }else {
-                //     channel->flush_len = 0;
-                //     channel->srate = 100000UL;
-                // }
+                if (channel->spos != channel->len){
+                    if (pack->srate == channel->srate){
+                        if (channel->flush_len == 0){
+                            channel->flush_len = channel->flushlist.len;
+                            channel->flush_count = 0;
+                            __xlogd("begin flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                        }else {
+                            if (channel->flushlist.len > channel->flush_len){
+                                channel->flush_count--;
+                                if (channel->flush_count == -3){
+                                    channel->srate *= 1.5f;
+                                    channel->flush_len = 0;
+                                }
+                            }else {
+                                channel->flush_count++;
+                                if (channel->flush_count == 3){
+                                    if (channel->srate > 0){
+                                        channel->srate *= 0.9f;
+                                    }
+                                    channel->flush_len = 0;
+                                }
+                            }
+                            __xlogd("flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                        }
+                    }
+                }else {
+                    channel->flush_len = 0;
+                    channel->srate = 100000UL;
+                }
 
                 __ring_list_take_out(&channel->flushlist, pack);
             }
@@ -643,8 +641,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
 
-            // 测试 ipv6
-            xchannel_send_pack(channel);
+            // // 不使用任何策略， 测试 ipv6
+            // xchannel_send_pack(channel);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
@@ -902,19 +900,19 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            // if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
-            //     delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
-            //     if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
-            //         xchannel_send_pack(channel);
-            //     }else if (msger->timer > delay){
-            //         msger->timer = delay;
-            //     }
-            // }
-
-            // 测试 ipv6
-            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
-                xchannel_send_pack(channel);
+            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
+                delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
+                if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
+                    xchannel_send_pack(channel);
+                }else if (msger->timer > delay){
+                    msger->timer = delay;
+                }
             }
+
+            // // 不使用任何策略，测试 ipv6
+            // if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+            //     xchannel_send_pack(channel);
+            // }
 
             if (channel->flushlist.len > 0){
 
