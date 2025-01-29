@@ -672,6 +672,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         // 重传之后的包放入队尾
                         __ring_list_move_to_end(&channel->flushlist, pack);
                     }
+                    if (channel->threshold < (channel->serial_range >> 2)){
+                        channel->threshold--;
+                    }
                 }else {
                     __xlogd(">>>>------------------------> SEND FAILED\n");
                 }
@@ -935,7 +938,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (channel->spos != channel->len && __serialbuf_readable(channel->sendbuf) < (channel->serial_range)){
+            if (channel->spos != channel->len && __serialbuf_readable(channel->sendbuf) < channel->threshold){
                 delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
                 if (delay > 0){ // 不超过 100 微秒区间都可以发送
                     if (msger->timer > delay){
@@ -1003,6 +1006,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                 if (channel->flushlist.len > 1){
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
+                                }
+                                if (channel->threshold < (channel->serial_range >> 2)){
+                                    channel->threshold--;
                                 }
                             }else {
                                 __xlogd(">>>>------------------------> SEND FAILED\n");
