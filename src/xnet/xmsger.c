@@ -620,7 +620,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     }
                 }else {
                     channel->flush_len = 0;
-                    channel->srate = 4000000UL;
+                    // channel->srate = 1000000UL;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
