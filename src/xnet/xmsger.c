@@ -620,9 +620,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     }
                 }else {
                     channel->flush_len = 0;
-                    if (channel->srate < 100000UL){
-                        channel->srate = 1000000UL;
-                    }
+                    channel->srate = 1000000UL;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
@@ -908,7 +906,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 2)){
                 delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
                 if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
                     xchannel_send_pack(channel);
