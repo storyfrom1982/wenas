@@ -1173,7 +1173,7 @@ static void msger_loop(void *ptr)
                 __xcheck(rpack == NULL);
             }
             rpack->head.len = 0;
-            __xcheck(xmsger_send_all(msger) != 0);
+            // __xcheck(xmsger_send_all(msger) != 0);
         }
         }
 
