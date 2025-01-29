@@ -595,19 +595,19 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->spos != channel->len){
                     if (pack->srate == channel->srate){
                         if (channel->flush_len == 0){
-                            channel->flush_len = channel->flushlist.len;
+                            channel->flush_len = channel->flushlist.len + 1;
                             channel->flush_count = 0;
                             __xlogd("begin flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
                         }else {
                             if (channel->flushlist.len > channel->flush_len){
                                 channel->flush_count--;
-                                if (channel->flush_count == -3){
+                                if (channel->flush_count < -3){
                                     channel->srate *= 1.5f;
                                     channel->flush_len = 0;
                                 }
                             }else {
                                 channel->flush_count++;
-                                if (channel->flush_count == 3){
+                                if (channel->flush_count > 3){
                                     if (channel->srate > 0){
                                         channel->srate *= 0.9f;
                                     }
