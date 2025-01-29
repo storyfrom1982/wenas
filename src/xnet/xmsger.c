@@ -86,6 +86,8 @@ struct xchannel {
     int8_t flush_count;
     float hz_radio;
     uint64_t srate;
+    uint64_t average_rate;
+    uint64_t all_rate;
     uint64_t timestamp;
 
     uint16_t back_times;
@@ -569,13 +571,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (pack->ts != 0){
 
                 // 累计新的一次往返时长
-                uint64_t clock = __xapi->clock();
-                // 由于均匀预设了发送时间戳，有可能导致往返延迟为负数
-                if (clock > pack->ts){
-                    channel->back_range += clock - pack->ts;
-                }else {
-                    channel->back_range += channel->back_delay >> 1;
-                }
+                channel->back_range += __xapi->clock() - pack->ts;
+                channel->all_rate += channel->srate;
 
                 pack->ts = 0;
 
@@ -585,9 +582,11 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->back_range -= channel->back_delay;
+                    channel->all_rate -= channel->average_rate;
                 }
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
+                channel->average_rate = channel->all_rate / channel->back_times;
 
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
@@ -598,7 +597,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         if (channel->flush_len == 0){
                             channel->flush_len = channel->flushlist.len;
                             channel->flush_count = 0;
-                            __xlogd("begin flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                            __xlogd("begin flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
                         }else {
                             if (channel->flushlist.len > channel->flush_len){
                                 channel->flush_count--;
@@ -615,12 +614,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     channel->flush_len = 0;
                                 }
                             }
-                            __xlogd("flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
+                            __xlogd("flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
                         }
                     }
                 }else {
                     channel->flush_len = 0;
-                    channel->srate = 100000UL;
+                    channel->srate = channel->average_rate;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
