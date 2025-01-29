@@ -672,7 +672,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         // 重传之后的包放入队尾
                         __ring_list_move_to_end(&channel->flushlist, pack);
                     }
-                    if (channel->threshold < (channel->serial_range >> 2)){
+                    if (channel->threshold > (channel->serial_range >> 2)){
                         channel->threshold--;
                     }
                 }else {
@@ -1007,7 +1007,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
-                                if (channel->threshold < (channel->serial_range >> 2)){
+                                if (channel->threshold > (channel->serial_range >> 2)){
                                     channel->threshold--;
                                 }
                             }else {
