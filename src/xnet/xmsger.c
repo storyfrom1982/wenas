@@ -902,7 +902,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < channel->serial_range){
+            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
                 delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
                 if (delay > 0){ // 不超过 100 微秒区间都可以发送
                     if (msger->timer > delay){
