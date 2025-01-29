@@ -593,9 +593,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->spos != channel->len){
-                    if (channel->flushlist.len == channel->threshold){
-                        channel->srate *= 1.5f;
-                    }else {
+                    if (channel->flushlist.len < channel->threshold) {
                         if (pack->srate == channel->srate){
                             if (channel->flush_len == 0){
                                 channel->flush_len = channel->flushlist.len;
@@ -620,6 +618,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                             }
                         }
+                    }else {
+                        channel->srate *= 1.5f;
                     }
                 }else {
                     channel->flush_len = 0;
