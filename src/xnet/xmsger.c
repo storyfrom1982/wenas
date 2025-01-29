@@ -645,7 +645,39 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // 不使用任何策略， 测试 ipv6
             __xlogd("recv ack -------------- send pack %u\n", __serialbuf_readable(channel->sendbuf));
-            xchannel_send_pack(channel);
+
+            pack = channel->flushlist.head.next;
+            if (pack != &channel->flushlist.head && (int64_t)((pack->ts + pack->elapsed) - __xapi->clock()) < 0) {
+                // 判断重传的包是否带有 ACK
+                if (pack->head.ack.type != 0){
+                    // 更新 ACKS
+                    // 是 recvbuf->wpos 而不是 __serialbuf_wpos(channel->recvbuf) 否则会造成接收端缓冲区溢出的 BUG
+                    pack->head.ack.pos = channel->recvbuf->wpos;
+                    // TODO ack 也要更新
+                }
+
+                __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Threshold[%u] Delay[%lu:%lu]\n", 
+                        pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
+                        pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn, 
+                        channel->threshold, channel->back_delay / 1000000UL, pack->elapsed / 1000000UL);
+
+                // 判断发送是否成功
+                if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
+                    // 记录重传次数
+                    pack->head.resend++;
+                    // 最后一个待确认包的超时时间加上平均往返时长
+                    pack->elapsed *= XCHANNEL_RESEND_STEPPING;
+                    // 列表中如果只有一个成员，就不能更新包的位置
+                    if (channel->flushlist.len > 1){
+                        // 重传之后的包放入队尾
+                        __ring_list_move_to_end(&channel->flushlist, pack);
+                    }
+                }else {
+                    __xlogd(">>>>------------------------> SEND FAILED\n");
+                }
+            }else {
+                xchannel_send_pack(channel);
+            }
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
