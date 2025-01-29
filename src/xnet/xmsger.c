@@ -610,11 +610,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             }else {
                                 channel->flush_count++;
                                 if (channel->flush_count > 3){
-                                    if (channel->flush_len < channel->threshold){
-                                        channel->srate *= 0.9f;
-                                        __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                            channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
-                                    }
+                                    channel->srate *= 0.9f;
+                                    __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                                        channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                                     channel->flush_len = 0;
                                 }
                             }
