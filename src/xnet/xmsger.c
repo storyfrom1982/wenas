@@ -613,13 +613,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     channel->flush_len = 0;
                                 }
                             }
-                            __xlogd("flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
+                            __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                                channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                         }
                     }
                 }else {
                     channel->flush_len = 0;
-                    // channel->srate = channel->average_rate;
-                    channel->srate = channel->back_delay / channel->threshold;
+                    channel->srate = channel->average_rate;
+                    // channel->srate = channel->back_delay / channel->threshold;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
