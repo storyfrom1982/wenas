@@ -9,7 +9,8 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  64
+#define XPACK_SERIAL_RANGE  128
+#define XPACK_SEND_RATE     100000UL // 0.1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -213,12 +214,12 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = serial_range >> 1;
+    channel->threshold = serial_range;
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
     channel->flush_count = 0;
     channel->hz_radio = 1.0f;
-    channel->srate = 1000000UL; // 1 毫秒
+    channel->srate = XPACK_SEND_RATE;
     channel->back_delay = 80000000UL;
     // channel->rid = XNONE;
 
@@ -592,37 +593,37 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                if (channel->spos != channel->len){
-                    if (pack->srate == channel->srate){
-                        if (channel->flush_len == 0){
-                            channel->flush_len = channel->flushlist.len;
-                            channel->flush_count = 0;
-                            __xlogd("begin flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
-                        }else {
+                // if (channel->spos != channel->len){
+                //     if (pack->srate == channel->srate){
+                //         if (channel->flush_len == 0){
+                //             channel->flush_len = channel->flushlist.len;
+                //             channel->flush_count = 0;
+                //             __xlogd("begin flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                //                 channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
+                //         }else {
 
-                            if (channel->flushlist.len > channel->flush_len){
-                                channel->flush_count--;
-                                if (channel->flush_count < -3){
-                                    channel->srate *= 1.5f;
-                                    channel->flush_len = 0;
-                                }
-                            }else {
-                                channel->flush_count++;
-                                if (channel->flush_count > 3){
-                                    channel->srate *= 0.9f;
-                                    __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                        channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
-                                    channel->flush_len = 0;
-                                }
-                            }
-                        }
-                    }
-                }else {
-                    channel->flush_len = 0;
-                    channel->srate = channel->average_rate;
-                    // channel->srate = channel->back_delay / channel->threshold;
-                }
+                //             if (channel->flushlist.len > channel->flush_len){
+                //                 channel->flush_count--;
+                //                 if (channel->flush_count < -3){
+                //                     channel->srate *= 1.5f;
+                //                     channel->flush_len = 0;
+                //                 }
+                //             }else {
+                //                 channel->flush_count++;
+                //                 if (channel->flush_count > 3){
+                //                     channel->srate *= 0.9f;
+                //                     __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                //                         channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
+                //                     channel->flush_len = 0;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // }else {
+                //     channel->flush_len = 0;
+                //     channel->srate = channel->average_rate;
+                //     // channel->srate = channel->back_delay / channel->threshold;
+                // }
 
                 __ring_list_take_out(&channel->flushlist, pack);
             }
@@ -642,8 +643,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
 
-            // // 不使用任何策略， 测试 ipv6
-            // xchannel_send_pack(channel);
+            // 不使用任何策略， 测试 ipv6
+            xchannel_send_pack(channel);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
@@ -901,21 +902,16 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold)
-            if (channel->flushlist.len < channel->threshold)
-            {
-                delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
-                if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
+            if (__serialbuf_readable(channel->sendbuf) < channel->serial_range){
+                delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
+                if (delay > 0){ // 不超过 100 微秒区间都可以发送
+                    if (msger->timer > delay){
+                        msger->timer = delay;
+                    }
+                }else {
                     xchannel_send_pack(channel);
-                }else if (msger->timer > delay){
-                    msger->timer = delay;
                 }
             }
-
-            // // 不使用任何策略，测试 ipv6
-            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-            //     xchannel_send_pack(channel);
-            // }
 
             if (channel->flushlist.len > 0){
 
