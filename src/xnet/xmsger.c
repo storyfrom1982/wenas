@@ -216,7 +216,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->flush_len = 0;
     channel->flush_count = 0;
     channel->hz_radio = 1.0f;
-    channel->srate = 1000000UL; // 1 毫秒
+    channel->srate = 100000UL; // 0.1 毫秒
     channel->back_delay = 160000000UL;
     // channel->rid = XNONE;
 
@@ -620,7 +620,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     }
                 }else {
                     channel->flush_len = 0;
-                    channel->srate = 1000000UL;
+                    channel->srate = 100000UL;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
