@@ -614,10 +614,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                         channel->srate *= 0.9f;
                                         __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
                                             channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
-                                    }else {
-                                        channel->srate *= 1.5f;
-                                        __xlogd("+++++++ flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                            channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                                     }
                                     channel->flush_len = 0;
                                 }
