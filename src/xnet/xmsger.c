@@ -905,12 +905,13 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            // 缓冲少于阈值时，在这里发送，剩余的可写缓冲区留给回复 ACK 时候，如果有数据待发送，可以与 ACK 一起发送
-            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-            //     xchannel_send_pack(channel);
-            // }
-            if (__xapi->clock() - channel->timestamp >= channel->srate && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
-                xchannel_send_pack(channel);
+            if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+                delay = (int64_t)((channel->srate - __xapi->clock() - channel->timestamp));
+                if (delay < 100000L){ // 不超过 100 微秒区间都可以发送
+                    xchannel_send_pack(channel);
+                }else if (msger->timer > delay){
+                    msger->timer = delay;
+                }
             }
 
             if (channel->flushlist.len > 0){
