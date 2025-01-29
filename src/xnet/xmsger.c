@@ -44,8 +44,8 @@ typedef struct xhead {
 
 typedef struct xpack {
     uint64_t ts; // 计算往返耗时
-    uint64_t delay; // 累计超时时长
-    uint64_t interval;
+    uint64_t srate; // 发包频率
+    uint64_t elapsed; // 累计超时时长
     xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -85,7 +85,7 @@ struct xchannel {
     uint8_t flush_len;
     int8_t flush_count;
     float hz_radio;
-    uint64_t hz;
+    uint64_t srate;
     uint64_t timestamp;
 
     uint16_t back_times;
@@ -216,7 +216,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->flush_len = 0;
     channel->flush_count = 0;
     channel->hz_radio = 1.0f;
-    channel->hz = 4000000UL; // 4 毫秒
+    channel->srate = 1000000UL; // 1 毫秒
     channel->back_delay = 160000000UL;
     // channel->rid = XNONE;
 
@@ -376,7 +376,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         msg->range--;
 
         pack->channel = channel;
-        pack->delay = channel->back_delay;
+        pack->elapsed = channel->back_delay;
         pack->head.resend = 0;
         pack->head.ack.type = 0;
         pack->head.ack.pos = channel->serial_range; // 只有每个连接的第一个包会用到
@@ -425,7 +425,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             channel->spos += pack->head.len;
 
-            pack->interval = channel->hz;
+            pack->srate = channel->srate;
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
@@ -436,7 +436,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             //         pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
             //     }
             // }
-            pack->delay = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
+            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -594,33 +594,33 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->spos != channel->len){
-                    if (pack->interval == channel->hz){
+                    if (pack->srate == channel->srate){
                         if (channel->flush_len == 0){
                             channel->flush_len = channel->flushlist.len;
-                            channel->flush_count = 1;
-                            __xlogd("1 flush len = %u list len = %u count = %d hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->hz);
+                            channel->flush_count = 0;
+                            __xlogd("1 flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
                         }else {
                             if (channel->flushlist.len > channel->flush_len){
                                 channel->flush_count--;
-                                if (channel->flush_count == (channel->flush_len * -1)){
-                                    channel->hz *= 1.1f;
+                                if (channel->flush_count == -3){
+                                    channel->srate *= 1.5f;
                                     channel->flush_len = 0;
                                 }
                             }else {
                                 channel->flush_count++;
-                                if (channel->flush_count == channel->flush_len){
-                                    if (channel->hz > 0){
-                                        channel->hz *= 0.9f;
+                                if (channel->flush_count == 3){
+                                    if (channel->srate > 0){
+                                        channel->srate *= 0.9f;
                                     }
                                     channel->flush_len = 0;
                                 }
                             }
-                            __xlogd("1 flush len = %u list len = %u count = %d hz=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->hz);
+                            __xlogd("1 flush len = %u list len = %u count = %d srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->srate);
                         }
                     }
                 }else {
                     channel->flush_len = 0;
-                    channel->hz = 4000000UL;
+                    channel->srate = 4000000UL;
                 }
 
                 __ring_list_take_out(&channel->flushlist, pack);
@@ -711,7 +711,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                pack->delay *= XCHANNEL_RESEND_STEPPING;
+                                pack->elapsed *= XCHANNEL_RESEND_STEPPING;
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
                             }
@@ -909,7 +909,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
             //     xchannel_send_pack(channel);
             // }
-            if (__xapi->clock() - channel->timestamp >= channel->hz && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
+            if (__xapi->clock() - channel->timestamp >= channel->srate && __serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
                 xchannel_send_pack(channel);
             }
 
@@ -920,7 +920,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 while (spack != &channel->flushlist.head)
                 {
                     npack = spack->next;
-                    delay = (int64_t)((spack->ts + spack->delay) - __xapi->clock());
+                    delay = (int64_t)((spack->ts + spack->elapsed) - __xapi->clock());
                     if (delay >= 0) {
                         // 未超时
                         if (msger->timer > delay){
@@ -932,12 +932,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                     }else {
 
-                        if (spack->delay > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
+                        if (spack->elapsed > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                         {
                             if (!channel->timedout){
                                 channel->timedout = true;
                                 __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) delay(%lu)\n", 
-                                        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, spack->delay / 1000000UL);
+                                        __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, spack->elapsed / 1000000UL);
                                 msger->cb->on_message_timedout(msger->cb, channel, spack->msg);
                             }
                             break;
@@ -957,14 +957,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Threshold[%u] Delay[%lu:%lu]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                    channel->threshold, channel->back_delay / 1000000UL, spack->delay / 1000000UL);
+                                    channel->threshold, channel->back_delay / 1000000UL, spack->elapsed / 1000000UL);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                                 // 记录重传次数
                                 spack->head.resend++;
                                 // 最后一个待确认包的超时时间加上平均往返时长
-                                spack->delay *= XCHANNEL_RESEND_STEPPING;
+                                spack->elapsed *= XCHANNEL_RESEND_STEPPING;
                                 // 列表中如果只有一个成员，就不能更新包的位置
                                 if (channel->flushlist.len > 1){
                                     // 重传之后的包放入队尾
