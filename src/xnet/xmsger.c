@@ -688,11 +688,11 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
-            if (((rpack->head.ack.sn - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) >= 2){
+            if (((rpack->head.ack.sn - channel->sendbuf->rpos) & (channel->sendbuf->range - 1)) >= 0){
                 // 使用临时变量
                 uint8_t index = channel->sendbuf->rpos;
                 // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
-                // while (index != rpack->head.ack.sn)
+                while (index != rpack->head.ack.sn)
                 {
                     // 取出落后的包
                     pack = &channel->sendbuf->buf[(index & (channel->sendbuf->range - 1))];
@@ -712,6 +712,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 pack->elapsed *= XCHANNEL_RESEND_STEPPING;
+                                break; // 每次只重传一个包
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
                             }
