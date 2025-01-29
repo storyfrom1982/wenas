@@ -600,26 +600,27 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             __xlogd("begin flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
                                 channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                         }else {
-                            if (channel->flush_len < channel->threshold){
-                                if (channel->flushlist.len > channel->flush_len){
-                                    channel->flush_count--;
-                                    if (channel->flush_count < -3){
-                                        channel->srate *= 1.5f;
-                                        channel->flush_len = 0;
-                                    }
-                                }else {
-                                    channel->flush_count++;
-                                    if (channel->flush_count > 3){
+
+                            if (channel->flushlist.len > channel->flush_len){
+                                channel->flush_count--;
+                                if (channel->flush_count < -3){
+                                    channel->srate *= 1.5f;
+                                    channel->flush_len = 0;
+                                }
+                            }else {
+                                channel->flush_count++;
+                                if (channel->flush_count > 3){
+                                    channel->flush_len = 0;
+                                    if (channel->flush_len < channel->threshold){
                                         channel->srate *= 0.9f;
-                                        channel->flush_len = 0;
+                                        __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                                            channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
+                                    }else {
+                                        channel->srate *= 1.5f;
+                                        __xlogd("+++++++ flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
+                                            channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                                     }
                                 }
-                                __xlogd("----- flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                    channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
-                            }else {
-                                channel->srate *= 1.5f;
-                                __xlogd("+++++++ flush len = %u list len = %u count = %d delay = %lu arate=%lu srate=%lu\n", 
-                                    channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->average_rate, channel->srate);
                             }
                         }
                     }
