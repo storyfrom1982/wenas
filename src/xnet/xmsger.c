@@ -583,8 +583,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->back_range += __xapi->clock() - pack->ts;
                 channel->all_rate += channel->srate;
 
-                pack->ts = 0;
-
                 if (channel->back_times < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
                     channel->back_times++;
@@ -602,19 +600,23 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->srate == 0){
+                    __xlogd("stream ts = %lu pack ts = %lu\n", channel->stream_ts, pack->ts);
                     if (pack->ts == channel->stream_ts){
                         channel->sbegin = __xapi->clock();
                         channel->scount = 1;
                     }else {
                         if ((int64_t)((__xapi->clock() - channel->sbegin) - channel->back_delay) > 0){
                             channel->scount++;
+                            __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                         }else {
                             channel->srate = channel->back_delay / channel->scount;
                             channel->sbegin = channel->stream_ts = 0;
-                            __xlogd("delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
+                            __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                         }
                     }
                 }
+
+                pack->ts = 0;
 
                 __ring_list_take_out(&channel->flushlist, pack);
             }
