@@ -83,14 +83,11 @@ struct xchannel {
 
     uint16_t serial_range;
     uint16_t threshold;
-    uint16_t flush_len;
     int16_t scount;
-    float hz_radio;
+    uint64_t arate;
     uint64_t srate;
     uint64_t sbegin;
     uint64_t stream_ts;
-    uint64_t average_rate;
-    uint64_t all_rate;
     uint64_t timestamp;
 
     uint16_t back_times;
@@ -218,9 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->serial_range = serial_range;
     channel->threshold = 0;
     channel->timestamp = __xapi->clock();
-    channel->flush_len = 0;
     channel->scount = 0;
-    channel->hz_radio = 1.0f;
     channel->srate = 0;
     channel->back_delay = 80000000UL;
     // channel->rid = XNONE;
@@ -583,7 +578,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 // 累计新的一次往返时长
                 channel->back_range += __xapi->clock() - pack->ts;
-                channel->all_rate += channel->srate;
 
                 if (channel->back_times < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
@@ -591,35 +585,30 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->back_range -= channel->back_delay;
-                    channel->all_rate -= channel->average_rate;
                 }
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
-                channel->average_rate = channel->all_rate / channel->back_times;
 
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                if (channel->srate == 0){
-                    __xlogd("stream ts = %lu pack ts = %lu sbegin = %lu\n", channel->stream_ts, pack->ts, channel->sbegin);
-                    if (channel->stream_ts != 0){
-                        if (pack->ts == channel->stream_ts){
-                            __xlogd("stream 1\n");
-                            channel->sbegin = __xapi->clock();
-                            channel->scount = 1;
-                        }else if (channel->scount > 0){
-                            __xlogd("stream 2\n");
-                            if (__xapi->clock() - channel->sbegin < channel->back_delay){
-                                __xlogd("stream 3\n");
-                                channel->scount++;
-                                __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                            }else {
-                                __xlogd("stream 4\n");
-                                channel->srate = channel->back_delay / channel->scount;
-                                channel->sbegin = channel->stream_ts = 0;
-                                __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                            }
+                if (channel->stream_ts != 0){
+                    if (pack->ts == channel->stream_ts){
+                        __xlogd("stream 1\n");
+                        channel->sbegin = __xapi->clock();
+                        channel->scount = 1;
+                    }else if (channel->scount > 0){
+                        __xlogd("stream 2\n");
+                        if (__xapi->clock() - channel->sbegin < channel->back_delay){
+                            __xlogd("stream 3\n");
+                            channel->scount++;
+                            __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
+                        }else {
+                            __xlogd("stream 4\n");
+                            channel->srate = channel->back_delay / channel->scount;
+                            channel->sbegin = channel->stream_ts = 0;
+                            __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                         }
                     }
                 }
