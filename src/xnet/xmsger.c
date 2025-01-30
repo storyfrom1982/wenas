@@ -600,13 +600,13 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->srate == 0){
-                    __xlogd("stream ts = %lu pack ts = %lu\n", channel->stream_ts, pack->ts);
+                    __xlogd("stream ts = %lu pack ts = %lu sbegin = %lu\n", channel->stream_ts, pack->ts, channel->sbegin);
                     if (channel->stream_ts != 0){
                         if (pack->ts == channel->stream_ts){
                             channel->sbegin = __xapi->clock();
                             channel->scount = 1;
                         }else {
-                            if ((int64_t)((__xapi->clock() - channel->sbegin) - channel->back_delay) > 0){
+                            if ((int64_t)(channel->back_delay - (__xapi->clock() - channel->sbegin)) > 0){
                                 channel->scount++;
                                 __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                             }else {
