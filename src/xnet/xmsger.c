@@ -601,13 +601,13 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                         if (channel->flushlist.len > channel->threshold){
                             channel->flush_count--;
-                            if (channel->flush_count == -3){
+                            if (channel->flush_count < -3){
                                 channel->srate *= 1.5f;
                             }
                             __xlogd("++ flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
                         }else {
                             channel->flush_count++;
-                            if (channel->flush_count == 3){
+                            if (channel->flush_count > 3){
                                 if (channel->srate > 0){
                                     channel->srate *= 0.9f;
                                 }
