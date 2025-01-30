@@ -601,7 +601,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 if (channel->srate == 0){
                     __xlogd("stream ts = %lu pack ts = %lu\n", channel->stream_ts, pack->ts);
-                    if (pack->ts == channel->stream_ts){
+                    if (channel->stream_ts != 0 && pack->ts == channel->stream_ts){
                         channel->sbegin = __xapi->clock();
                         channel->scount = 1;
                     }else {
