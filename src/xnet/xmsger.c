@@ -5,7 +5,7 @@
 
 #include "xlib/avlmini.h"
 
-#define XHEAD_SIZE          64
+#define XHEAD_SIZE          128
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
@@ -220,7 +220,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
     channel->flush_count = 0;
     channel->hz_radio = 1.0f;
     channel->srate = XPACK_SEND_RATE;
-    channel->back_delay = 80000000UL;
+    channel->back_delay = 100000000UL;
     // channel->rid = XNONE;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -672,9 +672,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         // 重传之后的包放入队尾
                         __ring_list_move_to_end(&channel->flushlist, pack);
                     }
-                    if (channel->threshold > (channel->serial_range >> 2)){
-                        channel->threshold--;
-                    }
+                    // if (channel->threshold > (channel->serial_range >> 2)){
+                    //     channel->threshold--;
+                    // }
                 }else {
                     __xlogd(">>>>------------------------> SEND FAILED\n");
                 }
@@ -1007,9 +1007,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
-                                if (channel->threshold > (channel->serial_range >> 2)){
-                                    channel->threshold--;
-                                }
+                                // if (channel->threshold > (channel->serial_range >> 2)){
+                                //     channel->threshold--;
+                                // }
                             }else {
                                 __xlogd(">>>>------------------------> SEND FAILED\n");
                             }
