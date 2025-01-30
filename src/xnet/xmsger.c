@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  1024
+#define XPACK_SERIAL_RANGE  128
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -544,12 +544,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
     // __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n",
     //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
-    //         (uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
+    //         (uint16_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint16_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
 
     // 只处理 sn 在 rpos 与 spos 之间的 xpack
     if (__serialbuf_recvable(channel->sendbuf) > 0 
-        && ((uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos) 
-        <= (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos))){
+        && ((uint16_t)(rpack->head.ack.sn - channel->sendbuf->rpos) 
+        <= (uint16_t)(channel->sendbuf->spos - channel->sendbuf->rpos))){
 
         xpack_ptr pack;
 
@@ -560,12 +560,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
         // 如果没有丢包，第一个顺序到达的 acks 一定等于 ack，但是如果这个包丢了，acks 就会不等于 ack
         // 所以每次都要检测 rpos 是否等于 asks
 
-        uint8_t index = __serialbuf_rpos(channel->sendbuf);
+        uint16_t index = __serialbuf_rpos(channel->sendbuf);
 
         // 这里曾经使用 do while 方式，造成了收到重复的 ACK，导致 rpos 越界的 BUG
         // 连续的 acks 必须至少比 rpos 大 1
-        while ((uint8_t)(rpack->head.ack.pos - channel->sendbuf->rpos) 
-                <= (uint8_t)(channel->sendbuf->spos - channel->sendbuf->rpos) // 防止后到的 acks 比之前的 acks 和 rpos 小，导致 rpos 越界
+        while ((uint16_t)(rpack->head.ack.pos - channel->sendbuf->rpos) 
+                <= (uint16_t)(channel->sendbuf->spos - channel->sendbuf->rpos) // 防止后到的 acks 比之前的 acks 和 rpos 小，导致 rpos 越界
                 && channel->sendbuf->rpos != rpack->head.ack.pos) {
 
             pack = &channel->sendbuf->buf[index];
@@ -683,9 +683,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
-            if (((uint8_t)(rpack->head.ack.sn - channel->sendbuf->rpos)) > 3){
+            if (((uint16_t)(rpack->head.ack.sn - channel->sendbuf->rpos)) > 3){
                 // 使用临时变量
-                uint8_t index = channel->sendbuf->rpos;
+                uint16_t index = channel->sendbuf->rpos;
                 // 实时重传 rpos 到 SN 之间的所有尚未确认的 SN
                 while (index != rpack->head.ack.sn)
                 {
@@ -771,7 +771,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
     }else {
 
         // SN 不在 rpos 与 wpos 之间
-        if ((uint8_t)(channel->recvbuf->wpos - pack->head.sn) > (uint8_t)(pack->head.sn - channel->recvbuf->wpos)){
+        if ((uint16_t)(channel->recvbuf->wpos - pack->head.sn) > (uint16_t)(pack->head.sn - channel->recvbuf->wpos)){
 
             // SN 在 wpos 方向越界，是提前到达的 PACK
 
