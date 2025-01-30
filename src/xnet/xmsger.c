@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  128
+#define XPACK_SERIAL_RANGE  1024
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -20,18 +20,18 @@
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
-    uint8_t type; // 包类型
-    uint8_t sn; // 序列号
-    uint8_t resend; // 重传计数
+    uint16_t type; // 包类型
+    uint16_t sn; // 序列号
+    uint16_t resend; // 重传计数
     struct{
-        uint8_t type; // 标志着是否附带了 ACK 和 ACK 确认的包类型
-        uint8_t sn; // 确认收到了序列号为 sn 的包
-        uint8_t pos; // 确认收到了 pos 之前的所有包
+        uint16_t type; // 标志着是否附带了 ACK 和 ACK 确认的包类型
+        uint16_t sn; // 确认收到了序列号为 sn 的包
+        uint16_t pos; // 确认收到了 pos 之前的所有包
     }ack;
     uint16_t cid; // 通道 ID
     uint16_t len; // 当前分包的数据长度
     uint16_t range; // 一个消息的分包数量，从 1 到 range
-    uint8_t flags[20]; // 扩展标志位
+    uint8_t flags[14]; // 扩展标志位
     uint8_t secret[32]; // 密钥
 }*xhead_ptr;
 
@@ -55,22 +55,22 @@ typedef struct xpack {
 }*xpack_ptr;
 
 struct xpacklist {
-    uint8_t len;
+    uint16_t len;
     struct xpack head;
 };
 
 typedef struct serialbuf {
-    uint8_t range, spos, rpos, wpos;
+    uint16_t range, spos, rpos, wpos;
     struct xpack *buf[1];
 }*serialbuf_ptr;
 
 typedef struct sserialbuf {
-    uint8_t range, spos, rpos, wpos;
+    uint16_t range, spos, rpos, wpos;
     struct xpack buf[1];
 }*sserialbuf_ptr;
 
 typedef struct xmsgbuf {
-    uint8_t range, spos, rpos, wpos;
+    uint16_t range, spos, rpos, wpos;
     xline_t *buf[1];
 }*xmsgbuf_ptr;
 
@@ -81,10 +81,10 @@ struct xchannel {
 
     int sock;
 
-    uint8_t serial_range;
-    uint8_t threshold;
-    uint8_t flush_len;
-    int8_t flush_count;
+    uint16_t serial_range;
+    uint16_t threshold;
+    uint16_t flush_len;
+    int16_t flush_count;
     float hz_radio;
     uint64_t srate;
     uint64_t average_rate;
@@ -146,11 +146,11 @@ struct xmsger {
 #define __serialbuf_rpos(b)         ((b)->rpos & ((b)->range - 1))
 #define __serialbuf_spos(b)         ((b)->spos & ((b)->range - 1))
 
-#define __serialbuf_recvable(b)     ((uint8_t)((b)->spos - (b)->rpos))
-#define __serialbuf_sendable(b)     ((uint8_t)((b)->wpos - (b)->spos))
+#define __serialbuf_recvable(b)     ((uint16_t)((b)->spos - (b)->rpos))
+#define __serialbuf_sendable(b)     ((uint16_t)((b)->wpos - (b)->spos))
 
-#define __serialbuf_readable(b)     ((uint8_t)((b)->wpos - (b)->rpos))
-#define __serialbuf_writable(b)     ((uint8_t)((b)->range - (b)->wpos + (b)->rpos))
+#define __serialbuf_readable(b)     ((uint16_t)((b)->wpos - (b)->rpos))
+#define __serialbuf_writable(b)     ((uint16_t)((b)->range - (b)->wpos + (b)->rpos))
 
 #define __ring_list_take_out(rlist, rnode) \
     (rnode)->prev->next = (rnode)->next; \
@@ -207,7 +207,7 @@ XClean:
 }
 
 
-static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_range)
+static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_range)
 {
     xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
     __xcheck(channel == NULL);
@@ -643,7 +643,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             // // 不使用任何策略， 测试 ipv6
-            // xchannel_send_pack(channel);
+            xchannel_send_pack(channel);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
