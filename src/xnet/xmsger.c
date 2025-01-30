@@ -592,16 +592,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                     channel->stream_druation = current - channel->stream_begin;
 
-                    if (channel->stream_count < XPACK_SERIAL_RANGE){
-                        channel->stream_count++;
-                    }else {
-                        channel->stream_druation -= channel->stream_rate;
+                    channel->stream_count++;
+                    if (channel->stream_count > XPACK_SERIAL_RANGE){                        
                         channel->stream_rate = channel->stream_druation / channel->stream_count;
                         channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
                     }
 
-                    __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u\n", 
-                            channel->back_delay, channel->stream_druation, channel->stream_rate, channel->threshold);
+                    __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
+                            channel->back_delay, channel->stream_druation, channel->stream_rate, channel->threshold, channel->stream_count);
                 }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
