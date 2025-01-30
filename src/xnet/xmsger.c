@@ -439,7 +439,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             //         pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
             //     }
             // }
-            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
+            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING * 4;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -902,7 +902,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // readable 是已经写入缓冲区还尚未发送的包
             if (__serialbuf_readable(channel->sendbuf) < channel->serial_range){
                 delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
-                if (delay > 100000L){ // 不超过 100 微秒区间都可以发送
+                if (delay > 0){
                     if (msger->timer > delay){
                         msger->timer = delay;
                     }
@@ -960,7 +960,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Threshold[%u] Delay[%lu:%lu]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                    channel->threshold, channel->back_delay / 1000000UL, spack->elapsed / 1000000UL);
+                                    channel->threshold, channel->timestamp / 1000000UL, spack->elapsed / 1000000UL);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
