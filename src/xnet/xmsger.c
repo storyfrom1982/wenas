@@ -433,13 +433,14 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
             // if (channel->flushlist.len > 0){
+            //     __xcheck(channel->flushlist.head.prev->ts == pack->ts);
             //     // 均匀发送时间戳，避免一次性重传所有包
             //     if (pack->ts < (channel->flushlist.head.prev->ts + (channel->back_delay >> 1))){
             //         // 时间戳设置为前一个 pack 的基础上加往返时间的 1/2
             //         pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
             //     }
             // }
-            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING * 4;
+            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -960,7 +961,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Threshold[%u] Delay[%lu:%lu]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                    channel->threshold, channel->timestamp / 1000000UL, spack->elapsed / 1000000UL);
+                                    channel->threshold, spack->ts / 1000000UL, spack->elapsed / 1000000UL);
 
                             // 判断发送是否成功
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
