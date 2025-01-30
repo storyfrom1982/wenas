@@ -603,14 +603,17 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     __xlogd("stream ts = %lu pack ts = %lu sbegin = %lu\n", channel->stream_ts, pack->ts, channel->sbegin);
                     if (channel->stream_ts != 0){
                         if (pack->ts == channel->stream_ts){
+                            __xlogd("stream 1\n");
                             channel->sbegin = __xapi->clock();
                             channel->scount = 1;
                         }else {
-                            __xlogd("start delay = %lu sbegin = %lu  %ld\n", channel->back_delay, channel->sbegin, (int64_t)(__xapi->clock() - channel->sbegin));
-                            if ((int64_t)(__xapi->clock() - channel->sbegin) < channel->back_delay){
+                            __xlogd("stream 2\n");
+                            if (__xapi->clock() - channel->sbegin < channel->back_delay){
+                                __xlogd("stream 3\n");
                                 channel->scount++;
                                 __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                             }else {
+                                __xlogd("stream 4\n");
                                 channel->srate = channel->back_delay / channel->scount;
                                 channel->sbegin = channel->stream_ts = 0;
                                 __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
