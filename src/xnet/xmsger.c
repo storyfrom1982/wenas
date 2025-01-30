@@ -429,7 +429,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             channel->spos += pack->head.len;
             if (channel->spos != channel->len){
-                channel->stream_begin = pack->ts;
+                if (channel->stream_begin == 0){
+                    channel->stream_begin = pack->ts;
+                }
             }else {
                 channel->stream_begin = 0;
                 channel->stream_count = 0;
