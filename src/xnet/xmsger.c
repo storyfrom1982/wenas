@@ -10,7 +10,7 @@
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
 #define XPACK_SERIAL_RANGE  128
-#define XPACK_SEND_RATE     2000000UL // 1 毫秒
+#define XPACK_SEND_RATE     4000000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -973,10 +973,10 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
-                                // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
-                                if (channel->threshold > (channel->serial_range >> 3)){
-                                    channel->threshold--;
-                                }
+                                // // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
+                                // if (channel->threshold > (channel->serial_range >> 3)){
+                                //     channel->threshold--;
+                                // }
                             }else {
                                 __xlogd(">>>>------------------------> SEND FAILED\n");
                             }
