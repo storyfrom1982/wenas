@@ -908,6 +908,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     }
                 }else {
                     xchannel_send_pack(channel);
+                    xchannel_send_pack(channel);
+                    xchannel_send_pack(channel);
+                    xchannel_send_pack(channel);
                 }
             }
 
