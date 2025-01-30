@@ -214,7 +214,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint8_t serial_rang
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = serial_range;
+    channel->threshold = 0;
     channel->timestamp = __xapi->clock();
     channel->flush_len = 0;
     channel->flush_count = 0;
@@ -594,32 +594,30 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 if (channel->spos != channel->len){
+                    if (channel->threshold == 0){
+                        channel->threshold = channel->flushlist.len;
+                    }
                     if (pack->srate == channel->srate){
-                        if (channel->flush_len == 0){
-                            channel->flush_len = channel->flushlist.len;
-                            channel->flush_count = 0;
-                            __xlogd("begin flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
+
+                        if (channel->flushlist.len > channel->threshold){
+                            channel->flush_count--;
+                            if (channel->flush_count == -3){
+                                channel->srate *= 1.5f;
+                            }
+                            __xlogd("++ flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
                         }else {
-                            if (channel->flushlist.len == channel->threshold -1 || channel->flushlist.len > channel->flush_len){
-                                channel->flush_count--;
-                                if (channel->flush_count == -3){
-                                    channel->srate *= 1.5f;
-                                    channel->flush_len = 0;
-                                }
-                            }else {
-                                channel->flush_count++;
-                                if (channel->flush_count == 3){
-                                    if (channel->srate > 0){
-                                        channel->srate *= 0.9f;
-                                    }
-                                    channel->flush_len = 0;
+                            channel->flush_count++;
+                            if (channel->flush_count == 3){
+                                if (channel->srate > 0){
+                                    channel->srate *= 0.9f;
                                 }
                             }
-                            __xlogd("flush len = %u list len = %u count = %d delay = %lu srate=%lu\n", channel->flush_len, channel->flushlist.len, channel->flush_count, channel->back_delay, channel->srate);
+                            __xlogd("-- flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
                         }
                     }
                 }else {
                     channel->flush_len = 0;
+                    channel->threshold = 0;
                     channel->srate = channel->average_rate;
                 }
 
@@ -900,7 +898,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+            if (__serialbuf_readable(channel->sendbuf) < channel->serial_range){
                 delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
                 if (delay > 100000L){ // 不超过 100 微秒区间都可以发送
                     if (msger->timer > delay){
@@ -973,10 +971,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     // 重传之后的包放入队尾
                                     __ring_list_move_to_end(&channel->flushlist, spack);
                                 }
-                                // // 重传一次，缓冲阈值就减 1，直到阈值等于最小设定阈值
-                                // if (channel->threshold > (channel->serial_range >> 3)){
-                                //     channel->threshold--;
-                                // }
                             }else {
                                 __xlogd(">>>>------------------------> SEND FAILED\n");
                             }
