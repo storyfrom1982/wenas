@@ -611,6 +611,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         }else {
                             channel->srate = channel->back_delay / channel->scount;
                             channel->sbegin = channel->stream_ts = 0;
+                            __xlogd("delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                         }
                     }
                 }
