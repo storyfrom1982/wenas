@@ -428,15 +428,15 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->timestamp = pack->ts;
 
             channel->spos += pack->head.len;
-            if (channel->spos != channel->len){
-                if (channel->stream_begin == 0){
-                    channel->stream_begin = pack->ts;
-                }
-            }else {
-                channel->stream_begin = 0;
-                channel->stream_count = 0;
-            }
-            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING;
+            // if (channel->spos != channel->len){
+            //     if (channel->stream_begin == 0){
+            //         channel->stream_begin = pack->ts;
+            //     }
+            // }else {
+            //     channel->stream_begin = 0;
+            //     channel->stream_count = 0;
+            // }
+            pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING * 2;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -588,18 +588,18 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
 
-                if (channel->stream_begin > 0){
-                    channel->stream_count++;
-                    channel->stream_druation = current - channel->stream_begin;
-                    if (channel->stream_count > XPACK_SERIAL_RANGE){                        
-                        channel->stream_rate = channel->stream_druation / channel->stream_count;
-                        if (channel->flushlist.len < channel->threshold){
-                            xchannel_send_pack(channel);
-                        }
-                    }
-                    __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
-                            channel->back_delay, channel->stream_druation, channel->stream_rate, channel->flushlist.len, channel->stream_count);
-                }
+                // if (channel->stream_begin > 0){
+                //     channel->stream_count++;
+                //     channel->stream_druation = current - channel->stream_begin;
+                //     if (channel->stream_count > XPACK_SERIAL_RANGE){                        
+                //         channel->stream_rate = channel->stream_druation / channel->stream_count;
+                //         if (channel->flushlist.len < channel->threshold){
+                //             xchannel_send_pack(channel);
+                //         }
+                //     }
+                //     __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
+                //             channel->back_delay, channel->stream_druation, channel->stream_rate, channel->flushlist.len, channel->stream_count);
+                // }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
