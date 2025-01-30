@@ -434,7 +434,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
-            channel->stream_ts = pack->ts;
+            if (channel->stream_ts == 0){
+                channel->stream_ts = pack->ts;
+            }
             // if (channel->flushlist.len > 0){
             //     __xcheck(channel->flushlist.head.prev->ts == pack->ts);
             //     // 均匀发送时间戳，避免一次性重传所有包
