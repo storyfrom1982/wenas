@@ -454,6 +454,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
     }else {
         
         channel->stream_ts = 0;
+        channel->scount = 0;
     }
 }
 
@@ -593,23 +594,21 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                if (channel->stream_ts != 0){
-                    if (pack->ts == channel->stream_ts){
-                        __xlogd("stream 1\n");
-                        channel->sbegin = __xapi->clock();
-                        channel->scount = 1;
-                    }else if (channel->scount > 0){
-                        __xlogd("stream 2\n");
-                        if (__xapi->clock() - channel->sbegin < channel->back_delay){
-                            __xlogd("stream 3\n");
-                            channel->scount++;
-                            __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                        }else {
-                            __xlogd("stream 4\n");
-                            channel->srate = channel->back_delay / channel->scount;
-                            channel->sbegin = channel->stream_ts = 0;
-                            __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                        }
+                if (pack->ts == channel->stream_ts){
+                    __xlogd("stream 1\n");
+                    channel->sbegin = __xapi->clock();
+                    channel->scount = 1;
+                }else if (channel->scount > 0){
+                    __xlogd("stream 2\n");
+                    if (__xapi->clock() - channel->sbegin < channel->back_delay){
+                        __xlogd("stream 3\n");
+                        channel->scount++;
+                        __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
+                    }else {
+                        __xlogd("stream 4\n");
+                        channel->srate = channel->back_delay / channel->scount;
+                        channel->sbegin = channel->stream_ts = 0;
+                        __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                     }
                 }
 
