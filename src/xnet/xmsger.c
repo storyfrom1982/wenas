@@ -606,7 +606,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             channel->sbegin = __xapi->clock();
                             channel->scount = 1;
                         }else {
-                            if ((int64_t)(channel->back_delay - (__xapi->clock() - channel->sbegin)) > 0){
+                            __xlogd("start delay = %lu sbegin = %lu  %ld\n", channel->back_delay, channel->sbegin, (int64_t)(__xapi->clock() - channel->sbegin));
+                            if ((int64_t)(__xapi->clock() - channel->sbegin) < channel->back_delay){
                                 channel->scount++;
                                 __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
                             }else {
