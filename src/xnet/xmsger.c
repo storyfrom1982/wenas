@@ -594,7 +594,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     if (channel->stream_count > XPACK_SERIAL_RANGE){                        
                         channel->stream_rate = channel->stream_druation / channel->stream_count;
                         // channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
-                    }else {
                         if (channel->flushlist.len < (channel->threshold >> 1)){
                             xchannel_send_pack(channel);
                         }
