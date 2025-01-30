@@ -212,7 +212,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = 0;
+    channel->threshold = serial_range;
     channel->timestamp = __xapi->clock();
     channel->stream_count = 0;
     channel->stream_rate = 0;
