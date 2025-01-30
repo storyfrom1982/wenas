@@ -595,7 +595,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         channel->stream_rate = channel->stream_druation / channel->stream_count;
                         // channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
                     }else {
-                        channel->stream_count++;
+                        if (channel->flushlist.len < (channel->threshold >> 1)){
+                            xchannel_send_pack(channel);
+                        }
                     }
                     __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
                             channel->back_delay, channel->stream_druation, channel->stream_rate, channel->flushlist.len, channel->stream_count);
