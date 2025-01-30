@@ -422,7 +422,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录发送次数
             pack->head.resend = 1;
             pack->srate = channel->stream_rate;
-            
+
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
@@ -598,7 +598,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
                     }
 
-                    __xlogd("stream delay = %lu rate = %lu threshold = %u\n", channel->back_delay, channel->stream_rate, channel->threshold);
+                    __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u\n", 
+                            channel->back_delay, channel->stream_druation, channel->stream_rate, channel->threshold);
                 }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
