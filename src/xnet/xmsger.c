@@ -10,7 +10,7 @@
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
 #define XPACK_SERIAL_RANGE  128
-#define XPACK_SEND_RATE     1000000UL // 1 毫秒
+#define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -594,35 +594,35 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
-                if (channel->spos != channel->len){
-                    if (channel->threshold == 0){
-                        channel->threshold = channel->flushlist.len;
-                    }
-                    if (pack->srate == channel->srate){
+                // if (channel->spos != channel->len){
+                //     if (channel->threshold == 0){
+                //         channel->threshold = channel->flushlist.len;
+                //     }
+                //     if (pack->srate == channel->srate){
 
-                        if (channel->flushlist.len > channel->threshold){
-                            channel->flush_count--;
-                            if (channel->flush_count < -3){
-                                channel->srate *= 1.5f;
-                                channel->flush_count = 0;
-                            }
-                            __xlogd("++ flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
-                        }else {
-                            channel->flush_count++;
-                            if (channel->flush_count > 3){
-                                if (channel->srate > 0){
-                                    channel->srate *= 0.9f;
-                                    channel->flush_count = 0;
-                                }
-                            }
-                            __xlogd("-- flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
-                        }
-                    }
-                }else {
-                    channel->flush_len = 0;
-                    channel->threshold = 0;
-                    channel->srate = channel->average_rate;
-                }
+                //         if (channel->flushlist.len > channel->threshold){
+                //             channel->flush_count--;
+                //             if (channel->flush_count < -3){
+                //                 channel->srate *= 1.5f;
+                //                 channel->flush_count = 0;
+                //             }
+                //             __xlogd("++ flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
+                //         }else {
+                //             channel->flush_count++;
+                //             if (channel->flush_count > 3){
+                //                 if (channel->srate > 0){
+                //                     channel->srate *= 0.9f;
+                //                     channel->flush_count = 0;
+                //                 }
+                //             }
+                //             __xlogd("-- flush len = %u threshold = %u count = %d delay = %lu srate=%lu\n", channel->flushlist.len, channel->threshold, channel->flush_count, channel->back_delay, channel->srate);
+                //         }
+                //     }
+                // }else {
+                //     channel->flush_len = 0;
+                //     channel->threshold = 0;
+                //     channel->srate = channel->average_rate;
+                // }
 
                 __ring_list_take_out(&channel->flushlist, pack);
             }
