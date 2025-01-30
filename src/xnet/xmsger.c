@@ -83,11 +83,10 @@ struct xchannel {
 
     uint16_t serial_range;
     uint16_t threshold;
-    int16_t scount;
-    uint64_t arate;
-    uint64_t srate;
-    uint64_t sbegin;
-    uint64_t stream_ts;
+    uint16_t stream_count;
+    uint64_t stream_rate;
+    uint64_t stream_begin;
+    uint64_t stream_druation;
     uint64_t timestamp;
 
     uint16_t back_times;
@@ -215,8 +214,8 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->serial_range = serial_range;
     channel->threshold = 0;
     channel->timestamp = __xapi->clock();
-    channel->scount = 0;
-    channel->srate = 0;
+    channel->stream_count = 0;
+    channel->stream_rate = 0;
     channel->back_delay = 80000000UL;
     // channel->rid = XNONE;
 
@@ -425,21 +424,18 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             channel->spos += pack->head.len;
 
-            pack->srate = channel->srate;
+            pack->srate = channel->stream_rate;
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
-            if (channel->stream_ts == 0){
-                channel->stream_ts = pack->ts;
+            if (channel->spos != channel->len){
+                if (channel->stream_begin == 0){
+                    channel->stream_begin = pack->ts;
+                    channel->stream_begin = 0;
+                }
+            }else {
+                channel->stream_begin = 0;
             }
-            // if (channel->flushlist.len > 0){
-            //     __xcheck(channel->flushlist.head.prev->ts == pack->ts);
-            //     // 均匀发送时间戳，避免一次性重传所有包
-            //     if (pack->ts < (channel->flushlist.head.prev->ts + (channel->back_delay >> 1))){
-            //         // 时间戳设置为前一个 pack 的基础上加往返时间的 1/2
-            //         pack->ts = (channel->flushlist.head.prev->ts + (channel->back_delay >> 1));
-            //     }
-            // }
             pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING;
             __ring_list_put_into_end(&channel->flushlist, pack);
 
@@ -453,8 +449,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
     }else {
         
-        channel->stream_ts = 0;
-        channel->scount = 0;
+        channel->stream_druation = 0;
+        channel->stream_count = 0;
     }
 }
 
@@ -577,41 +573,39 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             if (pack->ts != 0){
 
+                uint64_t current = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->back_range += __xapi->clock() - pack->ts;
+                channel->back_range += current - pack->ts;
 
-                if (channel->back_times < XCHANNEL_FEEDBACK_TIMES){
+                if (channel->back_times < XPACK_SERIAL_RANGE){
                     // 更新累计次数
                     channel->back_times++;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->back_range -= channel->back_delay;
                 }
+
                 // 重新计算平均时长
                 channel->back_delay = channel->back_range / channel->back_times;
+
+                if (channel->stream_begin > 0){
+
+                    channel->stream_druation = current - channel->stream_begin;
+
+                    if (channel->stream_count < XPACK_SERIAL_RANGE){
+                        channel->stream_count++;
+                    }else {
+                        channel->stream_druation -= channel->stream_rate;
+                        channel->stream_rate = channel->stream_druation / channel->stream_count;
+                        channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
+                    }
+
+                    __xlogd("stream delay = %lu rate = %lu threshold = %u\n", channel->back_delay, channel->stream_rate, channel->threshold);
+                }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
-
-                if (pack->ts == channel->stream_ts){
-                    __xlogd("stream 1\n");
-                    channel->sbegin = __xapi->clock();
-                    channel->scount = 1;
-                }else if (channel->scount > 0){
-                    __xlogd("stream 2\n");
-                    if (__xapi->clock() - channel->sbegin < channel->back_delay){
-                        __xlogd("stream 3\n");
-                        channel->scount++;
-                        __xlogd("start delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                    }else {
-                        __xlogd("stream 4\n");
-                        channel->srate = channel->back_delay / channel->scount;
-                        channel->sbegin = channel->stream_ts = 0;
-                        channel->scount = 0;
-                        __xlogd("-- delay = %lu srate = %lu scount = %u\n", channel->back_delay, channel->srate, channel->scount);
-                    }
-                }
 
                 pack->ts = 0;
 
@@ -632,10 +626,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // 更新索引
             index = __serialbuf_rpos(channel->sendbuf);
-
-            if (channel->srate > 0 && channel->scount > channel->flushlist.len){
-                xchannel_send_pack(channel);
-            }
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
         }
@@ -893,18 +883,18 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             // readable 是已经写入缓冲区还尚未发送的包
-            if (channel->srate > 0 && __serialbuf_readable(channel->sendbuf) < channel->scount){
-                delay = (int64_t)(channel->srate - (__xapi->clock() - channel->timestamp));
-                if (delay > 0){
-                    if (msger->timer > delay){
-                        msger->timer = delay;
-                    }
+            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+                if (channel->stream_rate == 0){
+                    xchannel_send_pack(channel);
                 }else {
-                    xchannel_send_pack(channel);
-                }
-            }else {
-                if (__serialbuf_readable(channel->sendbuf) < channel->serial_range){
-                    xchannel_send_pack(channel);
+                    delay = (int64_t)(channel->stream_rate - (__xapi->clock() - channel->timestamp));
+                    if (delay > 0){
+                        if (msger->timer > delay){
+                            msger->timer = delay;
+                        }
+                    }else {
+                        xchannel_send_pack(channel);
+                    }
                 }
             }
 
