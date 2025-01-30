@@ -428,13 +428,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->ts = __xapi->clock();
             channel->timestamp = pack->ts;
-            if (channel->spos != channel->len){
-                if (channel->stream_begin == 0){
-                    channel->stream_begin = pack->ts;
-                    channel->stream_begin = 0;
-                }
-            }else {
+            if (channel->stream_begin == 0){                
+                channel->stream_begin = pack->ts;
+            }else if (channel->spos != channel->len){
                 channel->stream_begin = 0;
+                channel->stream_count = 0;
             }
             pack->elapsed = channel->back_delay * XCHANNEL_RESEND_STEPPING;
             __ring_list_put_into_end(&channel->flushlist, pack);
