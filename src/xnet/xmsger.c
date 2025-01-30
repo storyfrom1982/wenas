@@ -589,15 +589,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->back_delay = channel->back_range / channel->back_times;
 
                 if (channel->stream_begin > 0){
-
-                    channel->stream_druation = current - channel->stream_begin;
-
                     channel->stream_count++;
+                    channel->stream_druation = current - channel->stream_begin;
                     if (channel->stream_count > XPACK_SERIAL_RANGE){                        
-                        channel->stream_rate = channel->stream_druation / channel->stream_count;
-                        channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
+                        channel->stream_rate = (channel->stream_druation - channel->back_delay) / channel->stream_count;
+                        // channel->threshold = (channel->back_delay + channel->stream_rate - 1) / channel->stream_rate;
                     }
-
                     __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
                             channel->back_delay, channel->stream_druation, channel->stream_rate, channel->threshold, channel->stream_count);
                 }
