@@ -3,6 +3,7 @@ clear
 # rm -rf build
 rm -rf build/xpeer
 rm -rf tmp
+rm -rf /tmp/wenas
 cmake -B build -D CMAKE_BUILD_TYPE=$5 && cmake --build build
 
 ./build/$1 $2 $3 $4
