@@ -428,6 +428,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->spos += pack->head.len;
             if (channel->spos == channel->len){
                 channel->threshold = channel->serial_range;
+                channel->stream_count = 0;
             }
             // if (channel->spos != channel->len){
             //     if (channel->stream_begin == 0){
@@ -579,6 +580,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->back_times < XPACK_SERIAL_RANGE){
                     // 更新累计次数
                     channel->back_times++;
+                    if (channel->spos != channel->len && channel->stream_count == 0){
+                        channel->stream_count = __serialbuf_readable(channel->sendbuf);
+                    }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->back_range -= channel->back_delay;
@@ -608,8 +612,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 if (channel->threshold == 0){
                     __xlogd("back delay = %lu buf readable = %u\n", channel->back_delay, __serialbuf_readable(channel->sendbuf));
-                    if (__serialbuf_readable(channel->sendbuf) < 32){
-                        channel->threshold = 32;
+                    if (__serialbuf_readable(channel->sendbuf) < channel->stream_count){
+                        channel->threshold = channel->stream_count;
                     }
                     xchannel_send_pack(channel);
                 }
