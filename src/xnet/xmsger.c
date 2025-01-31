@@ -933,6 +933,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->last_ts = __xapi->clock();
                             if (spack->head.resend > 2){
                                 channel->send_threshold = 0; // 停止发包
+                                __xlogd(">>>>------------------------> SEND LIMIT\n");
                             }
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
