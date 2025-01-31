@@ -16,7 +16,7 @@
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_RESEND_LIMIT       10
-#define XCHANNEL_RESEND_STEPPING    2
+#define XCHANNEL_RESEND_STEPPING    4
 #define XCHANNEL_FEEDBACK_TIMES     1000
 
 typedef struct xhead {
