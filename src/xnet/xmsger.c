@@ -82,15 +82,15 @@ struct xchannel {
 
     uint16_t serial_range;
     uint16_t send_threshold;
-    // uint64_t stream_rate;
-    // uint64_t stream_begin;
-    // uint64_t stream_druation;
-    uint64_t timestamp;
 
+    uint64_t timestamp;
+    uint64_t rt_packs;
+    uint64_t rt_counts;
+    uint64_t rt_begin;
     uint16_t rt_threshold;
     uint16_t rt_samples; // round-trip times
     uint64_t rt_time;
-    uint64_t rt_counts;
+    uint64_t rt_duration;
 
     // char ip[46];
     // uint16_t port;
@@ -425,18 +425,14 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->timestamp = pack->first_ts;
 
             channel->spos += pack->head.len;
-            if (channel->spos == channel->len){
-                channel->send_threshold = channel->serial_range;
-                channel->rt_threshold = 0;
+            if (channel->spos != channel->len){
+                if (channel->rt_begin == 0){
+                    channel->rt_begin = channel->timestamp;
+                    channel->rt_packs = 0;
+                }
+            }else {
+                channel->rt_begin = 0;
             }
-            // if (channel->spos != channel->len){
-            //     if (channel->stream_begin == 0){
-            //         channel->stream_begin = pack->ts;
-            //     }
-            // }else {
-            //     channel->stream_begin = 0;
-            //     channel->stream_count = 0;
-            // }
 
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
@@ -572,18 +568,29 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 channel->timestamp = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->rt_counts += channel->timestamp - pack->last_ts;
+                channel->rt_duration += channel->timestamp - pack->last_ts;
 
                 if (channel->rt_samples < XPACK_SERIAL_RANGE){
                     // 更新累计次数
                     channel->rt_samples++;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
-                    channel->rt_counts -= channel->rt_time;
+                    channel->rt_duration -= channel->rt_time;
                 }
 
                 // 重新计算平均时长
-                channel->rt_time = channel->rt_counts / channel->rt_samples;
+                channel->rt_time = channel->rt_duration / channel->rt_samples;
+
+                if (channel->spos != channel->len){
+                    if (channel->timestamp - channel->rt_begin > channel->rt_time){
+                        channel->rt_packs++;
+                    }else {
+                        channel->rt_threshold = channel->rt_packs;
+                        // channel->rt_counts += channel->rt_packs;
+                        channel->rt_begin = channel->timestamp;
+                        channel->rt_packs = 1;
+                    }
+                }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
@@ -591,20 +598,13 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 pack->last_ts = 0;
 
-                // if (channel->rt_threshold == 0){
-                //     if (channel->spos != channel->len){
-                //         channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
-                //         __xlogd("---- back delay = %lu rt-threshold = %u buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
-                //     }
-                // }
-
-                if (channel->send_threshold == 0){
+                if (channel->send_threshold < channel->serial_range){
                     if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
                         channel->send_threshold = channel->rt_threshold;
                     }
-                    __xlogd("back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
                     xchannel_send_pack(channel);
                 }
+                __xlogd("back delay = %lu threshold = %u  buf readable = %u\n", channel->rt_time, channel->send_threshold, __serialbuf_readable(channel->sendbuf));
             }
 
             // 更新已经到达对端的数据计数
@@ -636,16 +636,16 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (pack->last_ts != 0){
                 channel->timestamp = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->rt_counts += channel->timestamp - pack->last_ts;
+                channel->rt_duration += channel->timestamp - pack->last_ts;
                 if (channel->rt_samples < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
                     channel->rt_samples++;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
-                    channel->rt_counts -= channel->rt_time;
+                    channel->rt_duration -= channel->rt_time;
                 }
                 // 重新计算平均时长
-                channel->rt_time = channel->rt_counts / channel->rt_samples;
+                channel->rt_time = channel->rt_duration / channel->rt_samples;
                 pack->last_ts = 0;
                 // 从定时队列中移除
                 // __ring_list_take_out(&channel->flushlist, pack);
@@ -875,8 +875,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // readable 是已经写入缓冲区还尚未发送的包
             if (__serialbuf_readable(channel->sendbuf) < channel->send_threshold){
                 xchannel_send_pack(channel);
-            }else {
-                channel->send_threshold = 0;
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
@@ -908,9 +906,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     }else {
 
                         // 超时重传
-                        if (channel->send_threshold == channel->serial_range && channel->rt_threshold < channel->serial_range){
-                            channel->send_threshold = channel->rt_threshold;
-                        }
+                        channel->send_threshold = 0; // 停止发包
 
                         // 判断重传的包是否带有 ACK
                         if (spack->head.ack.type != 0){
