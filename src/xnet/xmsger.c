@@ -575,10 +575,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->rt_samples < XPACK_SERIAL_RANGE){
                     // 更新累计次数
                     channel->rt_samples++;
-                    if (channel->spos != channel->len && channel->rt_threshold == 0){
-                        channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
-                        __xlogd("---- back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
-                    }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rt_counts -= channel->rt_time;
@@ -587,34 +583,26 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 // 重新计算平均时长
                 channel->rt_time = channel->rt_counts / channel->rt_samples;
 
-                // if (channel->stream_begin > 0){
-                //     channel->stream_count++;
-                //     channel->stream_druation = current - channel->stream_begin;
-                //     if (channel->stream_count > XPACK_SERIAL_RANGE){                        
-                //         channel->stream_rate = channel->stream_druation / channel->stream_count;
-                //         if (channel->flushlist.len < channel->threshold){
-                //             xchannel_send_pack(channel);
-                //         }
-                //     }
-                //     __xlogd("stream delay = %lu druation = %lu rate = %lu threshold = %u count = %u\n", 
-                //             channel->back_delay, channel->stream_druation, channel->stream_rate, channel->flushlist.len, channel->stream_count);
-                // }
-
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->pos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 pack->last_ts = 0;
 
+                if (channel->rt_threshold == 0){
+                    if (channel->spos != channel->len){
+                        channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
+                        __xlogd("---- back delay = %lu rt-threshold = %u buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
+                    }
+                }
+
                 if (channel->send_threshold == 0){
-                    __xlogd("back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
                     if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
                         channel->send_threshold = channel->rt_threshold;
                     }
+                    __xlogd("back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
                     xchannel_send_pack(channel);
                 }
-
-                // __ring_list_take_out(&channel->flushlist, pack);
             }
 
             // 更新已经到达对端的数据计数
