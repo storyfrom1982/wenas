@@ -609,8 +609,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 if (channel->threshold == 0){
                     __xlogd("back delay = %lu buf readable = %u\n", channel->back_delay, __serialbuf_readable(channel->sendbuf));
                     xchannel_send_pack(channel);
-                    if (__serialbuf_readable(channel->sendbuf) < (channel->serial_range >> 1)){
-                        channel->threshold = channel->serial_range >> 1;
+                    if (__serialbuf_readable(channel->sendbuf) == 0){
+                        channel->threshold = channel->serial_range;
                     }
                 }
 
