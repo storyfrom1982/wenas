@@ -934,7 +934,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
-                            if (++channel->resend_counter > 3){
+                            if (++channel->resend_counter > 1){
                                 channel->send_rate = 0; // 停止发包
                                 __xlogd(">>>>------------------------> RESEND LIMIT\n");
                             }
