@@ -577,6 +577,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rt_samples++;
                     if (channel->spos != channel->len && channel->rt_threshold == 0){
                         channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
+                        __xlogd("---- back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
                     }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
@@ -606,7 +607,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 pack->last_ts = 0;
 
                 if (channel->send_threshold == 0){
-                    __xlogd("back delay = %lu buf readable = %u\n", channel->rt_time, __serialbuf_readable(channel->sendbuf));
+                    __xlogd("back delay = %lu rt-threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
                     if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
                         channel->send_threshold = channel->rt_threshold;
                     }
