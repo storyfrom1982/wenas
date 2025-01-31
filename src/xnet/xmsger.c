@@ -568,9 +568,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             if (pack->last_ts != 0){
 
-                uint64_t current = __xapi->clock();
+                channel->timestamp = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->rt_counts += current - pack->last_ts;
+                channel->rt_counts += channel->timestamp - pack->last_ts;
 
                 if (channel->rt_samples < XPACK_SERIAL_RANGE){
                     // 更新累计次数
@@ -632,8 +632,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             pack = &channel->sendbuf->buf[rpack->head.ack.sn & (channel->sendbuf->range - 1)];
 
             if (pack->last_ts != 0){
+                channel->timestamp = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->rt_counts += __xapi->clock() - pack->last_ts;
+                channel->rt_counts += channel->timestamp - pack->last_ts;
                 if (channel->rt_samples < XCHANNEL_FEEDBACK_TIMES){
                     // 更新累计次数
                     channel->rt_samples++;
@@ -675,7 +676,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                channel->timestamp = pack->last_ts = __xapi->clock();
+                                pack->last_ts = __xapi->clock();
                                 break; // 每次只重传一个包
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
@@ -872,18 +873,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             // readable 是已经写入缓冲区还尚未发送的包
             if (__serialbuf_readable(channel->sendbuf) < channel->send_threshold){
                 xchannel_send_pack(channel);
-                // if (channel->stream_rate == 0){
-                //     xchannel_send_pack(channel);
-                // }else {
-                //     delay = (int64_t)(channel->stream_rate - (__xapi->clock() - channel->timestamp));
-                //     if (delay > 0){
-                //         if (msger->timer > delay){
-                //             msger->timer = delay;
-                //         }
-                //     }else {
-                //         xchannel_send_pack(channel);
-                //     }
-                // }
             }else {
                 channel->send_threshold = 0;
             }
@@ -904,7 +893,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - spack->first_ts > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
+                    if (current_ts - channel->timestamp > NANO_SECONDS * XCHANNEL_RESEND_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
@@ -936,7 +925,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
-                            channel->timestamp = spack->last_ts = __xapi->clock();
+                            spack->last_ts = __xapi->clock();
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
