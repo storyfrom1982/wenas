@@ -923,10 +923,10 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // TODO ack 也要更新
                         }
 
-                        __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] Threshold[%u] Delay[%lu:%lu]\n", 
+                        __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%u]\n", 
                                 spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                 spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                channel->send_rate, spack->first_ts / 1000000UL, spack->last_ts / 1000000UL);
+                                channel->rtt / 1000000UL, channel->send_rate);
 
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
