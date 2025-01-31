@@ -16,7 +16,7 @@
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
-#define XCHANNEL_RTT_TIMEDOUT_COUNTS    4
+#define XCHANNEL_RTT_TIMEDOUT_COUNTS    2
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
 typedef struct xhead {
