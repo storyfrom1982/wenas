@@ -603,6 +603,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 pack->last_ts = 0;
 
+                if (channel->threshold == 0){
+                    xchannel_send_pack(channel);
+                }
+
                 // __ring_list_take_out(&channel->flushlist, pack);
             }
 
@@ -872,18 +876,21 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         {
             // readable 是已经写入缓冲区还尚未发送的包
             if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-                if (channel->stream_rate == 0){
-                    xchannel_send_pack(channel);
-                }else {
-                    delay = (int64_t)(channel->stream_rate - (__xapi->clock() - channel->timestamp));
-                    if (delay > 0){
-                        if (msger->timer > delay){
-                            msger->timer = delay;
-                        }
-                    }else {
-                        xchannel_send_pack(channel);
-                    }
-                }
+                xchannel_send_pack(channel);
+                // if (channel->stream_rate == 0){
+                //     xchannel_send_pack(channel);
+                // }else {
+                //     delay = (int64_t)(channel->stream_rate - (__xapi->clock() - channel->timestamp));
+                //     if (delay > 0){
+                //         if (msger->timer > delay){
+                //             msger->timer = delay;
+                //         }
+                //     }else {
+                //         xchannel_send_pack(channel);
+                //     }
+                // }
+            }else {
+                channel->threshold = 0;
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
