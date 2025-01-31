@@ -597,9 +597,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 pack->last_ts = 0;
 
                 if (channel->send_threshold < channel->serial_range){
-                    // if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
-                    //     channel->send_threshold = channel->rt_threshold;
-                    // }
+                    if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
+                        channel->send_threshold = channel->rt_threshold;
+                    }
                     xchannel_send_pack(channel);
                 }
                 __xlogd("back delay = %lu threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
@@ -904,7 +904,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     }else {
 
                         // 超时重传
-                        channel->send_threshold = channel->rt_threshold; // 停止发包
+                        channel->send_threshold = 0; // 停止发包
 
                         // 判断重传的包是否带有 ACK
                         if (spack->head.ack.type != 0){
