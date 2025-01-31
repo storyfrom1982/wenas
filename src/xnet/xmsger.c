@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  2048
+#define XPACK_SERIAL_RANGE  256
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -568,6 +568,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             if (pack->last_ts != 0){
 
+                channel->rt_threshold++;
+
                 channel->timestamp = __xapi->clock();
                 // 累计新的一次往返时长
                 channel->rt_counts += channel->timestamp - pack->last_ts;
@@ -589,12 +591,12 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 pack->last_ts = 0;
 
-                if (channel->rt_threshold == 0){
-                    if (channel->spos != channel->len){
-                        channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
-                        __xlogd("---- back delay = %lu rt-threshold = %u buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
-                    }
-                }
+                // if (channel->rt_threshold == 0){
+                //     if (channel->spos != channel->len){
+                //         channel->rt_threshold = __serialbuf_readable(channel->sendbuf);
+                //         __xlogd("---- back delay = %lu rt-threshold = %u buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
+                //     }
+                // }
 
                 if (channel->send_threshold == 0){
                     if (__serialbuf_readable(channel->sendbuf) < channel->rt_threshold){
@@ -906,6 +908,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     }else {
 
                         // 超时重传
+                        if (channel->send_threshold == channel->serial_range && channel->rt_threshold < channel->serial_range){
+                            channel->send_threshold = channel->rt_threshold;
+                        }
 
                         // 判断重传的包是否带有 ACK
                         if (spack->head.ack.type != 0){
