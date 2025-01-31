@@ -92,7 +92,7 @@ struct xchannel {
     uint64_t rtt_sample_counts; // 采样总数
     uint64_t rtt_sample_begin_ts;
 
-    // uint64_t timestamp;
+    uint8_t resend_counter;
     uint64_t recv_ts;
     uint64_t send_ts;
 
@@ -421,6 +421,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录发送次数
             pack->head.resend = 1;
+            channel->resend_counter = 0;
 
             // 记录当前时间
             pack->first_ts = pack->last_ts = __xapi->clock();
@@ -932,9 +933,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             channel->send_ts = spack->last_ts = __xapi->clock();
-                            if (spack->head.resend > 2){
+                            if (++channel->resend_counter > 3){
                                 channel->send_rate = 0; // 停止发包
-                                __xlogd(">>>>------------------------> SEND LIMIT\n");
+                                __xlogd(">>>>------------------------> RESEND LIMIT\n");
                             }
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
