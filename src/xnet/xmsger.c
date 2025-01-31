@@ -585,7 +585,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     if (channel->timestamp - channel->rt_begin < channel->rt_time){
                         channel->rt_recv++;
                     }else {
-                        channel->rt_packs += channel->rt_counts;
+                        channel->rt_packs += channel->rt_recv;
                         if (channel->rt_counts < 8){
                             channel->rt_counts++;
                             channel->rt_threshold = (channel->rt_packs / channel->rt_counts) + 1;
