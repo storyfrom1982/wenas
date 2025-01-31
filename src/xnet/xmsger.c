@@ -82,6 +82,7 @@ struct xchannel {
 
     uint16_t serial_range;
     uint16_t send_threshold;
+    uint8_t resend_count;
 
     uint64_t timestamp;
     uint64_t rt_recv;
@@ -594,6 +595,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         }
                         channel->rt_begin = channel->timestamp;
                         channel->rt_recv = 1;
+                        __xlogd("back delay = %lu rt = %u send = %u buf readable = %u\n", 
+                        channel->rt_time, channel->rt_threshold, channel->send_threshold, __serialbuf_readable(channel->sendbuf));
                     }
                 }
 
@@ -607,7 +610,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->send_threshold = channel->rt_threshold;
                     xchannel_send_pack(channel);
                 }
-                __xlogd("back delay = %lu threshold = %u  buf readable = %u\n", channel->rt_time, channel->rt_threshold, __serialbuf_readable(channel->sendbuf));
             }
 
             // 更新已经到达对端的数据计数
@@ -908,8 +910,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                     }else {
 
-                        // 超时重传
-                        channel->send_threshold = 0; // 停止发包
+                        // 超时重传                        
 
                         // 判断重传的包是否带有 ACK
                         if (spack->head.ack.type != 0){
@@ -930,6 +931,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
+                            if (spack->head.resend > 2){
+                                channel->send_threshold = 0; // 停止发包
+                            }
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
