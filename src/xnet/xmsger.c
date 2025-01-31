@@ -422,7 +422,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录发送次数
             pack->head.resend = 1;
-            channel->resend_counter = 0;
 
             // 记录当前时间
             pack->first_ts = pack->last_ts = __xapi->clock();
@@ -608,6 +607,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 pack->last_ts = 0;
+                channel->resend_counter = 0;
 
                 if (channel->send_rate < channel->serial_range){
                     channel->send_rate = channel->rtt_send_rate;
