@@ -84,6 +84,7 @@ struct xchannel {
     uint16_t send_threshold;
 
     uint64_t timestamp;
+    uint64_t rt_recv;
     uint64_t rt_packs;
     uint64_t rt_counts;
     uint64_t rt_begin;
@@ -428,7 +429,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             if (channel->spos != channel->len){
                 if (channel->rt_begin == 0){
                     channel->rt_begin = channel->timestamp;
-                    channel->rt_packs = 0;
+                    channel->rt_recv = 0;
                 }
             }else {
                 channel->rt_begin = 0;
@@ -581,12 +582,17 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 if (channel->spos != channel->len){
                     if (channel->timestamp - channel->rt_begin < channel->rt_time){
-                        channel->rt_packs++;
+                        channel->rt_recv++;
                     }else {
-                        channel->rt_threshold = channel->rt_packs + 1;
-                        // channel->rt_counts += channel->rt_packs;
+                        channel->rt_counts += channel->rt_packs;
+                        if (channel->rt_packs < 8){
+                            channel->rt_packs++;
+                        }else {
+                            channel->rt_counts -= channel->rt_threshold;
+                        }
+                        channel->rt_threshold = (channel->rt_counts >> 3) + 1;
                         channel->rt_begin = channel->timestamp;
-                        channel->rt_packs = 1;
+                        channel->rt_recv = 1;
                     }
                 }
 
