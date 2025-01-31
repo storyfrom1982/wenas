@@ -375,6 +375,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         msg->range--;
 
         pack->channel = channel;
+        // TODO ?
         pack->last_ts = channel->rtt;
         pack->head.resend = 0;
         pack->head.ack.type = 0;
@@ -685,7 +686,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                channel->send_ts = pack->last_ts = __xapi->clock();
+                                pack->last_ts = __xapi->clock();
                                 break; // 每次只重传一个包
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
@@ -932,7 +933,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
-                            channel->send_ts = spack->last_ts = __xapi->clock();
+                            spack->last_ts = __xapi->clock();
                             if (++channel->resend_counter > 3){
                                 channel->send_rate = 0; // 停止发包
                                 __xlogd(">>>>------------------------> RESEND LIMIT\n");
