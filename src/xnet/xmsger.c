@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  256
+#define XPACK_SERIAL_RANGE  1024
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -85,8 +85,8 @@ struct xchannel {
 
     uint64_t timestamp;
     uint64_t rt_recv;
-    uint64_t rt_packs;
     uint64_t rt_counts;
+    uint64_t rt_packs;
     uint64_t rt_begin;
     uint16_t rt_threshold;
     uint16_t rt_samples; // round-trip times
@@ -584,13 +584,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     if (channel->timestamp - channel->rt_begin < channel->rt_time){
                         channel->rt_recv++;
                     }else {
-                        channel->rt_counts += channel->rt_packs;
-                        if (channel->rt_packs < 8){
-                            channel->rt_packs++;
+                        channel->rt_packs += channel->rt_counts;
+                        if (channel->rt_counts < 8){
+                            channel->rt_counts++;
+                            channel->rt_threshold = (channel->rt_packs / channel->rt_counts) + 1;
                         }else {
-                            channel->rt_counts -= channel->rt_threshold;
+                            channel->rt_packs -= (channel->rt_threshold - 1);
+                            channel->rt_threshold = (channel->rt_packs >> 3) + 1;
                         }
-                        channel->rt_threshold = (channel->rt_counts >> 3) + 1;
                         channel->rt_begin = channel->timestamp;
                         channel->rt_recv = 1;
                     }
