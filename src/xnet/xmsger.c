@@ -893,10 +893,20 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
+                
+                if (channel->spos != channel->wpos && channel->ack_ts == 0){
+                    continue;
+                }
 
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-                delay = (int64_t)((channel->ack_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
+
+                if (channel->spos == channel->wpos){
+                    delay = (int64_t)((channel->send_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
+                }else {
+                    delay = (int64_t)((channel->ack_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
+                }
+
                 if (delay >= 0) {
                     // 未超时
                     if (msger->timer > delay){
