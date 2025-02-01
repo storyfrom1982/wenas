@@ -595,7 +595,11 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         //     channel->rtt_sample_counts -= (channel->rtt_send_rate - 1);
                         //     channel->rtt_send_rate = (channel->rtt_sample_counts >> 3) + 1;
                         // }
-                        channel->rtt_send_rate = (channel->rtt_send_rate + channel->rtt_send_counter + 1) >> 1;
+                        if (channel->rtt_send_rate == 0){
+                            channel->rtt_send_rate = channel->rtt_send_counter;
+                        }else {
+                            channel->rtt_send_rate = (channel->rtt_send_rate + channel->rtt_send_counter + 1) >> 1;    
+                        }
                         channel->rtt_sample_begin_ts = channel->recv_ts;
                         channel->rtt_send_counter = 1;
                         __xlogd("back delay = %lu rt = %u send = %u buf readable = %u\n", 
@@ -902,6 +906,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
+                current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
                 delay = (int64_t)((spack->last_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
                 if (delay >= 0) {
