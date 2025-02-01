@@ -570,22 +570,22 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rtt = channel->rtt_duration / channel->sampling_counter;
                     if (channel->psf_begin == 0){
                         channel->psf_begin = channel->ack_ts;
+                        channel->ack_last_ts = channel->ack_ts;
+                    }else {
+                        channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
                     }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
-                    if (channel->ack_ts - channel->ack_last_ts > channel->psf){
-                        channel->psf_duration = channel->ack_ts - channel->psf_begin - (channel->ack_ts - channel->ack_last_ts);
-                    }else {
-                        channel->psf_duration = channel->ack_ts - channel->psf_begin - channel->psf;
-                    }
+                    channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    channel->psf_duration -= channel->psf;
                     channel->psf = channel->psf_duration >> 8;
                 }
             }
 
-            __xlogd("rtt = %lu psf = %lu\n", channel->rtt, channel->psf);
+            __xlogd("rtt = %lu psf = %lu threshold = %u\n", channel->rtt, channel->psf, channel->threshold);
 
             // 数据已发送，从待发送数据中减掉这部分长度
             __atom_add(channel->msger->pos, pack->head.len);
@@ -595,6 +595,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->sampling_counter = 0;
                 channel->psf_begin = 0;
                 channel->psf = 0;
+                // channel->ack_last_ts = 0;
+                // channel->ack_ts = 0;
             }
 
             channel->resend_counter = 0;
@@ -893,7 +895,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
-                
+
                 if (channel->spos != channel->wpos && channel->ack_ts == 0){
                     continue;
                 }
