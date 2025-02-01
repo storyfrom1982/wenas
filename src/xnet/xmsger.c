@@ -584,17 +584,18 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 }
 
                 if (channel->spos != channel->wpos){
-                    if (channel->recv_ts - channel->rtt_sample_begin_ts < channel->rtt){
+                    if (channel->recv_ts - channel->rtt_sample_begin_ts < (channel->rtt > 10000000UL ? channel->rtt : 10000000UL)){
                         channel->rtt_send_counter++;
                     }else {
-                        channel->rtt_sample_counts += channel->rtt_send_counter;
-                        if (channel->rtt_sample_counter < 8){
-                            channel->rtt_sample_counter++;
-                            channel->rtt_send_rate = (channel->rtt_sample_counts / channel->rtt_sample_counter) + 1;
-                        }else {
-                            channel->rtt_sample_counts -= (channel->rtt_send_rate - 1);
-                            channel->rtt_send_rate = (channel->rtt_sample_counts >> 3) + 1;
-                        }
+                        // channel->rtt_sample_counts += channel->rtt_send_counter;
+                        // if (channel->rtt_sample_counter < 8){
+                        //     channel->rtt_sample_counter++;
+                        //     channel->rtt_send_rate = (channel->rtt_sample_counts / channel->rtt_sample_counter) + 1;
+                        // }else {
+                        //     channel->rtt_sample_counts -= (channel->rtt_send_rate - 1);
+                        //     channel->rtt_send_rate = (channel->rtt_sample_counts >> 3) + 1;
+                        // }
+                        channel->rtt_send_rate = (channel->rtt_send_rate + channel->rtt_send_counter + 1) >> 1;
                         channel->rtt_sample_begin_ts = channel->recv_ts;
                         channel->rtt_send_counter = 1;
                         __xlogd("back delay = %lu rt = %u send = %u buf readable = %u\n", 
@@ -868,9 +869,11 @@ XClean:
 
 static inline int xmsger_send_all(xmsger_ptr msger)
 {
+    uint16_t len;
     static int64_t delay;
-    static xpack_ptr spack, npack;
+    static xpack_ptr spack;
     static xchannel_ptr channel;
+    uint64_t current_ts = __xapi->clock();
 
     // 判断待发送队列中是否有内容
     if (msger->sendlist.len > 0){
@@ -880,15 +883,26 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
         while (channel != &msger->sendlist.head)
         {
+            len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < channel->send_rate){
-                xchannel_send_pack(channel);
+            if (len < channel->sendbuf->range){
+                if (len < 16){
+                    xchannel_send_pack(channel);
+                }else {
+                    delay = 100000L - (current_ts - channel->send_ts);
+                    if (delay > 0){
+                        if (msger->timer > delay){
+                            msger->timer = delay;
+                        }
+                    }else {
+                        xchannel_send_pack(channel);
+                    }
+                }
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-                uint64_t current_ts = __xapi->clock();
                 delay = (int64_t)((spack->last_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
                 if (delay >= 0) {
                     // 未超时
