@@ -582,17 +582,17 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rtt = channel->rtt_duration >> 8;
                 }
 
-                if (channel->send_rate_begin_ts != 0){
-                    channel->send_rate_counter++;
-                    channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts) / channel->send_rate_counter;
-                }
-
                 // 数据已发送，从待发送数据中减掉这部分长度
                 __atom_add(channel->rpos, pack->head.len);
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 pack->last_ts = 0;
                 channel->resend_counter = 0;
+            }
+
+            if (channel->send_rate_begin_ts != 0){
+                channel->send_rate_counter++;
+                channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts - channel->rtt) / channel->send_rate_counter;
             }
 
             // 更新已经到达对端的数据计数
