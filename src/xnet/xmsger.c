@@ -215,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->threshold = 64;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
-    channel->psf = 0;
+    channel->psf = 1000000UL;
 
     // channel->rid = XNONE;
 
@@ -880,20 +880,17 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
             if (len < channel->sendbuf->range){
-                if (channel->psf > 0){
-                    if (channel->psf != 0){
-                        delay = channel->psf - (current_ts - channel->send_ts);
-                        if (delay > 0){
-                            if (msger->timer > delay){
-                                msger->timer = delay;
-                            }
-                        }else {
-                            xchannel_send_pack(channel);
-                        }
+                delay = channel->psf - (current_ts - channel->send_ts);
+                if (delay > 0){
+                    if (msger->timer > delay){
+                        msger->timer = delay;
                     }
-                }else if (len < channel->threshold){
+                }else {
                     xchannel_send_pack(channel);
                 }
+                // else if (len < channel->threshold){
+                //     xchannel_send_pack(channel);
+                // }
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
