@@ -215,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->threshold = 64;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
-    channel->psf = 1000000UL;
+    channel->psf = 10000UL;
 
     // channel->rid = XNONE;
 
@@ -568,22 +568,22 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->sampling_counter++;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration / channel->sampling_counter;
-                    if (channel->psf_begin == 0){
-                        channel->psf_begin = channel->ack_ts;
-                        channel->ack_last_ts = channel->ack_ts;
-                        channel->psf_duration = channel->psf;
-                    }else {
-                        channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
-                    }
-                    channel->psf = channel->psf_duration / channel->sampling_counter;
+                    // if (channel->psf_begin == 0){
+                    //     channel->psf_begin = channel->ack_ts;
+                    //     channel->ack_last_ts = channel->ack_ts;
+                    //     channel->psf_duration = channel->psf;
+                    // }else {
+                    //     channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    // }
+                    // channel->psf = channel->psf_duration / channel->sampling_counter;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
-                    channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
-                    channel->psf_duration -= channel->psf;
-                    channel->psf = channel->psf_duration >> 8;
+                    // channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    // channel->psf_duration -= channel->psf;
+                    // channel->psf = channel->psf_duration >> 8;
                 }
             }
 
@@ -595,9 +595,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (channel->rpos == channel->wpos){
                 channel->rtt_duration = 0;
                 channel->sampling_counter = 0;
-                channel->psf_begin = 0;
+                // channel->psf_begin = 0;
                 // channel->psf = 0;
-                channel->ack_ts = 0;
+                // channel->ack_ts = 0;
             }
 
             // 更新已经到达对端的数据计数
@@ -635,21 +635,21 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->sampling_counter++;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration / channel->sampling_counter;
-                    if (channel->psf_begin == 0){
-                        channel->psf_begin = channel->ack_ts;
-                        channel->ack_last_ts = channel->ack_ts;
-                        channel->psf_duration = 0;
-                    }else {
-                        channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
-                    }
+                    // if (channel->psf_begin == 0){
+                    //     channel->psf_begin = channel->ack_ts;
+                    //     channel->ack_last_ts = channel->ack_ts;
+                    //     channel->psf_duration = 0;
+                    // }else {
+                    //     channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    // }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
-                    channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
-                    channel->psf_duration -= channel->psf;
-                    channel->psf = channel->psf_duration >> 8;
+                    // channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    // channel->psf_duration -= channel->psf;
+                    // channel->psf = channel->psf_duration >> 8;
                 }
             }
 
