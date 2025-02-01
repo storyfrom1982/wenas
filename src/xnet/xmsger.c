@@ -16,7 +16,7 @@
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
-#define XCHANNEL_RTT_TIMEDOUT_COUNTS    3
+#define XCHANNEL_RTT_TIMEDOUT_COUNTS    4
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
 typedef struct xhead {
@@ -931,8 +931,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
-                            // if (++channel->resend_counter > 1)
-                            {
+                            if (++channel->resend_counter > 1){
                                 if (channel->threshold > 16){
                                     channel->threshold--;
                                 }
