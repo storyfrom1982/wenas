@@ -34,8 +34,8 @@ int main(int argc, char *argv[])
     // const char *cip = "192.168.1.7";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
-    const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
-    // const char *cip = "47.99.146.226";
+    // const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
+    const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8914:865d:877:5115:1502:14dc:4882";
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";

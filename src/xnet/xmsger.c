@@ -565,7 +565,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             pack = &channel->sendbuf->buf[index];
 
             channel->recv_ts = __xapi->clock();
-            
+
             if (pack->last_ts != 0){
 
                 // 累计新的一次往返时长
@@ -594,6 +594,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (channel->send_rate_begin_ts != 0){
                 channel->send_rate_counter++;
                 channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts - channel->rtt) / channel->send_rate_counter;
+                __xlogd("send duration = %lu counter= %lu send rate = %lu\n", 
+                        (channel->recv_ts - channel->send_rate_begin_ts - channel->rtt), channel->send_rate_counter, channel->send_rate);
             }
 
             // 更新已经到达对端的数据计数
