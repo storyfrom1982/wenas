@@ -162,7 +162,8 @@ void __xlog_printf(enum __xlog_level level, const char *file, int line, const ch
                 __xapi->fs_file_remove(gloger->log1);
             }
             __xapi->fs_path_rename(gloger->log0, gloger->log1);
-            gloger->fd = __xapi->fs_file_open(gloger->log0, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, 0644);
+            gloger->fd = __xapi->fs_file_open(gloger->log0, XAPI_FS_FLAG_WRITE, 0644);
+            // gloger->fd = __xapi->fs_file_open(gloger->log0, UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_APPEND, 0644);
             // __xcheck(gloger->fd == -1);
         }
         __atom_unlock(gloger->lock);
