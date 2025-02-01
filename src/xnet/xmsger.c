@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  1024
+#define XPACK_SERIAL_RANGE  256
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -81,6 +81,8 @@ struct xchannel {
     int sock;
 
     uint16_t serial_range;
+    uint16_t threshold;
+
     uint64_t rtt; // round-trip times 平均往返时间
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
@@ -89,6 +91,7 @@ struct xchannel {
     uint64_t send_rate_counter;
     uint64_t send_rate_begin_ts;
 
+    uint8_t resend_counter;
     uint64_t recv_ts;
     uint64_t send_ts;
 
@@ -208,7 +211,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->send_rate = serial_range;
+    channel->threshold = serial_range;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
     channel->send_rate = 1000000UL;
@@ -589,6 +592,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 pack->last_ts = 0;
+                channel->resend_counter = 0;
             }
 
             // 更新已经到达对端的数据计数
@@ -861,7 +865,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
             if (len < channel->sendbuf->range){
-                if (len < 64){
+                if (len < channel->threshold){
                     xchannel_send_pack(channel);
                 }else {
                     delay = channel->send_rate - (current_ts - channel->send_ts);
@@ -924,6 +928,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
+                            if (++channel->resend_counter > 1){
+                                if (channel->threshold > 16){
+                                    channel->threshold--;
+                                }
+                                __xlogd(">>>>------------------------> RESEND LIMIT threshold=%u\n", channel->threshold);
+                            }
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
