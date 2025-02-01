@@ -529,6 +529,7 @@ XClean:
 
 static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 {
+    __xlogd("xchannel_recv_ack enter\n");
     // __xlogd("xchannel_recv_ack >>>>-----------> ack[%u:%u:%u] rpos=%u spos=%u ack-rpos=%u spos-rpos=%u\n",
     //         rpack->head.ack.flag, rpack->head.ack.sn, rpack->head.ack.pos, channel->sendbuf->rpos, channel->sendbuf->spos, 
     //         (uint16_t)(rpack->head.ack.sn - channel->sendbuf->rpos), (uint16_t)(channel->sendbuf->spos - channel->sendbuf->rpos));
@@ -699,6 +700,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
     }
 
     channel->ack_last_ts = channel->ack_ts;
+
+    __xlogd("xchannel_recv_ack exit\n");
 }
 
 static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
@@ -862,6 +865,7 @@ XClean:
 
 static inline int xmsger_send_all(xmsger_ptr msger)
 {
+    __xlogd("xmsger_send_all enter\n");
     uint16_t len;
     static int64_t delay;
     static xpack_ptr spack;
@@ -898,6 +902,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 if (channel->spos != channel->wpos && channel->ack_ts == 0){
+                    __xlogd("xmsger_send_all continue\n");
                     continue;
                 }
 
@@ -999,7 +1004,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             channel = channel->next;
         }
     }
-
+    __xlogd("xmsger_send_all exit\n");
     return 0;
 XClean:
     return -1;
