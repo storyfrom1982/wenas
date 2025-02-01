@@ -903,13 +903,13 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 if (channel->ack_ts > 0){
                     begin_ts = channel->ack_ts;
+                    __xlogd("delay = %lu ack ts = %lu threshold = %u\n", delay, begin_ts, channel->threshold);
                 }else {
                     begin_ts = channel->send_ts;
+                    __xlogd("delay = %lu send ts = %lu threshold = %u\n", delay, begin_ts, channel->threshold);
                 }
 
                 delay = (int64_t)((begin_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
-
-                __xlogd("delay = %lu begin ts = %lu\n", delay, begin_ts);
 
                 if (delay >= 0) {
                     // 未超时
