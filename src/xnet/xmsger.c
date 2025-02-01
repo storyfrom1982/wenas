@@ -571,6 +571,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     if (channel->psf_begin == 0){
                         channel->psf_begin = channel->ack_ts;
                         channel->ack_last_ts = channel->ack_ts;
+                        channel->psf_duration = 0;
                     }else {
                         channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
                     }
@@ -595,8 +596,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->sampling_counter = 0;
                 channel->psf_begin = 0;
                 channel->psf = 0;
-                // channel->ack_last_ts = 0;
-                // channel->ack_ts = 0;
+                channel->ack_ts = 0;
             }
 
             channel->resend_counter = 0;
@@ -638,17 +638,18 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rtt = channel->rtt_duration / channel->sampling_counter;
                     if (channel->psf_begin == 0){
                         channel->psf_begin = channel->ack_ts;
+                        channel->ack_last_ts = channel->ack_ts;
+                        channel->psf_duration = 0;
+                    }else {
+                        channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
                     }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
-                    if (channel->ack_ts - channel->ack_last_ts > channel->psf){
-                        channel->psf_duration = channel->ack_ts - channel->psf_begin - (channel->ack_ts - channel->ack_last_ts);
-                    }else {
-                        channel->psf_duration = channel->ack_ts - channel->psf_begin - channel->psf;
-                    }
+                    channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
+                    channel->psf_duration -= channel->psf;
                     channel->psf = channel->psf_duration >> 8;
                 }
             }
@@ -900,14 +901,17 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     continue;
                 }
 
+                uint64_t begin_ts;
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                if (channel->spos == channel->wpos){
-                    delay = (int64_t)((channel->send_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
+                if (channel->ack_ts > 0){
+                    begin_ts = channel->ack_ts;
                 }else {
-                    delay = (int64_t)((channel->ack_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
+                    begin_ts = channel->send_ts;
                 }
+
+                delay = (int64_t)((begin_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
 
                 if (delay >= 0) {
                     // 未超时
@@ -920,7 +924,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - channel->ack_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - begin_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
