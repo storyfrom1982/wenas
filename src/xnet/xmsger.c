@@ -895,7 +895,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }
             }
 
-            if (__serialbuf_recvable(channel->sendbuf) > 0 && channel->spos != channel->wpos && channel->ack_ts == 0){
+            if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 uint64_t begin_ts;
                 current_ts = __xapi->clock();
