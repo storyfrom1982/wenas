@@ -81,16 +81,13 @@ struct xchannel {
     int sock;
 
     uint16_t serial_range;
-    uint16_t send_rate;
-
     uint64_t rtt; // round-trip times 平均往返时间
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
-    uint16_t rtt_send_rate; // 往返时间内的平均发包频率
-    uint64_t rtt_send_counter; // 往返时间内发包计数器
-    uint64_t rtt_sample_counter; // 采样计数
-    uint64_t rtt_sample_counts; // 采样总数
-    uint64_t rtt_sample_begin_ts;
+
+    uint64_t send_rate;
+    uint64_t send_rate_counter;
+    uint64_t send_rate_begin_ts;
 
     uint8_t resend_counter;
     uint64_t recv_ts;
@@ -215,7 +212,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->send_rate = serial_range;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
-    channel->rtt_send_rate = 0;
+    channel->send_rate = 1000000UL;
 
     // channel->rid = XNONE;
 
@@ -429,12 +426,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             channel->spos += pack->head.len;
             if (channel->spos != channel->wpos){
-                if (channel->rtt_sample_begin_ts == 0){
-                    channel->rtt_sample_begin_ts = channel->send_ts;
-                    channel->rtt_send_counter = 0;
+                if (channel->send_rate_begin_ts == 0){
+                    channel->send_rate_begin_ts = channel->send_ts;
+                    channel->send_rate_counter = 0;
                 }
             }else {
-                channel->rtt_sample_begin_ts = 0;
+                channel->send_rate_begin_ts = 0;
             }
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -583,28 +580,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rtt = channel->rtt_duration >> 8;
                 }
 
-                if (channel->spos != channel->wpos){
-                    if (channel->recv_ts - channel->rtt_sample_begin_ts < (channel->rtt > 10000000UL ? channel->rtt : 10000000UL)){
-                        channel->rtt_send_counter++;
-                    }else {
-                        // channel->rtt_sample_counts += channel->rtt_send_counter;
-                        // if (channel->rtt_sample_counter < 8){
-                        //     channel->rtt_sample_counter++;
-                        //     channel->rtt_send_rate = (channel->rtt_sample_counts / channel->rtt_sample_counter) + 1;
-                        // }else {
-                        //     channel->rtt_sample_counts -= (channel->rtt_send_rate - 1);
-                        //     channel->rtt_send_rate = (channel->rtt_sample_counts >> 3) + 1;
-                        // }
-                        if (channel->rtt_send_rate == 0){
-                            channel->rtt_send_rate = channel->rtt_send_counter;
-                        }else {
-                            channel->rtt_send_rate = (channel->rtt_send_rate + channel->rtt_send_counter + 1) >> 1;    
-                        }
-                        channel->rtt_sample_begin_ts = channel->recv_ts;
-                        channel->rtt_send_counter = 1;
-                        __xlogd("back delay = %lu rt = %u send = %u buf readable = %u\n", 
-                                channel->rtt, channel->rtt_send_rate, channel->send_rate, __serialbuf_readable(channel->sendbuf));
-                    }
+                if (channel->send_rate_begin_ts != 0){
+                    channel->send_rate_counter++;
+                    channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts) / channel->send_rate_counter;
                 }
 
                 // 数据已发送，从待发送数据中减掉这部分长度
@@ -613,11 +591,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                 pack->last_ts = 0;
                 channel->resend_counter = 0;
-
-                if (channel->send_rate < channel->serial_range){
-                    channel->send_rate = channel->rtt_send_rate;
-                    xchannel_send_pack(channel);
-                }
             }
 
             // 更新已经到达对端的数据计数
@@ -893,7 +866,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 if (len < 16){
                     xchannel_send_pack(channel);
                 }else {
-                    delay = 100000L - (current_ts - channel->send_ts);
+                    delay = channel->send_rate - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
                             msger->timer = delay;
