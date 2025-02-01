@@ -549,7 +549,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
         uint16_t index = __serialbuf_rpos(channel->sendbuf);
 
-        channel->ack_ts = __xapi->clock();
+        channel->recv_ts = channel->ack_ts = __xapi->clock();
 
         // 这里曾经使用 do while 方式，造成了收到重复的 ACK，导致 rpos 越界的 BUG
         // 连续的 acks 必须至少比 rpos 大 1
