@@ -886,7 +886,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-                delay = (int64_t)((spack->last_ts + (channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS * spack->head.resend)) - current_ts);
+                delay = (int64_t)((spack->last_ts + ((channel->rtt > 10000000UL ? channel->rtt : 10000000UL) * XCHANNEL_RTT_TIMEDOUT_COUNTS * spack->head.resend)) - current_ts);
                 if (delay >= 0) {
                     // 未超时
                     if (msger->timer > delay){
