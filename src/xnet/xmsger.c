@@ -564,9 +564,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             pack = &channel->sendbuf->buf[index];
 
+            channel->recv_ts = __xapi->clock();
+            
             if (pack->last_ts != 0){
 
-                channel->recv_ts = __xapi->clock();
                 // 累计新的一次往返时长
                 channel->rtt_duration += channel->recv_ts - pack->last_ts;
 
