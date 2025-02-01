@@ -16,7 +16,7 @@
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
-#define XCHANNEL_RTT_TIMEDOUT_COUNTS    4
+#define XCHANNEL_RTT_TIMEDOUT_COUNTS    2
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
 typedef struct xhead {
@@ -46,6 +46,7 @@ typedef struct xhead {
 typedef struct xpack {
     uint64_t first_ts; // 计算往返耗时
     uint64_t last_ts; // 累计超时时长
+    uint64_t rtt;
     xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -83,17 +84,17 @@ struct xchannel {
     uint16_t serial_range;
     uint16_t threshold;
 
-    uint64_t rtt; // round-trip times 平均往返时间
-    uint16_t rtt_counter; 
-    uint64_t rtt_duration;
+    uint64_t rtt; // round-trip times
+    uint64_t psf; // packet sending frequency
 
-    uint64_t send_rate;
-    uint64_t send_rate_counter;
-    uint64_t send_rate_begin_ts;
+    uint64_t psf_begin;
+    uint64_t psf_duration;
+    uint64_t rtt_duration;
+    uint16_t sampling_counter; 
 
     uint8_t resend_counter;
-    uint64_t recv_ts;
-    uint64_t send_ts;
+    uint64_t ack_ts, ack_last_ts;
+    uint64_t send_ts, recv_ts;
 
     void *ctx;
     // uint64_t rid;
@@ -214,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->threshold = 64;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
-    channel->send_rate = 1000000UL;
+    channel->psf = 0;
 
     // channel->rid = XNONE;
 
@@ -548,6 +549,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
         uint16_t index = __serialbuf_rpos(channel->sendbuf);
 
+        channel->ack_ts = __xapi->clock();
+
         // 这里曾经使用 do while 方式，造成了收到重复的 ACK，导致 rpos 越界的 BUG
         // 连续的 acks 必须至少比 rpos 大 1
         while ((uint16_t)(rpack->head.ack.pos - channel->sendbuf->rpos) 
@@ -556,47 +559,45 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             pack = &channel->sendbuf->buf[index];
 
-            channel->recv_ts = __xapi->clock();
-
             if (pack->last_ts != 0){
-
                 // 累计新的一次往返时长
-                channel->rtt_duration += channel->recv_ts - pack->last_ts;
-
-                if (channel->rtt_counter < XCHANNEL_RTT_SAMPLING_COUNTS){
+                channel->rtt_duration += channel->ack_ts - pack->last_ts;
+                pack->last_ts = 0;
+                if (channel->sampling_counter < XCHANNEL_RTT_SAMPLING_COUNTS){
                     // 更新累计次数
-                    channel->rtt_counter++;
+                    channel->sampling_counter++;
                     // 重新计算平均时长
-                    channel->rtt = channel->rtt_duration / channel->rtt_counter;
+                    channel->rtt = channel->rtt_duration / channel->sampling_counter;
+                    if (channel->psf_begin == 0){
+                        channel->psf_begin = channel->ack_ts;
+                    }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
+                    if (channel->ack_ts - channel->ack_last_ts > channel->psf){
+                        channel->psf_duration = channel->ack_ts - channel->psf_begin - (channel->ack_ts - channel->ack_last_ts);
+                    }else {
+                        channel->psf_duration = channel->ack_ts - channel->psf_begin - channel->psf;
+                    }
+                    channel->psf = channel->psf_duration >> 8;
                 }
-
-                // 数据已发送，从待发送数据中减掉这部分长度
-                __atom_add(channel->rpos, pack->head.len);
-                __atom_add(channel->msger->pos, pack->head.len);
-
-                pack->last_ts = 0;
-                channel->resend_counter = 0;
             }
 
-            if (channel->spos != channel->wpos){
-                if (channel->send_rate_begin_ts == 0){
-                    channel->send_rate_begin_ts = channel->recv_ts;
-                    channel->send_rate_counter = 1;
-                }else {
-                    channel->send_rate_counter++;
-                    channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts) / channel->send_rate_counter;
-                    __xlogd("send duration = %lu counter= %lu send rate = %lu\n", 
-                            (channel->recv_ts - channel->send_rate_begin_ts), channel->send_rate_counter, channel->send_rate);
-                }
-            }else {
-                channel->send_rate_begin_ts = 0;
-                channel->send_rate_counter = 0;
+            __xlogd("rtt = %lu psf = %lu\n", channel->rtt, channel->psf);
+
+            // 数据已发送，从待发送数据中减掉这部分长度
+            __atom_add(channel->msger->pos, pack->head.len);
+            __atom_add(channel->rpos, pack->head.len);
+            if (channel->rpos == channel->wpos){
+                channel->rtt_duration = 0;
+                channel->sampling_counter = 0;
+                channel->psf_begin = 0;
+                channel->psf = 0;
             }
+
+            channel->resend_counter = 0;
 
             // 更新已经到达对端的数据计数
             pack->msg->rpos += pack->head.len;
@@ -625,24 +626,29 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             pack = &channel->sendbuf->buf[rpack->head.ack.sn & (channel->sendbuf->range - 1)];
 
             if (pack->last_ts != 0){
-                channel->recv_ts = __xapi->clock();
                 // 累计新的一次往返时长
-                channel->rtt_duration += channel->recv_ts - pack->last_ts;
-                if (channel->rtt_counter < XCHANNEL_RTT_SAMPLING_COUNTS){
+                channel->rtt_duration += channel->ack_ts - pack->last_ts;
+                pack->last_ts = 0;
+                if (channel->sampling_counter < XCHANNEL_RTT_SAMPLING_COUNTS){
                     // 更新累计次数
-                    channel->rtt_counter++;
+                    channel->sampling_counter++;
+                    // 重新计算平均时长
+                    channel->rtt = channel->rtt_duration / channel->sampling_counter;
+                    if (channel->psf_begin == 0){
+                        channel->psf_begin = channel->ack_ts;
+                    }
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
+                    // 重新计算平均时长
+                    channel->rtt = channel->rtt_duration >> 8;
+                    if (channel->ack_ts - channel->ack_last_ts > channel->psf){
+                        channel->psf_duration = channel->ack_ts - channel->psf_begin - (channel->ack_ts - channel->ack_last_ts);
+                    }else {
+                        channel->psf_duration = channel->ack_ts - channel->psf_begin - channel->psf;
+                    }
+                    channel->psf = channel->psf_duration >> 8;
                 }
-                // 重新计算平均时长
-                channel->rtt = channel->rtt_duration / channel->rtt_counter;
-                pack->last_ts = 0;
-                // 从定时队列中移除
-                // __ring_list_take_out(&channel->flushlist, pack);
-                // 数据已发送，从待发送数据中减掉这部分长度
-                __atom_add(channel->rpos, pack->head.len);
-                __atom_add(channel->msger->pos, pack->head.len);
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
@@ -688,6 +694,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
         // __xlogd("xchannel_recv_ack >>>>-----------> (%u) OUT OF RANGE: %u\n", channel->peer_cid, rpack->head.sn);
 
     }
+
+    channel->ack_last_ts = channel->ack_ts;
 }
 
 static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
@@ -868,16 +876,18 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
             if (len < channel->sendbuf->range){
-                if (len < channel->threshold){
+                if (len < channel->threshold && channel->psf == 0){
                     xchannel_send_pack(channel);
                 }else {
-                    delay = channel->send_rate - (current_ts - channel->send_ts);
-                    if (delay > 0){
-                        if (msger->timer > delay){
-                            msger->timer = delay;
+                    if (channel->psf != 0){
+                        delay = channel->psf - (current_ts - channel->send_ts);
+                        if (delay > 0){
+                            if (msger->timer > delay){
+                                msger->timer = delay;
+                            }
+                        }else {
+                            xchannel_send_pack(channel);
                         }
-                    }else {
-                        xchannel_send_pack(channel);
                     }
                 }
             }
@@ -886,7 +896,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-                delay = (int64_t)((spack->last_ts + ((channel->rtt > 40000000UL ? channel->rtt : 40000000UL) * XCHANNEL_RTT_TIMEDOUT_COUNTS * spack->head.resend)) - current_ts);
+                delay = (int64_t)((channel->ack_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
                 if (delay >= 0) {
                     // 未超时
                     if (msger->timer > delay){
@@ -898,7 +908,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - channel->send_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - channel->ack_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
@@ -923,7 +933,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%lu]\n", 
                                 spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                 spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                channel->rtt / 1000000UL, channel->send_rate);
+                                channel->rtt / 1000000UL, channel->psf);
 
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
@@ -933,7 +943,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->last_ts = __xapi->clock();
                             // if (++channel->resend_counter > 1)
                             {
-                                if (channel->threshold > 16){
+                                if (channel->threshold > 8){
                                     channel->threshold--;
                                 }
                                 __xlogd(">>>>------------------------> RESEND LIMIT threshold=%u\n", channel->threshold);
