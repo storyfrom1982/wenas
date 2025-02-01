@@ -427,14 +427,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->send_ts = pack->first_ts;
 
             channel->spos += pack->head.len;
-            if (channel->spos != channel->wpos){
-                if (channel->send_rate_begin_ts == 0){
-                    channel->send_rate_begin_ts = channel->send_ts;
-                    channel->send_rate_counter = 0;
-                }
-            }else {
-                channel->send_rate_begin_ts = 0;
-            }
 
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
@@ -591,11 +583,19 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->resend_counter = 0;
             }
 
-            if (channel->send_rate_begin_ts != 0){
-                channel->send_rate_counter++;
-                channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts - channel->rtt) / channel->send_rate_counter;
-                __xlogd("send duration = %lu counter= %lu send rate = %lu\n", 
-                        (channel->recv_ts - channel->send_rate_begin_ts - channel->rtt), channel->send_rate_counter, channel->send_rate);
+            if (channel->spos != channel->wpos){
+                if (channel->send_rate_begin_ts == 0){
+                    channel->send_rate_begin_ts = channel->recv_ts;
+                    channel->send_rate_counter = 1;
+                }else {
+                    channel->send_rate_counter++;
+                    channel->send_rate = (channel->recv_ts - channel->send_rate_begin_ts) / channel->send_rate_counter;
+                    __xlogd("send duration = %lu counter= %lu send rate = %lu\n", 
+                            (channel->recv_ts - channel->send_rate_begin_ts), channel->send_rate_counter, channel->send_rate);
+                }
+            }else {
+                channel->send_rate_begin_ts = 0;
+                channel->send_rate_counter = 0;
             }
 
             // 更新已经到达对端的数据计数
