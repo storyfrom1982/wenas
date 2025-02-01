@@ -211,7 +211,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = 16;
+    channel->threshold = channel->threshold;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
     channel->send_rate = 1000000UL;
@@ -886,7 +886,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
-                delay = (int64_t)((spack->last_ts + ((channel->rtt > 10000000UL ? channel->rtt : 10000000UL) * XCHANNEL_RTT_TIMEDOUT_COUNTS * spack->head.resend)) - current_ts);
+                delay = (int64_t)((spack->last_ts + ((channel->rtt > 40000000UL ? channel->rtt : 40000000UL) * XCHANNEL_RTT_TIMEDOUT_COUNTS * spack->head.resend)) - current_ts);
                 if (delay >= 0) {
                     // 未超时
                     if (msger->timer > delay){
