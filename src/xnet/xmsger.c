@@ -571,10 +571,11 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     if (channel->psf_begin == 0){
                         channel->psf_begin = channel->ack_ts;
                         channel->ack_last_ts = channel->ack_ts;
-                        channel->psf_duration = 0;
+                        channel->psf_duration = channel->psf;
                     }else {
                         channel->psf_duration += channel->ack_ts - channel->ack_last_ts;
                     }
+                    channel->psf = channel->psf_duration / channel->sampling_counter;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
@@ -595,7 +596,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->rtt_duration = 0;
                 channel->sampling_counter = 0;
                 channel->psf_begin = 0;
-                channel->psf = 0;
+                // channel->psf = 0;
                 channel->ack_ts = 0;
             }
 
@@ -879,9 +880,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
             if (len < channel->sendbuf->range){
-                if (len < channel->threshold && channel->psf == 0){
-                    xchannel_send_pack(channel);
-                }else {
+                if (channel->psf > 0){
                     if (channel->psf != 0){
                         delay = channel->psf - (current_ts - channel->send_ts);
                         if (delay > 0){
@@ -892,6 +891,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             xchannel_send_pack(channel);
                         }
                     }
+                }else if (len < channel->threshold){
+                    xchannel_send_pack(channel);
                 }
             }
 
