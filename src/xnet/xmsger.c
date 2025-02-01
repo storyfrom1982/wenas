@@ -89,7 +89,6 @@ struct xchannel {
     uint64_t send_rate_counter;
     uint64_t send_rate_begin_ts;
 
-    uint8_t resend_counter;
     uint64_t recv_ts;
     uint64_t send_ts;
 
@@ -590,7 +589,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 __atom_add(channel->msger->pos, pack->head.len);
 
                 pack->last_ts = 0;
-                channel->resend_counter = 0;
             }
 
             // 更新已经到达对端的数据计数
@@ -863,7 +861,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
             if (len < channel->sendbuf->range){
-                if (len < 16){
+                if (len < 64){
                     xchannel_send_pack(channel);
                 }else {
                     delay = channel->send_rate - (current_ts - channel->send_ts);
@@ -915,7 +913,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // TODO ack 也要更新
                         }
 
-                        __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%u]\n", 
+                        __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%lu]\n", 
                                 spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                 spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
                                 channel->rtt / 1000000UL, channel->send_rate);
@@ -926,11 +924,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
-                            channel->resend_counter++;
-                            if (channel->rtt > 10000000UL && channel->resend_counter > 2){
-                                channel->send_rate = 0; // 停止发包
-                                __xlogd(">>>>------------------------> RESEND LIMIT\n");
-                            }
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
