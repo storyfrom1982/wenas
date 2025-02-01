@@ -600,8 +600,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->ack_ts = 0;
             }
 
-            channel->resend_counter = 0;
-
             // 更新已经到达对端的数据计数
             pack->msg->rpos += pack->head.len;
             if (pack->msg->rpos == pack->msg->wpos){
@@ -879,18 +877,19 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         {
             len = __serialbuf_readable(channel->sendbuf);
             // readable 是已经写入缓冲区还尚未发送的包
-            if (len < channel->sendbuf->range){
-                delay = channel->psf - (current_ts - channel->send_ts);
-                if (delay > 0){
-                    if (msger->timer > delay){
-                        msger->timer = delay;
+            if (channel->resend_counter > 0){
+                channel->resend_counter--;
+            }else {
+                if (len < channel->sendbuf->range){
+                    delay = channel->psf - (current_ts - channel->send_ts);
+                    if (delay > 0){
+                        if (msger->timer > delay){
+                            msger->timer = delay;
+                        }
+                    }else {
+                        xchannel_send_pack(channel);
                     }
-                }else {
-                    xchannel_send_pack(channel);
                 }
-                // else if (len < channel->threshold){
-                //     xchannel_send_pack(channel);
-                // }
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
@@ -955,13 +954,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->last_ts = __xapi->clock();
-                            // if (++channel->resend_counter > 1)
-                            {
-                                if (channel->threshold > 8){
-                                    channel->threshold--;
-                                }
-                                __xlogd(">>>>------------------------> RESEND LIMIT threshold=%u\n", channel->threshold);
-                            }
+                            channel->resend_counter++;
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
