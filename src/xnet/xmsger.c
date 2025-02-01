@@ -909,7 +909,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 //     __xlogd("delay = %lu send ts = %lu threshold = %u\n", delay, begin_ts, channel->threshold);
                 // }
 
-                begin_ts = channel->send_ts;
+                begin_ts = spack->first_ts;
 
                 delay = (int64_t)((begin_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
 
