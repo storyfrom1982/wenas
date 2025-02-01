@@ -913,6 +913,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 delay = (int64_t)((begin_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
 
+                __xlogd("delay = %lu begin ts = %lu\n", delay, begin_ts);
+
                 if (delay >= 0) {
                     // 未超时
                     if (msger->timer > delay){
