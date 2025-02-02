@@ -850,15 +850,16 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }else {
                 channel->threshold = __serialbuf_readable(channel->sendbuf);
                 if (channel->threshold < channel->sendbuf->range){
-                    if (channel->threshold < 20){
-                        channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
-                    }else if (channel->threshold < 40){
-                        channel->psf = (channel->threshold - 9 + 1) * 10000UL; // 20 - 110 微妙
-                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    }else {
-                        channel->psf = (channel->threshold - 19 + 1) * 100000UL * (channel->threshold / 20); // 200 - 13800 微妙
-                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    }
+                    channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
+                    // if (channel->threshold < 20){
+                    //     channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
+                    // }else if (channel->threshold < 40){
+                    //     channel->psf = (channel->threshold - 9 + 1) * 10000UL; // 20 - 110 微妙
+                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    // }else {
+                    //     channel->psf = (channel->threshold - 19 + 1) * 100000UL * (channel->threshold / 20); // 200 - 13800 微妙
+                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    // }
                     delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
