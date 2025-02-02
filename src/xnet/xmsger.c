@@ -16,7 +16,7 @@
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
-#define XCHANNEL_RTT_TIMEDOUT_COUNTS    2
+#define XCHANNEL_RTT_TIMEDOUT_COUNTS    1.5
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
 typedef struct xhead {
@@ -47,6 +47,7 @@ typedef struct xpack {
     uint64_t first_ts; // 计算往返耗时
     uint64_t last_ts; // 累计超时时长
     uint64_t rtt;
+    uint64_t timedout;
     xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -426,6 +427,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             pack->first_ts = pack->last_ts = __xapi->clock();
             channel->send_ts = pack->first_ts;
+            pack->timedout = channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS * 2;
 
             channel->spos += pack->head.len;
 
@@ -677,7 +679,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                                     pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                pack->last_ts = __xapi->clock();
+                                pack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
                                 break; // 每次只重传一个包
                             }else {
                                 __xlogd("xchannel_recv_ack >>>>------------------------> SEND FAILED\n");
@@ -896,29 +898,17 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         }
                     }else {
                         xchannel_send_pack(channel);
+                        __xlogd("psf = %lu len = %u\n", psf, len);
                     }
                 }
             }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
-                uint64_t begin_ts;
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                // if (channel->ack_ts > 0){
-                //     begin_ts = channel->ack_ts;
-                //     __xlogd("delay = %lu ack ts = %lu threshold = %u\n", delay, begin_ts, channel->threshold);
-                // }else {
-                //     begin_ts = channel->send_ts;
-                //     __xlogd("delay = %lu send ts = %lu threshold = %u\n", delay, begin_ts, channel->threshold);
-                // }
-
-                begin_ts = spack->first_ts;
-
-                delay = (int64_t)((begin_ts + channel->rtt * XCHANNEL_RTT_TIMEDOUT_COUNTS) - current_ts);
-
-                if (delay >= 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - spack->first_ts))) > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
@@ -929,7 +919,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - begin_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - spack->first_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
@@ -954,14 +944,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%lu]\n", 
                                 spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                 spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                channel->rtt / 1000000UL, channel->psf);
+                                channel->rtt / 1000000UL, psf);
 
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                             // 记录重传次数
                             spack->head.resend++;
                             // 最后一个待确认包的超时时间加上平均往返时长
-                            spack->last_ts = __xapi->clock();
+                            spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
                             channel->resend_counter++;
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
