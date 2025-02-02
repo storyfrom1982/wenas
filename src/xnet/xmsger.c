@@ -851,21 +851,22 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }else {
                 channel->psf_scale = __serialbuf_readable(channel->sendbuf);
                 if (channel->psf_scale < channel->threshold){
-                    channel->psf = (channel->psf_scale) * 1000UL;
+                    // channel->psf = (channel->psf_scale) * 1000UL;
                     // if (channel->threshold > (channel->serial_range >> 1)){
                     //     channel->psf_factor = 1000UL;
                     // }else {
                     //     channel->psf_factor = 10000UL;
                     // }
-                    // if (channel->psf_scale < 10){
-                    //     channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-                    // }else if (channel->psf_scale < 20){
-                    //     channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
-                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    // }else {
-                    //     channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
-                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    // }
+                    channel->psf_factor = 1000UL;
+                    if (channel->psf_scale < 10){
+                        channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
+                    }else if (channel->psf_scale < 20){
+                        channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
+                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    }else {
+                        channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
+                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    }
                     delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
