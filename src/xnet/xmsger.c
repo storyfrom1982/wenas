@@ -851,20 +851,21 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }else {
                 channel->psf_scale = __serialbuf_readable(channel->sendbuf);
                 if (channel->psf_scale < channel->threshold){
-                    if (channel->threshold > (channel->serial_range >> 1)){
-                        channel->psf_factor = 1000UL;
-                    }else {
-                        channel->psf_factor = 10000UL;
-                    }
-                    if (channel->psf_scale < 10){
-                        channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-                    }else if (channel->psf_scale < 20){
-                        channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
-                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    }else {
-                        channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
-                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    }
+                    channel->psf = (channel->psf_scale) * 1000UL;
+                    // if (channel->threshold > (channel->serial_range >> 1)){
+                    //     channel->psf_factor = 1000UL;
+                    // }else {
+                    //     channel->psf_factor = 10000UL;
+                    // }
+                    // if (channel->psf_scale < 10){
+                    //     channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
+                    // }else if (channel->psf_scale < 20){
+                    //     channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
+                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    // }else {
+                    //     channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
+                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    // }
                     delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
@@ -920,11 +921,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             channel->resend_counter++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
-                            if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
-                                if (channel->threshold > (channel->serial_range >> 1)){
-                                    channel->threshold--;
-                                }
-                            }
+                            // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
+                            //     if (channel->threshold > (channel->serial_range >> 1)){
+                            //         channel->threshold--;
+                            //     }
+                            // }
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] SCALE[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, channel->psf_scale,
