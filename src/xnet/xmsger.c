@@ -874,7 +874,13 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                if ((delay = (int64_t)(spack->timedout - (current_ts - spack->ts))) > 0) {
+                if (channel->ack_ts > 0){
+                    delay = (int64_t)(spack->timedout - (current_ts - channel->ack_ts));
+                }else {
+                    delay = (int64_t)(spack->timedout - (current_ts - spack->ts));
+                }
+
+                if (delay > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
