@@ -667,8 +667,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
     }else {
 
-        // __xlogd("xchannel_recv_ack >>>>-----------> (%u) OUT OF RANGE: %u\n", channel->peer_cid, rpack->head.sn);
-        channel->resend_factor *= 1.1f;
+        
+        channel->resend_factor *= 1.15;
+        __xlogd("xchannel_recv_ack >>>>-----------> OUT OF RANGE: %u RESEND FACTOR: %f\n", rpack->head.sn, channel->resend_factor);
 
     }
 }
