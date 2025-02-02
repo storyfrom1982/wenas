@@ -921,8 +921,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->head.resend++;
                             channel->resend_counter++;
-                            // 最后一个待确认包的超时时间加上平均往返时长
-                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
                             //     if (channel->threshold > (channel->serial_range >> 1)){
                             //         channel->threshold--;
@@ -932,6 +930,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, spack->timedout / 1000000UL, (current_ts - spack->ts) / 1000000UL, delay / 1000000L,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
