@@ -15,7 +15,7 @@
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
-#define XCHANNEL_TIMEDOUT_LIMIT         20
+#define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_TIMEDOUT_COUNTS    1.5
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
@@ -579,7 +579,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->rpos, pack->head.len);
             if (channel->rpos == channel->wpos){
                 channel->ack_ts = 0;
-                channel->threshold = 0;
+                channel->threshold = channel->serial_range;
             }
 
             // 更新已经到达对端的数据计数
