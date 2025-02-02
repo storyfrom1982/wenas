@@ -422,7 +422,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            pack->timedout = channel->rtt * channel->resend_factor;
+            // pack->timedout = channel->rtt * channel->resend_factor;
+            pack->timedout = 100000000UL; // 100 毫秒
 
             channel->spos += pack->head.len;
 
