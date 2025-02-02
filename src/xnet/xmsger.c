@@ -15,7 +15,7 @@
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
-#define XCHANNEL_TIMEDOUT_LIMIT         10
+#define XCHANNEL_TIMEDOUT_LIMIT         20
 #define XCHANNEL_RTT_TIMEDOUT_COUNTS    1.5
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
@@ -930,9 +930,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     channel->threshold--;
                                 }
                             }
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RTT[%lu] COUNT[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] THRESHOLD[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    channel->rtt / 1000000UL, spack->head.resend,
+                                    spack->head.resend, channel->threshold,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
