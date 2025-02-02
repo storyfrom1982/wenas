@@ -863,10 +863,10 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         channel->psf = (channel->threshold + 1) * channel->psf_factor;
                     }else if (channel->threshold < 20){
                         channel->psf = (channel->threshold - 9 + 1) * channel->psf_factor * 10;
-                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }else {
                         channel->psf = (channel->threshold - 19 + 1) * channel->psf_factor * 100;
-                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                        // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }
                     delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
