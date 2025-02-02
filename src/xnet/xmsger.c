@@ -401,8 +401,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_spos(channel->sendbuf)];
 
-        __xlogd("<SEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>------> SN[%u]\n", 
-            pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
+        __xlogd("<SEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] PSF[%lu] ACK[%u:%u:%u] >>>>------> SN[%u]\n", 
+            pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, channel->psf,
             pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
 
         if (channel->ack.ack.type != 0){
@@ -588,8 +588,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     // channel->psf = channel->psf_duration >> 8;
                 }
             }
-
-            __xlogd("rtt = %lu psf = %lu threshold = %u\n", channel->rtt, channel->psf, channel->threshold);
 
             // 数据已发送，从待发送数据中减掉这部分长度
             __atom_add(channel->msger->pos, pack->head.len);
@@ -863,8 +861,6 @@ XClean:
 
 static inline int xmsger_send_all(xmsger_ptr msger)
 {
-    uint16_t len;
-    uint64_t psf;
     static int64_t delay;
     static xpack_ptr spack;
     static xchannel_ptr channel;
@@ -883,18 +879,18 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (channel->resend_counter > 0){
                 channel->resend_counter--;
             }else {
-                len = __serialbuf_readable(channel->sendbuf);
-                if (len < channel->sendbuf->range){
-                    if (len < 10){
-                        psf = (len + 1) * 1000UL; // 1 - 10 微妙
-                    }else if (len < 20){
-                        psf = (len - 9 + 1) * 10000UL; // 20 - 110 微妙
-                        __xlogd("psf = %lu len = %u\n", psf, len);
+                channel->threshold = __serialbuf_readable(channel->sendbuf);
+                if (channel->threshold < channel->sendbuf->range){
+                    if (channel->threshold < 10){
+                        channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
+                    }else if (channel->threshold < 20){
+                        channel->psf = (channel->threshold - 9 + 1) * 10000UL; // 20 - 110 微妙
+                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }else {
-                        psf = (len - 19 + 1) * 100000UL * (len / 20); // 200 - 13800 微妙
-                        __xlogd("psf = %lu len = %u\n", psf, len);
+                        channel->psf = (channel->threshold - 19 + 1) * 100000UL * (channel->threshold / 20); // 200 - 13800 微妙
+                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }
-                    delay = psf - (current_ts - channel->send_ts);
+                    delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
                             msger->timer = delay;
@@ -946,7 +942,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] SendRate[%lu]\n", 
                                 spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                 spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                channel->rtt / 1000000UL, psf);
+                                channel->rtt / 1000000UL, channel->psf);
 
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
