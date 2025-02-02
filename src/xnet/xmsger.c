@@ -863,7 +863,8 @@ XClean:
 
 static inline int xmsger_send_all(xmsger_ptr msger)
 {
-    uint16_t len, psf;
+    uint16_t len;
+    uint64_t psf;
     static int64_t delay;
     static xpack_ptr spack;
     static xchannel_ptr channel;
