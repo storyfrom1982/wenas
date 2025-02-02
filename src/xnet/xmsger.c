@@ -17,7 +17,7 @@
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
-#define XCHANNEL_RESEND_SCALING_FACTOR  2
+#define XCHANNEL_RESEND_SCALING_FACTOR  1.5
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -83,7 +83,6 @@ struct xchannel {
     uint16_t serial_range;
     uint16_t threshold;
     uint16_t resend_counter;
-    float resend_factor;
 
     uint64_t psf; // packet sending frequency
     uint16_t psf_scale;
@@ -213,7 +212,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->threshold = serial_range;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
-    channel->resend_factor = XCHANNEL_RESEND_SCALING_FACTOR;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
@@ -422,8 +420,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            // pack->timedout = channel->rtt * channel->resend_factor;
-            pack->timedout = 120000000UL; // 100 毫秒
+            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
 
             channel->spos += pack->head.len;
 
@@ -649,7 +646,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 channel->resend_counter++;
-                                pack->timedout *= channel->resend_factor;
+                                pack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                                 __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] DELAY[%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                         pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->timedout / 1000000UL,
                                         pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
@@ -925,15 +922,15 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             channel->resend_counter++;
                             // 最后一个待确认包的超时时间加上平均往返时长
-                            spack->timedout *= channel->resend_factor;
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
                             //     if (channel->threshold > (channel->serial_range >> 1)){
                             //         channel->threshold--;
                             //     }
                             // }
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] SCALE[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] DELAY[%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->psf_scale,
+                                    spack->head.resend, spack->timedout,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
