@@ -927,7 +927,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
                             if (spack->head.resend > 1){
                                 if (channel->threshold > 10){
-                                    channel->threshold--;
+                                    channel->threshold *= 0.9f;
                                 }
                             }
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] THRESHOLD[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
