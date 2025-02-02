@@ -888,7 +888,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         psf = (len + 1) * 1000UL; // 1 - 10 微妙
                     }else if (len < 20){
                         psf = (len - 9 + 1) * 10000UL; // 20 - 110 微妙
-                    }else if (len < 30){
+                    }else {
                         psf = (len - 19 + 1) * 100000UL * (len / 20); // 200 - 13800 微妙
                     }
                     delay = psf - (current_ts - channel->send_ts);
