@@ -919,11 +919,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             channel->resend_counter++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
-                            // if (channel->psf_scale == channel->serial_range && spack->head.resend > 3){
-                            //     if (channel->threshold > (channel->serial_range >> 1)){
-                            //         channel->threshold--;
-                            //     }
-                            // }
+                            if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
+                                if (channel->threshold > (channel->serial_range >> 1)){
+                                    channel->threshold--;
+                                }
+                            }
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] SCALE[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, channel->psf_scale,
