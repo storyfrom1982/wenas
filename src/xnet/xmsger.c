@@ -645,6 +645,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             }
 
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
+                                channel->resend_counter++;
                                 pack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
                                 __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] DELAY[%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                         pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->timedout / 1000000UL,
