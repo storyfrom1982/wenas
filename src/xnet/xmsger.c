@@ -81,10 +81,11 @@ struct xchannel {
     int sock;
 
     uint16_t serial_range;
-    uint16_t threshold;
     uint16_t resend_counter;
+    uint16_t threshold;
 
     uint64_t psf; // packet sending frequency
+    uint16_t psf_factor;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
@@ -207,7 +208,8 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = 64;
+    channel->threshold = serial_range;
+    channel->psf_factor = 64;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
     channel->psf = 10000UL;
@@ -577,6 +579,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->rpos, pack->head.len);
             if (channel->rpos == channel->wpos){
                 channel->ack_ts = 0;
+                channel->threshold = 0;
             }
 
             // 更新已经到达对端的数据计数
@@ -848,9 +851,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (channel->resend_counter > 0){
                 channel->resend_counter--;
             }else {
-                channel->threshold = __serialbuf_readable(channel->sendbuf);
-                if (channel->threshold < channel->sendbuf->range){
-                    channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
+                channel->psf_factor = __serialbuf_readable(channel->sendbuf);
+                if (channel->psf_factor < channel->threshold){
+                    channel->psf = (channel->psf_factor + 1) * 1000UL; // 1 - 10 微妙
                     // if (channel->threshold < 20){
                     //     channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
                     // }else if (channel->threshold < 40){
@@ -922,10 +925,15 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             channel->resend_counter++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] ACK[%u:%u:%u] >>>>-----> SN[%u] RTT[%lu] DELAY[%lu]\n", 
+                            if (spack->head.resend > 1){
+                                if (channel->threshold > 10){
+                                    channel->threshold--;
+                                }
+                            }
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RTT[%lu] COUNT[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn, 
-                                    channel->rtt / 1000000UL, spack->timedout);
+                                    channel->rtt / 1000000UL, spack->head.resend,
+                                    spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
