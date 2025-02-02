@@ -919,6 +919,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                             // 记录重传次数
+                            spack->ts = current_ts;
                             spack->head.resend++;
                             channel->resend_counter++;
                             // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
