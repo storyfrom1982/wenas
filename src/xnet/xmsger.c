@@ -17,7 +17,7 @@
 
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
-#define XCHANNEL_RESEND_SCALING_FACTOR  1.5
+#define XCHANNEL_RESEND_SCALING_FACTOR  2
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -423,7 +423,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
             // pack->timedout = channel->rtt * channel->resend_factor;
-            pack->timedout = 100000000UL; // 100 毫秒
+            pack->timedout = 120000000UL; // 100 毫秒
 
             channel->spos += pack->head.len;
 
@@ -668,7 +668,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
     }else {
 
         
-        channel->resend_factor *= 1.15;
+        // channel->resend_factor *= 1.5;
         __xlogd("xchannel_recv_ack >>>>-----------> OUT OF RANGE: %u RESEND FACTOR: %f\n", rpack->head.sn, channel->resend_factor);
 
     }
