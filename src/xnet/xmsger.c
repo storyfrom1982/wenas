@@ -926,9 +926,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
                                 channel->threshold >>= 1;
                             }
-                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] THRESHOLD[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] SCALE[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->threshold,
+                                    spack->head.resend, channel->psf_scale,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
