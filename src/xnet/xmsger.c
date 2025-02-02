@@ -858,9 +858,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     //     channel->psf_factor = 10000UL;
                     // }
                     channel->psf_factor = 1000UL;
-                    if (channel->psf_scale < 10){
+                    if (channel->psf_scale < 20){
                         channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-                    }else if (channel->psf_scale < 20){
+                    }else if (channel->psf_scale < 40){
                         channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
                         // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }else {
