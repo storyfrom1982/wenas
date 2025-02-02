@@ -420,8 +420,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            if (channel->rtt < 40000000UL){
-                pack->timedout = 40000000UL * XCHANNEL_RESEND_SCALING_FACTOR;
+            if (channel->rtt < 80000000UL){
+                pack->timedout = 80000000UL * XCHANNEL_RESEND_SCALING_FACTOR;
             }else {
                 pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
             }
