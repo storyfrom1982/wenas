@@ -9,7 +9,7 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  256
+#define XPACK_SERIAL_RANGE  64
 #define XPACK_SEND_RATE     100000UL // 1 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
@@ -861,12 +861,11 @@ XClean:
 
 static inline int xmsger_send_all(xmsger_ptr msger)
 {
-    uint16_t len;
+    uint16_t len, psf;
     static int64_t delay;
     static xpack_ptr spack;
     static xchannel_ptr channel;
-    uint64_t current_ts = __xapi->clock();
-
+    
     // 判断待发送队列中是否有内容
     if (msger->sendlist.len > 0){
 
@@ -875,13 +874,22 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
         while (channel != &msger->sendlist.head)
         {
-            len = __serialbuf_readable(channel->sendbuf);
+            uint64_t current_ts = __xapi->clock();
+
             // readable 是已经写入缓冲区还尚未发送的包
             if (channel->resend_counter > 0){
                 channel->resend_counter--;
             }else {
+                len = __serialbuf_readable(channel->sendbuf);
                 if (len < channel->sendbuf->range){
-                    delay = channel->psf - (current_ts - channel->send_ts);
+                    if (len < 10){
+                        psf = (len + 1) * 1000UL; // 1 - 10 微妙
+                    }else if (len < 20){
+                        psf = (len - 9 + 1) * 10000UL; // 20 - 110 微妙
+                    }else if (len < 30){
+                        psf = (len - 19 + 1) * 100000UL * (len / 20); // 200 - 13800 微妙
+                    }
+                    delay = psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
                             msger->timer = delay;
