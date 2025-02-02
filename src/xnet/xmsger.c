@@ -850,9 +850,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             }else {
                 channel->threshold = __serialbuf_readable(channel->sendbuf);
                 if (channel->threshold < channel->sendbuf->range){
-                    if (channel->threshold < 10){
+                    if (channel->threshold < 20){
                         channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
-                    }else if (channel->threshold < 30){
+                    }else if (channel->threshold < 40){
                         channel->psf = (channel->threshold - 9 + 1) * 10000UL; // 20 - 110 微妙
                         // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
                     }else {
