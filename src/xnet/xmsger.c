@@ -15,7 +15,7 @@
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
-#define XCHANNEL_TIMEDOUT_LIMIT         20
+#define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_TIMEDOUT_COUNTS    1.5
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 
@@ -85,6 +85,7 @@ struct xchannel {
     uint16_t threshold;
 
     uint64_t psf; // packet sending frequency
+    uint16_t psf_scale;
     uint16_t psf_factor;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
@@ -209,7 +210,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->msger = msger;
     channel->serial_range = serial_range;
     channel->threshold = serial_range;
-    channel->psf_factor = 64;
+    channel->psf_scale = 64;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 80000000UL;
     channel->psf = 10000UL;
@@ -851,18 +852,22 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (channel->resend_counter > 0){
                 channel->resend_counter--;
             }else {
-                channel->psf_factor = __serialbuf_readable(channel->sendbuf);
-                if (channel->psf_factor < channel->threshold){
-                    channel->psf = (channel->psf_factor + 1) * 1000UL; // 1 - 10 微妙
-                    // if (channel->threshold < 20){
-                    //     channel->psf = (channel->threshold + 1) * 1000UL; // 1 - 10 微妙
-                    // }else if (channel->threshold < 40){
-                    //     channel->psf = (channel->threshold - 9 + 1) * 10000UL; // 20 - 110 微妙
-                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    // }else {
-                    //     channel->psf = (channel->threshold - 19 + 1) * 100000UL * (channel->threshold / 20); // 200 - 13800 微妙
-                    //     // __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
-                    // }
+                channel->psf_scale = __serialbuf_readable(channel->sendbuf);
+                if (channel->psf_scale < channel->threshold){
+                    if (channel->threshold < channel->serial_range){
+                        channel->psf_factor = 10000UL;
+                    }else {
+                        channel->psf_factor = 1000UL;
+                    }
+                    if (channel->threshold < 10){
+                        channel->psf = (channel->threshold + 1) * channel->psf_factor;
+                    }else if (channel->threshold < 20){
+                        channel->psf = (channel->threshold - 9 + 1) * channel->psf_factor * 10;
+                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    }else {
+                        channel->psf = (channel->threshold - 19 + 1) * channel->psf_factor * 100;
+                        __xlogd("psf = %lu len = %u\n", channel->psf, channel->threshold);
+                    }
                     delay = channel->psf - (current_ts - channel->send_ts);
                     if (delay > 0){
                         if (msger->timer > delay){
@@ -879,24 +884,17 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                if (channel->ack_ts > 0){
-                    delay = (int64_t)(spack->timedout - (current_ts - channel->ack_ts));
-                }else {
-                    delay = (int64_t)(spack->timedout - (current_ts - spack->ts));
-                }
-
-                if (delay > 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - spack->ts))) > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
                         msger->timer = delay;
                     }
                     // 第一个包未超时，后面的包就都没有超时
-                    break;
 
                 }else {
 
-                    if (current_ts - spack->ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - channel->send_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
@@ -925,10 +923,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             channel->resend_counter++;
                             // 最后一个待确认包的超时时间加上平均往返时长
                             spack->timedout *= XCHANNEL_RTT_TIMEDOUT_COUNTS;
-                            if (spack->head.resend > 1){
-                                if (channel->threshold > 10){
-                                    channel->threshold *= 0.9f;
-                                }
+                            if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
+                                channel->threshold >>= 1;
                             }
                             __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] THRESHOLD[%u] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
