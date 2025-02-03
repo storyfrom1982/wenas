@@ -565,7 +565,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->prf_duration = channel->ack_ts - channel->ack_last;
                 }
                 if (channel->prf_duration > channel->prf){
-                    channel->prf = channel->prf_duration;
+                    channel->prf = (channel->prf + channel->prf_duration) >> 1;
                 }
                 // 累计新的一次往返时长
                 channel->rtt_duration += channel->ack_ts - pack->ts;
@@ -626,9 +626,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             if (pack->ts != 0){
                 if (channel->ack_last > 0){
-                    channel->prf_duration += channel->ack_ts - channel->ack_last;
-                }else {
-                    channel->prf_duration += channel->prf;
+                    channel->prf_duration = channel->ack_ts - channel->ack_last;
+                }
+                if (channel->prf_duration > channel->prf){
+                    channel->prf = (channel->prf + channel->prf_duration) >> 1;
                 }
                 // 累计新的一次往返时长
                 channel->rtt_duration += channel->ack_ts - pack->ts;
@@ -638,15 +639,14 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->rtt_counter++;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration / channel->rtt_counter;
-                    channel->prf = channel->prf_duration / channel->rtt_counter;
                 }else {
                     // 已经到达累计次数，需要减掉一次平均时长
                     channel->rtt_duration -= channel->rtt;
                     // 重新计算平均时长
                     channel->rtt = channel->rtt_duration >> 8;
-                    channel->prf_duration -= channel->prf;
-                    channel->prf = channel->prf_duration >> 8;
                 }
+
+                __xlogd("prf = %lu last = %lu\n", channel->prf, channel->ack_ts - channel->ack_last);
             }
 
             // ack 与 rpos 的间隔大于一才进行重传
@@ -951,7 +951,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->ts = current_ts;
                             spack->head.resend++;
-                            spack->timedout *= 4;
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             channel->resend_counter++;
                             if (channel->threshold > 8){
                                 channel->threshold -= spack->head.resend;
