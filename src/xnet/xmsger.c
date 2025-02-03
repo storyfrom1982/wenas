@@ -907,15 +907,16 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 current_ts = __xapi->clock();
+                uint64_t last_ts;
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
                 if (channel->ack_last > 0){
-                    delay = (int64_t)(spack->timedout - (current_ts - channel->ack_last));
+                    last_ts = channel->ack_last;
                 }else {
-                    delay = (int64_t)(spack->timedout - (current_ts - channel->send_ts));
+                    last_ts = channel->send_ts;
                 }
 
-                if (delay > 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
@@ -925,7 +926,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - channel->send_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - last_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
@@ -952,15 +953,16 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->ts = current_ts;
                             spack->head.resend++;
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             channel->resend_counter++;
                             if (channel->threshold > 8){
                                 channel->threshold -= spack->head.resend;
                             }
-                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, delay / 1000000L,
+                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout, delay / 1000000L,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
-                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
+                            
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
