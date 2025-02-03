@@ -951,10 +951,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->ts = current_ts;
                             spack->head.resend++;
                             channel->resend_counter++;
-                            if (channel->psf_scale == channel->serial_range){
-                                if (channel->threshold > 16){
-                                    channel->threshold--;
-                                }
+                            if (channel->threshold > 16){
+                                channel->threshold--;
                             }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
