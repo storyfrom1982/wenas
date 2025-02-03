@@ -424,7 +424,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
             if (channel->ack_last > 0){
-                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR;
+                pack->timedout = channel->prf * 3;
             }else {
                 pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
             }
