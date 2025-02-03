@@ -953,14 +953,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->ts = current_ts;
                             spack->head.resend++;
-                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
+                            spack->timedout *= 4;
                             channel->resend_counter++;
                             if (channel->threshold > 8){
                                 channel->threshold -= spack->head.resend;
                             }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout, delay / 1000000L,
+                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout / 1000000UL, delay / 1000000L,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                             
                         }else {
