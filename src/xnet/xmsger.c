@@ -862,7 +862,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 channel->psf_scale = __serialbuf_readable(channel->sendbuf);
                 if (channel->psf_scale < channel->threshold){
                     // channel->psf = (channel->psf_scale) * 1000UL;
-                    channel->psf_factor = 1000UL;
+                    if (channel->threshold < channel->sendbuf->range){
+                        channel->psf_factor = 10000UL;
+                    }else {
+                        channel->psf_factor = 1000UL;
+                    }
                     if (channel->psf_scale < 10){
                         channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
                     }else if (channel->psf_scale < 20){
@@ -929,11 +933,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             channel->resend_counter++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
-                            // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
-                            //     if (channel->threshold > (channel->serial_range >> 1)){
-                            //         channel->threshold--;
-                            //     }
-                            // }
+                            if (spack->timedout > NANO_SECONDS){
+                                if (channel->threshold > 8){
+                                    channel->threshold >>= 1;
+                                }
+                            }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] PSF[%u:%u] DELAY[%u:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     channel->psf, channel->psf_scale, spack->head.resend, spack->timedout / 1000000UL, delay,
