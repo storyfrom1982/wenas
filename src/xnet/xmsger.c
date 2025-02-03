@@ -938,9 +938,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                                     channel->threshold >>= 1;
                                 }
                             }
-                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] PSF[%u:%u] DELAY[%u:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] PSF[%lu:%u:%u] DELAY[%u:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    channel->psf, channel->psf_scale, spack->head.resend, spack->timedout / 1000000UL, delay,
+                                    channel->psf, channel->psf_scale, channel->threshold, spack->head.resend, spack->timedout / 1000000UL, delay,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
