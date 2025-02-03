@@ -896,7 +896,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     last_ts = channel->ack_ts;
                     delay = (int64_t)(spack->timedout - (current_ts - channel->ack_ts));
                 }else {
-                    last_ts = channel->ack_ts;
+                    last_ts = channel->send_ts;
                     delay = (int64_t)(spack->timedout - (current_ts - channel->send_ts));
                 }
 
@@ -915,7 +915,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         if (!channel->timedout){
                             channel->timedout = true;
                             __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%lu)\n", 
-                                    __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, (current_ts - spack->ts) / 1000000UL);
+                                    __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, (current_ts - last_ts) / 1000000UL);
                             msger->cb->on_message_timedout(msger->cb, channel, spack->msg);
                         }
                         break;
