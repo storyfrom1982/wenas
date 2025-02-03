@@ -673,8 +673,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 channel->resend_counter++;
                                 pack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
-                                __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] DELAY[%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
-                                        pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->timedout / 1000000UL,
+                                __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                                        pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
+                                        pack->head.resend, channel->threshold, channel->prf / 1000000UL, pack->timedout / 1000000UL,
                                         pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                                 break; // 每次只重传一个包
                             }else {
