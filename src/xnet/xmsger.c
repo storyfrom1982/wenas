@@ -584,7 +584,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->prf = channel->prf_duration >> 8;
                 }
 
-                __xlogd("prf = %lu\n", channel->prf);
+                __xlogd("prf = %lu last = %lu\n", channel->prf, channel->ack_ts - channel->ack_last);
             }
 
             // 数据已发送，从待发送数据中减掉这部分长度
@@ -916,7 +916,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     last_ts = channel->send_ts;
                 }
 
-                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) >= 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
