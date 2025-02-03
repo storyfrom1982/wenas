@@ -613,7 +613,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
 
-            xchannel_send_pack(channel);
+            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+                xchannel_send_pack(channel);
+            }
         }
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
@@ -952,7 +954,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             channel->resend_counter++;
                             if (channel->threshold > 16){
-                                channel->threshold--;
+                                channel->threshold -= spack->head.resend;
                             }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
