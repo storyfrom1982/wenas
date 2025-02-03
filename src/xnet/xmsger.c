@@ -583,7 +583,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                     channel->prf = channel->prf_duration >> 8;
                 }
 
-                __xlogd("prf = %lu\n");
+                __xlogd("prf = %lu\n", channel->prf);
             }
 
             // 数据已发送，从待发送数据中减掉这部分长度
@@ -592,6 +592,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             if (channel->rpos == channel->wpos){
                 channel->threshold = channel->serial_range;
                 channel->ack_ts = channel->ack_last = 0;
+                channel->rtt_counter = 0;
             }
 
             // 更新已经到达对端的数据计数
