@@ -423,12 +423,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            // if (channel->ack_last > 0){
-            //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR;
-            // }else {
-            //     pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
-            // }
+            // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            if (channel->ack_last > 0){
+                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR;
+            }else {
+                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
+            }
             channel->spos += pack->head.len;
 
             // 如果有待发送数据，确保 sendable 会大于 0
