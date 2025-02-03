@@ -901,10 +901,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 current_ts = __xapi->clock();
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                if (channel->ack_ts == 0){
-                    delay = (int64_t)(spack->timedout - (current_ts - channel->send_ts));
+                if (channel->ack_last > 0){
+                    delay = (int64_t)(spack->timedout - (current_ts - channel->ack_last));
+                    __xlogd("prf=%lu timedout=%lu:%lu:%ld\n", channel->prf, spack->timedout, (current_ts - channel->ack_last), delay);
                 }else {
-                    delay = (int64_t)(spack->timedout - (current_ts - channel->ack_ts));
+                    delay = (int64_t)(spack->timedout - (current_ts - channel->send_ts));
                 }
 
                 if (delay > 0) {
