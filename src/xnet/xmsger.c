@@ -887,10 +887,13 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 current_ts = __xapi->clock();
+                uint64_t last_ts;
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
                 if (channel->ack_ts > 0){
+                    last_ts = channel->ack_ts;
                     delay = (int64_t)(spack->timedout - (current_ts - channel->ack_ts));
                 }else {
+                    last_ts = channel->ack_ts;
                     delay = (int64_t)(spack->timedout - (current_ts - channel->send_ts));
                 }
 
@@ -904,7 +907,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
                 }else {
 
-                    if (current_ts - channel->send_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
+                    if (current_ts - last_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT)
                     {
                         if (!channel->timedout){
                             channel->timedout = true;
