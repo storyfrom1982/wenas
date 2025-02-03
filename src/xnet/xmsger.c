@@ -425,9 +425,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->ts = channel->send_ts;
             // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             if (channel->ack_last > 0){
-                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR;
+                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             }else {
-                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
+                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             }
             channel->spos += pack->head.len;
 
@@ -953,7 +953,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->ts = current_ts;
                             spack->head.resend++;
                             channel->resend_counter++;
-                            if (channel->threshold > 16){
+                            if (channel->threshold > 8){
                                 channel->threshold -= spack->head.resend;
                             }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
