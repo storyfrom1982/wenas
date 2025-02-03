@@ -856,33 +856,36 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             uint64_t current_ts = __xapi->clock();
 
             // readable 是已经写入缓冲区还尚未发送的包
-            if (channel->resend_counter > 0){
-                channel->resend_counter--;
-            }else {
-                channel->psf_scale = __serialbuf_readable(channel->sendbuf);
-                if (channel->psf_scale < channel->threshold){
-                    // channel->psf = (channel->psf_scale) * 1000UL;
-                    if (channel->threshold < channel->sendbuf->range){
-                        channel->psf_factor = 10000UL;
-                    }else {
-                        channel->psf_factor = 1000UL;
-                    }
-                    if (channel->psf_scale < 10){
-                        channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-                    }else if (channel->psf_scale < 20){
-                        channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
-                    }else {
-                        channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
-                    }
-                    if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
-                        if (msger->timer > delay){
-                            msger->timer = delay;
-                        }
-                    }else {
-                        xchannel_send_pack(channel);
-                    }
-                }
+            if (__serialbuf_readable(channel->sendbuf) < channel->sendbuf->range){
+                xchannel_send_pack(channel);
             }
+            // if (channel->resend_counter > 0){
+            //     channel->resend_counter--;
+            // }else {
+            //     channel->psf_scale = __serialbuf_readable(channel->sendbuf);
+            //     if (channel->psf_scale < channel->threshold){
+            //         // channel->psf = (channel->psf_scale) * 1000UL;
+            //         if (channel->threshold < channel->sendbuf->range){
+            //             channel->psf_factor = 10000UL;
+            //         }else {
+            //             channel->psf_factor = 1000UL;
+            //         }
+            //         if (channel->psf_scale < 10){
+            //             channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
+            //         }else if (channel->psf_scale < 20){
+            //             channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
+            //         }else {
+            //             channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
+            //         }
+            //         if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
+            //             if (msger->timer > delay){
+            //                 msger->timer = delay;
+            //             }
+            //         }else {
+            //             xchannel_send_pack(channel);
+            //         }
+            //     }
+            // }
 
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
