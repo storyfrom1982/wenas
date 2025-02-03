@@ -420,7 +420,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
             // if (channel->rtt < 80000000UL){
             //     pack->timedout = 80000000UL * XCHANNEL_RESEND_SCALING_FACTOR;
             // }else {
@@ -600,6 +600,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
+
+            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+                xchannel_send_pack(channel);
+            }
         }
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
@@ -859,9 +863,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 if (channel->psf_scale < channel->threshold){
                     // channel->psf = (channel->psf_scale) * 1000UL;
                     channel->psf_factor = 1000UL;
-                    if (channel->psf_scale < 20){
+                    if (channel->psf_scale < 10){
                         channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-                    }else if (channel->psf_scale < 30){
+                    }else if (channel->psf_scale < 20){
                         channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
                     }else {
                         channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
@@ -924,16 +928,16 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->ts = current_ts;
                             spack->head.resend++;
                             channel->resend_counter++;
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
                             //     if (channel->threshold > (channel->serial_range >> 1)){
                             //         channel->threshold--;
                             //     }
                             // }
-                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] DELAY[%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] DELAY[%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, spack->timedout / 1000000UL, (current_ts - spack->ts) / 1000000UL, delay / 1000000L,
+                                    spack->head.resend, spack->timedout / 1000000UL, delay,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
-                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                         }else {
                             __xlogd(">>>>------------------------> SEND FAILED\n");
                         }
