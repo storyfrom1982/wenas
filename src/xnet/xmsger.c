@@ -423,12 +423,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            // if (channel->ack_last > 0){
-            //     pack->timedout = channel->prf * 3;
-            // }else {
-            //     pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
-            // }
+            // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            if (channel->ack_last > 0){
+                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR;
+            }else {
+                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
+            }
             channel->spos += pack->head.len;
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -875,7 +875,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             uint64_t current_ts = __xapi->clock();
 
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < channel->sendbuf->range){
+            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
                 xchannel_send_pack(channel);
             }
             // if (channel->resend_counter > 0){
@@ -952,11 +952,11 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->ts = current_ts;
                             spack->head.resend++;
                             channel->resend_counter++;
-                            // if (channel->psf_scale == channel->serial_range && spack->head.resend > 2){
-                            //     if (channel->threshold > (channel->serial_range >> 1)){
-                            //         channel->threshold--;
-                            //     }
-                            // }
+                            if (channel->psf_scale == channel->serial_range){
+                                if (channel->threshold > 16){
+                                    channel->threshold--;
+                                }
+                            }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] COUNT[%u] DELAY[%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, spack->timedout / 1000000UL, delay / 1000000L,
