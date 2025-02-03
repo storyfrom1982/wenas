@@ -601,9 +601,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
 
-            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-                xchannel_send_pack(channel);
-            }
+            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+            //     xchannel_send_pack(channel);
+            // }
         }
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
