@@ -423,12 +423,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            if (channel->ack_last > 0){
-                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            }else {
-                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            }
+            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // if (channel->ack_last > 0){
+            //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // }else {
+            //     pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // }
             channel->spos += pack->head.len;
 
             // 如果有待发送数据，确保 sendable 会大于 0
@@ -916,7 +916,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     last_ts = channel->send_ts;
                 }
 
-                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) > 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) >= 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
