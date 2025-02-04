@@ -550,6 +550,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
     if (channel->ack_last > 0){
+        __xlogd("interval recv = %lu send = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), (pack->ts - pack->last_ts - pack->psf), channel->psf);
         channel->prf_duration += (int64_t)(channel->ack_ts - channel->ack_last) - (pack->ts - pack->last_ts - pack->psf);
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
@@ -558,7 +559,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->prf;
-            __xlogd("threshold = %u psf = %ld prf = %lu last = %lu\n", channel->threshold, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            __xlogd("threshold = %u psf = %lu prf = %ld last = %lu\n", channel->threshold, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->psf * channel->threshold <= channel->rtt){
                 channel->threshold++;
             }
