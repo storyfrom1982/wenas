@@ -45,7 +45,7 @@ typedef struct xhead {
 
 typedef struct xpack {
     uint64_t ts;
-    uint64_t last_ts;
+    uint64_t interval;
     uint64_t psf;
     uint64_t timedout;
     xline_t *msg;
@@ -89,14 +89,14 @@ struct xchannel {
     uint64_t psf; // packet sending frequency
     uint16_t psf_scale;
     uint16_t psf_factor;
-    int64_t prf; // packet recv frequency
-    int64_t prf_duration;
+    uint64_t prf; // packet recv frequency
+    uint64_t prf_duration;
     uint16_t prf_counter;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
 
-    uint64_t send_ts, recv_ts, ack_ts, ack_last;
+    uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
     void *ctx;
     // uint64_t rid;
@@ -215,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->msger = msger;
     channel->serial_range = serial_range;
     channel->threshold = 8;
-    channel->send_ts = channel->recv_ts = __xapi->clock();
+    channel->send_ts = channel->send_last = channel->recv_ts = __xapi->clock();
     channel->prf = 10000UL;
     channel->psf = 10000UL;
     channel->rtt = 100000000UL;
@@ -424,9 +424,13 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录发送次数
             pack->head.resend = 1;
             pack->psf = channel->psf;
-            pack->last_ts = channel->send_ts;
             // 记录当前时间
             channel->send_ts = __xapi->clock();
+            if (channel->send_ts == channel->send_last){
+                pack->interval = channel->psf;    
+            }else {
+                pack->interval = channel->send_ts - channel->send_last;
+            }
             pack->ts = channel->send_ts;
             // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             if (channel->ack_last > 0){
@@ -435,6 +439,8 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
                 pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             }
             channel->spos += pack->head.len;
+
+            channel->send_last = channel->send_ts;
 
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
@@ -550,8 +556,8 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
     if (channel->ack_last > 0){
-        __xlogd("interval recv = %lu send = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), (pack->ts - pack->last_ts - pack->psf), channel->psf);
-        channel->prf_duration += (int64_t)(channel->ack_ts - channel->ack_last) - (pack->ts - pack->last_ts - pack->psf);
+        __xlogd("prf = %lu interval = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), pack->interval, channel->psf);
+        channel->prf_duration += (channel->ack_ts - channel->ack_last) - (pack->interval - pack->psf);
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
@@ -559,7 +565,8 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->prf;
-            __xlogd("threshold = %u psf = %lu prf = %ld last = %lu\n", channel->threshold, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
+                    channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->psf * channel->threshold <= channel->rtt){
                 channel->threshold++;
             }
