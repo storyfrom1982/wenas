@@ -564,21 +564,13 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         }else {
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
-            if (channel->threshold == XCHANNEL_THRESHOLD_MIN){
-                channel->psf = channel->prf;
-            }else {
-                if (channel->prf < channel->psf){
-                    channel->psf = channel->prf;
-                }
-            }
+            channel->psf = channel->prf * 0.9f;
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->psf * channel->threshold < channel->rtt){
                 if (channel->threshold < channel->sendbuf->range){
                     channel->threshold++;
                 }
-            }else {
-                channel->psf *= 0.9f;
             }
         }
     }
