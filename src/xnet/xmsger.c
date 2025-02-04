@@ -215,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->msger = msger;
     channel->serial_range = serial_range;
     channel->threshold = 8;
-    channel->send_ts = channel->send_last = channel->recv_ts = __xapi->clock();
+    channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->prf = 10000UL;
     channel->psf = 10000UL;
     channel->rtt = 100000000UL;
@@ -426,10 +426,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->psf = channel->psf;
             // 记录当前时间
             channel->send_ts = __xapi->clock();
-            if (channel->send_ts == channel->send_last){
-                pack->interval = channel->psf;    
-            }else {
+            if (channel->send_last > 0){
                 pack->interval = channel->send_ts - channel->send_last;
+                channel->send_last = 0;
+            }else {
+                pack->interval = 0;
             }
             pack->ts = channel->send_ts;
             // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
@@ -557,7 +558,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
     if (channel->ack_last > 0){
         __xlogd("prf = %lu interval = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), pack->interval, channel->psf);
-        channel->prf_duration += (channel->ack_ts - channel->ack_last) - (pack->interval - pack->psf);
+        channel->prf_duration += (channel->ack_ts - channel->ack_last) - pack->interval;
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
@@ -888,6 +889,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }else {
                     xchannel_send_pack(channel);
                 }
+            }else {
+                channel->send_last = current_ts;
             }
 
             // if (channel->resend_counter > 0){
