@@ -556,7 +556,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     if (channel->ack_last > 0){
         __xlogd("prf = %lu interval = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), pack->interval, channel->psf);
         channel->prf_duration += (channel->ack_ts - channel->ack_last);
-        channel->prf_duration -= pack->interval;
+        // channel->prf_duration -= pack->interval;
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
