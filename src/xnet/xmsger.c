@@ -889,7 +889,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }else {
                     xchannel_send_pack(channel);
                 }
-            }else {
+            }else if(channel->send_last == 0){
                 channel->send_last = current_ts;
             }
 
