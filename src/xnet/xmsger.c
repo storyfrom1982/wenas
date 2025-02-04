@@ -440,9 +440,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
                 pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             }
             channel->spos += pack->head.len;
-
-            channel->send_last = channel->send_ts;
-
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
 
