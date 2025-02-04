@@ -18,6 +18,7 @@
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 #define XCHANNEL_RESEND_SCALING_FACTOR  1.5
+#define XCHANNEL_THRESHOLD_MIN          16
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -214,7 +215,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = 8;
+    channel->threshold = XCHANNEL_THRESHOLD_MIN;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->prf = 10000UL;
     channel->psf = 10000UL;
@@ -563,13 +564,11 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         }else {
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
-            if (channel->threshold == 8){
+            if (channel->threshold == XCHANNEL_THRESHOLD_MIN){
                 channel->psf = channel->prf;
             }else {
                 if (channel->prf < channel->psf){
                     channel->psf = channel->prf;
-                }else if (channel->threshold > 8){
-                    channel->threshold--;
                 }
             }
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
@@ -623,7 +622,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->msger->pos, pack->head.len);
             __atom_add(channel->rpos, pack->head.len);
             if (channel->rpos == channel->wpos){
-                channel->threshold = 8;
+                channel->threshold = XCHANNEL_THRESHOLD_MIN;
                 channel->ack_ts = channel->ack_last = 0;
                 channel->rtt_counter = 0;
             }
