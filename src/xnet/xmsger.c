@@ -89,9 +89,9 @@ struct xchannel {
     uint64_t psf; // packet sending frequency
     uint16_t psf_scale;
     uint16_t psf_factor;
-    uint64_t prf;
+    int64_t prf; // packet recv frequency
     int64_t prf_duration;
-    uint64_t prf_counter;
+    uint16_t prf_counter;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
@@ -558,7 +558,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->prf;
-            __xlogd("threshold = %u psf = %lu prf = %lu last = %lu\n", channel->threshold, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            __xlogd("threshold = %u psf = %ld prf = %lu last = %lu\n", channel->threshold, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->psf * channel->threshold <= channel->rtt){
                 channel->threshold++;
             }
