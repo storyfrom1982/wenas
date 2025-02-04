@@ -90,7 +90,7 @@ struct xchannel {
     uint16_t psf_scale;
     uint16_t psf_factor;
     uint64_t prf;
-    uint64_t prf_duration;
+    int64_t prf_duration;
     uint64_t prf_counter;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
@@ -550,7 +550,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
     if (channel->ack_last > 0){
-        channel->prf_duration += (channel->ack_ts - channel->ack_last) - (pack->ts - pack->last_ts - pack->psf);
+        channel->prf_duration += (int64_t)(channel->ack_ts - channel->ack_last) - (pack->ts - pack->last_ts - pack->psf);
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
