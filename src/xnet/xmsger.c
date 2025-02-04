@@ -568,6 +568,8 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->psf * channel->threshold <= channel->rtt){
                 channel->threshold++;
+            }else {
+                channel->psf *= 0.9f;
             }
         }
     }
