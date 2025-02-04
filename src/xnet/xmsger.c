@@ -433,12 +433,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
                 pack->interval = 0;
             }
             pack->ts = channel->send_ts;
-            // pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            if (channel->ack_last > 0){
-                pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            }else {
-                pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            }
+            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // if (channel->ack_last > 0){
+            //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // }else {
+            //     pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
+            // }
             channel->spos += pack->head.len;
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
