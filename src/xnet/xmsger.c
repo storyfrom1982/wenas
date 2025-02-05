@@ -566,11 +566,12 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     if (channel->ack_last > 0){
         uint64_t prf = channel->ack_ts - channel->ack_last;
         if (pack->interval > 0){
-            if (prf > pack->interval){
-                channel->prf_duration += prf - pack->interval;
-            }else {
-                channel->prf_duration += channel->prf;
-            }
+            channel->prf_duration += channel->prf + (channel->prf >> 4);
+            // if (prf > pack->interval){
+            //     channel->prf_duration += prf - pack->interval;
+            // }else {
+            //     channel->prf_duration += channel->prf;
+            // }
             if (channel->kabuf_counter > channel->threshold){
                 if (channel->psf / 10000UL == channel->prf / 10000UL){
                     if (channel->threshold * channel->psf < channel->rtt 
