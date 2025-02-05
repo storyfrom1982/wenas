@@ -574,8 +574,9 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
                     }
-                }else if (channel->psf < channel->prf){
-                    channel->psf = (channel->prf - (channel->prf >> 2));
+                }else /*if (channel->psf < channel->prf)*/{
+                    // channel->psf = (channel->prf - (channel->prf >> 2));
+                    channel->psf = channel->prf;
                 }
                 channel->kabuf_counter = 0;
             }
