@@ -564,18 +564,21 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         if (pack->interval > 0){
             channel->psf_duration += channel->psf;
             channel->prf_duration += channel->prf;
+            __xlogd("kabuf le .................\n");
         }else {
             channel->psf_duration += pack->psf;
             channel->prf_duration += (channel->ack_ts - channel->ack_last);
         }
-        channel->prf_counter++;
+
         if (channel->prf_counter < channel->threshold){
+            channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->psf_duration / channel->prf_counter;
         }else {
+            channel->prf_duration -= channel->prf;
+            channel->psf_duration -= channel->psf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->psf_duration / channel->prf_counter;
-            channel->prf_counter = 0;
             if (channel->prf / 100000UL > channel->psf / 100000UL){
                 channel->psf = channel->prf;
                 channel->threshold--;
