@@ -585,7 +585,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->kabuf > 0){
-                channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
+                // channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
                 __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
                         channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
                         pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
