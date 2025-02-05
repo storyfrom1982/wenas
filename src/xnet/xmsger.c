@@ -566,26 +566,32 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     if (channel->ack_last > 0){
         if (pack->interval > 0){
             // channel->psf_duration += channel->psf;
-            channel->prf_duration += channel->prf;
+            channel->prf_duration += channel->prf << 1;
             if (channel->kabuf_counter > channel->threshold){
-                if (channel->psf / 10000UL < channel->prf / 10000UL){
-                    channel->psf = channel->prf * 0.9f;
-                }else {
+                if (channel->psf / 10000UL == channel->prf / 10000UL){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
                     }
+                }else if (channel->psf < channel->prf){
+                    channel->psf = (channel->prf - (channel->prf >> 3));
                 }
                 channel->kabuf_counter = 0;
             }
             __xlogd("kabuf le .............. %lu\n", pack->interval);
         }else if (pack->head.resend > 1){
-            channel->prf_duration += channel->prf;
+            channel->prf_duration += (channel->prf << 1);
             __xlogd("resend .............. %u\n", pack->head.resend);
         }else {
             __xlogd("bu kabuf le .................%lu\n", pack->interval);
-            // channel->psf_duration += pack->psf;
-            channel->prf_duration += (channel->ack_ts - channel->ack_last);
+            uint64_t prf = channel->ack_ts - channel->ack_last;
+            if (prf > channel->prf << 1){
+                channel->prf_duration += (channel->prf << 1);
+            }else if (prf < channel->prf >> 1){
+                channel->prf_duration += (channel->prf >> 1);
+            }else {
+                channel->prf_duration += (channel->ack_ts - channel->ack_last);
+            }
         }
 
         if (channel->prf_counter < channel->threshold){
@@ -1022,9 +1028,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // channel->resend_counter++;
-                            // if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
-                            //     channel->threshold --;
-                            // }
+                            if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
+                                channel->threshold --;
+                            }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout / 1000000UL, delay,
