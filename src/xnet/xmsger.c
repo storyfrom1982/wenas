@@ -47,6 +47,7 @@ typedef struct xhead {
 typedef struct xpack {
     uint64_t ts;
     uint64_t psf;
+    uint64_t interval;
     uint64_t timedout;
     xline_t *msg;
     xchannel_ptr channel;
@@ -431,6 +432,11 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             if (channel->send_last > 0){
                 pack->psf = channel->send_ts - channel->send_last;
             }
+            if (channel->kabuf){
+                pack->interval = channel->send_ts - channel->kabuf;
+            }else {
+                pack->interval = 0;
+            }
             channel->send_last = channel->send_ts;
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // if (channel->ack_last > 0){
@@ -554,8 +560,13 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->ack_last > 0){
-        channel->psf_duration += pack->psf;
-        channel->prf_duration += (channel->ack_ts - channel->ack_last);
+        if (pack->interval > 0){
+            channel->psf_duration += channel->psf;
+            channel->prf_duration += channel->prf;
+        }else {
+            channel->psf_duration += pack->psf;
+            channel->prf_duration += (channel->ack_ts - channel->ack_last);
+        }
         channel->prf_counter++;
         if (channel->prf_counter < channel->threshold){
             channel->prf = channel->prf_duration / channel->prf_counter;
