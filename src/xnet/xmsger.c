@@ -1043,7 +1043,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             }else if (channel->rpos == channel->wpos){
 
-                if (current_ts - channel->recv_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
+                if (__xapi->clock() - channel->recv_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
