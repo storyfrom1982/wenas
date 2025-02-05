@@ -999,6 +999,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                             // 记录重传次数
                             spack->ts = current_ts;
+                            spack->interval = spack->ts - channel->send_last;
+                            channel->send_last = spack->ts;
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // channel->resend_counter++;
