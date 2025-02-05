@@ -569,7 +569,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
                 if (channel->psf < channel->prf){
-                    channel->psf *= 0.9f;
+                    channel->psf *= 1.1f;
                 }else {
                     if (channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
