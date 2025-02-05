@@ -18,7 +18,7 @@
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 #define XCHANNEL_RESEND_SCALING_FACTOR  1.5
-#define XCHANNEL_THRESHOLD_MIN          16
+#define XCHANNEL_THRESHOLD_MIN          8
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -555,23 +555,31 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
     if (channel->ack_last > 0){
-        __xlogd("prf = %lu interval = %lu psf = %lu\n", (channel->ack_ts - channel->ack_last), pack->interval, channel->psf);
-        channel->prf_duration += (channel->ack_ts - channel->ack_last);
-        // channel->prf_duration -= pack->interval;
+        if (pack->interval > 0){
+            channel->prf_duration += channel->prf;
+            uint64_t interval = channel->ack_ts - pack->ts;
+            channel->threshold = (interval + (channel->threshold - 1)) / channel->threshold + 1;
+            __xlogd("interval = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
+                    pack->interval, channel->threshold, channel->rtt, channel->prf * channel->threshold,
+                     pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+        }else {
+            channel->prf_duration += (channel->ack_ts - channel->ack_last);
+        }
         if (channel->prf_counter < channel->threshold){
             channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
         }else {
             channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
-            channel->psf = channel->prf * 0.9f;
+            channel->prf_counter = 0;
+            if (channel->prf > channel->psf){
+                channel->psf = channel->prf;
+            }else {
+                channel->psf = channel->prf * 0.9f;
+                channel->threshold++;
+            }
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            if (channel->psf * channel->threshold < channel->rtt){
-                if (channel->threshold < channel->sendbuf->range){
-                    channel->threshold++;
-                }
-            }
         }
     }
     pack->ts = 0;
