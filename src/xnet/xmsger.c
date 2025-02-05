@@ -98,6 +98,7 @@ struct xchannel {
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
     uint64_t kabuf;
+    uint16_t kabuf_counter;
 
     uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
@@ -566,12 +567,16 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         if (pack->interval > 0 || pack->head.resend > 1){
             // channel->psf_duration += channel->psf;
             channel->prf_duration += channel->prf;
-            if (pack->head.resend == 1){
-                if (channel->threshold * channel->psf < channel->rtt){
-                    channel->threshold++;
-                }
+            if (channel->kabuf_counter > channel->threshold 
+                && channel->threshold < channel->sendbuf->range
+                && channel->threshold * channel->prf < channel->rtt){
+                channel->threshold++;
+                channel->kabuf_counter = 0;
             }
-            __xlogd("kabuf le ..............resend %u ... %lu\n", pack->head.resend, pack->interval);
+            __xlogd("kabuf le .............. %lu\n", pack->interval);
+        }else if (pack->head.resend > 1){
+            channel->prf_duration += channel->prf;
+            __xlogd("resend .............. %u\n", pack->head.resend);
         }else {
             __xlogd("nokabuf le .................%lu\n", pack->interval);
             // channel->psf_duration += pack->psf;
@@ -932,6 +937,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }
             }else if(channel->kabuf == 0){
                 channel->kabuf = current_ts;
+                channel->kabuf_counter++;
             }
 
             // if (channel->resend_counter > 0){
