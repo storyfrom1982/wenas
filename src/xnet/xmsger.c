@@ -558,7 +558,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         if (pack->interval > 0){
             channel->prf_duration += channel->prf;
             // uint64_t interval = channel->ack_ts - pack->ts;
-            channel->threshold = (pack->interval + (channel->threshold - 1)) / channel->threshold + 1;
+            channel->threshold = channel->threshold + (pack->interval + (channel->prf - 1)) / channel->prf + 1;
             __xlogd("interval = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
                     pack->interval, channel->threshold, channel->rtt, channel->prf * channel->threshold,
                      pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
