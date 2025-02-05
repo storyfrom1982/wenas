@@ -18,7 +18,7 @@
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 #define XCHANNEL_RESEND_SCALING_FACTOR  1.5
-#define XCHANNEL_THRESHOLD_MIN          8
+#define XCHANNEL_THRESHOLD_MIN          32
 
 typedef struct xhead {
     uint16_t type; // 包类型
