@@ -18,7 +18,8 @@
 #define XCHANNEL_TIMEDOUT_LIMIT         10
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 #define XCHANNEL_RESEND_SCALING_FACTOR  1.5
-#define XCHANNEL_THRESHOLD_MIN          32
+#define XCHANNEL_THRESHOLD_MIN          8
+#define XCHANNEL_THRESHOLD_INIT         32
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -218,7 +219,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
 
     channel->msger = msger;
     channel->serial_range = serial_range;
-    channel->threshold = XCHANNEL_THRESHOLD_MIN;
+    channel->threshold = XCHANNEL_THRESHOLD_INIT;
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->prf = 1000000UL;
     channel->psf = 1000000UL;
