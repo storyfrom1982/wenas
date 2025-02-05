@@ -672,7 +672,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->msger->pos, pack->head.len);
             __atom_add(channel->rpos, pack->head.len);
             if (channel->rpos == channel->wpos){
-                channel->threshold = XCHANNEL_THRESHOLD_MIN;
+                channel->threshold = XCHANNEL_THRESHOLD_INIT;
                 channel->ack_ts = channel->ack_last = 0;
                 channel->rtt_counter = 0;
             }
