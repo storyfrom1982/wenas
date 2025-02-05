@@ -46,7 +46,7 @@ typedef struct xhead {
 
 typedef struct xpack {
     uint64_t ts;
-    uint64_t interval;
+    uint64_t psf;
     uint64_t timedout;
     xline_t *msg;
     xchannel_ptr channel;
@@ -89,6 +89,7 @@ struct xchannel {
     uint64_t psf; // packet sending frequency
     uint16_t psf_scale;
     uint16_t psf_factor;
+    uint64_t psf_duration;
     uint64_t prf; // packet recv frequency
     uint64_t prf_duration;
     uint16_t prf_counter;
@@ -217,8 +218,8 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->serial_range = serial_range;
     channel->threshold = XCHANNEL_THRESHOLD_MIN;
     channel->send_ts = channel->recv_ts = __xapi->clock();
-    channel->prf = 10000UL;
-    channel->psf = 10000UL;
+    channel->prf = 1000000UL;
+    channel->psf = 1000000UL;
     channel->rtt = 100000000UL;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -428,12 +429,9 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
             if (channel->send_last > 0){
-                pack->interval = channel->send_ts - channel->send_last;
-                channel->send_last = 0;
-                __xlogd("send interval = %lu\n", pack->interval);
-            }else {
-                pack->interval = 0;
+                pack->psf = channel->send_ts - channel->send_last;
             }
+            channel->send_last = channel->send_ts;
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // if (channel->ack_last > 0){
             //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
@@ -556,30 +554,30 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->ack_last > 0){
-        if (pack->interval > 0){
-            channel->prf_duration += channel->prf;
-        }else {
-            channel->prf_duration += (channel->ack_ts - channel->ack_last);
-        }
+        channel->psf_duration += pack->psf;
+        channel->prf_duration += (channel->ack_ts - channel->ack_last);
         channel->prf_counter++;
         if (channel->prf_counter < channel->threshold){
             channel->prf = channel->prf_duration / channel->prf_counter;
+            channel->psf = channel->psf_duration / channel->prf_counter;
         }else {
             channel->prf = channel->prf_duration / channel->prf_counter;
+            channel->psf = channel->psf_duration / channel->prf_counter;
             channel->prf_counter = 0;
             if (channel->prf > channel->psf){
                 channel->psf = channel->prf;
+                channel->threshold--;
             }else {
                 channel->psf = channel->prf * 0.9f;
                 channel->threshold++;
             }
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
-                    channel->threshold, channel->rtt, pack->interval, channel->prf, channel->ack_ts - channel->ack_last);
+                    channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             if (channel->kabuf > 0){
                 channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
                 __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
                         channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
-                        pack->interval, channel->prf, channel->ack_ts - channel->ack_last);
+                        pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
                 channel->kabuf = 0;
             }
         }
@@ -906,7 +904,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     xchannel_send_pack(channel);
                 }
             }else if(channel->kabuf == 0){
-                channel->send_last = channel->kabuf = current_ts;
+                channel->kabuf = current_ts;
             }
 
             // if (channel->resend_counter > 0){
