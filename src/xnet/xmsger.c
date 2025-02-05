@@ -429,13 +429,14 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
-            if (channel->send_last > 0){
-                pack->psf = channel->send_ts - channel->send_last;
-            }
             if (channel->kabuf){
                 pack->interval = channel->send_ts - channel->kabuf;
+                pack->psf = channel->psf;
                 channel->kabuf = 0;
             }else {
+                if (channel->send_last > 0){
+                    pack->psf = channel->send_ts - channel->send_last;
+                }
                 pack->interval = 0;
             }
             channel->send_last = channel->send_ts;
