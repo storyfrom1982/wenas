@@ -575,7 +575,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->psf_duration / channel->prf_counter;
             channel->prf_counter = 0;
-            if (channel->prf > channel->psf){
+            if (channel->prf / 100000UL > channel->psf / 100000UL){
                 channel->psf = channel->prf;
                 channel->threshold--;
             }else {
@@ -584,19 +584,19 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             }
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            if (channel->kabuf > 0){
-                // channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
-                __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
-                        channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
-                        pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-                channel->kabuf = 0;
-            }
+            // if (channel->kabuf > 0){
+            //     // channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
+            //     __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
+            //             channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
+            //             pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            //     channel->kabuf = 0;
+            // }
         }
     }else {
-        if (channel->kabuf > 0){
-            channel->kabuf = channel->ack_ts - channel->kabuf;
-            __xlogd("send kabuf = %lu\n", channel->kabuf);
-        }
+        // if (channel->kabuf > 0){
+        //     channel->kabuf = channel->ack_ts - channel->kabuf;
+        //     __xlogd("send kabuf = %lu\n", channel->kabuf);
+        // }
     }
     pack->ts = 0;
 }
