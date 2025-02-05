@@ -939,17 +939,17 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             uint64_t current_ts = __xapi->clock();
 
             // readable 是已经写入缓冲区还尚未发送的包
-            if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-                if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
-                    if (msger->timer > delay){
-                        msger->timer = delay;
-                    }
-                }else {
-                    xchannel_send_pack(channel);
+            if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
+                if (msger->timer > delay){
+                    msger->timer = delay;
                 }
-            }else if(channel->kabuf == 0){
-                channel->kabuf = current_ts;
-                channel->kabuf_counter++;
+            }else {
+                if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
+                    xchannel_send_pack(channel);
+                }else if(channel->kabuf == 0){
+                    channel->kabuf = current_ts;
+                    channel->kabuf_counter++;
+                }
             }
 
             // if (channel->resend_counter > 0){
