@@ -424,10 +424,15 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
 
             // 记录发送次数
             pack->head.resend = 1;
-            pack->psf = channel->psf;
             // 记录当前时间
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
+            if (channel->kabuf > 0){
+                pack->psf = channel->send_ts - channel->kabuf;
+            }else {
+                pack->psf = 0;
+            }
+            __xlogd("send psf = %lu\n", pack->psf);
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // if (channel->ack_last > 0){
             //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
@@ -548,14 +553,10 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         // 重新计算平均时长
         channel->rtt = channel->rtt_duration >> 8;
     }
+
     if (channel->ack_last > 0){
-        if (channel->kabuf > 0){
+        if (pack->psf > 0){
             channel->prf_duration += channel->prf;
-            channel->threshold = channel->threshold + ((channel->ack_ts - channel->kabuf) + (channel->prf - 1)) / channel->prf + 1;
-            __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
-                    channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
-                     pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            channel->kabuf = 0;
         }else {
             channel->prf_duration += (channel->ack_ts - channel->ack_last);
         }
@@ -573,6 +574,17 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             }
             __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
                     channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+        }
+        if (channel->kabuf > 0){
+            channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
+            __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
+                    channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
+                     pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            channel->kabuf = 0;
+        }
+    }else {
+        if (channel->kabuf > 0){
+            channel->kabuf = channel->ack_ts - channel->kabuf;
         }
     }
     pack->ts = 0;
