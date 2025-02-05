@@ -46,7 +46,6 @@ typedef struct xhead {
 
 typedef struct xpack {
     uint64_t ts;
-    uint64_t interval;
     uint64_t psf;
     uint64_t timedout;
     xline_t *msg;
@@ -96,6 +95,7 @@ struct xchannel {
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
+    uint64_t kabuf;
 
     uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
@@ -427,12 +427,6 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->psf = channel->psf;
             // 记录当前时间
             channel->send_ts = __xapi->clock();
-            if (channel->send_last > 0){
-                pack->interval = channel->send_ts - channel->send_last;
-                channel->send_last = 0;
-            }else {
-                pack->interval = 0;
-            }
             pack->ts = channel->send_ts;
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // if (channel->ack_last > 0){
@@ -555,21 +549,20 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
     if (channel->ack_last > 0){
-        if (pack->interval > 0){
+        if (channel->kabuf > 0){
             channel->prf_duration += channel->prf;
-            // uint64_t interval = channel->ack_ts - pack->ts;
-            channel->threshold = channel->threshold + (pack->interval + (channel->prf - 1)) / channel->prf + 1;
-            __xlogd("interval = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
-                    pack->interval, channel->threshold, channel->rtt, channel->prf * channel->threshold,
+            channel->threshold = channel->threshold + ((channel->ack_ts - channel->kabuf) + (channel->prf - 1)) / channel->prf + 1;
+            __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
+                    channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
                      pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            channel->kabuf = 0;
         }else {
             channel->prf_duration += (channel->ack_ts - channel->ack_last);
         }
+        channel->prf_counter++;
         if (channel->prf_counter < channel->threshold){
-            channel->prf_counter++;
             channel->prf = channel->prf_duration / channel->prf_counter;
         }else {
-            channel->prf_duration -= channel->prf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->prf_counter = 0;
             if (channel->prf > channel->psf){
@@ -898,8 +891,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }else {
                     xchannel_send_pack(channel);
                 }
-            }else if(channel->send_last == 0){
-                channel->send_last = current_ts;
+            }else if(channel->kabuf == 0){
+                channel->kabuf = current_ts;
             }
 
             // if (channel->resend_counter > 0){
