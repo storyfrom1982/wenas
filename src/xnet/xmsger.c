@@ -466,6 +466,7 @@ static inline void xchannel_send_ack(xchannel_ptr channel)
 
     if ((__xapi->udp_sendto(channel->sock, channel->addr, (void*)&channel->ack, XHEAD_SIZE)) == XHEAD_SIZE){
         channel->ack.ack.type = 0;
+        channel->ack.resend = 0;
     }else {
         __xlogd("xchannel_send_ack >>>>------------------------> SEND FAILED\n");
     }
@@ -562,10 +563,10 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->ack_last > 0){
-        if (pack->interval > 0){
+        if (pack->interval > 0 || pack->head.resend > 0){
             // channel->psf_duration += channel->psf;
             channel->prf_duration += channel->prf;
-            __xlogd("kabuf le .................%lu\n", pack->interval);
+            __xlogd("kabuf le ..............resend %u ... %lu\n", pack->head.resend, pack->interval);
         }else {
             __xlogd("nokabuf le .................%lu\n", pack->interval);
             // channel->psf_duration += pack->psf;
@@ -819,6 +820,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             // 回复 ACK 等于 ACKS，通知对端包已经收到
             channel->ack.ack.pos = channel->recvbuf->wpos;
             channel->ack.ack.sn = channel->ack.ack.pos;
+            channel->ack.resend = 1;
             // 重复到达的 PACK
             __xlogd("RECV AGAIN >>>>--------> IP=[%s] PORT=[%u] CID[%u] FLAG[%u] ACK[%u:%u:%u]\n", 
                     __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->head.type,
