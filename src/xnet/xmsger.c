@@ -579,15 +579,15 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->psf_duration -= channel->psf;
             channel->prf = channel->prf_duration / channel->prf_counter;
             channel->psf = channel->psf_duration / channel->prf_counter;
-            if (channel->prf / 10000UL > pack->psf / 10000UL){
-                channel->psf = channel->prf;
-                channel->threshold--;
-            }else {
-                channel->psf = channel->psf * 0.9f;
-                channel->threshold++;
-            }
-            __xlogd("threshold = %u rtt = %lu psf = %lu prf = %lu last = %lu\n", 
-                    channel->threshold, channel->rtt, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            // if (channel->prf / 10000UL > pack->psf / 10000UL){
+            //     channel->psf = channel->prf;
+            //     channel->threshold--;
+            // }else {
+            //     channel->psf = channel->psf * 0.9f;
+            //     channel->threshold++;
+            // }
+            __xlogd("threshold = %u rtt = %lu psf = %lu:%lu prf = %lu last = %lu\n", 
+                    channel->threshold, channel->rtt, channel->psf, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
             // if (channel->kabuf > 0){
             //     // channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
             //     __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
@@ -997,9 +997,9 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // channel->resend_counter++;
-                            if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
-                                channel->threshold --;
-                            }
+                            // if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
+                            //     channel->threshold --;
+                            // }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
                                     spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout / 1000000UL, delay,
