@@ -576,7 +576,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                         channel->threshold++;
                     }
                 }else {
-                    channel->psf = (channel->prf - (channel->prf >> 3));
+                    channel->psf = (channel->prf - (channel->prf >> 2));
                 }
                 channel->kabuf_counter = 0;
             }
