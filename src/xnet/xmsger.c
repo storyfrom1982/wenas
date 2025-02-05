@@ -566,6 +566,9 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         if (pack->interval > 0 || pack->head.resend > 1){
             // channel->psf_duration += channel->psf;
             channel->prf_duration += channel->prf;
+            if (pack->head.resend == 1){
+                channel->threshold++;
+            }
             __xlogd("kabuf le ..............resend %u ... %lu\n", pack->head.resend, pack->interval);
         }else {
             __xlogd("nokabuf le .................%lu\n", pack->interval);
