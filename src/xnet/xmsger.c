@@ -563,7 +563,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->ack_last > 0){
-        if (pack->interval > 0 || pack->head.resend > 0){
+        if (pack->interval > 0 || pack->head.resend > 1){
             // channel->psf_duration += channel->psf;
             channel->prf_duration += channel->prf;
             __xlogd("kabuf le ..............resend %u ... %lu\n", pack->head.resend, pack->interval);
@@ -820,7 +820,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
             // 回复 ACK 等于 ACKS，通知对端包已经收到
             channel->ack.ack.pos = channel->recvbuf->wpos;
             channel->ack.ack.sn = channel->ack.ack.pos;
-            channel->ack.resend = 1;
+            channel->ack.resend = 2;
             // 重复到达的 PACK
             __xlogd("RECV AGAIN >>>>--------> IP=[%s] PORT=[%u] CID[%u] FLAG[%u] ACK[%u:%u:%u]\n", 
                     __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, pack->head.type,
