@@ -1044,12 +1044,13 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             }else if (channel->rpos == channel->wpos){
 
-                if (__xapi->clock() - channel->recv_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
+                uint64_t recv_timedout = __xapi->clock() - channel->recv_ts;
+                if (recv_timedout > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
                         __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%lu)\n", 
-                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, (current_ts - channel->recv_ts) / 1000000UL);
+                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, recv_timedout / 1000000UL);
                         if (channel->req != NULL){
                             // 连接已经建立，需要回收资源
                             msger->cb->on_message_timedout(msger->cb, channel, channel->req);
