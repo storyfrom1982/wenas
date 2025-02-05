@@ -434,6 +434,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             }
             if (channel->kabuf){
                 pack->interval = channel->send_ts - channel->kabuf;
+                channel->kabuf = 0;
             }else {
                 pack->interval = 0;
             }
