@@ -571,13 +571,13 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             __xlogd("kabuf le .............. %lu\n", pack->interval);
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
-                if (pack->psf <= channel->prf * 0.7f){
+                if (channel->psf < (channel->prf >> 1)){
+                    channel->psf *= 1.01f;
+                }else if (pack->psf < channel->prf * 0.7f){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
                     }
-                }else if (channel->psf < (channel->prf >> 1)){
-                    channel->psf *= 1.01f;
                 }
                 channel->kabuf_counter = 0;
             }
