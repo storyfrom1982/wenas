@@ -10,7 +10,7 @@
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
 #define XPACK_SERIAL_RANGE  64
-#define XPACK_SEND_RATE     10000UL
+#define XPACK_SEND_RATE     100000UL
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -571,13 +571,13 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             __xlogd("kabuf le .............. %lu\n", pack->interval);
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
-                if (pack->psf / 100000UL == channel->prf * 0.8f / 100000UL){
+                if (pack->psf <= channel->prf * 0.7f){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
                     }
                 }else if (channel->psf < (channel->prf >> 1)){
-                    channel->psf *= 1.05f;
+                    channel->psf *= 1.01f;
                 }
                 channel->kabuf_counter = 0;
             }
@@ -600,7 +600,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf = channel->prf_duration / channel->prf_counter;
             // channel->psf = channel->psf_duration / channel->prf_counter;
             if (channel->prf < channel->psf){
-                channel->psf = channel->prf * 0.8f;
+                channel->psf = channel->prf * 0.7f;
             }
             // if (channel->prf / 10000UL > pack->psf / 10000UL){
             //     channel->psf = channel->prf;
