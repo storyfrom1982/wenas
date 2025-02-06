@@ -568,9 +568,10 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     if (channel->ack_last > 0){
         uint64_t prf = channel->ack_ts - channel->ack_last;
         if (pack->interval > 0){
+            __xlogd("kabuf le .............. %lu\n", pack->interval);
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
-                if (channel->psf / 100000UL == channel->prf / 100000UL){
+                if (pack->psf / 100000UL == channel->prf / 100000UL){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
@@ -580,14 +581,10 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                 }
                 channel->kabuf_counter = 0;
             }
-            __xlogd("kabuf le .............. %lu\n", pack->interval);
-        }else if (pack->head.resend > 1){
-            channel->prf_duration += (channel->prf + (channel->prf >> 1));
-            __xlogd("resend .............. %u\n", pack->head.resend);
         }else {
-            __xlogd("bu kabuf le .................%lu\n", pack->interval);
+            __xlogd("zhengchang le .................%lu\n", pack->interval);
             if (prf > channel->prf << 1){
-                channel->prf_duration += (channel->prf << 1);
+                channel->prf_duration += (channel->prf + (channel->prf >> 1));
             }else {
                 channel->prf_duration += (channel->ack_ts - channel->ack_last);
             }
