@@ -572,8 +572,8 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
                 if (channel->psf < (channel->prf >> 1)){
-                    channel->psf *= 1.01f;
-                }else if (pack->psf < channel->prf * 0.8f){
+                    channel->psf *= 1.1f;
+                }else if (pack->psf < channel->prf * 0.9f){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
@@ -600,7 +600,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf = channel->prf_duration / channel->prf_counter;
             // channel->psf = channel->psf_duration / channel->prf_counter;
             if (channel->prf < channel->psf){
-                channel->psf = channel->prf * 0.8f;
+                channel->psf = channel->prf * 0.9f;
             }
             // if (channel->prf / 10000UL > pack->psf / 10000UL){
             //     channel->psf = channel->prf;
