@@ -10,7 +10,7 @@
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
 #define XPACK_SERIAL_RANGE  64
-#define XPACK_SEND_RATE     100000UL // 1 毫秒
+#define XPACK_SEND_RATE     10000UL
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -221,8 +221,8 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->serial_range = serial_range;
     channel->threshold = XCHANNEL_THRESHOLD_INIT;
     channel->send_ts = channel->recv_ts = __xapi->clock();
-    channel->prf = 1000000UL;
-    channel->psf = 1000000UL;
+    channel->prf = XPACK_SEND_RATE;
+    channel->psf = XPACK_SEND_RATE;
     channel->rtt = 100000000UL;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
