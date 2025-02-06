@@ -1020,7 +1020,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // 记录重传次数
                             spack->ts = current_ts;
                             spack->interval = spack->ts - channel->send_last;
-                            channel->send_last = spack->ts;
+                            // channel->send_last = spack->ts;
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // channel->resend_counter++;
@@ -1040,12 +1040,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             }else if (channel->rpos == channel->wpos){
 
-                uint64_t recv_timedout = __xapi->clock() - channel->recv_ts;
+                int64_t recv_timedout = __xapi->clock() - channel->recv_ts;
                 if (recv_timedout > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
-                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%lu)\n", 
+                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%ld)\n", 
                                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, recv_timedout / 1000000UL);
                         if (channel->req != NULL){
                             // 连接已经建立，需要回收资源
