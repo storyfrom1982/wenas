@@ -49,7 +49,7 @@ typedef struct xpack {
     uint64_t ts;
     uint64_t psf;
     uint64_t interval;
-    uint64_t timer;
+    uint64_t timedout;
     xline_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
@@ -442,7 +442,7 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
                 pack->interval = 0;
             }
             channel->send_last = channel->send_ts;
-            pack->timer = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR;
+            pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // if (channel->ack_last > 0){
             //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
             // }else {
@@ -496,6 +496,10 @@ static inline void xchannel_send_final(int sock, __xipaddr_ptr addr, xpack_ptr p
 
 static inline int xchannel_recv_msg(xchannel_ptr channel)
 {
+    // 更新时间戳
+    channel->recv_ts = __xapi->clock();
+    __xlogd("xchannel_recv_msg >>>>------------------------> recv ts = %lu\n", channel->recv_ts);
+
     if (__serialbuf_readable(channel->recvbuf) > 0){
         // 索引已接收的包
         xpack_ptr pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
@@ -567,13 +571,13 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             __xlogd("kabuf le .............. %lu\n", pack->interval);
             channel->prf_duration += channel->prf;
             if (channel->kabuf_counter > channel->threshold){
-                if (channel->psf / 10000UL == channel->prf / 10000UL){
+                if (pack->psf / 100000UL == channel->prf * 0.8f / 100000UL){
                     if (channel->threshold * channel->psf < channel->rtt 
                         && channel->threshold < channel->sendbuf->range){
                         channel->threshold++;
                     }
-                }else if (channel->psf <= (channel->prf >> 1)){
-                    channel->psf += 1000UL;
+                }else if (channel->psf < (channel->prf >> 1)){
+                    channel->psf *= 1.05f;
                 }
                 channel->kabuf_counter = 0;
             }
@@ -596,7 +600,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf = channel->prf_duration / channel->prf_counter;
             // channel->psf = channel->psf_duration / channel->prf_counter;
             if (channel->prf < channel->psf){
-                channel->psf = channel->prf - 50000UL;
+                channel->psf = channel->prf * 0.8f;
             }
             // if (channel->prf / 10000UL > pack->psf / 10000UL){
             //     channel->psf = channel->prf;
@@ -725,10 +729,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
                                 channel->resend_counter++;
-                                pack->timer *= XCHANNEL_RESEND_SCALING_FACTOR;
+                                pack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                                 __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                         pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                        pack->head.resend, channel->threshold, channel->prf / 1000000UL, pack->timer / 1000000UL,
+                                        pack->head.resend, channel->threshold, channel->prf / 1000000UL, pack->timedout / 1000000UL,
                                         pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                                 break; // 每次只重传一个包
                             }else {
@@ -756,9 +760,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
 static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 {
     xpack_ptr pack = *rpack;
-    // 更新时间戳
-    channel->recv_ts = __xapi->clock();
-    __xlogd("xchannel_recv_msg >>>>------------------------> recv ts = %lu\n", channel->recv_ts);
 
     channel->ack.type = XPACK_TYPE_ACK;
     channel->ack.ack.type = pack->head.type;
@@ -982,7 +983,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     last_ts = channel->send_ts;
                 }
 
-                if ((delay = (int64_t)(spack->timer - (current_ts - last_ts))) > 0) {
+                if ((delay = (int64_t)(spack->timedout - (current_ts - last_ts))) > 0) {
                     // 未超时
                     if (msger->timer > delay){
                         // 超时时间更近，更新休息时间
@@ -1021,14 +1022,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             spack->interval = spack->ts - channel->send_last;
                             // channel->send_last = spack->ts;
                             spack->head.resend++;
-                            spack->timer *= XCHANNEL_RESEND_SCALING_FACTOR;
+                            spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             // channel->resend_counter++;
                             if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
                                 channel->threshold --;
                             }
                             __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timer / 1000000UL, delay,
+                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout / 1000000UL, delay,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                             
                         }else {
