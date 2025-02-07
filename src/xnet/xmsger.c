@@ -574,7 +574,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         uint64_t prf = channel->ack_ts - channel->ack_last;
         if (pack->interval > 0){
             __xlogd("kabuf le .............. %lu\n", pack->interval);
-            if (pack->interval > (channel->rtt << 1)){
+            if (pack->interval > channel->rtt){
                 if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
                     channel->threshold--;
                 }
