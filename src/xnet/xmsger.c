@@ -553,6 +553,9 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
 {
     // 累计新的一次往返时长
     uint64_t rtt = channel->ack_ts - pack->ts;
+    if (pack->interval > 0){
+        rtt -= pack->interval;
+    }
     if (rtt > (channel->rtt << 1)){
         channel->rtt_duration += (channel->rtt << 1);
     }else {
