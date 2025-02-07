@@ -99,7 +99,7 @@ struct xchannel {
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
     uint64_t kabuf;
-    uint16_t kabuf_counter;
+    // uint16_t kabuf_counter;
 
     uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
@@ -580,19 +580,15 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                 }
             }
             channel->prf_duration += channel->prf;
-            if (channel->kabuf_counter++ > 2){
-                if (channel->psf < (channel->prf >> 1)){
-                    channel->psf *= 1.1f;
-                }else if (pack->psf < channel->prf * 0.9f){
-                    if (channel->threshold * channel->psf < channel->rtt 
-                        && channel->threshold < channel->sendbuf->range){
-                        channel->threshold++;
-                    }
+            if (channel->psf < (channel->prf >> 1)){
+                channel->psf *= 1.1f;
+            }else if (pack->psf < channel->prf * 0.9f){
+                if (channel->threshold * channel->psf < channel->rtt 
+                    && channel->threshold < channel->sendbuf->range){
+                    channel->threshold++;
                 }
-                channel->kabuf_counter = 0;
             }
         }else {
-            channel->kabuf_counter = 0;
             __xlogd("zhengchang le .................%lu\n", pack->interval);
             if (prf > channel->prf << 1){
                 channel->prf_duration += (channel->prf + (channel->prf >> 1));
@@ -954,7 +950,6 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                     xchannel_send_pack(channel);
                 }else if(channel->kabuf == 0){
                     channel->kabuf = current_ts;
-                    // channel->kabuf_counter++;
                 }
             }
 
