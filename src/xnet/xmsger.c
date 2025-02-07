@@ -553,10 +553,6 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
 {
     // 累计新的一次往返时长
     uint64_t rtt = channel->ack_ts - pack->ts;
-    if (pack->interval > 0){
-        __xlogd("rtt=%lu kabuf=%lu\n", rtt, pack->interval);
-        rtt -= pack->interval;
-    }
     if (rtt > (channel->rtt << 1)){
         channel->rtt_duration += (channel->rtt << 1);
     }else {
@@ -731,6 +727,8 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         // 判断是否进行了重传
                         if (pack->head.resend < 2){
                             pack->head.resend++;
+                            pack->ts = __xapi->clock();
+                            pack->interval = pack->ts - channel->send_last;
                             // 判断重传的包是否带有 ACK
                             if (pack->head.ack.type != 0){
                                 // 更新 ACKS
@@ -1025,11 +1023,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // TODO ack 也要更新
                         }
 
+                        spack->ts = current_ts;
+                        spack->interval = spack->ts - channel->send_last;
+
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                             // 记录重传次数
-                            spack->ts = current_ts;
-                            spack->interval = spack->ts - channel->send_last;
                             // channel->send_last = spack->ts;
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
