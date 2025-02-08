@@ -433,13 +433,15 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             pack->ts = channel->send_ts;
             if (channel->kabuf){
                 pack->interval = channel->send_ts - channel->kabuf;
-                pack->psf = channel->psf;
                 channel->kabuf = 0;
+                if (channel->send_last > 0){
+                    pack->psf = channel->send_ts - channel->send_last - pack->interval;
+                }
             }else {
+                pack->interval = 0;
                 if (channel->send_last > 0){
                     pack->psf = channel->send_ts - channel->send_last;
                 }
-                pack->interval = 0;
             }
             channel->send_last = channel->send_ts;
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
@@ -582,7 +584,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->prf_duration += channel->prf;
             if (channel->psf < (channel->prf >> 1)){
                 channel->psf *= 1.1f;
-            }else if (pack->psf < channel->prf * 0.9f){
+            }else if (pack->psf / 10000UL == channel->prf / 10000UL){
                 if (channel->threshold * channel->psf < channel->rtt 
                     && channel->threshold < channel->sendbuf->range){
                     channel->threshold++;
