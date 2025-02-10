@@ -102,7 +102,6 @@ struct xchannel {
     // uint16_t kabuf_counter;
     uint64_t recv_begin;
     uint64_t recv_counter;
-    int detected;
 
     uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
@@ -224,8 +223,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->serial_range = serial_range;
     channel->threshold = XCHANNEL_THRESHOLD_INIT;
     channel->send_ts = channel->recv_ts = __xapi->clock();
-    channel->prf = XPACK_SEND_RATE;
-    channel->psf = XPACK_SEND_RATE;
     channel->rtt = 100000000UL;
 
     channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
@@ -575,7 +572,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
 
-    if (channel->detected == 0){
+    if (channel->psf == 0){
         if (channel->recv_begin == 0){
             channel->recv_begin = channel->ack_ts;
             channel->recv_counter++;
@@ -587,13 +584,12 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
                 if (channel->threshold > channel->recvbuf->range){
                     channel->threshold = channel->recvbuf->range;
                 }
-                channel->detected = 1;
                 __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->recv_counter, channel->psf, channel->threshold);
             }
         }
     }else {
         if (pack->interval > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
-            channel->detected = 0;
+            channel->psf = 0;
             channel->recv_begin = 0;
             channel->recv_counter = 0;
             channel->threshold = XCHANNEL_THRESHOLD_INIT;
@@ -660,7 +656,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->ack_ts = channel->ack_last = 0;
                 channel->rtt_counter = 0;
                 channel->recv_begin = 0;
-                channel->detected = 0;
+                channel->psf = 0;
             }
 
             // 更新已经到达对端的数据计数
@@ -925,9 +921,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
         while (channel != &msger->sendlist.head)
         {
             uint64_t current_ts = __xapi->clock();
+            if (channel->psf > 0){
+                delay = channel->psf - (current_ts - channel->send_ts);
+            }else {
+                delay = XPACK_SEND_RATE - (current_ts - channel->send_ts);
+            }
 
             // readable 是已经写入缓冲区还尚未发送的包
-            if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
+            if (delay > 0){
                 if (msger->timer > delay){
                     msger->timer = delay;
                 }
