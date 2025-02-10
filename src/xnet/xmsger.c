@@ -575,24 +575,25 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
 
-    if(channel->recv_begin == 0){
-        channel->recv_begin = channel->ack_ts;
-        channel->recv_counter++;
-    }else {
-        channel->recv_counter++;
-        if ((channel->ack_ts - channel->recv_begin) >= 100000000UL){
-            channel->psf = (100000000UL) / channel->recv_counter;
-            channel->threshold = (channel->rtt + channel->psf - 1) / channel->psf + 1;
-            if (channel->threshold > channel->recvbuf->range){
-                channel->threshold = channel->recvbuf->range;
+    if (channel->detected == 0){
+        if (channel->recv_begin == 0){
+            channel->recv_begin = channel->ack_ts;
+            channel->recv_counter++;
+        }else {
+            channel->recv_counter++;
+            if ((channel->ack_ts - channel->recv_begin) >= 100000000UL){
+                channel->psf = (100000000UL) / channel->recv_counter;
+                channel->threshold = (channel->rtt + channel->psf - 1) / channel->psf + 1;
+                if (channel->threshold > channel->recvbuf->range){
+                    channel->threshold = channel->recvbuf->range;
+                }
+                channel->detected = 1;
+                __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->recv_counter, channel->psf, channel->threshold);
             }
-            channel->detected = 1;
-            __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->recv_counter, channel->psf, channel->threshold);
         }
-    }
-
-    if (channel->detected){
+    }else {
         if (pack->interval > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
+            channel->detected = 0;
             channel->recv_begin = 0;
             channel->recv_counter = 0;
             __xlogd("kabuf le .............. %lu\n", pack->interval);
@@ -658,6 +659,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->ack_ts = channel->ack_last = 0;
                 channel->rtt_counter = 0;
                 channel->recv_begin = 0;
+                channel->detected = 0;
             }
 
             // 更新已经到达对端的数据计数
