@@ -10,7 +10,7 @@
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
 #define XPACK_SERIAL_RANGE  64
-#define XPACK_SEND_RATE     100000UL
+#define XPACK_SEND_RATE     100000UL // 100微妙
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -100,6 +100,9 @@ struct xchannel {
     uint64_t rtt_duration;
     uint64_t kabuf;
     // uint16_t kabuf_counter;
+    uint64_t recv_begin;
+    uint64_t recv_counter;
+    int detected;
 
     uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
 
@@ -572,69 +575,25 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
         channel->rtt = channel->rtt_duration >> 8;
     }
 
-    if (channel->ack_last > 0){
-        uint64_t prf = channel->ack_ts - channel->ack_last;
-        if (pack->interval > (channel->prf)){
-            __xlogd("kabuf le .............. %lu\n", pack->interval);
-            if (pack->interval > channel->rtt * 10){
-                if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
-                    channel->threshold--;
-                }
-            }
-            channel->prf_duration += channel->prf;
-            if (channel->psf < (channel->prf >> 1)){
-                channel->psf *= 1.01f;
-            }else if (pack->psf / 100000UL == channel->prf / 100000UL){
-                if (channel->threshold * channel->psf < channel->rtt 
-                    && channel->threshold < channel->sendbuf->range){
-                    channel->threshold++;
-                }
-            }
-        }else {
-            __xlogd("zhengchang le .................%lu\n", pack->interval);
-            // if (prf > channel->prf << 1){
-            //     channel->prf_duration += (channel->prf + (channel->prf >> 1));
-            // }else {
-            //     channel->prf_duration += (channel->ack_ts - channel->ack_last);
-            // }
-            channel->prf_duration += (channel->ack_ts - channel->ack_last);
-        }
-
-        if (channel->prf_counter < channel->threshold){
-            channel->prf_counter++;
-            channel->prf = channel->prf_duration / channel->prf_counter;
-            // channel->psf = channel->psf_duration / channel->prf_counter;
-        }else {
-            channel->prf_duration -= channel->prf;
-            // channel->psf_duration -= channel->psf;
-            channel->prf = channel->prf_duration / channel->prf_counter;
-            // channel->psf = channel->psf_duration / channel->prf_counter;
-            if (channel->prf < channel->psf){
-                channel->psf = channel->prf * 0.7f;
-            }
-            // if (channel->prf / 10000UL > pack->psf / 10000UL){
-            //     channel->psf = channel->prf;
-            //     channel->threshold--;
-            // }else {
-            //     channel->psf = channel->psf * 0.9f;
-            //     channel->threshold++;
-            // }
-            __xlogd("threshold = %u rtt = %lu psf = %lu:%lu prf = %lu last = %lu\n", 
-                    channel->threshold, channel->rtt, channel->psf, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            // if (channel->kabuf > 0){
-            //     // channel->threshold = channel->threshold + (channel->kabuf + (channel->prf - 1)) / channel->prf + 1;
-            //     __xlogd("kabuf = %lu threshold = %u rtt = %lu:%lu psf = %lu prf = %lu last = %lu\n", 
-            //             channel->kabuf, channel->threshold, channel->rtt, channel->prf * channel->threshold,
-            //             pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            //     channel->kabuf = 0;
-            // }
-        }
+    if(channel->recv_begin == 0){
+        channel->recv_begin = channel->ack_ts;
+        channel->recv_counter++;
     }else {
-        // if (channel->kabuf > 0){
-        //     channel->kabuf = channel->ack_ts - channel->kabuf;
-        //     __xlogd("send kabuf = %lu\n", channel->kabuf);
-        // }
+        channel->recv_counter++;
+        if ((channel->ack_ts - channel->recv_begin) >= 100000000UL){
+            channel->psf = 100000000UL / channel->recv_counter;
+            channel->threshold = (channel->rtt + channel->psf - 1) / channel->psf + 1;
+            channel->detected = 1;
+        }
     }
+
+    if (channel->detected){
+        if (pack->interval > channel->rtt * 10){
+            channel->recv_begin = 0;
+            channel->recv_counter = 0;
+        }
+    }
+    
     pack->ts = 0;
 }
 
@@ -680,6 +639,7 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                 channel->threshold = XCHANNEL_THRESHOLD_INIT;
                 channel->ack_ts = channel->ack_last = 0;
                 channel->rtt_counter = 0;
+                channel->recv_begin = 0;
             }
 
             // 更新已经到达对端的数据计数
