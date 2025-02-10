@@ -588,9 +588,23 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->detected){
-        if (pack->interval > channel->rtt * 10){
+        if (pack->interval > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
             channel->recv_begin = 0;
             channel->recv_counter = 0;
+            __xlogd("kabuf le .............. %lu\n", pack->interval);
+        }else {
+            if (channel->prf_counter < channel->threshold){
+                channel->prf_counter++;
+                channel->prf = channel->prf_duration / channel->prf_counter;
+            }else {
+                channel->prf_duration -= channel->prf;
+                channel->prf = channel->prf_duration / channel->prf_counter;
+                // if (channel->prf < channel->psf){
+                //     channel->psf = channel->prf * 0.7f;
+                // }
+                __xlogd("threshold = %u rtt = %lu psf = %lu:%lu prf = %lu last = %lu\n", 
+                        channel->threshold, channel->rtt, channel->psf, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
+            }
         }
     }
     
