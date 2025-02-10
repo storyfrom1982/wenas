@@ -19,7 +19,7 @@
 #define XCHANNEL_RTT_SAMPLING_COUNTS    256
 #define XCHANNEL_RESEND_SCALING_FACTOR  1.5
 #define XCHANNEL_THRESHOLD_MIN          8
-#define XCHANNEL_THRESHOLD_INIT         32
+#define XCHANNEL_THRESHOLD_INIT         XPACK_SERIAL_RANGE
 
 typedef struct xhead {
     uint16_t type; // 包类型
@@ -596,6 +596,7 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             channel->detected = 0;
             channel->recv_begin = 0;
             channel->recv_counter = 0;
+            channel->threshold = XCHANNEL_THRESHOLD_INIT;
             __xlogd("kabuf le .............. %lu\n", pack->interval);
         }else {
             if (channel->prf_counter < channel->threshold){
