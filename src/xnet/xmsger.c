@@ -581,8 +581,11 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }else {
         channel->recv_counter++;
         if ((channel->ack_ts - channel->recv_begin) >= 100000000UL){
-            channel->psf = (100000000UL + channel->rtt / 2) / channel->recv_counter;
+            channel->psf = (100000000UL + channel->rtt) / channel->recv_counter;
             channel->threshold = (channel->rtt + channel->psf - 1) / channel->psf + 1;
+            if (channel->threshold > channel->recvbuf->range){
+                channel->threshold = channel->recvbuf->range;
+            }
             channel->detected = 1;
             __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->recv_counter, channel->psf, channel->threshold);
         }
