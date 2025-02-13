@@ -9,8 +9,9 @@
 #define XBODY_SIZE          1280 // 1024 + 256
 #define XPACK_SIZE          ( XHEAD_SIZE + XBODY_SIZE ) // 1344
 
-#define XPACK_SERIAL_RANGE  64
-#define XPACK_SEND_RATE     100000UL // 100微妙
+#define XPACK_SERIAL_RANGE      64
+#define XPACK_PSF_DEFAULT       100000UL // 100微妙
+#define XPACK_PSF_SAMPLING      10000000UL // 10 毫秒
 
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
@@ -36,14 +37,6 @@ typedef struct xhead {
     uint8_t flags[14]; // 扩展标志位
     uint8_t secret[32]; // 密钥
 }*xhead_ptr;
-
-// typedef struct xmsg {
-//     void *ctx;
-//     uint32_t flag;
-//     uint32_t range;
-//     uint64_t spos;
-//     xline_t *xl;
-// }xmsg_t;
 
 typedef struct xpack {
     uint64_t ts;
@@ -85,25 +78,17 @@ struct xchannel {
     int sock;
 
     uint16_t serial_range;
+    uint64_t kabuf;
     uint16_t threshold;
-    uint16_t resend_counter;
-
     uint64_t psf; // packet sending frequency
-    uint16_t psf_scale;
-    uint16_t psf_factor;
-    uint64_t psf_duration;
-    uint64_t prf; // packet recv frequency
-    uint64_t prf_duration;
-    uint16_t prf_counter;
+    uint64_t psf_begin;
+    uint64_t psf_counter;
     uint64_t rtt; // round-trip times
     uint16_t rtt_counter; 
     uint64_t rtt_duration;
-    uint64_t kabuf;
-    // uint16_t kabuf_counter;
-    uint64_t recv_begin;
-    uint64_t recv_counter;
+    
 
-    uint64_t send_ts, send_last, recv_ts, ack_ts, ack_last;
+    uint64_t send_ts, send_last, recv_ts, ack_ts;
 
     void *ctx;
     // uint64_t rid;
@@ -125,7 +110,6 @@ struct xchannel {
     xmsgbuf_ptr msgbuf;
     serialbuf_ptr recvbuf;
     sserialbuf_ptr sendbuf;
-    // struct xpacklist flushlist;
 
     xchannel_ptr prev, next;
 };
@@ -238,10 +222,6 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     __xcheck(channel->msgbuf == NULL);
     channel->msgbuf->range = 4;
 
-    // channel->flushlist.len = 0;
-    // channel->flushlist.head.prev = &channel->flushlist.head;
-    // channel->flushlist.head.next = &channel->flushlist.head;
-
     __ring_list_put_into_head(&msger->sendlist, channel);
 
     return channel;
@@ -267,10 +247,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
 {
     __xlogd("xchannel_clear enter\n");
 
-    // // 清空冲洗队列
-    // channel->flushlist.len = 0;
-    // channel->flushlist.head.prev = &channel->flushlist.head;
-    // channel->flushlist.head.next = &channel->flushlist.head;
     // 刷新发送队列
     while(__serialbuf_sendable(channel->sendbuf) > 0){
         __xlogd("xchannel_clear pack send buf\n");
@@ -296,7 +272,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
             channel->msger->len -= (channel->msgbuf->buf[i]->wpos - channel->msgbuf->buf[i]->rpos);
             // xl 加了引用计数，这里需要释放一次
             xl_free(&channel->msgbuf->buf[i]);
-            // channel->msgbuf->buf[i] = NULL;
         }
     }
 
@@ -304,7 +279,6 @@ static inline void xchannel_clear(xchannel_ptr channel)
     if (channel->msg != NULL){
         __xlogd("xchannel_clear msg recv buf\n");
         xl_free(&channel->msg);
-        // channel->msg = NULL;
     }
 
     if (channel->req != NULL){
@@ -335,24 +309,6 @@ static void xchannel_free(xchannel_ptr channel)
     free(channel);
     __xlogd("xchannel_free >>>>-------------------> exit\n");
 }
-
-// static inline void xchannel_serial_pack(xchannel_ptr channel, uint8_t type)
-// {
-//     xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
-//     pack->head.flags[0] = channel->serial_range;
-//     pack->msg = NULL;
-//     pack->head.type = type;
-//     pack->head.range = 1;
-//     pack->channel = channel;
-//     pack->delay = channel->back_delay;
-//     pack->head.resend = 0;
-//     pack->head.ack.type = 0;
-//     pack->head.cid = channel->cid;
-//     pack->head.sn = channel->sendbuf->wpos;
-//     __atom_add(channel->sendbuf->wpos, 1);
-//     channel->len += pack->head.len;
-//     channel->msger->len += pack->head.len;
-// }
 
 static inline void xchannel_serial_msg(xchannel_ptr channel)
 {
@@ -573,40 +529,27 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
     }
 
     if (channel->psf == 0){
-        if (channel->recv_begin == 0){
-            channel->recv_begin = channel->ack_ts;
-            channel->recv_counter++;
+        if (channel->psf_begin == 0){
+            channel->psf_begin = channel->ack_ts;
+            channel->psf_counter++;
         }else {
-            channel->recv_counter++;
-            if ((channel->ack_ts - channel->recv_begin) >= 10000000UL){
-                channel->psf = (10000000UL) / channel->recv_counter;
+            channel->psf_counter++;
+            if ((channel->ack_ts - channel->psf_begin) >= XPACK_PSF_SAMPLING){
+                channel->psf = (XPACK_PSF_SAMPLING) / channel->psf_counter;
                 channel->threshold = (channel->rtt + channel->psf - 1) / channel->psf + 1;
                 if (channel->threshold > channel->recvbuf->range){
                     channel->threshold = channel->recvbuf->range;
                 }
-                __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->recv_counter, channel->psf, channel->threshold);
+                __xlogd("detected counter=%lu psf=%lu threshold=%u\n", channel->psf_counter, channel->psf, channel->threshold);
             }
         }
     }else {
         if (pack->interval > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
             channel->psf = 0;
-            channel->recv_begin = 0;
-            channel->recv_counter = 0;
+            channel->psf_begin = 0;
+            channel->psf_counter = 0;
             channel->threshold = XCHANNEL_THRESHOLD_INIT;
             __xlogd("kabuf le .............. %lu\n", pack->interval);
-        }else {
-            if (channel->prf_counter < channel->threshold){
-                channel->prf_counter++;
-                channel->prf = channel->prf_duration / channel->prf_counter;
-            }else {
-                channel->prf_duration -= channel->prf;
-                channel->prf = channel->prf_duration / channel->prf_counter;
-                // if (channel->prf < channel->psf){
-                //     channel->psf = channel->prf * 0.7f;
-                // }
-                __xlogd("threshold = %u rtt = %lu psf = %lu:%lu prf = %lu last = %lu\n", 
-                        channel->threshold, channel->rtt, channel->psf, pack->psf, channel->prf, channel->ack_ts - channel->ack_last);
-            }
         }
     }
     
@@ -653,9 +596,9 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             __atom_add(channel->rpos, pack->head.len);
             if (channel->rpos == channel->wpos){
                 channel->threshold = XCHANNEL_THRESHOLD_INIT;
-                channel->ack_ts = channel->ack_last = 0;
+                channel->ack_ts = 0;
                 channel->rtt_counter = 0;
-                channel->recv_begin = 0;
+                channel->psf_begin = 0;
                 channel->psf = 0;
             }
 
@@ -717,11 +660,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                             }
 
                             if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(pack->head), XHEAD_SIZE + pack->head.len) == XHEAD_SIZE + pack->head.len){
-                                channel->resend_counter++;
                                 pack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
-                                __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                                __xlogd("<RESEND> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                         pack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                        pack->head.resend, channel->threshold, channel->prf / 1000000UL, pack->timedout / 1000000UL,
+                                        pack->head.resend, channel->threshold, pack->timedout / 1000000UL,
                                         pack->head.ack.type, pack->head.ack.sn, pack->head.ack.pos, pack->head.sn);
                                 break; // 每次只重传一个包
                             }else {
@@ -742,8 +684,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
         __xlogd("xchannel_recv_ack >>>>-----------> OUT OF RANGE: %u\n", rpack->head.sn);
 
     }
-
-    channel->ack_last = channel->ack_ts;
 }
 
 static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
@@ -924,15 +864,15 @@ static inline int xmsger_send_all(xmsger_ptr msger)
             if (channel->psf > 0){
                 delay = channel->psf - (current_ts - channel->send_ts);
             }else {
-                delay = XPACK_SEND_RATE - (current_ts - channel->send_ts);
+                delay = XPACK_PSF_DEFAULT - (current_ts - channel->send_ts);
             }
 
-            // readable 是已经写入缓冲区还尚未发送的包
             if (delay > 0){
                 if (msger->timer > delay){
                     msger->timer = delay;
                 }
             }else {
+                // readable 是已经写入缓冲区还尚未发送的包
                 if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
                     xchannel_send_pack(channel);
                 }else if(channel->kabuf == 0){
@@ -940,38 +880,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                 }
             }
 
-            // if (channel->resend_counter > 0){
-            //     channel->resend_counter--;
-            // }else {
-            //     channel->psf_scale = __serialbuf_readable(channel->sendbuf);
-            //     if (channel->psf_scale < channel->threshold){
-            //         // channel->psf = (channel->psf_scale) * 1000UL;
-            //         channel->psf_factor = 1000UL;
-            //         if (channel->psf_scale < 20){
-            //             channel->psf = (channel->psf_scale + 1) * channel->psf_factor;
-            //         }else if (channel->psf_scale < 30){
-            //             channel->psf = (channel->psf_scale - 9 + 1) * channel->psf_factor * 10;
-            //         }else {
-            //             channel->psf = (channel->psf_scale - 19 + 1) * channel->psf_factor * 100;
-            //         }
-            //         if ((delay = channel->psf - (current_ts - channel->send_ts)) > 0){
-            //             if (msger->timer > delay){
-            //                 msger->timer = delay;
-            //             }
-            //         }else {
-            //             xchannel_send_pack(channel);
-            //         }
-            //     }
-            // }
-
             if (__serialbuf_recvable(channel->sendbuf) > 0){
 
                 current_ts = __xapi->clock();
                 uint64_t last_ts;
                 spack = &channel->sendbuf->buf[__serialbuf_rpos(channel->sendbuf)];
 
-                if (channel->ack_last > 0){
-                    last_ts = channel->ack_last;
+                if (channel->ack_ts > 0){
+                    last_ts = channel->ack_ts;
                 }else {
                     last_ts = channel->send_ts;
                 }
@@ -1017,13 +933,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // channel->send_last = spack->ts;
                             spack->head.resend++;
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
-                            // channel->resend_counter++;
                             if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
-                                channel->threshold --;
+                                channel->threshold--;
                             }
-                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
+                            __xlogd("<-RESEND-> TYPE[%u] IP[%s] PORT[%u] CID[%u] RESEND[%u:%lu:%lu:%ld] ACK[%u:%u:%u] >>>>-----> SN[%u]\n", 
                                     spack->head.type, __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, 
-                                    spack->head.resend, channel->threshold, channel->prf / 1000000UL, spack->timedout / 1000000UL, delay,
+                                    spack->head.resend, channel->threshold, spack->timedout / 1000000UL, delay,
                                     spack->head.ack.type, spack->head.ack.sn, spack->head.ack.pos, spack->head.sn);
                             
                         }else {
