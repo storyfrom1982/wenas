@@ -40,8 +40,7 @@ typedef struct xhead {
 
 typedef struct xpack {
     uint64_t ts;
-    uint64_t psf;
-    uint64_t interval;
+    uint64_t kabuf;
     uint64_t timedout;
     xline_t *msg;
     xchannel_ptr channel;
@@ -88,7 +87,7 @@ struct xchannel {
     uint64_t rtt_duration;
     
 
-    uint64_t send_ts, send_last, recv_ts, ack_ts;
+    uint64_t send_ts, recv_ts, ack_ts;
 
     void *ctx;
     // uint64_t rid;
@@ -388,24 +387,12 @@ static inline void xchannel_send_pack(xchannel_ptr channel)
             channel->send_ts = __xapi->clock();
             pack->ts = channel->send_ts;
             if (channel->kabuf){
-                pack->interval = channel->send_ts - channel->kabuf;
+                pack->kabuf = channel->send_ts - channel->kabuf;
                 channel->kabuf = 0;
-                if (channel->send_last > 0){
-                    pack->psf = channel->send_ts - channel->send_last - pack->interval;
-                }
             }else {
-                pack->interval = 0;
-                if (channel->send_last > 0){
-                    pack->psf = channel->send_ts - channel->send_last;
-                }
+                pack->kabuf = 0;
             }
-            channel->send_last = channel->send_ts;
             pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            // if (channel->ack_last > 0){
-            //     pack->timedout = channel->prf * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            // }else {
-            //     pack->timedout = channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR * 2;
-            // }
             channel->spos += pack->head.len;
             // 如果有待发送数据，确保 sendable 会大于 0
             xchannel_serial_msg(channel);
@@ -544,12 +531,12 @@ static inline void xchannel_sampling(xchannel_ptr channel, xpack_ptr pack)
             }
         }
     }else {
-        if (pack->interval > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
+        if (pack->kabuf > channel->rtt * XCHANNEL_RESEND_SCALING_FACTOR){
             channel->psf = 0;
             channel->psf_begin = 0;
             channel->psf_counter = 0;
             channel->threshold = XCHANNEL_THRESHOLD_INIT;
-            __xlogd("kabuf le .............. %lu\n", pack->interval);
+            __xlogd("kabuf le .............. %lu\n", pack->kabuf);
         }
     }
     
@@ -618,10 +605,6 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
             index = __serialbuf_rpos(channel->sendbuf);
 
             // rpos 一直在 acks 之前，一旦 rpos 等于 acks，所有连续的 ACK 就处理完成了
-
-            // if (__serialbuf_readable(channel->sendbuf) < channel->threshold){
-            //     xchannel_send_pack(channel);
-            // }
         }
 
         if (rpack->head.ack.sn != rpack->head.ack.pos){
@@ -650,8 +633,10 @@ static inline void xchannel_recv_ack(xchannel_ptr channel, xpack_ptr rpack)
                         // 判断是否进行了重传
                         if (pack->head.resend < 2){
                             pack->head.resend++;
-                            pack->ts = __xapi->clock();
-                            pack->interval = pack->ts - channel->send_last;
+                            // 设置kabuf状态
+                            pack->kabuf = __xapi->clock() - pack->ts;
+                            // 更新时间戳
+                            pack->ts += pack->kabuf;
                             // 判断重传的包是否带有 ACK
                             if (pack->head.ack.type != 0){
                                 // 更新 ACKS
@@ -924,14 +909,14 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             // TODO ack 也要更新
                         }
 
+                        spack->kabuf = current_ts - spack->ts;
                         spack->ts = current_ts;
-                        spack->interval = spack->ts - channel->send_last;
 
                         // 判断发送是否成功
                         if (__xapi->udp_sendto(channel->sock, channel->addr, (void*)&(spack->head), XHEAD_SIZE + spack->head.len) == XHEAD_SIZE + spack->head.len){
                             // 记录重传次数
                             // channel->send_last = spack->ts;
-                            spack->head.resend++;
+                            spack->head.resend++;                            
                             spack->timedout *= XCHANNEL_RESEND_SCALING_FACTOR;
                             if (channel->threshold > XCHANNEL_THRESHOLD_MIN){
                                 channel->threshold--;
@@ -949,13 +934,12 @@ static inline int xmsger_send_all(xmsger_ptr msger)
 
             }else if (channel->rpos == channel->wpos){
 
-                int64_t recv_timedout = __xapi->clock() - channel->recv_ts;
-                if (recv_timedout > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
+                if (__xapi->clock() - channel->recv_ts > NANO_SECONDS * XCHANNEL_TIMEDOUT_LIMIT){
                     if (!channel->timedout){
                         channel->timedout = true;
                         // __set_true(channel->disconnecting);
-                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%ld)\n", 
-                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, recv_timedout / 1000000UL);
+                        __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
+                                __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
                         if (channel->req != NULL){
                             // 连接已经建立，需要回收资源
                             msger->cb->on_message_timedout(msger->cb, channel, channel->req);
@@ -1029,9 +1013,9 @@ static void msger_loop(void *ptr)
                 if (rpack->head.type == XPACK_TYPE_MSG) {
 
                     __xcheck(xchannel_recv_pack(channel, &rpack) != 0);
-                    // if (__serialbuf_sendable(channel->sendbuf) > 0){
-                    //     xchannel_send_pack(channel);
-                    // }else 
+                    if (__serialbuf_sendable(channel->sendbuf) > 0){
+                        xchannel_send_pack(channel);
+                    }else 
                     {
                         xchannel_send_ack(channel);
                     }
