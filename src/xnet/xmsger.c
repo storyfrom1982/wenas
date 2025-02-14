@@ -42,7 +42,7 @@ typedef struct xpack {
     uint64_t ts;
     uint64_t kabuf;
     uint64_t timedout;
-    xline_t *msg;
+    xframe_t *msg;
     xchannel_ptr channel;
     struct xpack *prev, *next;
     struct xhead head;
@@ -66,7 +66,7 @@ typedef struct sserialbuf {
 
 typedef struct xmsgbuf {
     uint16_t range, spos, rpos, wpos;
-    xline_t *buf[1];
+    xframe_t *buf[1];
 }*xmsgbuf_ptr;
 
 
@@ -102,8 +102,8 @@ struct xchannel {
     // __atom_bool disconnecting;
     __atom_size spos, rpos, wpos;
 
-    xline_t *msg;
-    xline_t *req;
+    xframe_t *msg;
+    xframe_t *req;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -178,7 +178,7 @@ struct xmsger {
     (rnode)->next->prev = (rnode)
 
 
-static inline int xmsg_fixed(xline_t *msg)
+static inline int xmsg_fixed(xframe_t *msg)
 {
     __xcheck(msg == NULL);
     msg->rpos = msg->spos = 0;
@@ -217,7 +217,7 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->sendbuf->range = channel->serial_range;
     channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = 0;
 
-    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xline_t*) * 4);
+    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xframe_t*) * 4);
     __xcheck(channel->msgbuf == NULL);
     channel->msgbuf->range = 4;
 
@@ -314,7 +314,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
     // 每次只缓冲一个包，尽量使发送速度均匀
     if (__serialbuf_writable(channel->sendbuf) > 0 && __serialbuf_sendable(channel->msgbuf) > 0){
 
-        xline_t *msg = channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
+        xframe_t *msg = channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)];
         xpack_ptr pack = &channel->sendbuf->buf[__serialbuf_wpos(channel->sendbuf)];
 
         pack->msg = msg;
@@ -765,7 +765,7 @@ static inline int xchannel_recv_pack(xchannel_ptr channel, xpack_ptr *rpack)
 
 static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 {
-    xline_t *msg = (xline_t*)(*(uint64_t*)&head->flags[0]);
+    xframe_t *msg = (xframe_t*)(*(uint64_t*)&head->flags[0]);
 
     if (head->ack.type == XPACK_TYPE_REQ){
 
@@ -1109,7 +1109,7 @@ XClean:
     __xlogd("xmsger_loop exit\n");
 }
 
-int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xline_t *msg)
+int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xframe_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(channel == NULL);
@@ -1144,7 +1144,7 @@ XClean:
     return -1;
 }
 
-int xmsger_disconnect(xmsger_ptr msger, xline_t *msg)
+int xmsger_disconnect(xmsger_ptr msger, xframe_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(msg == NULL);
@@ -1160,7 +1160,7 @@ XClean:
 
 }
 
-int xmsger_connect(xmsger_ptr msger, xline_t *msg)
+int xmsger_connect(xmsger_ptr msger, xframe_t *msg)
 {
     __xcheck(msger == NULL);
     __xcheck(msg == NULL);
@@ -1315,7 +1315,7 @@ void xmsger_free(xmsger_ptr *pptr)
 //     return __xapi->udp_addr_port(channel->addr);
 // }
 
-xline_t* xchannel_get_req(xchannel_ptr channel)
+xframe_t* xchannel_get_req(xchannel_ptr channel)
 {
     return channel->req;
 }

@@ -6,12 +6,12 @@
 
 static int scandir_cb(const char *name, int type, uint64_t size, void **ctx)
 {
-    xline_t **frame = (xline_t**)ctx;
-    uint64_t pos = xl_add_obj_begin(frame, NULL);
+    xframe_t **frame = (xframe_t**)ctx;
+    uint64_t pos = xl_obj_begin(frame, NULL);
     xl_add_word(frame, "path", name);
     xl_add_int(frame, "type", type);
     xl_add_uint(frame, "size", size);
-    xl_add_obj_end(frame, pos);
+    xl_obj_end(frame, pos);
     return 0;
 }
 
@@ -34,8 +34,8 @@ int main(int argc, char *argv[])
     // const char *cip = "192.168.1.4";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
-    // const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
-    const char *cip = "47.99.146.226";
+    const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
+    // const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8914:865d:877:5115:1502:14dc:4882";
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
@@ -82,20 +82,20 @@ int main(int argc, char *argv[])
         } else if (strcmp(command, "scan") == 0) {
 
             // xline_t *dirlist = xl_maker();
-            // // uint64_t pos = xl_add_list_begin(&dirlist, "list");
+            // // uint64_t pos = xl_list_begin(&dirlist, "list");
             // // int name_pos = 0;
             // // while (cwd_path[cwd_size - name_pos -1] != '/')
             // // {
             // //     name_pos++;
             // // }
             // // __xapi->fs_path_scanner(cwd_path, cwd_size - name_pos, scandir_cb, (void**)&dirlist);
-            // // xl_add_list_end(&dirlist, pos);
+            // // xl_list_end(&dirlist, pos);
             // // xl_printf(&dirlist->line);
             // xlio_path_scanner(cwd_path, &dirlist);
             // xline_t xllist = xl_parser(&dirlist->line);
-            // xbyte_t *dlist = xl_find(&xllist, "list");
+            // xline_t *dlist = xl_find(&xllist, "list");
             // xllist = xl_parser(dlist);
-            // xbyte_t *xd;
+            // xline_t *xd;
             // while ((xd = xl_list_next(&xllist)) != NULL){
             //     xl_printf(xd);
             // }

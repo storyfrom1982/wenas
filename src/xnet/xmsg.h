@@ -11,7 +11,7 @@
 // #define XMSG_FLAG_STREAM        0x05
 
 typedef struct xltp xltp_t;
-typedef int(*xmsgcb_ptr)(xltp_t*, xline_t *msg, void *ctx);
+typedef int(*xmsgcb_ptr)(xltp_t*, xframe_t *msg, void *ctx);
 
 #define __xmsg_get_cb(msg)                  (xmsgcb_ptr)(msg)->args[0]
 #define __xmsg_get_ctx(msg)                 (msg)->args[1]
