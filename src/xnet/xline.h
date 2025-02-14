@@ -172,6 +172,15 @@ static inline void xl_clear(xframe_t *frame)
     frame->wpos = frame->rpos = 0;
 }
 
+static inline uint64_t xl_usable(xframe_t *frame, const char *key)
+{
+    int headlen = slength(key) + 2 + XLINE_SIZE;
+    if ((frame->size - frame->wpos) > headlen){
+        return (frame->size - frame->wpos) - headlen;
+    }
+    return 0;
+}
+
 static inline void xl_free(xframe_t **pptr)
 {
     if (pptr && *pptr){

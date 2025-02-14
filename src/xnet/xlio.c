@@ -85,7 +85,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
         xl_add_uint(&frame, "size", stream->file_size);
         xl_add_uint(&frame, "pos", stream->file_pos);
 
-        uint64_t len = frame->size - frame->wpos - 6/* key size */ - 9 /* value head size */;
+        uint64_t len = xl_usable(frame, "data");
         if (stream->file_size - stream->file_pos < len){
             len = stream->file_size - stream->file_pos;
         }
@@ -156,7 +156,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                         __xapi->fs_file_close(stream->fd);
                         stream->fd = -1;
                     }else {
-                        uint64_t len = frame->size - frame->wpos - 6/* key size */ - 9 /* value head size */;
+                        uint64_t len = xl_usable(frame, "data");
                         if (stream->file_size < len){
                             len = stream->file_size;
                         }
