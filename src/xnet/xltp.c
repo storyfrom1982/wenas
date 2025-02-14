@@ -223,7 +223,7 @@ static inline int xltp_recv_req(xltp_t *xltp, xframe_t *msg)
     static char *api;
     static xmsgcb_ptr cb;
     xltp->parser = xl_parser(&msg->line);
-    api = xl_find_word(&xltp->parser, "api");
+    xl_find_word(&xltp->parser, "api", &api);
     __xcheck(api == NULL);
     // msg->id = xl_find_uint(&xltp->parser, "rid");
     // __xcheck(msg->id == XNONE);
@@ -275,7 +275,7 @@ static inline int xltp_recv_msg(xltp_t *xltp, xframe_t *msg)
             cb(xltp, msg, NULL);
         }else {
             xltp->parser = xl_parser(&msg->line);
-            api = xl_find_word(&xltp->parser, "api");
+            xl_find_word(&xltp->parser, "api", &api);
             __xcheck(api == NULL);
             cb = xtree_find(xltp->api, api, slength(api));
             __xcheck(cb == NULL);
@@ -618,10 +618,10 @@ XClean:
 
 static int req_put(xltp_t *xltp, xframe_t *msg, void *ctx)
 {
-    const char *path;
+    char *path;
     xframe_t *req = NULL;
     xltp->parser = xl_parser(&msg->line);
-    path = xl_find_word(&xltp->parser, "path");
+    xl_find_word(&xltp->parser, "path", &path);
     req = xl_maker();
     __xcheck(req == NULL);
     __xmsg_set_cb(req, res_put);
@@ -703,9 +703,9 @@ XClean:
 
 static int req_get(xltp_t *xltp, xframe_t *msg, void *ctx)
 {
-    const char *uri;
+    char *uri;
     xltp->parser = xl_parser(&msg->line);
-    uri = xl_find_word(&xltp->parser, "uri");
+    xl_find_word(&xltp->parser, "uri", &uri);
     __xcheck(uri == NULL);
     xframe_t *req = xl_maker();
     __xcheck(req == NULL);

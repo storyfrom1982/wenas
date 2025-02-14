@@ -479,49 +479,49 @@ static inline xline_t* xl_find(xframe_t *frame, const char *key)
     return NULL;
 }
 
-static inline int64_t xl_find_int(xframe_t *frame, const char *key)
+static inline xline_t* xl_find_int(xframe_t *frame, const char *key, int64_t *ptr)
 {
     xline_t *val = xl_find(frame, key);
-    if (val){
-        return __xl_b2i(val);
+    if (val && ptr){
+        *ptr = __xl_b2i(val);
     }
-    return XNONE;
+    return val;
 }
 
-static inline uint64_t xl_find_uint(xframe_t *frame, const char *key)
+static inline xline_t* xl_find_uint(xframe_t *frame, const char *key, uint64_t *ptr)
 {
     xline_t *val = xl_find(frame, key);
-    if (val){
-        return __xl_b2u(val);
+    if (val && ptr){
+        *ptr = __xl_b2u(val);
     }
-    return XNONE;
+    return val;
 }
 
-static inline double xl_find_float(xframe_t *frame, const char *key)
+static inline xline_t* xl_find_float(xframe_t *frame, const char *key, double *ptr)
 {
     xline_t *val = xl_find(frame, key);
-    if (val){
-        return __xl_b2f(val);
+    if (val && ptr){
+        *ptr = __xl_b2f(val);
     }
-    return (double)XNONE;
+    return val;
 }
 
-static inline char* xl_find_word(xframe_t *frame, const char *key)
+static inline xline_t* xl_find_word(xframe_t *frame, const char *key, char **pptr)
 {
     xline_t *val = xl_find(frame, key);
-    if (val){
-        return (char*)__xl_b2o(val);
+    if (val && pptr){
+        *pptr = (char*)__xl_b2o(val);
     }
-    return NULL;
+    return val;
 }
 
-static inline void* xl_find_ptr(xframe_t *frame, const char *key)
+static inline xline_t* xl_find_ptr(xframe_t *frame, const char *key, void **pptr)
 {
     xline_t *val = xl_find(frame, key);
-    if (val){
-        return (void *)(__xl_b2u(val));
+    if (val && pptr){
+        *pptr = (void*)(__xl_b2u(val));
     }
-    return NULL;
+    return val;
 }
 
 static xframe_t xl_parser(xline_t *xd)

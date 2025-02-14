@@ -23,7 +23,7 @@ typedef struct xmsgbuf {
 
 typedef struct xlio_stream {
     int flag;
-    int status;
+    int64_t status;
     __xfile_t fd;
     int is_dir;
     int is_resend;
@@ -65,16 +65,17 @@ typedef struct xlio {
 static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
 {
     if (stream->fd > 0){
-
+        int64_t isfile;
+        char *name;
         __xcheck(stream->obj == NULL);
         xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
         xl_add_int(&frame, "id", frame->id);
         uint64_t list_begin_pos = xl_list_begin(&frame, "list");
 
         xframe_t parser = xl_parser(stream->obj);
-        const char *name = xl_find_word(&parser, "path");
-        int64_t isfile = xl_find_int(&parser, "type");
-        stream->file_size = xl_find_uint(&parser, "size");
+        xl_find_word(&parser, "path", &name);
+        xl_find_int(&parser, "type", &isfile);
+        xl_find_uint(&parser, "size", &stream->file_size);
         
 
         uint64_t obj_begin_pos = xl_obj_begin(&frame, NULL);
@@ -122,7 +123,8 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
         do {
 
             if ((stream->obj != NULL)){
-
+                int64_t isfile;
+                char *name;
                 // xl_printf(stream->obj);
                 
                 if (frame->size - frame->wpos < __xl_sizeof_line(stream->obj) + 256){
@@ -131,9 +133,9 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                 }
                 
                 xframe_t parser = xl_parser(stream->obj);
-                const char *name = xl_find_word(&parser, "path");
-                int64_t isfile = xl_find_int(&parser, "type");
-                stream->file_size = xl_find_uint(&parser, "size");
+                xl_find_word(&parser, "path", &name);
+                xl_find_int(&parser, "type", &isfile);
+                xl_find_uint(&parser, "size", &stream->file_size);
                 
 
                 uint64_t obj_begin_pos = xl_obj_begin(&frame, NULL);
@@ -210,17 +212,19 @@ static inline int xlio_check_list(xlio_stream_t *ios, xframe_t **in, xframe_t **
     // ios->parser = xl_parser(&(*in)->line);
     // xline_t *objlist = xl_find(&ios->parser, "list");
     // ios->parser = xl_parser(objlist);
-
+    int64_t isfile;
+    char *name;
+    uint64_t size;
     uint64_t pos = xl_list_begin(out, "list");
     while ((ios->obj = xl_list_next(&ios->parser)) != NULL)
     {
         // xl_printf(ios->obj);
         // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
         xframe_t parser = xl_parser(ios->obj);
-        int64_t isfile = xl_find_int(&parser, "type");
+        xl_find_int(&parser, "type", &isfile);
         if (isfile){
             xl_list_append(out, ios->obj);
-            uint64_t size = xl_find_int(&parser, "size");
+            xl_find_uint(&parser, "size", &size);
             ios->list_size += size;
             // uint64_t pos = xl_obj_begin(out, "llll");
             // uint64_t pos = xl_obj_begin(out, NULL);
@@ -228,7 +232,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xframe_t **in, xframe_t **
             // __xcheck(xl_add_int(out, "type", 1) == XNONE);
             // xl_obj_end(out, pos);
         }else {
-            const char *name = xl_find_word(&parser, "path");
+            xl_find_word(&parser, "path", &name);
             // ios->size = xl_find_uint(&parser, "size");
             int full_path_len = slength(ios->uri) + slength(name) + 2;
             char full_path[full_path_len];
@@ -291,6 +295,9 @@ static void xlio_loop(void *ptr)
     __xlogd("xlio_loop >>>>---------------> enter\n");
 
     int ret = 0;
+    uint64_t pos;
+    int64_t isfile;
+    char *name;
     xframe_t parser;
     xframe_t *msg;
     xframe_t *frame;
@@ -313,7 +320,7 @@ static void xlio_loop(void *ptr)
 
                 parser = xl_parser(&msg->line);
                 // xl_printf(&msg->line);
-                stream->status = xl_find_int(&parser, "api");
+                xl_find_int(&parser, "api", &stream->status);
 
                 if (stream->status == XLIO_STREAM_REQ_LIST){
 
@@ -370,7 +377,7 @@ static void xlio_loop(void *ptr)
                     // xl_printf(&msg->line);
                     __xcheck(stream->current_frame != NULL);
                     stream->current_frame = msg;
-                    stream->list_size = xl_find_uint(&parser, "size");
+                    xl_find_uint(&parser, "size", &stream->list_size);
                     xline_t *list = xl_find(&parser, "list");
                     if (__xl_sizeof_body(list) > 0){
                         xl_hold(msg);
@@ -416,11 +423,11 @@ static void xlio_loop(void *ptr)
                             // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
                             parser = xl_parser(stream->obj);
                             __xlogd("write data 2 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                            const char *name = xl_find_word(&parser, "path");
-                            int64_t isfile = xl_find_int(&parser, "type");
+                            xl_find_word(&parser, "path", &name);
+                            xl_find_int(&parser, "type", &isfile);
                             __xcheck(isfile != 1);
-                            stream->file_size = xl_find_uint(&parser, "size");
-                            uint64_t pos = xl_find_uint(&parser, "pos");
+                            xl_find_uint(&parser, "size", &stream->file_size);
+                            xl_find_uint(&parser, "pos", &pos);
                             int full_path_len = slength(stream->uri) + slength(name) + 2;
                             char full_path[full_path_len];                
                             __xlogd("write data 3 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
@@ -600,8 +607,9 @@ XClean:
 
 int xlio_start_downloader(xlio_t *io, xframe_t *req, int response)
 {
+    char *uri;
     xframe_t parser = xl_parser(&req->line);
-    const char *uri = xl_find_word(&parser, "path");
+    xl_find_word(&parser, "path", &uri);
     __xcheck(uri == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_DOWNLOAD);
@@ -631,8 +639,9 @@ XClean:
 
 int xlio_start_uploader(xlio_t *io, xframe_t *req, int response)
 {
+    char *uri;
     xframe_t parser = xl_parser(&req->line);
-    const char *uri = xl_find_word(&parser, "uri");
+    xl_find_word(&parser, "uri", &uri);
     __xcheck(uri == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_UPLOAD);
