@@ -75,10 +75,8 @@ void xlog_recorder_close()
     }
 
     xclear(gloger, sizeof(global_logrecorder));
-
-#ifdef XMALLOC_ENABLE
+    
     xalloc_leak_trace(memory_leak_cb);
-#endif
 }
 
 extern void env_backtrace_setup();
