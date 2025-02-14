@@ -42,8 +42,8 @@ int main(int argc, char *argv[])
     // const char *cip = "2409:8a14:8745:8d90:8:4168:3641:fb61"; // 
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    mcopy(ip, cip, slength(cip));
-    ip[slength(cip)] = '\0';
+    xcopy(ip, cip, xlen(cip));
+    ip[xlen(cip)] = '\0';
 
     char str[1024];
     char input[256];
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
             size_t cwd_size = 1024;
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
-            // int path_len = slength(cwd_path);
+            // int path_len = xlen(cwd_path);
             int dir_name_pos = 0;
             while (cwd_path[cwd_size - dir_name_pos - 1] != '/'){
                 dir_name_pos++;
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
             __xlogi("未知命令: %s\n", command);
         }
 
-        mclear(command, 256);
+        xclear(command, 256);
     }
 
     xltp_free(&peer);

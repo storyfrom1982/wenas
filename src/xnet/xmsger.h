@@ -2,7 +2,7 @@
 #define __XMSGER_H__
 
 
-#include "xmalloc.h"
+#include "xalloc.h"
 #include "xmsg.h"
 
 

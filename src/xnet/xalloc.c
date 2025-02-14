@@ -1,17 +1,17 @@
-#include "xmalloc.h"
+#include "xalloc.h"
 
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
 
-#ifdef XMALLOC_PAGE_SIZE
-# define __page_size                XMALLOC_PAGE_SIZE
+#ifdef XALLOC_PAGE_SIZE
+# define __page_size                XALLOC_PAGE_SIZE
 #else
 # define __page_size                0x1000000
 #endif
 
-#ifdef XMALLOC_MAX_POOL
-# define	__max_pool_number		XMALLOC_MAX_POOL
+#ifdef XALLOC_MAX_POOL
+# define	__max_pool_number		XALLOC_MAX_POOL
 #else
 # define	__max_pool_number		8
 #endif
@@ -209,7 +209,7 @@ static inline int malloc_page(xmalloc_pool_t *pool, xmalloc_page_t *page, size_t
     page->end->prev = page->head;
     page->end->next = NULL;
 
-    mclear(&(page->recycle_pool), sizeof(page->recycle_pool));
+    xclear(&(page->recycle_pool), sizeof(page->recycle_pool));
 
     return 0;
 }
@@ -379,7 +379,6 @@ static inline void flush_cache()
 // 	}
 // }
 
-#ifdef XMALLOC_ENABLE
 static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_t ptr_pid)
 {
 #ifdef UNWIND_BACKTRACE
@@ -408,7 +407,66 @@ static inline void memory_backtrace(void **ptr_stack, int64_t ptr_depth, uint64_
 #endif //UNWIND_BACKTRACE
 }
 
-void free(void* address)
+size_t xlen(const char *s)
+{
+    if (!s){
+        return 0;
+    }
+    size_t l = 0;
+    while (s[l] != '\0'){
+        l++;
+    }
+    return l;
+}
+
+int xcompare(const void *s1, const void *s2, size_t n)
+{
+    if (s1 == NULL || s2 == NULL || n == 0){
+        return 0;
+    }
+    while (--n && *(char*)s1 == *(char*)s2){
+        s1 = (char*)s1 + 1;
+        s2 = (char*)s2 + 1;
+    }
+    return (*(char*)s1 - *(char*)s2);
+}
+
+void* xcopy(void *dst, const void *src, size_t n)
+{
+    if (src == NULL || dst == NULL || n == 0){
+        return dst;
+    }
+    size_t l = n / 8;
+    for (size_t i = 0; i < l; ++i){
+        *(((size_t*)dst) + i) = *(((size_t*)src) + i);
+    }
+    for (size_t r = n % 8; r > 0; r--){
+        *(((char*)dst) + (n - r)) = *(((char*)src) + (n - r));
+    }
+    return dst;
+}
+
+void xclear(void *ptr, size_t len)
+{
+    if (ptr != NULL){
+        size_t l = len >> 3;
+        for (size_t i = 0; i < l; ++i){
+            *(((size_t*)ptr) + i) = 0;
+        }
+        for (size_t r = len % 8; r > 0; r--){
+            *(((char*)ptr) + (len - r)) = 0;
+        }
+        // char *c = (char*)ptr;
+        // for (size_t t = 0; t < len; ++t){
+        // 	if (c[t] != 0){
+        // 		// printf("xclear failed\n");
+        // 		exit(0);
+        // 	}
+        // }
+    }
+}
+
+inline void xfree(void* address)
 {
     size_t page_id = 0;
     size_t pool_id = 0;
@@ -466,11 +524,8 @@ void free(void* address)
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////
-////
-/////////////////////////////////////////////////////////////////////////////
 
-void* malloc(size_t size)
+inline void* xalloc(size_t size)
 {
     __xptr *ptr = NULL;
     size_t reserved_size = 0;
@@ -592,6 +647,88 @@ void* malloc(size_t size)
     return __pointer2address(ptr);
 }
 
+void xalloc_leak_trace(void (*cb)(const char *s, uint64_t pid))
+{
+    __xptr *ptr = NULL;
+    xmalloc_pool_t *pool = NULL;
+
+    if (cb == NULL){
+        return;
+    }
+
+    int result = 0;
+    size_t len = 10240;
+    char buf[10240];
+
+    flush_cache();
+
+    for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
+        pool = &(mm->pool[pool_id]);
+        for (size_t page_id = 0; page_id < pool->page_number; ++page_id){
+            if (pool->page[page_id].start_address
+                && pool->page[page_id].ptr->size
+                       != pool->page[page_id].size - __free_pointer_size * 2){
+                cb("[!!! Found a memory leak !!!]", 0xFFFFFFFF);
+                ptr = (__next_pointer(pool->page[page_id].head));
+                while(ptr != pool->page[page_id].end){
+#ifdef UNWIND_BACKTRACE
+                    if (!__mergeable(__next_pointer(ptr))){
+                        size_t n = 0;
+                        int64_t count = *((int64_t*)ptr->trace);
+                        void** buffer = ((void**)ptr->trace) + 1;
+                        for (size_t idx = 0; idx < count; ++idx) {
+                            result = __xapi->dladdr((const void*)(buffer[idx]), buf + n, len - n - 1);
+                            if (result == -1){
+                                break;
+                            }
+                            n += result;
+                        }
+                        buf[n] = '\0';
+                        cb(buf, *(((int64_t*)ptr->trace) + count));
+                    }
+#endif
+                    ptr = __next_pointer(ptr);
+                }
+            }
+        }
+    }
+}
+
+void* xcalloc(size_t count, size_t size)
+{
+    size *= count;
+
+    void *ptr = xalloc(size);
+
+    if (ptr != NULL){
+        size_t l = size >> 3;
+        for (size_t i = 0; i < l; ++i){
+            *(((size_t*)ptr) + i) = 0;
+        }
+        for (size_t r = size % 8; r > 0; r--){
+            *(((char*)ptr) + (size - r)) = 0;
+        }
+    }
+
+    return ptr;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+////
+/////////////////////////////////////////////////////////////////////////////
+
+#ifdef XALLOC_ENABLE
+
+void free(void* address)
+{
+    xfree(address);
+}
+
+void* malloc(size_t size)
+{
+    return xalloc(size);
+}
+
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
@@ -616,7 +753,7 @@ void* calloc(size_t number, size_t size)
         // char *c = (char*)ptr;
         // for (size_t t = 0; t < size; ++t){
         // 	if (c[t] != 0){
-        // 		printf("mclear failed\n");
+        // 		printf("xclear failed\n");
         // 		exit(0);
         // 	}
         // }
@@ -642,9 +779,9 @@ void* realloc(void* address, size_t size)
 
             if (address != NULL){
                 if (size > old_pointer->size - __work_pointer_size){
-                    mcopy(new_address, address, old_pointer->size - __work_pointer_size);
+                    xcopy(new_address, address, old_pointer->size - __work_pointer_size);
                 }else{
-                    mcopy(new_address, address, size);
+                    xcopy(new_address, address, size);
                 }
                 free(address);
             }
@@ -698,7 +835,7 @@ void* aligned_alloc(size_t alignment, size_t size)
         pointer->size = free_size;
 
 #ifdef UNWIND_BACKTRACE
-        mcopy(aligned_pointer->trace, pointer->trace, __backtrace_size);
+        xcopy(aligned_pointer->trace, pointer->trace, __backtrace_size);
 #endif
 
         free(address);
@@ -729,53 +866,6 @@ int posix_memalign(void* *ptr, size_t align, size_t size)
     return 0;
 }
 
-void xmalloc_leak_trace(void (*cb)(const char *leak_location, uint64_t pid))
-{
-    __xptr *ptr = NULL;
-    xmalloc_pool_t *pool = NULL;
-
-    if (cb == NULL){
-        return;
-    }
-
-    int result = 0;
-    size_t len = 10240;
-    char buf[10240];
-
-    flush_cache();
-
-    for (size_t pool_id = 0; pool_id < mm->pool_number; ++pool_id){
-        pool = &(mm->pool[pool_id]);
-        for (size_t page_id = 0; page_id < pool->page_number; ++page_id){
-            if (pool->page[page_id].start_address
-                && pool->page[page_id].ptr->size
-                       != pool->page[page_id].size - __free_pointer_size * 2){
-                cb("[!!! Found a memory leak !!!]", 0xFFFFFFFF);
-                ptr = (__next_pointer(pool->page[page_id].head));
-                while(ptr != pool->page[page_id].end){
-#ifdef UNWIND_BACKTRACE
-                    if (!__mergeable(__next_pointer(ptr))){
-                        size_t n = 0;
-                        int64_t count = *((int64_t*)ptr->trace);
-                        void** buffer = ((void**)ptr->trace) + 1;
-                        for (size_t idx = 0; idx < count; ++idx) {
-                            result = __xapi->dladdr((const void*)(buffer[idx]), buf + n, len - n - 1);
-                            if (result == -1){
-                                break;
-                            }
-                            n += result;
-                        }
-                        buf[n] = '\0';
-                        cb(buf, *(((int64_t*)ptr->trace) + count));
-                    }
-#endif
-                    ptr = __next_pointer(ptr);
-                }
-            }
-        }
-    }
-}
-#endif //XMALLOC_ENABLE
 /////////////////////////////////////////////////////////////////////////////
 ////
 /////////////////////////////////////////////////////////////////////////////
@@ -784,12 +874,12 @@ char* strdup(const char *s)
 {
     char *result = NULL;
     if (s){
-        size_t len = slength(s);
+        size_t len = xlen(s);
 
         result = (char *)malloc(len + 1);
 
         if (result != NULL){
-            mcopy(result, s, len);
+            xcopy(result, s, len);
             result[len] = '\0';
         }
     }
@@ -805,7 +895,7 @@ char* strndup(const char *s, size_t n)
         result = (char *)malloc(n + 1);
 
         if (result != NULL){
-            mcopy(result, s, n);
+            xcopy(result, s, n);
             result[n] = '\0';
         }
     }
@@ -813,64 +903,7 @@ char* strndup(const char *s, size_t n)
     return result;
 }
 
-size_t slength(const char *s)
-{
-    if (!s){
-        return 0;
-    }
-    size_t l = 0;
-    while (s[l] != '\0'){
-        l++;
-    }
-    return l;
-}
-
-int mcompare(const void *s1, const void *s2, size_t n)
-{
-    if (s1 == NULL || s2 == NULL || n == 0){
-        return 0;
-    }
-    while (--n && *(char*)s1 == *(char*)s2){
-        s1 = (char*)s1 + 1;
-        s2 = (char*)s2 + 1;
-    }
-    return (*(char*)s1 - *(char*)s2);
-}
-
-void* mcopy(void *dst, const void *src, size_t n)
-{
-    if (src == NULL || dst == NULL || n == 0){
-        return dst;
-    }
-    size_t l = n / 8;
-    for (size_t i = 0; i < l; ++i){
-        *(((size_t*)dst) + i) = *(((size_t*)src) + i);
-    }
-    for (size_t r = n % 8; r > 0; r--){
-        *(((char*)dst) + (n - r)) = *(((char*)src) + (n - r));
-    }
-    return dst;
-}
-
-void mclear(void *ptr, size_t len)
-{
-    if (ptr != NULL){
-        size_t l = len >> 3;
-        for (size_t i = 0; i < l; ++i){
-            *(((size_t*)ptr) + i) = 0;
-        }
-        for (size_t r = len % 8; r > 0; r--){
-            *(((char*)ptr) + (len - r)) = 0;
-        }
-        // char *c = (char*)ptr;
-        // for (size_t t = 0; t < len; ++t){
-        // 	if (c[t] != 0){
-        // 		// printf("mclear failed\n");
-        // 		exit(0);
-        // 	}
-        // }
-    }
-}
+#endif //XALLOC_ENABLE
 
 /////////////////////////////////////////////////////////////////////////////
 ////
@@ -887,7 +920,7 @@ void xmalloc_release()
             }
         }
     }
-    mclear(mm, sizeof(xmalloc_t));
+    xclear(mm, sizeof(xmalloc_t));
     __atom_unlock(mm->lock);
 }
 

@@ -91,7 +91,7 @@ XClean:
 
 // static inline xltp_io_t* xltp_make_ctx(xltp_t *xltp, char *path)
 // {
-//     xltp_io_t* ctx = (xltp_io_t*)malloc(sizeof(xltp_io_t));
+//     xltp_io_t* ctx = (xltp_io_t*)xalloc(sizeof(xltp_io_t));
 //     __xcheck(ctx == NULL);
 //     ctx->xltp = xltp;
 //     ctx->channel = NULL;
@@ -150,7 +150,7 @@ XClean:
 
 int xltp_make_api(xltp_t *xltp, const char *api, xmsgcb_ptr cb)
 {
-    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), cb) == NULL);
+    __xcheck(xtree_add(xltp->api, (void*)api, xlen(api), cb) == NULL);
     return 0;
 XClean:
     return -1;
@@ -227,7 +227,7 @@ static inline int xltp_recv_req(xltp_t *xltp, xframe_t *msg)
     __xcheck(api == NULL);
     // msg->id = xl_find_uint(&xltp->parser, "rid");
     // __xcheck(msg->id == XNONE);
-    cb = xtree_find(xltp->api, api, slength(api));
+    cb = xtree_find(xltp->api, api, xlen(api));
     __xcheck(cb == NULL);
     cb(xltp, msg, NULL);
     return 0;
@@ -277,7 +277,7 @@ static inline int xltp_recv_msg(xltp_t *xltp, xframe_t *msg)
             xltp->parser = xl_parser(&msg->line);
             xl_find_word(&xltp->parser, "api", &api);
             __xcheck(api == NULL);
-            cb = xtree_find(xltp->api, api, slength(api));
+            cb = xtree_find(xltp->api, api, xlen(api));
             __xcheck(cb == NULL);
             cb(xltp, msg, NULL);
         }
@@ -751,7 +751,7 @@ XClean:
 
 xltp_t* xltp_create(int boot)
 {
-    xltp_t *xltp = (xltp_t*)calloc(1, sizeof(struct xltp));
+    xltp_t *xltp = (xltp_t*)xcalloc(1, sizeof(struct xltp));
 
     __set_true(xltp->runnig);
 
@@ -806,7 +806,7 @@ XClean:
 static void xapi_clear(void *xapi)
 {
     if (xapi){
-        // free(xapi);
+        // xfree(xapi);
     }
 }
 
@@ -859,6 +859,6 @@ void xltp_free(xltp_t **pptr)
             xtree_free(&xltp->api);
         }
 
-        free(xltp);
+        xfree(xltp);
     }
 }

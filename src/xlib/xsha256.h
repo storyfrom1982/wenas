@@ -1,7 +1,7 @@
 #ifndef __XSHA256_H__
 #define __XSHA256_H__
 
-#include "xnet/xmalloc.h"
+#include "xnet/xalloc.h"
 
 #define SHA2_IS_BIG_ENDIAN	1
 

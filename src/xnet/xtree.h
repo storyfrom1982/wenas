@@ -1,7 +1,7 @@
 #ifndef __SYS_TREE_H__
 #define __SYS_TREE_H__
 
-#include "xmalloc.h"
+#include "xalloc.h"
 
 #define NODE_DIMENSION          4
 #define TREE_DIMENSION          16
@@ -32,7 +32,7 @@ typedef struct xnode_list {
 
 static inline xtree xtree_create()
 {
-    return (xtree)calloc(TREE_NODE_DIMENSION, sizeof(void*));
+    return (xtree)xcalloc(TREE_NODE_DIMENSION, sizeof(void*));
 }
 
 
@@ -41,7 +41,7 @@ static inline void xtree_free(xtree *pptr)
     if (pptr && *pptr){
         xtree node = *pptr;
         *pptr = (xtree)NULL;
-        free(node);
+        xfree(node);
     }
 }
 
@@ -63,7 +63,7 @@ static inline void** xtree_add(xtree root, void *key, uint8_t keylen, void *mapp
         parent = tree;
         i = ((*p) >> 4);
         if (tree[i] == NULL){
-            tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(void*));
+            tree[i] = xcalloc(TREE_NODE_DIMENSION, sizeof(void*));
             if (tree[i] == NULL){
                 return NULL;
             }
@@ -79,7 +79,7 @@ static inline void** xtree_add(xtree root, void *key, uint8_t keylen, void *mapp
         parent = tree;
         i = (*p & 0x0F);
         if (tree[i] == NULL){
-            tree[i] = calloc(TREE_NODE_DIMENSION, sizeof(void*));
+            tree[i] = xcalloc(TREE_NODE_DIMENSION, sizeof(void*));
             if (tree[i] == NULL){
                 return NULL;
             }
@@ -179,7 +179,7 @@ static inline void* xtree_del(xtree root, void *key, uint8_t keylen)
         if (tree != NULL){
             if ((--(__tree2node(tree)->route)) == 0){
                 // 这个分支只有这一个属于删除节点的路径，所以节点被删除后，这个分支也要同时删除
-                free(tree);
+                xfree(tree);
                 parent[((*p) & 0x0F)] = NULL;
                 // 更新分支数
                 __tree2node(parent)->branch --;
@@ -190,7 +190,7 @@ static inline void* xtree_del(xtree root, void *key, uint8_t keylen)
         parent = __tree2node(tree)->parent;
         if (tree != NULL){
             if ((--(__tree2node(tree)->route)) == 0){
-                free(tree);
+                xfree(tree);
                 parent[((*p) >> 4)] = NULL;
                 __tree2node(parent)->branch --;
             }
@@ -247,7 +247,7 @@ static inline void xtree_clear(xtree root, void(*clear)(void*))
                 }
             }
             // __logi("xtree_clear %u ", i-1);
-            free(temp);
+            xfree(temp);
             tree[i-1] = NULL;
         }
         //已经回到了上级父结点
@@ -354,7 +354,7 @@ static inline xnode_list_ptr tree_rise(xtree root, void *key, uint8_t keylen, ui
         }
 
         // 将当前节点加入排序队列
-        next->next = (xnode_list_ptr)malloc(sizeof(struct xnode_list));
+        next->next = (xnode_list_ptr)xalloc(sizeof(struct xnode_list));
         next = next->next;
         next->node = __tree2node(tree);
         next->next = NULL;
@@ -382,7 +382,7 @@ static inline xnode_list_ptr tree_rise(xtree root, void *key, uint8_t keylen, ui
 
             // 因为是从左向右，从小到大遍历一棵树，所以，只要节点有映射，就可以加入排序队列
             if (__tree2node(tree)->mapping != NULL){
-                next->next = (xnode_list_ptr)malloc(sizeof(struct xnode_list));
+                next->next = (xnode_list_ptr)xalloc(sizeof(struct xnode_list));
                 next = next->next;
                 next->node = __tree2node(tree);
                 next->next = NULL;
@@ -452,7 +452,7 @@ static inline xnode_list_ptr tree_drop(xtree root, void *key, uint8_t keylen, ui
         }
 
         // 将当前节点加入排序列表
-        next->next = (xnode_list_ptr)malloc(sizeof(struct xnode_list));
+        next->next = (xnode_list_ptr)xalloc(sizeof(struct xnode_list));
         next = next->next;
         next->node = __tree2node(tree);
         next->next = NULL;
@@ -498,7 +498,7 @@ static inline xnode_list_ptr tree_drop(xtree root, void *key, uint8_t keylen, ui
                 // 在一个分支上找到了叶子结点
                 // 这里只加入叶子节点，不处理分支节点
                 // 因为是从右向左遍历，所以最先找到的第一个叶子节点，一定是最大的那个叶子节点
-                next->next = (xnode_list_ptr)malloc(sizeof(struct xnode_list));
+                next->next = (xnode_list_ptr)xalloc(sizeof(struct xnode_list));
                 next = next->next;
                 next->node = __tree2node(tree);
                 next->next = NULL;
@@ -521,7 +521,7 @@ static inline xnode_list_ptr tree_drop(xtree root, void *key, uint8_t keylen, ui
                 // 将标记清零
                 __tree2node(tree)->x = 0;
                 if (__tree2node(tree)->mapping != NULL){
-                    next->next = (xnode_list_ptr)malloc(sizeof(struct xnode_list));
+                    next->next = (xnode_list_ptr)xalloc(sizeof(struct xnode_list));
                     next = next->next;
                     next->node = __tree2node(tree);
                     next->next = NULL;

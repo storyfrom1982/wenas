@@ -199,7 +199,7 @@ XClean:
 
 static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_range)
 {
-    xchannel_ptr channel = (xchannel_ptr) calloc(1, sizeof(struct xchannel));
+    xchannel_ptr channel = (xchannel_ptr) xcalloc(1, sizeof(struct xchannel));
     __xcheck(channel == NULL);
 
     channel->msger = msger;
@@ -208,16 +208,16 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->send_ts = channel->recv_ts = __xapi->clock();
     channel->rtt = 100000000UL;
 
-    channel->recvbuf = (serialbuf_ptr) calloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
+    channel->recvbuf = (serialbuf_ptr) xcalloc(1, sizeof(struct serialbuf) + sizeof(xpack_ptr) * channel->serial_range);
     __xcheck(channel->recvbuf == NULL);
     channel->recvbuf->range = channel->serial_range;
 
-    channel->sendbuf = (sserialbuf_ptr) calloc(1, sizeof(struct sserialbuf) + sizeof(struct xpack) * channel->serial_range);
+    channel->sendbuf = (sserialbuf_ptr) xcalloc(1, sizeof(struct sserialbuf) + sizeof(struct xpack) * channel->serial_range);
     __xcheck(channel->sendbuf == NULL);
     channel->sendbuf->range = channel->serial_range;
     channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = 0;
 
-    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xframe_t*) * 4);
+    channel->msgbuf = (xmsgbuf_ptr) xcalloc(1, sizeof(struct xmsgbuf) + sizeof(xframe_t*) * 4);
     __xcheck(channel->msgbuf == NULL);
     channel->msgbuf->range = 4;
 
@@ -229,15 +229,15 @@ XClean:
 
     if (channel){
         if (channel->recvbuf){
-            free(channel->recvbuf);
+            xfree(channel->recvbuf);
         }
         if (channel->sendbuf){
-            free(channel->sendbuf);
+            xfree(channel->sendbuf);
         }
         if (channel->msgbuf){
-            free(channel->msgbuf);
+            xfree(channel->msgbuf);
         }
-        free(channel);
+        xfree(channel);
     }
     return NULL;
 }
@@ -257,7 +257,7 @@ static inline void xchannel_clear(xchannel_ptr channel)
     for (int i = 0; i < channel->recvbuf->range; ++i){
         if (channel->recvbuf->buf[i] != NULL){
             __xlogd("xchannel_clear pack recv buf\n");
-            free(channel->recvbuf->buf[i]);
+            xfree(channel->recvbuf->buf[i]);
             // 这里要置空，否则重复调用这个函数，会导致崩溃
             channel->recvbuf->buf[i] = NULL;
         }
@@ -297,16 +297,16 @@ static void xchannel_free(xchannel_ptr channel)
         avl_tree_remove(&channel->msger->peers, channel);
     }
     __xlogd("xchannel_free >>>>-------------------> 1\n");
-    free(channel->recvbuf);
-    __xlogd("xchannel_free >>>>-------------------> 2\n");
-    free(channel->sendbuf);
-    __xlogd("xchannel_free >>>>-------------------> 3\n");
-    free(channel->msgbuf);
-    __xlogd("xchannel_free >>>>-------------------> 4\n");
-    free(channel->addr);
-    __xlogd("xchannel_free >>>>-------------------> 5\n");
-    free(channel);
-    __xlogd("xchannel_free >>>>-------------------> exit\n");
+    xfree(channel->recvbuf);
+    __xlogd("xchannel_xfree >>>>-------------------> 2\n");
+    xfree(channel->sendbuf);
+    __xlogd("xchannel_xfree >>>>-------------------> 3\n");
+    xfree(channel->msgbuf);
+    __xlogd("xchannel_xfree >>>>-------------------> 4\n");
+    xfree(channel->addr);
+    __xlogd("xchannel_xfree >>>>-------------------> 5\n");
+    xfree(channel);
+    __xlogd("xchannel_xfree >>>>-------------------> exit\n");
 }
 
 static inline void xchannel_serial_msg(xchannel_ptr channel)
@@ -330,7 +330,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
             pack->head.len = 0;
         }
         pack->head.range = msg->range;
-        mcopy(pack->body, msg->ptr + msg->spos, pack->head.len);
+        xcopy(pack->body, msg->ptr + msg->spos, pack->head.len);
         msg->spos += pack->head.len;
         // __xlogi("====================== debug msg pack len = %u msg wpos = %lu spos = %lu range = %u\n", pack->head.len, msg->wpos, msg->spos, msg->range);
         msg->range--;
@@ -460,7 +460,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
                 // __xlogi("====================== debug msg range = %lu\n", channel->msg->range);
             }
             if (pack->head.len > 0){
-                mcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
+                xcopy(channel->msg->ptr + channel->msg->wpos, pack->body, pack->head.len);
                 channel->msg->wpos += pack->head.len;
             }
             // __xlogi("====================== debug msg packet len = %u msg range = %lu size = %lu wpos = %lu\n", pack->head.len, channel->msg->range, channel->msg->size, channel->msg->wpos);
@@ -482,7 +482,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
             // 更新读索引
             channel->recvbuf->rpos++;
             // 释放资源
-            free(pack);
+            xfree(pack);
             // 索引下一个缓冲区
             pack = channel->recvbuf->buf[__serialbuf_rpos(channel->recvbuf)];
 
@@ -975,7 +975,7 @@ static void msger_loop(void *ptr)
     addrs[0] =  __xapi->udp_any_to_addr(0, 9256);
     addrs[1] =  __xapi->udp_any_to_addr(1, 9256);
     
-    xpack_ptr rpack = (xpack_ptr)malloc(sizeof(struct xpack));
+    xpack_ptr rpack = (xpack_ptr)xalloc(sizeof(struct xpack));
     __xcheck(rpack == NULL);
     rpack->head.len = 0;
 
@@ -990,7 +990,7 @@ static void msger_loop(void *ptr)
         while (__xapi->udp_recvfrom(msger->sock[sid], addr, &rpack->head, XPACK_SIZE) == (rpack->head.len + XHEAD_SIZE)){
 
             if (rpack->head.type == XPACK_TYPE_LOCAL){
-                if (mcompare(addr, msger->laddr, 8) == 0){
+                if (xcompare(addr, msger->laddr, 8) == 0){
                     xmsger_local_recv(msger, &rpack->head);
                 }
                 rpack->head.len = 0;
@@ -1078,7 +1078,7 @@ static void msger_loop(void *ptr)
             }
 
             if (rpack == NULL){
-                rpack = (xpack_ptr)malloc(sizeof(struct xpack));
+                rpack = (xpack_ptr)xalloc(sizeof(struct xpack));
                 __xcheck(rpack == NULL);
             }
             rpack->head.len = 0;
@@ -1096,15 +1096,15 @@ XClean:
 
 
     if (rpack != NULL){
-        free(rpack);
+        xfree(rpack);
     }
 
     if (addrs[0]){
-        free(addrs[0]);
+        xfree(addrs[0]);
     }
 
     if (addrs[1]){
-        free(addrs[1]);
+        xfree(addrs[1]);
     }
     __xlogd("xmsger_loop exit\n");
 }
@@ -1205,7 +1205,8 @@ xmsger_ptr xmsger_create(xmsgercb_ptr callback, uint16_t port)
 
     __xcheck(callback == NULL);
 
-    xmsger_ptr msger = (xmsger_ptr)calloc(1, sizeof(struct xmsger));
+    xmsger_ptr msger = (xmsger_ptr)xcalloc(1, sizeof(struct xmsger));
+    xclear(msger, sizeof(struct xmsger));
 
     msger->port = port;
     msger->sock[0] = __xapi->udp_open(0, 1, 1);
@@ -1294,12 +1295,12 @@ void xmsger_free(xmsger_ptr *pptr)
             __xapi->udp_close(msger->sock[2]);
         }
         if (msger->addr){
-            free(msger->addr);
+            xfree(msger->addr);
         }
         if (msger->laddr){
-            free(msger->laddr);
+            xfree(msger->laddr);
         }
-        free(msger);
+        xfree(msger);
     }
 
     __xlogd("xmsger_free exit\n");

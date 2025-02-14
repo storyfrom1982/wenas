@@ -7,6 +7,8 @@
 
 #include "uv.h"
 
+#include "xnet/xalloc.h"
+
 /// nanoseconds since the Epoch(1970-01-01 00:00:00 +0000 (UTC))
 static uint64_t __xtime(void)
 {
@@ -72,7 +74,7 @@ typedef struct __xmutex {
 
 static __xmutex_ptr __xmutex_create()
 {
-    __xmutex_ptr ptr = (__xmutex_ptr)malloc(sizeof(struct __xmutex));
+    __xmutex_ptr ptr = (__xmutex_ptr)xalloc(sizeof(struct __xmutex));
     __xcheck(ptr == NULL);
     int ret = uv_mutex_init(ptr->mutex);
     __xcheck(ret != 0);
@@ -82,7 +84,7 @@ static __xmutex_ptr __xmutex_create()
 
 XClean:
     if (ptr){
-        free(ptr);
+        xfree(ptr);
     }
     return NULL;
 }
@@ -92,7 +94,7 @@ static void __xmutex_free(__xmutex_ptr ptr)
     __xcheck(ptr == NULL);
     uv_mutex_destroy(ptr->mutex);
     uv_cond_destroy(ptr->cond);
-    free(ptr);
+    xfree(ptr);
 XClean:
     return;
 }
@@ -183,7 +185,7 @@ void stack_init(Stack* stack) {
 // 压入路径到栈中
 void stack_push(Stack* stack, const char* path, int path_len) {
     // size_t path_len = strlen(path) + 1; // 计算路径长度（包括终止符）
-    StackNode* node = (StackNode*)malloc(sizeof(StackNode) + path_len); // 动态分配节点内存
+    StackNode* node = (StackNode*)xalloc(sizeof(StackNode) + path_len); // 动态分配节点内存
     node->path_len = path_len;
     memcpy(node->path, path, path_len); // 复制路径到节点
     node->next = stack->top;            // 新节点的 next 指向当前栈顶
@@ -207,7 +209,7 @@ void stack_free(Stack* stack) {
     while (stack->top != NULL) {
         StackNode* node = stack->top;
         stack->top = node->next;
-        free(node); // 释放节点
+        xfree(node); // 释放节点
     }
 }
 
@@ -227,7 +229,7 @@ typedef struct __xfs_scanner {
 
 // 初始化遍历器
 __xfs_scanner_ptr traverser_init(const char* start_path) {
-    __xfs_scanner_ptr traverser = malloc(sizeof(struct __xfs_scanner));
+    __xfs_scanner_ptr traverser = xalloc(sizeof(struct __xfs_scanner));
     __xcheck(traverser == NULL);
     stack_init(&traverser->stack); // 初始化栈
     stack_push(&traverser->stack, start_path, strlen(start_path)+1); // 将起始路径压入栈
@@ -246,10 +248,10 @@ void traverser_free(__xfs_scanner_ptr traverser) {
             uv_fs_req_cleanup(&traverser->open_req);
         }
         if (traverser->current_path) {
-            free(traverser->current_path);
+            xfree(traverser->current_path);
         }
         stack_free(&traverser->stack);
-        free(traverser);
+        xfree(traverser);
     }
 }
 
@@ -281,7 +283,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
             // 如果没有更多条目，关闭当前目录
             uv_fs_closedir(NULL, &traverser->open_req, traverser->current_dir, NULL);
             uv_fs_req_cleanup(&traverser->open_req);
-            free(traverser->current_path);
+            xfree(traverser->current_path);
             traverser->current_path = NULL;
             traverser->current_dir = NULL;
             continue;
@@ -324,7 +326,7 @@ XClean:
     }
     if (traverser->current_path) {
         __xlogd("len=%d path = %s\n", traverser->current_path->path_len, traverser->current_path->path);
-        free(traverser->current_path);
+        xfree(traverser->current_path);
         traverser->current_path = NULL;
     }
     return NULL;
@@ -671,7 +673,7 @@ int udp_addr_to_host(const __xipaddr_ptr addr, char* ip, uint16_t* port) {
 
 __xipaddr_ptr udp_addr_dump(const __xipaddr_ptr addr)
 {
-    __xipaddr_ptr res = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xipaddr_ptr res = (__xipaddr_ptr)xalloc(sizeof(struct __xipaddr));
     __xcheck(addr == NULL);
     __xcheck(res == NULL);
     *res = *addr;
@@ -687,7 +689,7 @@ int udp_addr_is_ipv6(__xipaddr_ptr addr)
 
 __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
 {
-    __xipaddr_ptr ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    __xipaddr_ptr ipaddr = (__xipaddr_ptr)xalloc(sizeof(struct __xipaddr));
     __xcheck(ipaddr == NULL);
     if (ipv6){
         ipaddr->v6.sin6_family = AF_INET6;
@@ -704,7 +706,7 @@ __xipaddr_ptr udp_any_to_addr(int ipv6, uint16_t port)
 
 XClean:
     if (ipaddr != NULL){
-        free(ipaddr);
+        xfree(ipaddr);
     }
     return NULL;
 }
@@ -713,7 +715,7 @@ __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 {
     __xipaddr_ptr ipaddr = NULL;
     __xcheck(ip == NULL);
-    ipaddr = (__xipaddr_ptr)malloc(sizeof(struct __xipaddr));
+    ipaddr = (__xipaddr_ptr)xalloc(sizeof(struct __xipaddr));
     __xcheck(ipaddr == NULL);
     memset(ipaddr, 0, sizeof(struct __xipaddr));
     __xcheck(socket_addr_from((struct sockaddr_storage*)ipaddr, &ipaddr->addrlen, ip, port) != 0);
@@ -721,7 +723,7 @@ __xipaddr_ptr udp_host_to_addr(const char *ip, uint16_t port)
 
 XClean:
     if (ipaddr != NULL){
-        free(ipaddr);
+        xfree(ipaddr);
     }
     return NULL;
 }
