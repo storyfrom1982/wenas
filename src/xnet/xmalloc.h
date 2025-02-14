@@ -3,8 +3,8 @@
 
 #include <xapi/xapi.h>
 
-#define XNONE   0xFFFFFFFFFFFFFFFFUL
-#define XNULL   ((void*)XNONE)
+#define XEOF    0xFFFFFFFFFFFFFFFFUL
+// #define XNULL   ((void*)XEOF)
 
 #define __sizeof_ptr    sizeof(void*)
 

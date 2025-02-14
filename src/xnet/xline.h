@@ -219,7 +219,7 @@ static inline uint64_t xl_obj_begin(xframe_t **pptr, const char *key)
     frame->wpos += XLINE_SIZE;
     return frame->wpos - XLINE_SIZE;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline void xl_obj_end(xframe_t **pptr, uint64_t pos)
@@ -257,7 +257,7 @@ static inline uint64_t xl_add_word(xframe_t **pptr, const char *key, const char 
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_str(xframe_t **pptr, const char *key, const char *str, size_t size)
@@ -276,7 +276,7 @@ static inline uint64_t xl_add_str(xframe_t **pptr, const char *key, const char *
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_bin(xframe_t **pptr, const char *key, const void *bin, uint64_t size)
@@ -297,7 +297,7 @@ static inline uint64_t xl_add_bin(xframe_t **pptr, const char *key, const void *
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_obj(xframe_t **pptr, const char *key, xline_t *xd)
@@ -317,7 +317,7 @@ static inline uint64_t xl_add_obj(xframe_t **pptr, const char *key, xline_t *xd)
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_int(xframe_t **pptr, const char *key, int64_t i64)
@@ -334,7 +334,7 @@ static inline uint64_t xl_add_int(xframe_t **pptr, const char *key, int64_t i64)
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_uint(xframe_t **pptr, const char *key, uint64_t u64)
@@ -351,7 +351,7 @@ static inline uint64_t xl_add_uint(xframe_t **pptr, const char *key, uint64_t u6
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_float(xframe_t **pptr, const char *key, double f64)
@@ -368,7 +368,7 @@ static inline uint64_t xl_add_float(xframe_t **pptr, const char *key, double f64
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_add_ptr(xframe_t **pptr, const char *key, void *ptr)
@@ -386,7 +386,7 @@ static inline uint64_t xl_add_ptr(xframe_t **pptr, const char *key, void *ptr)
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_list_append(xframe_t **pptr, xline_t *xl)
@@ -402,7 +402,7 @@ static inline uint64_t xl_list_append(xframe_t **pptr, xline_t *xl)
     frame->wpos += size;
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline uint64_t xl_list_add(xframe_t **pptr, xline_t *xl)
@@ -419,7 +419,7 @@ static inline uint64_t xl_list_add(xframe_t **pptr, xline_t *xl)
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_LIST);
     return frame->wpos;
 XClean:
-    return XNONE;
+    return XEOF;
 }
 
 static inline xline_t* xl_list_next(xframe_t *frame)

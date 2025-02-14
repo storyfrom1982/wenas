@@ -255,7 +255,7 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
     // xl_clear(stream->list_frame);
     // __xcheck(xl_add_int(frame, "type", XLIO_STREAM_SYN_LIST) == XNONE);
     uint64_t pos = xl_list_begin(frame, "list");
-    __xcheck(pos == XNONE);
+    __xcheck(pos == XEOF);
 
     do {
         if (ios->item != NULL){
@@ -268,10 +268,10 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
             }
             // __xlogd("scanner --- type(%d) size:%lu %s\n", ios->item->type, ios->item->size, ios->item->path + ios->dir_name_pos);
             uint64_t pos = xl_obj_begin(frame, NULL);
-            __xcheck(pos == XNONE);
-            __xcheck(xl_add_int(frame, "type", ios->item->type) == XNONE);
-            __xcheck(xl_add_word(frame, "path", ios->item->path + ios->src_name_pos) == XNONE);
-            __xcheck(xl_add_uint(frame, "size", ios->item->size) == XNONE);
+            __xcheck(pos == XEOF);
+            __xcheck(xl_add_int(frame, "type", ios->item->type) == XEOF);
+            __xcheck(xl_add_word(frame, "path", ios->item->path + ios->src_name_pos) == XEOF);
+            __xcheck(xl_add_uint(frame, "size", ios->item->size) == XEOF);
             xl_obj_end(frame, pos);
             ios->list_size += ios->item->size;
             // stream->item = NULL;
@@ -790,7 +790,7 @@ uint64_t xlio_stream_length(xlio_stream_t *ios)
     if (ios){
         return ios->file_size;
     }
-    return XNONE;
+    return XEOF;
 }
 
 uint64_t xlio_stream_update(xlio_stream_t *ios, uint64_t size)
