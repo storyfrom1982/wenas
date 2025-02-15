@@ -27,5 +27,6 @@ int xlio_stream_read(xlio_stream_t *ios, xframe_t *frame);
 int xlio_stream_write(xlio_stream_t *ios, xframe_t *frame);
 uint64_t xlio_stream_length(xlio_stream_t *ios);
 uint64_t xlio_stream_update(xlio_stream_t *ios, uint64_t size);
+int xlio_stream_close(xlio_stream_t *ios);
 
 #endif //__XLIO_H__
