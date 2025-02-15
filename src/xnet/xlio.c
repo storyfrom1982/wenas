@@ -589,6 +589,35 @@ void xlio_free(xlio_t **pptr)
     }
 }
 
+static int xlio_post_close(xltp_t *tp, xframe_t *msg, void *ctx)
+{
+    xlio_stream_t *ios = (xlio_stream_t *)ctx;
+    xmsger_flush(ios->io->msger, ios->channel);
+    xlio_stream_free(ios);
+    xl_free(&msg);
+    return 0;
+XClean:
+    return -1;
+}
+
+int xlio_stream_close(xlio_stream_t *ios)
+{
+    xframe_t *msg = xl_maker();
+    __xcheck(msg == NULL);
+    msg->flag = XMSG_FLAG_POST;
+    __xmsg_set_cb(msg, xlio_post_close);
+    __xmsg_set_ctx(msg, ios);
+    __xmsg_set_channel(msg, ios->channel);
+    __xcheck(xpipe_write(ios->io->pipe, &msg, __sizeof_ptr) != __sizeof_ptr);    
+    return 0;
+XClean:
+    xlio_stream_free(ios);
+    if (msg != NULL){
+        xl_free(&msg);
+    }
+    return -1;    
+}
+
 static int xlio_post_download(xltp_t *tp, xframe_t *msg, void *ctx)
 {
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
