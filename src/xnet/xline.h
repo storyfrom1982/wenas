@@ -1,7 +1,7 @@
 #ifndef __XLINE_H__
 #define __XLINE_H__
 
-#include "xalloc.h"
+#include "xmalloc.h"
 #include "xlib/avlmini.h"
 
 enum {
@@ -139,7 +139,7 @@ typedef struct xframe {
 
 static inline xframe_t* xl_creator(uint64_t size)
 {
-    xframe_t* frame = (xframe_t*)xalloc(sizeof(xframe_t) + size);
+    xframe_t* frame = (xframe_t*)malloc(sizeof(xframe_t) + size);
     __xcheck(frame == NULL);
     frame->ref = 1;
     frame->size = size;
@@ -174,7 +174,7 @@ static inline void xl_clear(xframe_t *frame)
 
 static inline uint64_t xl_usable(xframe_t *frame, const char *key)
 {
-    int headlen = xlen(key) + 2 + XLINE_SIZE;
+    int headlen = slength(key) + 2 + XLINE_SIZE;
     if ((frame->size - frame->wpos) > headlen){
         return (frame->size - frame->wpos) - headlen;
     }
@@ -185,7 +185,7 @@ static inline void xl_free(xframe_t **pptr)
 {
     if (pptr && *pptr){
         if (__atom_sub((*pptr)->ref, 1) == 0){
-            xfree((*pptr));
+            free((*pptr));
             *pptr = NULL;
         }
     }
@@ -196,7 +196,7 @@ static inline void xl_free(xframe_t **pptr)
         if (klen > 64) klen = 64; \
         xf->key = xf->ptr + xf->wpos; \
         xf->key[0] = klen + 1; \
-        xcopy(xf->key + 1, key, klen); \
+        mcopy(xf->key + 1, key, klen); \
         *(xf->key + xf->key[0]) = '\0'; \
         xf->wpos += (xf->key[0] + 1); \
     }while(0)
@@ -204,12 +204,12 @@ static inline void xl_free(xframe_t **pptr)
 #define __xl_realloc(xf, pptr, newlen) \
     do { \
         xf->size = (xf->size * 2) + (newlen); \
-        xf = (xframe_t*)xalloc(sizeof(xframe_t) + xf->size); \
+        xf = (xframe_t*)malloc(sizeof(xframe_t) + xf->size); \
         __xcheck(xf == NULL); \
-        xcopy(xf, (*pptr), sizeof(xframe_t) + (*pptr)->wpos); \
+        mcopy(xf, (*pptr), sizeof(xframe_t) + (*pptr)->wpos); \
         xf->ptr = xf->line.b + XLINE_SIZE; \
         xf->size = (*pptr)->size; \
-        xfree((*pptr)); \
+        free((*pptr)); \
         *pptr = xf; \
     }while(0)
 
@@ -217,7 +217,7 @@ static inline void xl_free(xframe_t **pptr)
 static inline uint64_t xl_obj_begin(xframe_t **pptr, const char *key)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = (key != NULL ? keylen + 2 + XLINE_SIZE : XLINE_SIZE);
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -252,8 +252,8 @@ static inline void xl_list_end(xframe_t **pptr, uint64_t pos)
 static inline uint64_t xl_add_word(xframe_t **pptr, const char *key, const char *word)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
-    uint64_t wordlen = xlen(word) + 1;
+    uint64_t keylen = slength(key);
+    uint64_t wordlen = slength(word) + 1;
     uint64_t newlen = keylen + 2 + XLINE_SIZE + wordlen;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -261,7 +261,7 @@ static inline uint64_t xl_add_word(xframe_t **pptr, const char *key, const char 
     __xl_fill_key(frame, key, keylen);
     *((xline_t*)(frame->ptr + frame->wpos)) = __xl_n2b(wordlen, XLINE_TYPE_STR);
     frame->wpos += XLINE_SIZE;
-    xcopy(frame->ptr + frame->wpos, word, wordlen);
+    mcopy(frame->ptr + frame->wpos, word, wordlen);
     frame->wpos += wordlen;
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
@@ -272,7 +272,7 @@ XClean:
 static inline uint64_t xl_add_str(xframe_t **pptr, const char *key, const char *str, size_t size)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -280,7 +280,7 @@ static inline uint64_t xl_add_str(xframe_t **pptr, const char *key, const char *
     __xl_fill_key(frame, key, keylen);
     *((xline_t*)(frame->ptr + frame->wpos)) = __xl_n2b(size, XLINE_TYPE_STR);
     frame->wpos += XLINE_SIZE;
-    xcopy(frame->ptr + frame->wpos, str, size);
+    mcopy(frame->ptr + frame->wpos, str, size);
     frame->wpos += size;
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
     return frame->wpos;
@@ -291,7 +291,7 @@ XClean:
 static inline uint64_t xl_add_bin(xframe_t **pptr, const char *key, const void *bin, uint64_t size)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -300,7 +300,7 @@ static inline uint64_t xl_add_bin(xframe_t **pptr, const char *key, const void *
     *((xline_t*)(frame->ptr + frame->wpos)) = __xl_n2b(size, XLINE_TYPE_BIN);
     frame->wpos += XLINE_SIZE;
     if (bin != NULL){
-        xcopy(frame->ptr + frame->wpos, bin, size);
+        mcopy(frame->ptr + frame->wpos, bin, size);
     }
     frame->wpos += size;
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
@@ -312,7 +312,7 @@ XClean:
 static inline uint64_t xl_add_obj(xframe_t **pptr, const char *key, xline_t *xd)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t size = __xl_sizeof_line(xd);
     uint64_t newlen = keylen + 2 + XLINE_SIZE + size;
     if ((frame->size - frame->wpos) < newlen){
@@ -320,7 +320,7 @@ static inline uint64_t xl_add_obj(xframe_t **pptr, const char *key, xline_t *xd)
     }
     __xl_fill_key(frame, key, keylen);
     if (xd != NULL){
-        xcopy(frame->ptr + frame->wpos, xd->b, size);
+        mcopy(frame->ptr + frame->wpos, xd->b, size);
     }
     frame->wpos += size;
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
@@ -332,7 +332,7 @@ XClean:
 static inline uint64_t xl_add_int(xframe_t **pptr, const char *key, int64_t i64)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -349,7 +349,7 @@ XClean:
 static inline uint64_t xl_add_uint(xframe_t **pptr, const char *key, uint64_t u64)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -366,7 +366,7 @@ XClean:
 static inline uint64_t xl_add_float(xframe_t **pptr, const char *key, double f64)
 {
     xframe_t *frame = *pptr;
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -384,7 +384,7 @@ static inline uint64_t xl_add_ptr(xframe_t **pptr, const char *key, void *ptr)
 {
     xframe_t *frame = *pptr;
     uint64_t u64 = (uint64_t)(ptr);
-    uint64_t keylen = xlen(key);
+    uint64_t keylen = slength(key);
     uint64_t newlen = keylen + 2 + XLINE_SIZE;
     if ((frame->size - frame->wpos) < newlen){
         __xl_realloc(frame, pptr, newlen);
@@ -406,7 +406,7 @@ static inline uint64_t xl_list_append(xframe_t **pptr, xline_t *xl)
         __xl_realloc(frame, pptr, size);
     }
     if (xl != NULL){
-        xcopy(frame->ptr + frame->wpos, xl->b, size);
+        mcopy(frame->ptr + frame->wpos, xl->b, size);
     }
     frame->wpos += size;
     return frame->wpos;
@@ -422,7 +422,7 @@ static inline uint64_t xl_list_add(xframe_t **pptr, xline_t *xl)
         __xl_realloc(frame, pptr, size);
     }
     if (xl != NULL){
-        xcopy(frame->ptr + frame->wpos, xl->b, size);
+        mcopy(frame->ptr + frame->wpos, xl->b, size);
     }
     frame->wpos += size;
     frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_LIST);
@@ -464,8 +464,8 @@ static inline xline_t* xl_find(xframe_t *frame, const char *key)
         frame->rpos += (frame->key[0] + 1);
         frame->val = (xline_t*)(frame->ptr + frame->rpos);
         frame->rpos += __xl_sizeof_line(frame->val);
-        if (xlen(key) + 1 == frame->key[0]
-            && xcompare(key, frame->key + 1, frame->key[0]) == 0){
+        if (slength(key) + 1 == frame->key[0]
+            && mcompare(key, frame->key + 1, frame->key[0]) == 0){
             frame->key++;
             return frame->val;
         }
@@ -478,8 +478,8 @@ static inline xline_t* xl_find(xframe_t *frame, const char *key)
         frame->rpos += (frame->key[0] + 1);
         frame->val = (xline_t*)(frame->ptr + frame->rpos);
         frame->rpos += __xl_sizeof_line(frame->val);
-        if (xlen(key) + 1 == frame->key[0]
-            && xcompare(key, frame->key + 1, frame->key[0]) == 0){
+        if (slength(key) + 1 == frame->key[0]
+            && mcompare(key, frame->key + 1, frame->key[0]) == 0){
             frame->key++;
             return frame->val;
         }
@@ -546,7 +546,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
 {
     xframe_t parser = xl_parser(xl);
 
-    int len = xlen(key);
+    int len = slength(key);
 
     if (depth == 1){
         *pos += __xapi->snprintf(buf + *pos, size - *pos, "{\n", (depth) * 4, key);
@@ -653,7 +653,7 @@ static xframe_t* xl_test(int count)
     xl_add_word(&root, "api", "test");
     xl_add_int(&root, "count", count);
     xl_add_word(&root, "word", "hello word");
-    xl_add_str(&root, "str", "hello string", xlen("hello string")+1);
+    xl_add_str(&root, "str", "hello string", slength("hello string")+1);
     xl_add_bin(&root, "bin", bin, sizeof(bin));
     xl_add_int(&root, "int", -123456789);
     xl_add_uint(&root, "uint", 123456789);
@@ -662,7 +662,7 @@ static xframe_t* xl_test(int count)
 
     uint64_t obj_pos = xl_obj_begin(&root, "obj");
         xl_add_word(&root, "word", "hello word");
-        xl_add_str(&root, "str", "hello string", xlen("hello string")+1);
+        xl_add_str(&root, "str", "hello string", slength("hello string")+1);
         xl_add_bin(&root, "bin", bin, sizeof(bin));
         xl_add_int(&root, "int", -123456789);
         xl_add_uint(&root, "uint", 123456789);
@@ -674,7 +674,7 @@ static xframe_t* xl_test(int count)
     for (int i = 0; i < 3; ++i){
         uint64_t tmp_pos = xl_obj_begin(&root, NULL);
             xl_add_word(&root, "word", "hello word");
-            xl_add_str(&root, "str", "hello string", xlen("hello string")+1);
+            xl_add_str(&root, "str", "hello string", slength("hello string")+1);
             xl_add_bin(&root, "bin", bin, sizeof(bin));
             xl_add_int(&root, "int", -123456789);
             xl_add_uint(&root, "uint", 123456789);
@@ -686,7 +686,7 @@ static xframe_t* xl_test(int count)
 
     xobj = xl_maker();
     xl_add_word(&xobj, "word", "hello word");
-    xl_add_str(&xobj, "str", "hello string", xlen("hello string")+1);
+    xl_add_str(&xobj, "str", "hello string", slength("hello string")+1);
     xl_add_bin(&xobj, "bin", bin, sizeof(bin));
     xl_add_int(&xobj, "int", -123456789);
     xl_add_uint(&xobj, "uint", 123456789);
@@ -708,9 +708,9 @@ static xframe_t* xl_test(int count)
     xstrlist = xl_maker();
     for (int i = 0; i < 10; ++i){
         char str[64] = {0};
-        uint64_t len = xlen("hello") + 1;
+        uint64_t len = slength("hello") + 1;
         *((xline_t*)(str)) = __xl_n2b(len, XLINE_TYPE_STR);
-        xcopy(str + 9, "hello", len);
+        mcopy(str + 9, "hello", len);
         xl_list_add(&xstrlist, (xline_t*)str);
     }
     // xl_printf(&xstrlist->line);

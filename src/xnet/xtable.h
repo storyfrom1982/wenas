@@ -2,7 +2,7 @@
 #define __XTABLE_H__
 
 
-#include "xalloc.h"
+#include "xmalloc.h"
 #include "xlib/avlmini.h"
 
 

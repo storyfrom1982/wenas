@@ -6,7 +6,7 @@
 
 void* uuid_generate(void *uuid_bin_buf, const char *user_name)
 {
-    int name_len = xlen(user_name);
+    int name_len = slength(user_name);
     char seed[80] = {0};
     SHA256_CTX shactx;
     uint64_t *millisecond = (uint64_t *)seed;
@@ -16,7 +16,7 @@ void* uuid_generate(void *uuid_bin_buf, const char *user_name)
     if (name_len > 64){
         name_len = 64;
     }
-    xcopy(seed + 16, user_name, name_len);
+    mcopy(seed + 16, user_name, name_len);
     sha256_init(&shactx);
     sha256_update(&shactx, (const uint8_t*)seed, name_len + 16);
     sha256_finish(&shactx, uuid_bin_buf);

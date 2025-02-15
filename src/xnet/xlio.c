@@ -146,7 +146,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                 xl_add_uint(&frame, "pos", stream->file_pos);
 
                 if (isfile){
-                    int full_path_len = stream->uri_len + xlen(name) + 2;
+                    int full_path_len = stream->uri_len + slength(name) + 2;
                     char full_path[full_path_len];                
                     __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name + (stream->src_name_len+1));
                     __xlogd("upload file %s\n", full_path);
@@ -234,7 +234,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xframe_t **in, xframe_t **
         }else {
             xl_find_word(&parser, "path", &name);
             // ios->size = xl_find_uint(&parser, "size");
-            int full_path_len = xlen(ios->uri) + xlen(name) + 2;
+            int full_path_len = slength(ios->uri) + slength(name) + 2;
             char full_path[full_path_len];
             __xapi->snprintf(full_path, full_path_len, "%s/%s\0", ios->uri, name);
             __xlogd("mkpath === %s\n", full_path);
@@ -428,7 +428,7 @@ static void xlio_loop(void *ptr)
                             __xcheck(isfile != 1);
                             xl_find_uint(&parser, "size", &stream->file_size);
                             xl_find_uint(&parser, "pos", &pos);
-                            int full_path_len = xlen(stream->uri) + xlen(name) + 2;
+                            int full_path_len = slength(stream->uri) + slength(name) + 2;
                             char full_path[full_path_len];                
                             __xlogd("write data 3 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
                             __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
@@ -530,7 +530,7 @@ XClean:
 
 xlio_t* xlio_create(xmsger_ptr msger)
 {
-    xlio_t *io = (xlio_t*)xalloc(sizeof(xlio_t));
+    xlio_t *io = (xlio_t*)malloc(sizeof(xlio_t));
     __xcheck(io == NULL);
 
     io->running = true;
@@ -585,37 +585,8 @@ void xlio_free(xlio_t **pptr)
             stream = next;
         }
 
-        xfree(io);
+        free(io);
     }
-}
-
-static int xlio_post_close(xltp_t *tp, xframe_t *msg, void *ctx)
-{
-    xlio_stream_t *ios = (xlio_stream_t *)ctx;
-    xmsger_flush(ios->io->msger, ios->channel);
-    xlio_stream_free(ios);
-    xl_free(&msg);
-    return 0;
-XClean:
-    return -1;
-}
-
-int xlio_stream_close(xlio_stream_t *ios)
-{
-    xframe_t *msg = xl_maker();
-    __xcheck(msg == NULL);
-    msg->flag = XMSG_FLAG_POST;
-    __xmsg_set_cb(msg, xlio_post_close);
-    __xmsg_set_ctx(msg, ios);
-    __xmsg_set_channel(msg, ios->channel);
-    __xcheck(xpipe_write(ios->io->pipe, &msg, __sizeof_ptr) != __sizeof_ptr);    
-    return 0;
-XClean:
-    xlio_stream_free(ios);
-    if (msg != NULL){
-        xl_free(&msg);
-    }
-    return -1;    
 }
 
 static int xlio_post_download(xltp_t *tp, xframe_t *msg, void *ctx)
@@ -703,9 +674,9 @@ XClean:
 
 xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
 {
-    xlio_stream_t* ios = (xlio_stream_t*)xalloc(sizeof(xlio_stream_t));
+    xlio_stream_t* ios = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
     __xcheck(ios == NULL);
-    xclear(ios, sizeof(xlio_stream_t));
+    mclear(ios, sizeof(xlio_stream_t));
     ios->flag = stream_type;
 
     if (__xapi->fs_file_exist(uri)){
@@ -722,11 +693,11 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
         __xcheck((ios->flag == IOSTREAM_TYPE_UPLOAD));
     }
 
-    ios->uri_len = xlen(uri);
+    ios->uri_len = slength(uri);
     while (uri[ios->uri_len-1] == '/'){
         ios->uri_len--;
     }
-    xcopy(ios->uri, uri, ios->uri_len);
+    mcopy(ios->uri, uri, ios->uri_len);
     ios->src_name_len = 0;
     while (ios->src_name_len < ios->uri_len 
             && ios->uri[ios->uri_len - ios->src_name_len - 1] != '/'){
@@ -781,7 +752,7 @@ void xlio_stream_free(xlio_stream_t *ios)
                 xl_free(&ios->buf.buf[i]);
             }
         }
-        xfree(ios);
+        free(ios);
     }
 }
 

@@ -133,7 +133,7 @@ static void sha256_compress_blocks(uint32_t state[8],
 
 void sha256_init(SHA256_CTX *ctx)
 {
-	xclear(ctx, sizeof(*ctx));
+	mclear(ctx, sizeof(*ctx));
 	ctx->state[0] = 0x6a09e667;
 	ctx->state[1] = 0xbb67ae85;
 	ctx->state[2] = 0x3c6ef372;
@@ -152,11 +152,11 @@ void sha256_update(SHA256_CTX *ctx, const unsigned char *data, size_t datalen)
 	if (ctx->num) {
 		size_t left = SHA256_BLOCK_SIZE - ctx->num;
 		if (datalen < left) {
-			xcopy(ctx->block + ctx->num, data, datalen);
+			mcopy(ctx->block + ctx->num, data, datalen);
 			ctx->num += datalen;
 			return;
 		} else {
-			xcopy(ctx->block + ctx->num, data, left);
+			mcopy(ctx->block + ctx->num, data, left);
 			sha256_compress_blocks(ctx->state, ctx->block, 1);
 			ctx->nblocks++;
 			data += left;
@@ -174,7 +174,7 @@ void sha256_update(SHA256_CTX *ctx, const unsigned char *data, size_t datalen)
 
 	ctx->num = datalen;
 	if (datalen) {
-		xcopy(ctx->block, data, datalen);
+		mcopy(ctx->block, data, datalen);
 	}
 }
 
@@ -186,11 +186,11 @@ void sha256_finish(SHA256_CTX *ctx, unsigned char dgst[SHA256_DIGEST_SIZE])
 	ctx->block[ctx->num] = 0x80;
 
 	if (ctx->num <= SHA256_BLOCK_SIZE - 9) {
-		xclear(ctx->block + ctx->num + 1, SHA256_BLOCK_SIZE - ctx->num - 9);
+		mclear(ctx->block + ctx->num + 1, SHA256_BLOCK_SIZE - ctx->num - 9);
 	} else {
-		xclear(ctx->block + ctx->num + 1, SHA256_BLOCK_SIZE - ctx->num - 1);
+		mclear(ctx->block + ctx->num + 1, SHA256_BLOCK_SIZE - ctx->num - 1);
 		sha256_compress_blocks(ctx->state, ctx->block, 1);
-		xclear(ctx->block, SHA256_BLOCK_SIZE - 8);
+		mclear(ctx->block, SHA256_BLOCK_SIZE - 8);
 	}
 	PUTU32(ctx->block + 56, ctx->nblocks >> 23);
 	PUTU32(ctx->block + 60, (ctx->nblocks << 9) + (ctx->num << 3));

@@ -49,12 +49,12 @@ static inline uint32_t hash_string(const char *uuid, uint32_t *uuid_len)
 
 search_node_t* hnode_create(uint64_t hash_key, uint8_t *uuid, uint8_t uuid_len)
 {
-    search_node_t *node = (search_node_t*)xcalloc(1, sizeof(search_node_t));
+    search_node_t *node = (search_node_t*)calloc(1, sizeof(search_node_t));
     node->key = hash_key;
     if (uuid && uuid_len){
         node->uuid_len = uuid_len;
-        node->uuid = (uint8_t*)xalloc(node->uuid_len + 1);
-        xcopy(node->uuid, uuid, node->uuid_len + 1);
+        node->uuid = (uint8_t*)malloc(node->uuid_len + 1);
+        mcopy(node->uuid, uuid, node->uuid_len + 1);
     }
     node->next = node;
     node->prev = node;
@@ -68,7 +68,7 @@ void search_table_init(search_table_t *st, uint32_t size)
     st->mask = size - 1;
     st->head.next = &(st->head);
     st->head.prev = &(st->head);
-    st->table = (search_node_t**)xcalloc(size, sizeof(void*));
+    st->table = (search_node_t**)calloc(size, sizeof(void*));
     avl_tree_init(&st->tree, bytes_compare, bytes_compare, sizeof(search_node_t), AVL_OFFSET(search_node_t, node));
 }
 
@@ -77,12 +77,12 @@ void search_table_clear(search_table_t *st)
 {
     if (st){
         for (search_node_t *node = st->head.next; node != &st->head; node = node->next){
-            xfree(node->uuid);
-            xfree(node);
+            free(node->uuid);
+            free(node);
         }
-        xfree(st->table);
+        free(st->table);
         avl_tree_clear(&st->tree, NULL);
-        xclear(st, sizeof(search_table_t));
+        mclear(st, sizeof(search_table_t));
     }
 }
 
@@ -90,8 +90,8 @@ void search_table_add(search_table_t *st, const char *uuid, void *value)
 {
     search_node_t *node = hnode_create(0, NULL, 0);
     node->key = hash_string(uuid, &node->uuid_len);
-    node->uuid = (uint8_t*)xalloc(node->uuid_len + 1);
-    xcopy(node->uuid, uuid, node->uuid_len + 1);
+    node->uuid = (uint8_t*)malloc(node->uuid_len + 1);
+    mcopy(node->uuid, uuid, node->uuid_len + 1);
     node->value = value;
     uint32_t pos = node->key & st->mask;
 
@@ -115,8 +115,8 @@ void search_table_add(search_table_t *st, const char *uuid, void *value)
         st->count++;
 
     }else {
-        xfree(node->uuid);
-        xfree(node);
+        free(node->uuid);
+        free(node);
     }
 }
 
@@ -157,8 +157,8 @@ void* search_table_del(search_table_t *st, const char *uuid)
             head->next->prev = head->prev;
             head->prev->next = head->next;
             value = head->value;
-            xfree(head->uuid);
-            xfree(head);
+            free(head->uuid);
+            free(head);
             st->count--;
         }
     }
@@ -197,15 +197,15 @@ void index_table_init(index_table_t *it, uint32_t size /*must be the power of 2*
     it->mask = size - 1;
     it->head.next = &(it->head);
     it->head.prev = &(it->head);
-    it->table = (index_node_t**)xcalloc(size, sizeof(void*));
+    it->table = (index_node_t**)calloc(size, sizeof(void*));
     avl_tree_init(&it->tree, number_compare, number_compare, sizeof(index_node_t), AVL_OFFSET(index_node_t, node));
 }
 
 void index_table_clear(index_table_t *it)
 {
-    xfree(it->table);
+    free(it->table);
     avl_tree_clear(&it->tree, NULL);
-    xclear(&it, sizeof(it));
+    mclear(&it, sizeof(it));
 }
 
 void index_table_add(index_table_t *it, index_node_t *node)

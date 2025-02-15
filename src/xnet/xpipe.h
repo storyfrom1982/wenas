@@ -7,7 +7,7 @@
 
 typedef struct xpipe {
     uint64_t len;
-    // uint64_t leftover; 曾经为了避免使用一个临时变量处理折行，在这里添加了一个长周期的变量，却忽略了读写线程共用这个变量，导致 xcopy 越界的 BUG
+    // uint64_t leftover; 曾经为了避免使用一个临时变量处理折行，在这里添加了一个长周期的变量，却忽略了读写线程共用这个变量，导致 mcopy 越界的 BUG
     __atom_size writer;
     __atom_size reader;
     __atom_bool breaker;
@@ -40,10 +40,10 @@ static inline uint64_t __xpipe_write(xpipe_ptr pipe, void *data, uint64_t len)
 
         uint64_t leftover = pipe->len - ( pipe->writer & ( pipe->len - 1 ) );
         if (leftover >= writable){
-            xcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), writable);
+            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), writable);
         }else {
-            xcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), leftover);
-            xcopy(pipe->buf, ((uint8_t*)data) + leftover, writable - leftover);
+            mcopy(pipe->buf + (pipe->writer & (pipe->len - 1)), ((uint8_t*)data), leftover);
+            mcopy(pipe->buf, ((uint8_t*)data) + leftover, writable - leftover);
         }
         __atom_add(pipe->writer, writable);
     }
@@ -109,10 +109,10 @@ static inline uint64_t __xpipe_read(xpipe_ptr pipe, void *buf, uint64_t len)
 
         uint64_t leftover = pipe->len - ( pipe->reader & ( pipe->len - 1 ) );
         if (leftover >= readable){
-            xcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
+            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), readable);
         }else {
-            xcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), leftover);
-            xcopy(((uint8_t*)buf) + leftover, pipe->buf, readable - leftover);
+            mcopy(((uint8_t*)buf), pipe->buf + (pipe->reader & (pipe->len - 1)), leftover);
+            mcopy(((uint8_t*)buf) + leftover, pipe->buf, readable - leftover);
         }
         __atom_add(pipe->reader, readable);
     }
@@ -205,9 +205,9 @@ static inline void xpipe_free(xpipe_ptr *pptr)
             // 确保读写线程退出才能释放管道，否则释放互斥锁可能崩溃
             __xapi->mutex_free(pipe->mutex);
             if (pipe->buf){
-                xfree(pipe->buf);
+                free(pipe->buf);
             }
-            xfree(pipe);
+            free(pipe);
         }
     }
 }
@@ -215,15 +215,15 @@ static inline void xpipe_free(xpipe_ptr *pptr)
 
 static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
 {
-    xpipe_ptr pipe = (xpipe_ptr)xalloc(sizeof(struct xpipe));
+    xpipe_ptr pipe = (xpipe_ptr)malloc(sizeof(struct xpipe));
     __xcheck(pipe == NULL);
 
-    if (xlen(name) > 15){
-        xcopy(pipe->name, name, 15);
+    if (slength(name) > 15){
+        mcopy(pipe->name, name, 15);
         pipe->name[15] = '\0';
     }else {
-        xcopy(pipe->name, name, xlen(name));
-        pipe->name[xlen(name)] = '\0';
+        mcopy(pipe->name, name, slength(name));
+        pipe->name[slength(name)] = '\0';
     }
 
    if ((len & (len - 1)) == 0){
@@ -235,7 +235,7 @@ static inline xpipe_ptr xpipe_create(uint64_t len, const char *name)
         } while(len >>= 1);
     }
 
-    pipe->buf = (uint8_t*)xalloc(pipe->len);
+    pipe->buf = (uint8_t*)malloc(pipe->len);
     __xcheck(pipe->buf == NULL);
 
     pipe->mutex = __xapi->mutex_create();

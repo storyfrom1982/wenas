@@ -3,7 +3,7 @@
 #define __UUID_LIST_H__
 
 
-#include "xalloc.h"
+#include "xmalloc.h"
 #include "xlib/avlmini.h"
 
 

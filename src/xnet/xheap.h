@@ -2,7 +2,7 @@
 #define __XHEAP_H__
 
 
-#include "xalloc.h"
+#include "xmalloc.h"
 
 
 typedef struct xheapnode {

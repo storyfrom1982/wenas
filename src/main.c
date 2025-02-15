@@ -34,16 +34,16 @@ int main(int argc, char *argv[])
     // const char *cip = "192.168.1.4";
     // const char *cip = "120.78.155.213";
     // const char *cip = "47.92.77.19";
-    const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
-    // const char *cip = "47.99.146.226";
+    // const char *cip = "2408:4005:303:c200:6377:e67f:7eaf:72be";
+    const char *cip = "47.99.146.226";
     // const char *cip = hostname;
     // const char *cip = "2409:8914:865d:877:5115:1502:14dc:4882";
     // const char *cip = "2409:8a14:8743:9750:350f:784f:8966:8b52";
     // const char *cip = "2409:8a14:8745:8d90:8:4168:3641:fb61"; // 
     // const char *cip = "2409:8914:8669:1bf8:5c20:3ccc:1d88:ce38";
 
-    xcopy(ip, cip, xlen(cip));
-    ip[xlen(cip)] = '\0';
+    mcopy(ip, cip, slength(cip));
+    ip[slength(cip)] = '\0';
 
     char str[1024];
     char input[256];
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
             size_t cwd_size = 1024;
             char cwd_path[cwd_size];
             __xapi->fs_path_cwd(cwd_path, &cwd_size);
-            // int path_len = xlen(cwd_path);
+            // int path_len = slength(cwd_path);
             int dir_name_pos = 0;
             while (cwd_path[cwd_size - dir_name_pos - 1] != '/'){
                 dir_name_pos++;
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
             __xlogi("未知命令: %s\n", command);
         }
 
-        xclear(command, 256);
+        mclear(command, 256);
     }
 
     xltp_free(&peer);

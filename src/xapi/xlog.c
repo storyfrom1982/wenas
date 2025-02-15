@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <errno.h>
 
-#include "xnet/xalloc.h"
+#include "xnet/xmalloc.h"
 
 #include "uv.h"
 
@@ -37,7 +37,7 @@ static struct xlogrecorder global_logrecorder = {0}, *gloger = &global_logrecord
 void test3()
 {
     void *p = strdup("test");
-    // xfree(p);
+    // free(p);
     p = NULL;
     // *(int*)p = 0;
 }
@@ -50,12 +50,12 @@ void test2()
 
 void test1()
 {
-    void *p = xalloc(256);
+    void *p = malloc(256);
     test2();
 }
 
 static void test(){
-    void *p = xalloc(256);
+    void *p = malloc(256);
     test1();
 }
 
@@ -74,9 +74,11 @@ void xlog_recorder_close()
         __xapi->fs_file_close(gloger->fd);
     }
 
-    xclear(gloger, sizeof(global_logrecorder));
-    
-    xalloc_leak_trace(memory_leak_cb);
+    mclear(gloger, sizeof(global_logrecorder));
+
+#ifdef XMALLOC_ENABLE
+    xmalloc_leak_trace(memory_leak_cb);
+#endif
 }
 
 extern void env_backtrace_setup();

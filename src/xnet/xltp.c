@@ -91,7 +91,7 @@ XClean:
 
 // static inline xltp_io_t* xltp_make_ctx(xltp_t *xltp, char *path)
 // {
-//     xltp_io_t* ctx = (xltp_io_t*)xalloc(sizeof(xltp_io_t));
+//     xltp_io_t* ctx = (xltp_io_t*)malloc(sizeof(xltp_io_t));
 //     __xcheck(ctx == NULL);
 //     ctx->xltp = xltp;
 //     ctx->channel = NULL;
@@ -150,7 +150,7 @@ XClean:
 
 int xltp_make_api(xltp_t *xltp, const char *api, xmsgcb_ptr cb)
 {
-    __xcheck(xtree_add(xltp->api, (void*)api, xlen(api), cb) == NULL);
+    __xcheck(xtree_add(xltp->api, (void*)api, slength(api), cb) == NULL);
     return 0;
 XClean:
     return -1;
@@ -227,7 +227,7 @@ static inline int xltp_recv_req(xltp_t *xltp, xframe_t *msg)
     __xcheck(api == NULL);
     // msg->id = xl_find_uint(&xltp->parser, "rid");
     // __xcheck(msg->id == XNONE);
-    cb = xtree_find(xltp->api, api, xlen(api));
+    cb = xtree_find(xltp->api, api, slength(api));
     __xcheck(cb == NULL);
     cb(xltp, msg, NULL);
     return 0;
@@ -277,7 +277,7 @@ static inline int xltp_recv_msg(xltp_t *xltp, xframe_t *msg)
             xltp->parser = xl_parser(&msg->line);
             xl_find_word(&xltp->parser, "api", &api);
             __xcheck(api == NULL);
-            cb = xtree_find(xltp->api, api, xlen(api));
+            cb = xtree_find(xltp->api, api, slength(api));
             __xcheck(cb == NULL);
             cb(xltp, msg, NULL);
         }
@@ -360,19 +360,18 @@ XClean:
 static inline int xltp_timedout(xltp_t *xltp, xframe_t *msg)
 {
     xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
+    if (ios != NULL){
+        // TODO 如何确保在释放 channel 之前，释放掉 ios。
+        // TODO 解决释放 channel 时的崩溃。
+        xlio_stream_free(ios);
+    }
     if (msg->type == XPACK_TYPE_REQ){
         xframe_t *req = __xmsg_get_ctx(msg);
         if (req){
             xl_free(&req);
         }
     }
-    if (ios != NULL){
-        // TODO 如何确保在释放 channel 之前，释放掉 ios。
-        // TODO 解决释放 channel 时的崩溃。
-        xlio_stream_close(ios);
-    }else {
-        xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    }
+    xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
     xl_free(&msg);
     return 0;
 XClean:
@@ -752,7 +751,7 @@ XClean:
 
 xltp_t* xltp_create(int boot)
 {
-    xltp_t *xltp = (xltp_t*)xcalloc(1, sizeof(struct xltp));
+    xltp_t *xltp = (xltp_t*)calloc(1, sizeof(struct xltp));
 
     __set_true(xltp->runnig);
 
@@ -807,7 +806,7 @@ XClean:
 static void xapi_clear(void *xapi)
 {
     if (xapi){
-        // xfree(xapi);
+        // free(xapi);
     }
 }
 
@@ -860,6 +859,6 @@ void xltp_free(xltp_t **pptr)
             xtree_free(&xltp->api);
         }
 
-        xfree(xltp);
+        free(xltp);
     }
 }

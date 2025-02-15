@@ -60,7 +60,7 @@ check_c_source_compiles("
 set(kzx_sources
     src/xapi/xlog.c
     src/xapi/xapi.c
-    src/xnet/xalloc.c
+    src/xnet/xmalloc.c
     src/xnet/xmsger.c
     src/xnet/xtable.c
     src/xlib/avlmini.c
@@ -79,12 +79,11 @@ set(kzx_ldflags "")
 set(kzx_inclides "")
 set(kzx_directories "")
 
-list(APPEND kzx_defines -DXALLOC_PAGE_SIZE=0x1000000 -DXALLOC_MAX_POOL=8)
-
 # 检查编译器类型
 if(CMAKE_C_COMPILER_ID MATCHES "GNU")
     message(STATUS "Using GCC compiler")
-    # list(APPEND kzx_defines -DXALLOC_ENABLE)
+    list(APPEND kzx_defines -DXMALLOC_ENABLE)
+    list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
     list(APPEND kzx_ldflags "-Wl,--export-dynamic;")
 endif()
 
@@ -92,7 +91,8 @@ if(CMAKE_C_COMPILER_ID STREQUAL Clang OR CMAKE_C_COMPILER_ID STREQUAL AppleClang
     message(STATUS "Using Clang compiler")
     if(NOT DEFINED ENV{QTDIR})
         list(APPEND kzx_ldflags "-Wl,-export_dynamic;")
-        # list(APPEND kzx_defines -DXALLOC_ENABLE)
+        list(APPEND kzx_defines -DXMALLOC_ENABLE)
+        list(APPEND kzx_defines -DXMALLOC_PAGE_SIZE=0x1000000 -DXMALLOC_MAX_POOL=8)
     endif()
 endif()
 
