@@ -347,6 +347,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         // 判断消息是否全部写入缓冲区
         if (msg->spos == msg->wpos){
             __atom_add(channel->msgbuf->spos, 1);
+            xl_free(&msg);
         }
     }
 }
@@ -943,7 +944,7 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         if (channel->req != NULL){
                             // 连接已经建立，需要回收资源
                             msger->cb->on_message_timedout(msger->cb, channel, channel->req);
-                            channel->req = NULL;
+                            // channel->req = NULL;
                         }else {
                             // 连接尚未建立，直接释放即可
                             xchannel_free(channel);
@@ -1116,6 +1117,7 @@ int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xframe_t *msg)
     __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
         // msg->type = XPACK_TYPE_BIN;
+        xl_hold(msg);
         __xcheck(xmsg_fixed(msg) != 0);
         __atom_add(msger->len, msg->wpos);
         __atom_add(channel->wpos, msg->wpos);

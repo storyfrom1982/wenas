@@ -591,10 +591,14 @@ void xlio_free(xlio_t **pptr)
 
 static int xlio_post_close(xltp_t *tp, xframe_t *msg, void *ctx)
 {
+    __xlogd("xlio_post_close enter\n");
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
     xmsger_flush(ios->io->msger, ios->channel);
+    __xlogd("xlio_post_close 1\n");
     xlio_stream_free(ios);
+    __xlogd("xlio_post_close 2\n");
     xl_free(&msg);
+    __xlogd("xlio_post_close exit\n");
     return 0;
 XClean:
     return -1;
@@ -602,13 +606,15 @@ XClean:
 
 int xlio_stream_close(xlio_stream_t *ios)
 {
+    __xlogd("xlio_stream_close enter\n");
     xframe_t *msg = xl_maker();
     __xcheck(msg == NULL);
     msg->flag = XMSG_FLAG_POST;
     __xmsg_set_cb(msg, xlio_post_close);
     __xmsg_set_ctx(msg, ios);
     __xmsg_set_channel(msg, ios->channel);
-    __xcheck(xpipe_write(ios->io->pipe, &msg, __sizeof_ptr) != __sizeof_ptr);    
+    __xcheck(xpipe_write(ios->io->pipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+    __xlogd("xlio_stream_close exit\n");
     return 0;
 XClean:
     xlio_stream_free(ios);

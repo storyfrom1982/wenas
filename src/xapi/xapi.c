@@ -269,7 +269,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
             traverser->item.path_len = traverser->current_path->path_len;
             traverser->item.type = __XAPI_FS_ITEM_TYPE_DIR;
             traverser->item.size = 0;
-            // __xlogd("dir = %s size = %lu\n", traverser->item.path, traverser->item.path_len);
+            __xlogd("open dir = %s size = %lu\n", traverser->item.path, traverser->item.path_len);
             return &traverser->item; // 返回当前路径
         }
 
@@ -303,6 +303,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
         if (traverser->dirents[0].type == UV_DIRENT_DIR) {
             // 如果是目录，将路径压入栈
             stack_push(&traverser->stack, traverser->full_path, path_len + 1);
+            __xlogd("push dir = %s size = %lu\n", traverser->full_path, path_len + 1);
             uv_fs_req_cleanup(&traverser->read_req); // 清理读取请求
         }else {
             traverser->item.type = __XAPI_FS_ITEM_TYPE_FILE;
