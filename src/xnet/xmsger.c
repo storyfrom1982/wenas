@@ -346,6 +346,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         __atom_add(channel->sendbuf->wpos, 1);
         // 判断消息是否全部写入缓冲区
         if (msg->spos == msg->wpos){
+            channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)] = NULL;
             __atom_add(channel->msgbuf->spos, 1);
             xl_free(&msg);
         }
