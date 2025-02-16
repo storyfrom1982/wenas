@@ -321,35 +321,18 @@ XClean:
 static inline int xltp_back(xltp_t *xltp, xframe_t *msg)
 {
     __xlogd("xltp_back enter\n");
-    if (msg->type == XPACK_TYPE_REQ){
-        
-    }else if (msg->type == XPACK_TYPE_RES){
-        xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
-    }else if (msg->type == XPACK_TYPE_RES){
-
-    }else if (msg->type == XPACK_TYPE_MSG){
-        xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
-        if (ios != NULL){
-            // if (xlio_stream_update(ios, msg->wpos) == 0){
-            //     __xlogd("xltp_back final\n");
-            //     xl_clear(msg);
-            //     xl_hold(msg);
-            //     xlio_stream_free(ios);
-            //     xchannel_set_ctx(__xmsg_get_channel(msg), NULL);
-            //     xltp_send_bye(xltp, msg);
-            // }else 
-            xl_hold(msg);
-            xlio_stream_read(ios, msg);
-            // if (xlio_stream_update(ios, msg->wpos) > 0){
-            //     __xlogd("xltp_back read enter\n");
-            //     xlio_stream_read(ios, msg);
-            //     __xlogd("xltp_back read exit\n");
-            //     // msg->flag = XMSG_FLAG_STREAM;
-            //     // __xcheck(xpipe_write(xltp->iopipe, &msg, __sizeof_ptr) != __sizeof_ptr);
-            // }
+    xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
+    if (ios != NULL){
+        xlio_stream_read(ios, msg);
+        if (msg->type == XPACK_TYPE_RES){
+            xlio_stream_close(ios);
         }
+    }else {
+        if (msg->type == XPACK_TYPE_RES){
+            xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+        }
+        xl_free(&msg);
     }
-    xl_free(&msg);
     __xlogd("xltp_back exit\n");
     return 0;
 XClean:

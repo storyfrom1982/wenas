@@ -67,16 +67,21 @@ static inline xframe_t** xlio_hold_frame(xlio_stream_t *stream)
 {
     xframe_t **frame = &stream->buf.buf[__serialbuf_rpos(&stream->buf)];
     xl_hold(*frame);
-    (*frame)->id = stream->buf.rpos;
+    (*frame)->id = __serialbuf_rpos(&stream->buf);
     stream->buf.rpos++;
     return frame;
 }
 
 static inline void xlio_free_frame(xlio_stream_t *stream, xframe_t *frame)
 {
-    xl_free(&frame);
+    __xcheck(frame != stream->buf.buf[0] && frame != stream->buf.buf[1]);
+    __xcheck(frame->id != 0 && frame->id != 1);
     xl_clear(frame);
+    xl_free(&stream->buf.buf[frame->id]);
     stream->buf.wpos++;
+    return;
+XClean:
+    return;
 }
 
 static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
@@ -765,6 +770,7 @@ XClean:
 
 void xlio_stream_free(xlio_stream_t *ios)
 {
+    __xlogd("xlio_stream_free enter\n");
     if (ios){
         if (ios->fd > 0){
             __xapi->fs_file_close(ios->fd);
@@ -782,11 +788,13 @@ void xlio_stream_free(xlio_stream_t *ios)
         }
         for (size_t i = 0; i < MSGBUF_RANGE; i++){
             while (ios->buf.buf[i] != NULL){
+                __xlogd("xlio_stream_free buf %lu\n", ios->buf.buf[i]->ref);
                 xl_free(&ios->buf.buf[i]);
             }
         }
         free(ios);
     }
+    __xlogd("xlio_stream_free exit\n");
 }
 
 int xlio_stream_post(xlio_stream_t *ios, xframe_t *frame)
