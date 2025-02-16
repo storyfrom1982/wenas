@@ -348,7 +348,7 @@ static inline void xchannel_serial_msg(xchannel_ptr channel)
         if (msg->spos == msg->wpos){
             channel->msgbuf->buf[__serialbuf_spos(channel->msgbuf)] = NULL;
             __atom_add(channel->msgbuf->spos, 1);
-            xl_free(&msg);
+            // xl_free(&msg);
         }
     }
 }
@@ -1118,7 +1118,7 @@ int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xframe_t *msg)
     __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
         // msg->type = XPACK_TYPE_BIN;
-        xl_hold(msg);
+        // xl_hold(msg);
         __xcheck(xmsg_fixed(msg) != 0);
         __atom_add(msger->len, msg->wpos);
         __atom_add(channel->wpos, msg->wpos);
