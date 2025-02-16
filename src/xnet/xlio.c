@@ -689,12 +689,10 @@ int xlio_start_uploader(xlio_t *io, xframe_t *req, int response)
     xchannel_set_ctx(ios->channel, ios);
 
     if (response){
-        xframe_t *res = ios->buf.buf[__serialbuf_rpos(&ios->buf)];
-        xl_clear(res);
-        xl_add_int(&res, "status", 200);
-        ios->buf.rpos++;
-        res->type = XPACK_TYPE_MSG;
-        __xcheck(xmsger_send(ios->io->msger, ios->channel, res) != 0);
+        xframe_t **frame = xlio_hold_frame(ios);
+        xl_add_int(frame, "status", 200);
+        (*frame)->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(ios->io->msger, ios->channel, *frame) != 0);
     }
 
     xl_free(&req);
