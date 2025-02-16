@@ -66,7 +66,8 @@ typedef struct xlio {
 static inline xframe_t** xlio_hold_frame(xlio_stream_t *stream)
 {
     xframe_t **frame = &stream->buf.buf[__serialbuf_rpos(&stream->buf)];
-    xl_hold(*frame);
+    stream->buf.buf[__serialbuf_rpos(&stream->buf)] = NULL;
+    // xl_hold(*frame);
     (*frame)->id = __serialbuf_rpos(&stream->buf);
     stream->buf.rpos++;
     return frame;
@@ -74,10 +75,9 @@ static inline xframe_t** xlio_hold_frame(xlio_stream_t *stream)
 
 static inline void xlio_free_frame(xlio_stream_t *stream, xframe_t *frame)
 {
-    __xcheck(frame != stream->buf.buf[0] && frame != stream->buf.buf[1]);
-    __xcheck(frame->id != 0 && frame->id != 1);
     xl_clear(frame);
-    xl_free(&stream->buf.buf[frame->id]);
+    stream->buf.buf[frame->id] = frame;
+    // xl_free(&stream->buf.buf[frame->id]);
     stream->buf.wpos++;
     return;
 XClean:
@@ -787,7 +787,7 @@ void xlio_stream_free(xlio_stream_t *ios)
             ios->next->prev = ios->prev;
         }
         for (size_t i = 0; i < MSGBUF_RANGE; i++){
-            while (ios->buf.buf[i] != NULL){
+            if (ios->buf.buf[i] != NULL){
                 __xlogd("xlio_stream_free buf %lu\n", ios->buf.buf[i]->ref);
                 xl_free(&ios->buf.buf[i]);
             }
