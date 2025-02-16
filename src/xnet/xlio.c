@@ -63,11 +63,11 @@ typedef struct xlio {
 #define XLIO_STREAM_UPLOAD_LIST     3
 
 
-static inline xframe_t* xlio_hold_frame(xlio_stream_t *stream)
+static inline xframe_t** xlio_hold_frame(xlio_stream_t *stream)
 {
-    xframe_t *frame = stream->buf.buf[__serialbuf_rpos(&stream->buf)];
-    xl_hold(frame);
-    frame->id = stream->buf.rpos;
+    xframe_t **frame = &stream->buf.buf[__serialbuf_rpos(&stream->buf)];
+    xl_hold(*frame);
+    (*frame)->id = stream->buf.rpos;
     stream->buf.rpos++;
     return frame;
 }
@@ -79,15 +79,15 @@ static inline void xlio_free_frame(xlio_stream_t *stream, xframe_t *frame)
     stream->buf.wpos++;
 }
 
-static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
+static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
 {
     if (stream->fd > 0){
         int64_t isfile;
         char *name;
         __xcheck(stream->obj == NULL);
-        xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
-        xl_add_int(&frame, "id", frame->id);
-        uint64_t list_begin_pos = xl_list_begin(&frame, "list");
+        xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST);
+        xl_add_int(frame, "id", (*frame)->id);
+        uint64_t list_begin_pos = xl_list_begin(frame, "list");
 
         xframe_t parser = xl_parser(stream->obj);
         xl_find_word(&parser, "path", &name);
@@ -95,19 +95,19 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
         xl_find_uint(&parser, "size", &stream->file_size);
         
 
-        uint64_t obj_begin_pos = xl_obj_begin(&frame, NULL);
+        uint64_t obj_begin_pos = xl_obj_begin(frame, NULL);
 
-        xl_add_word(&frame, "path", name);
-        xl_add_int(&frame, "type", isfile);
-        xl_add_uint(&frame, "size", stream->file_size);
-        xl_add_uint(&frame, "pos", stream->file_pos);
+        xl_add_word(frame, "path", name);
+        xl_add_int(frame, "type", isfile);
+        xl_add_uint(frame, "size", stream->file_size);
+        xl_add_uint(frame, "pos", stream->file_pos);
 
-        uint64_t len = xl_usable(frame, "data");
+        uint64_t len = xl_usable((*frame), "data");
         if (stream->file_size - stream->file_pos < len){
             len = stream->file_size - stream->file_pos;
         }
-        uint64_t pos = xl_add_bin(&frame, "data", NULL, len);
-        int ret = __xapi->fs_file_read(stream->fd, frame->ptr + (pos - len), len);
+        uint64_t pos = xl_add_bin(frame, "data", NULL, len);
+        int ret = __xapi->fs_file_read(stream->fd, (*frame)->ptr + (pos - len), len);
         __xcheck(ret < 0);
 
         stream->file_pos += len;
@@ -122,20 +122,20 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
             stream->obj = NULL;
         }
 
-        xl_obj_end(&frame, obj_begin_pos);
-        xl_list_end(&frame, list_begin_pos);
+        xl_obj_end(frame, obj_begin_pos);
+        xl_list_end(frame, list_begin_pos);
 
         // xl_printf(&frame->line);
 
-        frame->type = XPACK_TYPE_MSG;
-        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+        (*frame)->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
 
 
     }else {
 
-        xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
-        xl_add_int(&frame, "id", frame->id);
-        uint64_t list_begin_pos = xl_list_begin(&frame, "list");
+        xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST);
+        xl_add_int(frame, "id", (*frame)->id);
+        uint64_t list_begin_pos = xl_list_begin(frame, "list");
 
         do {
 
@@ -144,8 +144,8 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                 char *name;
                 // xl_printf(stream->obj);
                 
-                if (frame->size - frame->wpos < __xl_sizeof_line(stream->obj) + 256){
-                    __xlogd("xlio_send_file frame size =%lu wpos =%lu obj size =%lu\n", frame->size, frame->wpos, __xl_sizeof_line(stream->obj));
+                if ((*frame)->size - (*frame)->wpos < __xl_sizeof_line(stream->obj) + 256){
+                    __xlogd("xlio_send_file frame size =%lu wpos =%lu obj size =%lu\n", (*frame)->size, (*frame)->wpos, __xl_sizeof_line(stream->obj));
                     break;
                 }
                 
@@ -155,12 +155,12 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                 xl_find_uint(&parser, "size", &stream->file_size);
                 
 
-                uint64_t obj_begin_pos = xl_obj_begin(&frame, NULL);
+                uint64_t obj_begin_pos = xl_obj_begin(frame, NULL);
 
-                xl_add_word(&frame, "path", name);
-                xl_add_int(&frame, "type", isfile);
-                xl_add_uint(&frame, "size", stream->file_size);
-                xl_add_uint(&frame, "pos", stream->file_pos);
+                xl_add_word(frame, "path", name);
+                xl_add_int(frame, "type", isfile);
+                xl_add_uint(frame, "size", stream->file_size);
+                xl_add_uint(frame, "pos", stream->file_pos);
 
                 if (isfile){
                     int full_path_len = stream->uri_len + slength(name) + 2;
@@ -173,12 +173,12 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                         __xapi->fs_file_close(stream->fd);
                         stream->fd = -1;
                     }else {
-                        uint64_t len = xl_usable(frame, "data");
+                        uint64_t len = xl_usable(*frame, "data");
                         if (stream->file_size < len){
                             len = stream->file_size;
                         }
-                        uint64_t pos = xl_add_bin(&frame, "data", NULL, len);
-                        int ret = __xapi->fs_file_read(stream->fd, frame->ptr + (pos - len), len);
+                        uint64_t pos = xl_add_bin(frame, "data", NULL, len);
+                        int ret = __xapi->fs_file_read(stream->fd, (*frame)->ptr + (pos - len), len);
                         __xcheck(ret < 0);
                         stream->file_pos += len;
                         stream->list_pos += len;
@@ -191,30 +191,30 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t *frame)
                             stream->file_size = 0;
                         }
                         if (len < stream->file_size){
-                            xl_obj_end(&frame, obj_begin_pos);
+                            xl_obj_end(frame, obj_begin_pos);
                             break;
                         }
                     }
                 }
 
-                xl_obj_end(&frame, obj_begin_pos);
+                xl_obj_end(frame, obj_begin_pos);
             }
             
         }while ((stream->obj = xl_list_next(&stream->list_parser)) != NULL);
 
-        xl_list_end(&frame, list_begin_pos);
+        xl_list_end(frame, list_begin_pos);
 
         // xl_printf(&frame->line);
-        __xlogd("send frame size = %lu\n", frame->wpos);
-        xframe_t parser = xl_parser(&frame->line);
+        __xlogd("send frame size = %lu\n", (*frame)->wpos);
+        xframe_t parser = xl_parser(&(*frame)->line);
         __xlogd("send frame rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
         xline_t *olist = xl_find(&parser, "list");
         parser = xl_parser(olist);
         __xlogd("send list rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
         
 
-        frame->type = XPACK_TYPE_MSG;
-        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+        (*frame)->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
     }
 
     __xlogd("xlio_send_file >>>>---------------> exit\n");
@@ -317,7 +317,7 @@ static void xlio_loop(void *ptr)
     char *name;
     xframe_t parser;
     xframe_t *msg;
-    xframe_t *frame;
+    xframe_t **frame;
     uint64_t framelen = MSGBUF_SIZE;
     xmsgcb_ptr cb;
     xlio_stream_t *stream;
@@ -343,21 +343,20 @@ static void xlio_loop(void *ptr)
 
                     __xcheck(__serialbuf_readable(&stream->buf) == 0);
                     frame = xlio_hold_frame(stream);
-                    xl_clear(frame);
-                    xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST);
-                    xl_add_uint(&frame, "size", 0);
+                    xl_add_int(frame, "api", XLIO_STREAM_RES_LIST);
+                    xl_add_uint(frame, "size", 0);
                     if (stream->scanner != NULL){
-                        __xcheck(xlio_scan_dir(stream, &frame) != 0);
-                        parser = xl_parser(&frame->line);
+                        __xcheck(xlio_scan_dir(stream, frame) != 0);
+                        parser = xl_parser(&(*frame)->line);
                         xline_t *size = xl_find(&parser, "size");
                         *size = __xl_u2b(stream->list_size);
                     }else {
-                        uint64_t pos = xl_list_begin(&frame, "list");
-                        xl_list_end(&frame, pos);
+                        uint64_t pos = xl_list_begin(frame, "list");
+                        xl_list_end(frame, pos);
                     }
                     // xl_printf(&frame->line);
-                    frame->type = XPACK_TYPE_MSG;
-                    __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                    (*frame)->type = XPACK_TYPE_MSG;
+                    __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
 
                 }else if (stream->status == XLIO_STREAM_RES_LIST){
 
@@ -366,24 +365,22 @@ static void xlio_loop(void *ptr)
                     if (__xl_sizeof_body(list) > 0){
                         stream->parser = xl_parser(list);
                         frame = xlio_hold_frame(stream);
-                        xl_clear(frame);
-                        xl_add_int(&frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
-                        xl_add_uint(&frame, "size", 0);
-                        xlio_check_list(stream, &msg, &frame);
+                        xl_add_int(frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
+                        xl_add_uint(frame, "size", 0);
+                        xlio_check_list(stream, &msg, frame);
                         if (stream->list_size > 0){
-                            parser = xl_parser(&frame->line);
+                            parser = xl_parser(&(*frame)->line);
                             xline_t *size = xl_find(&parser, "size");
                             *size = __xl_u2b(stream->list_size);
                         }else {
-                            xl_clear(frame);
-                            xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
+                            xl_add_int(frame, "api", XLIO_STREAM_REQ_LIST);
                         }
                         // xl_printf(&frame->line);
-                        frame->type = XPACK_TYPE_MSG;
-                        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                        (*frame)->type = XPACK_TYPE_MSG;
+                        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
                     }else {
-                        frame->type = XPACK_TYPE_RES;
-                        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                        (*frame)->type = XPACK_TYPE_RES;
+                        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
                     }
 
                 }else if (stream->status == XLIO_STREAM_DOWNLOAD_LIST){
@@ -399,7 +396,6 @@ static void xlio_loop(void *ptr)
                         while (stream->list_pos < stream->list_size && __serialbuf_readable(&stream->buf)){
                             __xlogd("buf rpos = %u wpos = %u readable = %u\n", __serialbuf_wpos(&stream->buf), __serialbuf_rpos(&stream->buf), __serialbuf_readable(&stream->buf));
                             frame = xlio_hold_frame(stream);
-                            frame->id = stream->buf.rpos;
                             xlio_send_file(stream, frame);
                         }
                     }
@@ -416,11 +412,10 @@ static void xlio_loop(void *ptr)
                     if (__xl_sizeof_body(objlist) == 0){
                         __xcheck(stream->list_pos != stream->list_size);
                         __xcheck(__serialbuf_readable(&stream->buf) == 0);
-                        xframe_t *frame = xlio_hold_frame(stream);
-                        xl_clear(frame);
-                        xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
-                        frame->type = XPACK_TYPE_MSG;
-                        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                        xframe_t **frame = xlio_hold_frame(stream);
+                        xl_add_int(frame, "api", XLIO_STREAM_REQ_LIST);
+                        (*frame)->type = XPACK_TYPE_MSG;
+                        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
                         stream->list_pos = stream->list_size = 0;
 
                     }else {
@@ -508,11 +503,11 @@ static void xlio_loop(void *ptr)
                         __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
                         __xcheck(stream->list_pos != stream->list_size);
                         frame = xlio_hold_frame(stream);
-                        xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
-                        uint64_t pos = xl_list_begin(&frame, "list");
-                        xl_list_end(&frame, pos);
-                        frame->type = XPACK_TYPE_MSG;
-                        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                        xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST);
+                        uint64_t pos = xl_list_begin(frame, "list");
+                        xl_list_end(frame, pos);
+                        (*frame)->type = XPACK_TYPE_MSG;
+                        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
                         xl_free(&stream->current_frame);
                         // stream->current_frame = NULL;
                         stream->list_pos = stream->list_size = 0;
@@ -531,8 +526,8 @@ static void xlio_loop(void *ptr)
     __xlogd("xlio_loop >>>>---------------> exit\n");
 
 XClean:
-    if (frame){
-        xl_free(&frame);
+    if (frame && *frame){
+        xl_free(frame);
     }
     return;
 }
@@ -637,10 +632,10 @@ static int xlio_post_download(xltp_t *tp, xframe_t *msg, void *ctx)
 {
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
     __xcheck(__serialbuf_readable(&ios->buf) == 0);
-    xframe_t *frame = xlio_hold_frame(ios);
-    xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
-    frame->type = XPACK_TYPE_MSG;
-    __xcheck(xmsger_send(ios->io->msger, ios->channel, frame) != 0);
+    xframe_t **frame = xlio_hold_frame(ios);
+    xl_add_int(frame, "api", XLIO_STREAM_REQ_LIST);
+    (*frame)->type = XPACK_TYPE_MSG;
+    __xcheck(xmsger_send(ios->io->msger, ios->channel, *frame) != 0);
     xl_free(&msg);
     return 0;
 XClean:
