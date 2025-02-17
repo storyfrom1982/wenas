@@ -325,7 +325,6 @@ static inline int recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
 
     if (stream->status == XLIO_STREAM_REQ_LIST){
 
-        __xcheck(__serialbuf_readable(&stream->buf) == 0);
         frame = xlio_hold_frame(stream);
         xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST);
         xl_add_uint(&frame, "size", 0);
@@ -345,7 +344,6 @@ static inline int recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
     }else if (stream->status == XLIO_STREAM_RES_LIST){
 
         xline_t *list = xl_find(&parser, "list");
-        __xcheck(__serialbuf_readable(&stream->buf) == 0);
         if (__xl_sizeof_body(list) > 0){
             stream->parser = xl_parser(list);
             frame = xlio_hold_frame(stream);
@@ -395,7 +393,6 @@ static inline int recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
         xline_t *objlist = xl_find(&stream->parser, "list");
         if (__xl_sizeof_body(objlist) == 0){
             __xcheck(stream->list_pos != stream->list_size);
-            __xcheck(__serialbuf_readable(&stream->buf) == 0);
             xframe_t *frame = xlio_hold_frame(stream);
             xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
             frame->type = XPACK_TYPE_MSG;
@@ -497,6 +494,7 @@ static void xlio_loop(void *ptr)
         if (msg->flag == XMSG_FLAG_RECV){
 
             if (msg->type == XPACK_TYPE_MSG){
+
                 if (__serialbuf_readable(&stream->buf) == 0){
                     xl_hold(msg);
                     stream->recv_frame = msg;
@@ -512,10 +510,10 @@ static void xlio_loop(void *ptr)
 
             // stream->buf.wpos++;
             xlio_free_frame(stream, msg);
-            __xlogd("----- buf rpos = %u wpos = %u readable = %u\n", __serialbuf_wpos(&stream->buf), __serialbuf_rpos(&stream->buf), __serialbuf_readable(&stream->buf));
 
             if (stream->recv_frame != NULL){
 
+                __xlogd("xliokabuf le\n");
                 (__xmsg_get_cb(stream->recv_frame))(NULL, stream->recv_frame, stream);
                 xl_free(&stream->recv_frame);
 
