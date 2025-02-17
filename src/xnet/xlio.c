@@ -371,6 +371,7 @@ static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
         // xl_printf(&frame->line);
         frame->type = XPACK_TYPE_MSG;
         __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+        stream->recv_frame = NULL;
 
     }else if (stream->status == XLIO_STREAM_RES_LIST){
 
@@ -395,6 +396,7 @@ static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
             frame->type = XPACK_TYPE_RES;
             __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
         }
+        stream->recv_frame = NULL;
 
     }else if (stream->status == XLIO_STREAM_DOWNLOAD_LIST){
 
@@ -494,6 +496,8 @@ static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
             }
         
         }
+
+        stream->recv_frame = NULL;
 
     }
 
