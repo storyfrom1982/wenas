@@ -496,7 +496,6 @@ static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
 
     }
 
-    stream->recv_frame = NULL;
     xl_free(&msg);
 
     __xlogd("recv_frame >>>>---------------> exit\n");
@@ -535,9 +534,11 @@ static void xlio_loop(void *ptr)
             if (msg->type == XPACK_TYPE_MSG){
 
                 if (__serialbuf_readable(&stream->buf) == 0){
+                    
                     xl_hold(msg);
-                    __xmsg_set_cb(stream->recv_frame, recv_frame);
                     stream->recv_frame = msg;
+                    __xmsg_set_cb(stream->recv_frame, recv_frame);
+                    
                 }else {
                     __xcheck(recv_frame(NULL, msg, stream) != 0);
                 }
@@ -552,6 +553,7 @@ static void xlio_loop(void *ptr)
             __xlogd("----- buf rpos = %u wpos = %u readable = %u\n", __serialbuf_wpos(&stream->buf), __serialbuf_rpos(&stream->buf), __serialbuf_readable(&stream->buf));
             if (stream->recv_frame != NULL && __xmsg_get_cb(stream->recv_frame) != NULL){
                 __xcheck((__xmsg_get_cb(stream->recv_frame))(NULL, stream->recv_frame, stream) != 0);
+                xl_free(&stream->recv_frame);
             }else if (stream->upload_frame != NULL && __xmsg_get_cb(stream->upload_frame) != NULL){
                 __xcheck((__xmsg_get_cb(stream->upload_frame))(NULL, stream->upload_frame, stream) != 0);
             }
