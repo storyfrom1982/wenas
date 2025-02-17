@@ -239,6 +239,8 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t 
     xframe_t obj_parser, list_parser = xl_parser(inlist);
 
     uint64_t pos = xl_list_begin(outframe, "list");
+    __xcheck(pos == XEOF);
+
     while ((obj = xl_list_next(&list_parser)) != NULL){
         obj_parser = xl_parser(obj);
         __xcheck(xl_find_int(&obj_parser, "type", &isfile) == NULL);
@@ -265,6 +267,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t 
             }
         }
     }
+
     xl_list_end(outframe, pos);
 
     return 0;
@@ -274,41 +277,42 @@ XClean:
 
 static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
 {
-    // xl_clear(stream->list_frame);
-    // __xcheck(xl_add_int(frame, "type", XLIO_STREAM_SYN_LIST) == XNONE);
+    char md5[64] = {0};
+    xframe_t *obj = xl_maker();
+    __xcheck(obj == NULL);
     uint64_t pos = xl_list_begin(frame, "list");
     __xcheck(pos == XEOF);
 
     do {
+
         if (ios->item != NULL){
-            if ((*frame)->size - (*frame)->wpos < ios->item->path_len + 256){
-                // __xlogd("frame size = %lu wpos = %lu path len = %lu\n", (*frame)->size, (*frame)->wpos, ios->item->path_len + 256);
+
+            __xcheck(xl_add_int(&obj, "type", ios->item->type) == XEOF);
+            __xcheck(xl_add_word(&obj, "path", ios->item->path + ios->src_name_pos) == XEOF);
+            __xcheck(xl_add_uint(&obj, "size", ios->item->size) == XEOF);
+            __xcheck(xl_add_bin(&obj, "md5", md5, 64) == XEOF);
+
+            if ((*frame)->size - (*frame)->wpos < __xl_sizeof_line(&obj->line)){
                 xl_list_end(frame, pos);
-                // (*frame)->type = XPACK_TYPE_MSG;
-                // __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+                xl_free(&obj);
                 return 0;
             }
-            // __xlogd("scanner --- type(%d) size:%lu %s\n", ios->item->type, ios->item->size, ios->item->path + ios->dir_name_pos);
-            uint64_t pos = xl_obj_begin(frame, NULL);
-            __xcheck(pos == XEOF);
-            __xcheck(xl_add_int(frame, "type", ios->item->type) == XEOF);
-            __xcheck(xl_add_word(frame, "path", ios->item->path + ios->src_name_pos) == XEOF);
-            __xcheck(xl_add_uint(frame, "size", ios->item->size) == XEOF);
-            char md5[64] = {0};
-            __xcheck(xl_add_bin(frame, "md5", md5, 64) == XEOF);
-            xl_obj_end(frame, pos);
+
+            __xcheck(xl_list_append(frame, &obj->line) == XEOF);
             ios->list_size += ios->item->size;
-            // stream->item = NULL;
+            xl_clear(obj);
         }
+        
         ios->item = __xapi->fs_scanner_read(ios->scanner);
+
     }while (ios->item != NULL);
 
     xl_list_end(frame, pos);
-    // (*frame)->type = XPACK_TYPE_MSG;
-    // __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+    xl_free(&obj);
 
     __xapi->fs_scanner_close(ios->scanner);
     ios->scanner = NULL;
+
     return 0;
 XClean:
     return -1;
