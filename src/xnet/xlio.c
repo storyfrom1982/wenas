@@ -229,44 +229,44 @@ XClean:
     return -1;
 }
 
-static inline int xlio_check_list(xlio_stream_t *ios, xframe_t **in, xframe_t **out)
+static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t **outframe)
 {
-    // ios->parser = xl_parser(&(*in)->line);
-    // xline_t *objlist = xl_find(&ios->parser, "list");
-    // ios->parser = xl_parser(objlist);
-    int64_t isfile;
     char *name;
+    int64_t isfile;
     uint64_t size;
-    uint64_t pos = xl_list_begin(out, "list");
-    while ((ios->obj = xl_list_next(&ios->parser)) != NULL)
-    {
-        // xl_printf(ios->obj);
-        // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
-        xframe_t parser = xl_parser(ios->obj);
-        xl_find_int(&parser, "type", &isfile);
+    char md5[64] = {0};
+    xline_t *obj, *name_val, *md5_val;
+    xframe_t obj_parser, list_parser = xl_parser(inlist);
+
+    uint64_t pos = xl_list_begin(outframe, "list");
+    while ((obj = xl_list_next(&list_parser)) != NULL){
+        obj_parser = xl_parser(obj);
+        __xcheck(xl_find_int(&obj_parser, "type", &isfile) == NULL);
+        __xcheck((name_val = xl_find_word(&obj_parser, "path", &name)) == NULL);
+        __xcheck(xl_find_uint(&obj_parser, "size", &size) == NULL);
+        __xcheck((md5_val = xl_find(&obj_parser, "md5")) == NULL);
+        int path_len = ios->uri_len + 1 + __xl_sizeof_body(name_val);
+        char path[path_len];
+        __xapi->snprintf(path, path_len, "%s/%s", ios->uri, name);
         if (isfile){
-            xl_list_append(out, ios->obj);
-            xl_find_uint(&parser, "size", &size);
-            ios->list_size += size;
-            // uint64_t pos = xl_obj_begin(out, "llll");
-            // uint64_t pos = xl_obj_begin(out, NULL);
-            // __xcheck(pos == XNONE);
-            // __xcheck(xl_add_int(out, "type", 1) == XNONE);
-            // xl_obj_end(out, pos);
+            if (!__xapi->fs_file_exist(path)){
+                __xcheck(xl_list_append(outframe, obj) == XEOF);
+                ios->list_size += size;
+            }else {
+                // TODO 对比 md5
+                if(mcompare(md5, __xl_b2o(md5_val), 64) != 0){
+                    __xcheck(xl_list_append(outframe, obj) == XEOF);
+                    ios->list_size += size;
+                }
+            }
         }else {
-            xl_find_word(&parser, "path", &name);
-            // ios->size = xl_find_uint(&parser, "size");
-            int full_path_len = slength(ios->uri) + slength(name) + 2;
-            char full_path[full_path_len];
-            __xapi->snprintf(full_path, full_path_len, "%s/%s\0", ios->uri, name);
-            __xlogd("mkpath === %s\n", full_path);
-            __xapi->fs_path_maker(full_path);
+            if (!__xapi->fs_dir_exist(path)){
+                __xcheck(__xapi->fs_path_maker(path) != 0);
+            }
         }
     }
-    xl_list_end(out, pos);
-    // xl_fixed(*out);
-    __xlogd("========================= checklist\n");
-    // xl_printf(&(*out)->line);
+    xl_list_end(outframe, pos);
+
     return 0;
 XClean:
     return -1;
@@ -294,6 +294,8 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
             __xcheck(xl_add_int(frame, "type", ios->item->type) == XEOF);
             __xcheck(xl_add_word(frame, "path", ios->item->path + ios->src_name_pos) == XEOF);
             __xcheck(xl_add_uint(frame, "size", ios->item->size) == XEOF);
+            char md5[64] = {0};
+            __xcheck(xl_add_bin(frame, "md5", md5, 64) == XEOF);
             xl_obj_end(frame, pos);
             ios->list_size += ios->item->size;
             // stream->item = NULL;
@@ -345,11 +347,11 @@ static inline int recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
 
         xline_t *list = xl_find(&parser, "list");
         if (__xl_sizeof_body(list) > 0){
-            stream->parser = xl_parser(list);
+            // stream->parser = xl_parser(list);
             frame = xlio_hold_frame(stream);
             xl_add_int(&frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
             xl_add_uint(&frame, "size", 0);
-            xlio_check_list(stream, &msg, &frame);
+            xlio_check_list(stream, list, &frame);
             if (stream->list_size > 0){
                 parser = xl_parser(&frame->line);
                 xline_t *size = xl_find(&parser, "size");
