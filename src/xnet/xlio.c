@@ -316,17 +316,15 @@ XClean:
 
 static inline int upload_frame(xltp_t *tp, xframe_t *frame, void *ctx)
 {
+    __xlogd("upload_frame >>>>---------------> enter\n");
     xlio_stream_t *stream = (xlio_stream_t*)ctx;
     //TODO list size 需要从对方发过来的下载列表中获取
     if (stream->list_pos < stream->list_size){
         __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
-        if (__serialbuf_readable(&stream->buf)){
-            frame = xlio_hold_frame(stream);
-            xlio_send_file(stream, &frame);
-        }
+        frame = xlio_hold_frame(stream);
+        xlio_send_file(stream, &frame);
     }else {
         __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
-        __xcheck(stream->list_pos != stream->list_size);
         frame = xlio_hold_frame(stream);
         xl_add_int(&frame, "api", XLIO_STREAM_UPLOAD_LIST);
         uint64_t pos = xl_list_begin(&frame, "list");
@@ -337,6 +335,7 @@ static inline int upload_frame(xltp_t *tp, xframe_t *frame, void *ctx)
         // stream->recv_frame = NULL;
         stream->list_pos = stream->list_size = 0;
     }
+    __xlogd("upload_frame >>>>---------------> exit\n");
     return 0;
 XClean:
     return -1;
@@ -344,6 +343,8 @@ XClean:
 
 static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
 {
+    __xlogd("recv_frame >>>>---------------> enter\n");
+
     uint64_t pos;
     int64_t isfile;
     char *name;
@@ -497,6 +498,8 @@ static inline int recv_frame(xltp_t *tp, xframe_t *msg, void *ctx)
     }
 
     xl_free(&msg);
+
+    __xlogd("recv_frame >>>>---------------> exit\n");
 
     return 0;
 XClean:
