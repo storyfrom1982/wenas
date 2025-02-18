@@ -255,6 +255,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t 
                 if(mcompare(md5, __xl_b2o(md5_val), 64) != 0){
                     __xcheck(xl_list_append(outframe, obj) == XEOF);
                     ios->list_size += size;
+                    __xlogd("xlio_check_list >>>>---------------> mcompare md5\n");
                 }
             }
         }else {
@@ -359,6 +360,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
             xl_add_uint(&frame, "size", 0);
             xlio_check_list(stream, list, &frame);
             if (stream->list_size > 0){
+                __xlogd("xlio_recv_frame >>>>---------------> list size = %lu\n", stream->list_size);
                 parser = xl_parser(&frame->line);
                 xline_t *size = xl_find(&parser, "size");
                 *size = __xl_u2b(stream->list_size);
