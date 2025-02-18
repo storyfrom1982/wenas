@@ -156,14 +156,6 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
     }while ((stream->obj = xl_list_next(&stream->list_parser)) != NULL);
 
     xl_list_end(frame, list_begin_pos);
-
-    // // xl_printf(&frame->line);
-    // __xlogd("send frame size = %lu\n", (*frame)->wpos);
-    // xframe_t parser = xl_parser(&(*frame)->line);
-    // __xlogd("send frame rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
-    // xline_t *olist = xl_find(&parser, "list");
-    // parser = xl_parser(olist);
-    // __xlogd("send list rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
     
     (*frame)->type = XPACK_TYPE_MSG;
     __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
@@ -172,6 +164,91 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
         
     return 0;
 XClean:
+    return -1;
+}
+
+static inline int xlio_recv_file(xlio_stream_t *stream, xframe_t *msg)
+{
+    char *name;
+    int64_t isfile;
+    uint64_t pos;
+    xline_t *obj_val, *name_val;
+    xframe_t list_parser, obj_parser;
+    xframe_t *frame = NULL;
+
+    __xlogd("upload frame size=%lu\n", msg->wpos);
+    __xlogd("ip=%s:%u\n", __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)), __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)));
+
+    list_parser = xl_parser(&msg->line);
+    xline_t *objlist = xl_find(&list_parser, "list");
+    __xcheck(objlist == NULL);
+
+    if (__xl_sizeof_body(objlist) == 0){
+
+        __xcheck(stream->list_pos != stream->list_size);
+        frame = xlio_take_frame(stream);
+        __xcheck(xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST) == XEOF);
+        frame->type = XPACK_TYPE_MSG;
+        __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
+        stream->list_pos = stream->list_size = 0;
+
+    }else {
+
+        list_parser = xl_parser(objlist);
+
+        while ((obj_val = xl_list_next(&list_parser)) != NULL){
+
+            xl_printf(obj_val);
+            obj_parser = xl_parser(obj_val);
+            
+            __xcheck((name_val = xl_find_word(&obj_parser, "path", &name)) == NULL);
+            __xcheck(xl_find_int(&obj_parser, "type", &isfile) == NULL);
+            __xcheck(xl_find_uint(&obj_parser, "size", &stream->file_size) == NULL);
+            __xcheck(xl_find_uint(&obj_parser, "pos", &pos) == NULL);
+
+            int full_path_len = stream->uri_len + 1 + __xl_sizeof_body(name_val);
+            char full_path[full_path_len];                
+            __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
+            __xlogd("download file = %s\n", full_path);
+
+            if (stream->fd == -1){
+                if (pos == 0){
+                    stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_CREATE, 0644);
+                    __xcheck(stream->fd < 0);
+                }else {
+                    stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_WRITE, 0644);
+                    __xcheck(stream->fd < 0);
+                    __xcheck(pos != __xapi->fs_file_tell(stream->fd));
+                }
+            }else {
+                __xcheck(pos != __xapi->fs_file_tell(stream->fd));
+            }
+
+            xline_t *bin = xl_find(&obj_parser, "data");
+            if (bin != NULL){
+                uint64_t data_len = __xl_sizeof_body(bin);
+                if (data_len > 0){
+                    __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
+                    stream->file_pos += data_len;
+                    stream->list_pos += data_len;
+                    __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
+                }
+            }
+
+            if (stream->file_pos == stream->file_size){
+                __xapi->fs_file_close(stream->fd);
+                stream->fd = -1;
+                stream->file_pos = 0;
+                stream->file_size = 0;
+            }
+        }
+    }
+
+    return 0;
+XClean:
+    if (frame != NULL){
+        xl_free(&frame);
+    }
     return -1;
 }
 
@@ -349,82 +426,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
 
         __xlogd("xlio_recv_frame >>>>---------------> XLIO_STREAM_UPLOAD_LIST\n");
 
-        // xl_printf(&msg->line);
-        __xlogd("upload frame size=%lu\n", msg->wpos);
-        __xlogd("ip=%s:%u\n", __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)), __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg)));
-        // __xcheck(stream->fd != -1);
-        stream->parser = xl_parser(&msg->line);
-        __xlogd("write data frame rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-        xline_t *objlist = xl_find(&stream->parser, "list");
-        if (__xl_sizeof_body(objlist) == 0){
-            __xcheck(stream->list_pos != stream->list_size);
-            xframe_t *frame = xlio_take_frame(stream);
-            xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
-            frame->type = XPACK_TYPE_MSG;
-            __xcheck(xmsger_send(stream->io->msger, stream->channel, frame) != 0);
-            stream->list_pos = stream->list_size = 0;
-
-        }else {
-
-            stream->parser = xl_parser(objlist);
-            __xlogd("write data 0 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-            while ((stream->obj = xl_list_next(&stream->parser)) != NULL)
-            {
-                __xlogd("write data 1 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                xl_printf(stream->obj);
-                // __xcheck(__xl_sizeof_body(obj) != __xl_sizeof_body(&msg->line));
-                parser = xl_parser(stream->obj);
-                __xlogd("write data 2 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                xl_find_word(&parser, "path", &name);
-                xl_find_int(&parser, "type", &isfile);
-                __xcheck(isfile != 1);
-                xl_find_uint(&parser, "size", &stream->file_size);
-                xl_find_uint(&parser, "pos", &pos);
-                int full_path_len = slength(stream->uri) + slength(name) + 2;
-                char full_path[full_path_len];                
-                __xlogd("write data 3 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-                __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name);
-                __xlogd("download file = %s\n", full_path);
-                if (stream->fd == -1){
-                    if (pos == 0){
-                        stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_CREATE, 0644);
-                        __xcheck(stream->fd < 0);
-                    }else {
-                        stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_WRITE, 0644);
-                        __xcheck(stream->fd < 0);
-                        __xcheck(pos != __xapi->fs_file_tell(stream->fd));
-                    }
-                }else {
-                    __xcheck(pos != __xapi->fs_file_tell(stream->fd));
-                }
-
-                if (stream->file_size == 0){
-                    __xapi->fs_file_close(stream->fd);
-                    stream->fd = -1;
-                }else {
-                    xline_t *bin = xl_find(&parser, "data");
-                    if (bin != NULL){
-                        uint64_t data_len = __xl_sizeof_body(bin);
-                        if (data_len > 0){
-                            __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
-                            stream->file_pos += data_len;
-                            stream->list_pos += data_len;
-                            __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
-                            if (stream->file_pos == stream->file_size){
-                                __xlogd("upload 1\n");
-                                __xapi->fs_file_close(stream->fd);
-                                stream->fd = -1;
-                                stream->file_pos = 0;
-                                stream->file_size = 0;
-                            }
-                        }
-                    }
-                }
-                __xlogd("write data 4 rpos=%lu wpos=%lu\n", stream->parser.rpos, stream->parser.wpos);
-            }
-        
-        }
-
+        xlio_recv_file(stream, msg);
     }
 
     __xlogd("xlio_recv_frame >>>>---------------> exit\n");
