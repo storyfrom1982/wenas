@@ -81,142 +81,92 @@ static inline void xlio_resave_frame(xlio_stream_t *stream, xframe_t *frame)
 
 static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
 {
-    if (stream->fd > 0){
-        int64_t isfile;
-        char *name;
-        __xcheck(stream->obj == NULL);
-        xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST);
-        xl_add_int(frame, "id", (*frame)->id);
-        uint64_t list_begin_pos = xl_list_begin(frame, "list");
+    char *name;
+    int64_t isfile;
+    xline_t *name_val;
+    xframe_t parser;
 
-        xframe_t parser = xl_parser(stream->obj);
-        xl_find_word(&parser, "path", &name);
-        xl_find_int(&parser, "type", &isfile);
-        xl_find_uint(&parser, "size", &stream->file_size);
-        
+    __xcheck(xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST) == XEOF);
+    __xcheck(xl_add_int(frame, "id", (*frame)->id) == XEOF);
+    uint64_t list_begin_pos = xl_list_begin(frame, "list");
+    __xcheck(list_begin_pos == XEOF);
 
-        uint64_t obj_begin_pos = xl_obj_begin(frame, NULL);
+    do {
 
-        xl_add_word(frame, "path", name);
-        xl_add_int(frame, "type", isfile);
-        xl_add_uint(frame, "size", stream->file_size);
-        xl_add_uint(frame, "pos", stream->file_pos);
+        if ((stream->obj != NULL)){
 
-        uint64_t len = xl_usable((*frame), "data");
-        if (stream->file_size - stream->file_pos < len){
-            len = stream->file_size - stream->file_pos;
-        }
-        uint64_t pos = xl_add_bin(frame, "data", NULL, len);
-        int ret = __xapi->fs_file_read(stream->fd, (*frame)->ptr + (pos - len), len);
-        __xcheck(ret < 0);
+            if (xl_usable(*frame, "pos") <= __xl_sizeof_line(stream->obj)){
+                break;
+            }
+            
+            parser = xl_parser(stream->obj);
+            __xcheck((name_val = xl_find_word(&parser, "path", &name)) == NULL);
+            __xcheck(xl_find_int(&parser, "type", &isfile) == NULL);
+            __xcheck(xl_find_uint(&parser, "size", &stream->file_size) == NULL);
 
-        stream->file_pos += len;
-        stream->list_pos += len;
-        __xlogd("-------------list size= %lu list pos = %lu\n", stream->list_size, stream->list_pos);
-        __xlogd("-------------file size= %lu file pos = %lu\n", stream->file_size, stream->file_pos);
-        if (stream->file_pos == stream->file_size){
-            __xapi->fs_file_close(stream->fd);
-            stream->fd = -1;
-            stream->file_pos = 0;
-            stream->file_size = 0;
-            stream->obj = NULL;
-        }
-
-        xl_obj_end(frame, obj_begin_pos);
-        xl_list_end(frame, list_begin_pos);
-
-        // xl_printf(&frame->line);
-
-        (*frame)->type = XPACK_TYPE_MSG;
-        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
-
-
-    }else {
-
-        xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST);
-        xl_add_int(frame, "id", (*frame)->id);
-        uint64_t list_begin_pos = xl_list_begin(frame, "list");
-
-        do {
-
-            if ((stream->obj != NULL)){
-                int64_t isfile;
-                char *name;
-                // xl_printf(stream->obj);
-                
-                if ((*frame)->size - (*frame)->wpos < __xl_sizeof_line(stream->obj) + 256){
-                    __xlogd("xlio_send_file frame size =%lu wpos =%lu obj size =%lu\n", (*frame)->size, (*frame)->wpos, __xl_sizeof_line(stream->obj));
-                    break;
-                }
-                
-                xframe_t parser = xl_parser(stream->obj);
-                xl_find_word(&parser, "path", &name);
-                xl_find_int(&parser, "type", &isfile);
-                xl_find_uint(&parser, "size", &stream->file_size);
-                
+            if (isfile){
 
                 uint64_t obj_begin_pos = xl_obj_begin(frame, NULL);
+                __xcheck(obj_begin_pos == XEOF);
 
-                xl_add_word(frame, "path", name);
-                xl_add_int(frame, "type", isfile);
-                xl_add_uint(frame, "size", stream->file_size);
-                xl_add_uint(frame, "pos", stream->file_pos);
+                __xcheck(xl_add_word(frame, "path", name) == XEOF);
+                __xcheck(xl_add_int(frame, "type", isfile) == XEOF);
+                __xcheck(xl_add_uint(frame, "size", stream->file_size) == XEOF);
+                __xcheck(xl_add_uint(frame, "pos", stream->file_pos) == XEOF);
 
-                if (isfile){
-                    int full_path_len = stream->uri_len + slength(name) + 2;
+                if (stream->fd == -1){
+                    int full_path_len = stream->uri_len + 1 + __xl_sizeof_body(name_val);
                     char full_path[full_path_len];                
                     __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name + (stream->src_name_len+1));
                     __xlogd("upload file %s\n", full_path);
                     stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_READ, 0644);
                     __xcheck(stream->fd < 0);
-                    if (stream->file_size == 0){
-                        __xapi->fs_file_close(stream->fd);
-                        stream->fd = -1;
-                    }else {
-                        uint64_t len = xl_usable(*frame, "data");
-                        if (stream->file_size < len){
-                            len = stream->file_size;
-                        }
-                        uint64_t pos = xl_add_bin(frame, "data", NULL, len);
-                        int ret = __xapi->fs_file_read(stream->fd, (*frame)->ptr + (pos - len), len);
-                        __xcheck(ret < 0);
-                        stream->file_pos += len;
-                        stream->list_pos += len;
-                        __xlogd("-------------list size= %lu list pos = %lu\n", stream->list_size, stream->list_pos);
-                        __xlogd("-------------file size= %lu file pos = %lu\n", stream->file_size, stream->file_pos);
-                        if (stream->file_pos == stream->file_size){
-                            __xapi->fs_file_close(stream->fd);
-                            stream->fd = -1;
-                            stream->file_pos = 0;
-                            stream->file_size = 0;
-                            stream->obj = NULL;
-                        }
-                        if (len < stream->file_size){
-                            xl_obj_end(frame, obj_begin_pos);
-                            break;
-                        }
+                }
+
+                if (stream->file_size > 0){
+                    uint64_t len = xl_usable(*frame, "data");
+                    if (stream->file_size - stream->file_pos < len){
+                        len = stream->file_size - stream->file_pos;
                     }
+                    uint64_t pos = xl_add_bin(frame, "data", NULL, len);
+                    int ret = __xapi->fs_file_read(stream->fd, (*frame)->ptr + (pos - len), len);
+                    __xcheck(ret < 0);
+                    stream->file_pos += len;
+                    stream->list_pos += len;
+                    __xlogd("-------------list size= %lu list pos = %lu\n", stream->list_size, stream->list_pos);
+                    __xlogd("-------------file size= %lu file pos = %lu\n", stream->file_size, stream->file_pos);
+                    if (stream->file_pos < stream->file_size){
+                        xl_obj_end(frame, obj_begin_pos);
+                        break;
+                    }
+                }
+
+                if (stream->file_pos == stream->file_size){
+                    __xapi->fs_file_close(stream->fd);
+                    stream->fd = -1;
+                    stream->file_pos = 0;
+                    stream->file_size = 0;
+                    stream->obj = NULL;
                 }
 
                 xl_obj_end(frame, obj_begin_pos);
             }
-            
-        }while ((stream->obj = xl_list_next(&stream->list_parser)) != NULL);
-
-        xl_list_end(frame, list_begin_pos);
-
-        // xl_printf(&frame->line);
-        __xlogd("send frame size = %lu\n", (*frame)->wpos);
-        xframe_t parser = xl_parser(&(*frame)->line);
-        __xlogd("send frame rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
-        xline_t *olist = xl_find(&parser, "list");
-        parser = xl_parser(olist);
-        __xlogd("send list rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
+        }
         
+    }while ((stream->obj = xl_list_next(&stream->list_parser)) != NULL);
 
-        (*frame)->type = XPACK_TYPE_MSG;
-        __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
-    }
+    xl_list_end(frame, list_begin_pos);
+
+    // // xl_printf(&frame->line);
+    // __xlogd("send frame size = %lu\n", (*frame)->wpos);
+    // xframe_t parser = xl_parser(&(*frame)->line);
+    // __xlogd("send frame rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
+    // xline_t *olist = xl_find(&parser, "list");
+    // parser = xl_parser(olist);
+    // __xlogd("send list rpos=%lu wpos=%lu\n", parser.rpos, parser.wpos);
+    
+    (*frame)->type = XPACK_TYPE_MSG;
+    __xcheck(xmsger_send(stream->io->msger, stream->channel, *frame) != 0);
 
     __xlogd("xlio_send_file >>>>---------------> exit\n");
         
