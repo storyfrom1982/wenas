@@ -365,6 +365,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
                 xline_t *size = xl_find(&parser, "size");
                 *size = __xl_u2b(stream->list_size);
             }else {
+                __xlogd("xlio_recv_frame >>>>---------------> send XLIO_STREAM_REQ_LIST\n");
                 xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
             }
             // xl_printf(&frame->line);
