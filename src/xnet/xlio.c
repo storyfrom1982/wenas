@@ -366,7 +366,10 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
                 *size = __xl_u2b(stream->list_size);
             }else {
                 __xlogd("xlio_recv_frame >>>>---------------> send XLIO_STREAM_REQ_LIST\n");
-                xl_add_int(&frame, "api", XLIO_STREAM_REQ_LIST);
+                parser = xl_parser(&frame->line);
+                xline_t *api = xl_find(&parser, "api");
+                int64_t i = XLIO_STREAM_REQ_LIST;
+                *api = __xl_i2b(i);
             }
             // xl_printf(&frame->line);
             frame->type = XPACK_TYPE_MSG;
