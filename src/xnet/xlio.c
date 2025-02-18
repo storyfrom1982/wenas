@@ -362,14 +362,11 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
             if (stream->list_size > 0){
                 __xlogd("xlio_recv_frame >>>>---------------> list size = %lu\n", stream->list_size);
                 parser = xl_parser(&frame->line);
-                xline_t *size = xl_find(&parser, "size");
-                *size = __xl_u2b(stream->list_size);
+                __xcheck(xl_set_value(&parser, "size", stream->list_size) == NULL);
             }else {
                 __xlogd("xlio_recv_frame >>>>---------------> send XLIO_STREAM_REQ_LIST\n");
                 parser = xl_parser(&frame->line);
-                xline_t *api = xl_find(&parser, "api");
-                int64_t i = XLIO_STREAM_REQ_LIST;
-                *api = __xl_i2b(i);
+                __xcheck(xl_set_value(&parser, "api", XLIO_STREAM_REQ_LIST) == NULL);
             }
             // xl_printf(&frame->line);
             frame->type = XPACK_TYPE_MSG;

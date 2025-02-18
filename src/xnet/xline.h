@@ -533,6 +533,15 @@ static inline xline_t* xl_find_ptr(xframe_t *frame, const char *key, void **pptr
     return val;
 }
 
+static inline xline_t* xl_set_value(xframe_t *frame, const char *key, uint64_t nb)
+{
+    xline_t *val = xl_find(frame, key);
+    if (val){
+        *val = __xl_u2b(nb);
+    }
+    return val;
+}
+
 static xframe_t xl_parser(xline_t *xd)
 {
     xframe_t parser = {0};
