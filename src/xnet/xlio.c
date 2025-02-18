@@ -350,7 +350,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
     uint64_t pos;
     int64_t isfile;
     char *name;
-    xframe_t *frame;
+    xframe_t *frame = NULL;
     xframe_t parser = xl_parser(&msg->line);
     // xl_printf(&msg->line);
     xl_find_int(&parser, "api", &stream->status);
@@ -380,9 +380,9 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
         __xlogd("xlio_recv_frame >>>>---------------> XLIO_STREAM_RES_LIST\n");
 
         xline_t *list = xl_find(&parser, "list");
+        frame = xlio_take_frame(stream);
         if (__xl_sizeof_body(list) > 0){
             // stream->parser = xl_parser(list);
-            frame = xlio_take_frame(stream);
             xl_add_int(&frame, "api", XLIO_STREAM_DOWNLOAD_LIST);
             xl_add_uint(&frame, "size", 0);
             xlio_check_list(stream, list, &frame);
