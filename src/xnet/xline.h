@@ -231,10 +231,13 @@ XClean:
     return XEOF;
 }
 
-static inline void xl_obj_end(xframe_t **pptr, uint64_t pos)
+static inline uint64_t xl_obj_end(xframe_t **pptr, uint64_t pos)
 {
-    uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
-    *((xline_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
+    if (pos < XEOF){
+        uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
+        *((xline_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_OBJ);
+    }
+    return pos;
 }
 
 static inline uint64_t xl_list_begin(xframe_t **pptr, const char *key)
@@ -242,11 +245,14 @@ static inline uint64_t xl_list_begin(xframe_t **pptr, const char *key)
     return xl_obj_begin(pptr, key);
 }
 
-static inline void xl_list_end(xframe_t **pptr, uint64_t pos)
+static inline uint64_t xl_list_end(xframe_t **pptr, uint64_t pos)
 {
-    uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
-    *((xline_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
-    (*pptr)->line = __xl_n2b((*pptr)->wpos, XLINE_TYPE_OBJ);
+    if (pos < XEOF){
+        uint64_t len = (*pptr)->wpos - pos - XLINE_SIZE;
+        *((xline_t*)((*pptr)->ptr + pos)) = __xl_n2b(len, XLINE_TYPE_LIST);
+        (*pptr)->line = __xl_n2b((*pptr)->wpos, XLINE_TYPE_OBJ);
+    }
+    return pos;
 }
 
 static inline uint64_t xl_add_word(xframe_t **pptr, const char *key, const char *word)
