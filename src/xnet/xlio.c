@@ -736,6 +736,8 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
     mclear(ios, sizeof(xlio_stream_t));
     ios->flag = stream_type;
 
+    __xlogd("uri === %s\n", uri);
+
     // if (__xapi->fs_file_exist(uri)){
     //     ios->is_dir = 0;
     //     if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
