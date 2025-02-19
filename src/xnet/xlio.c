@@ -543,6 +543,7 @@ static void xlio_loop(void *ptr)
             }else if (stream->flag == IOSTREAM_TYPE_UPLOAD){
                 
                 if (xlio_upload_list(stream) != 0){
+                    // TODO send error msg
                     xlio_stream_free(stream);
                     stream = NULL;
                 }
@@ -771,9 +772,9 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
     }else {
         char path[ios->uri_len - ios->src_name_len];
         mclear(path, sizeof(path));
-        mcopy(path, uri, ios->uri_len - ios->src_name_len);
+        mcopy(path, ios->uri, ios->uri_len - ios->src_name_len);
         __xlogd("check path = %s\n", path);
-        // __xapi->fs_path_maker(path);
+        __xcheck(__xapi->fs_path_maker(path) != 0);
     }
 
     ios->buf.range = MSGBUF_RANGE;
