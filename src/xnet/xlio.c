@@ -25,8 +25,8 @@ typedef struct xlio_stream {
     int flag;
     int64_t api;
     __xfile_t fd;
-    int is_dir;
-    int is_resend;
+    // int is_dir;
+    // int is_resend;
     xline_t *obj;
     xframe_t *upload_list, *recv_frame;
     xframe_t upload_parser;
@@ -91,6 +91,8 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
 
         if ((stream->obj != NULL)){
 
+            xl_printf(stream->obj);
+
             if (xl_usable(*frame, "pos") <= __xl_sizeof_line(stream->obj)){
                 break;
             }
@@ -111,12 +113,19 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
                 __xcheck(xl_add_uint(frame, "pos", stream->file_pos) == XEOF);
 
                 if (stream->fd == -1){
-                    int full_path_len = stream->uri_len + 1 + __xl_sizeof_body(name_val);
-                    char full_path[full_path_len];                
-                    __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name + (stream->src_name_len+1));
-                    __xlogd("upload file %s\n", full_path);
-                    stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_READ, 0644);
-                    __xcheck(stream->fd < 0);
+                    if (__xl_sizeof_body(name_val) == stream->src_name_len + 1){
+                        // 是单个文件
+                        stream->fd = __xapi->fs_file_open(stream->uri, XAPI_FS_FLAG_READ, 0644);
+                        __xcheck(stream->fd < 0);
+                    }else {
+                        // 是整个目录
+                        int full_path_len = stream->uri_len + 1 + __xl_sizeof_body(name_val);
+                        char full_path[full_path_len];                        
+                        __xapi->snprintf(full_path, full_path_len, "%s/%s", stream->uri, name + (stream->src_name_len + 1));
+                        __xlogd("upload file %s\n", full_path);
+                        stream->fd = __xapi->fs_file_open(full_path, XAPI_FS_FLAG_READ, 0644);
+                        __xcheck(stream->fd < 0);
+                    }
                 }
 
                 if (stream->file_size > 0){
@@ -321,6 +330,32 @@ XClean:
     return -1;
 }
 
+static inline int xlio_gen_list(xlio_stream_t *ios, xframe_t **frame)
+{
+    uint64_t file_size;
+    char md5[64] = {0};
+    ios->list_size = ios->file_size;
+    uint64_t list_pos = xl_list_begin(frame, "list");
+    __xcheck(list_pos == XEOF);
+
+    uint64_t obj_pos = xl_obj_begin(frame, NULL);
+    __xcheck(obj_pos == XEOF);
+    __xlogd("file name = %s::%s\n", ios->uri, ios->uri + ios->src_name_pos);
+    __xcheck(xl_add_word(frame, "path", ios->uri + ios->src_name_pos) == XEOF);
+    __xcheck(xl_add_int(frame, "type", 1) == XEOF);
+    __xcheck(xl_add_uint(frame, "size", ios->file_size) == XEOF);
+    __xcheck(xl_add_bin(frame, "md5", md5, 64) == XEOF);
+
+    xl_obj_end(frame, obj_pos);
+    xl_list_end(frame, list_pos);
+
+    xl_printf(&(*frame)->line);
+
+    return 0;
+XClean:
+    return -1;
+}
+
 static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
 {
     char md5[64] = {0};
@@ -381,11 +416,14 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
 
         frame = xlio_take_frame(stream);
         __xcheck(xl_add_int(&frame, "api", XLIO_STREAM_RES_LIST) == XEOF);
-        __xcheck(xl_add_uint(&frame, "size", 0) == XEOF);
         if (stream->scanner != NULL){
+            __xcheck(xl_add_uint(&frame, "size", 0) == XEOF);
             __xcheck(xlio_scan_dir(stream, &frame) != 0);
             parser = xl_parser(&frame->line);
             __xcheck(xl_set_value(&parser, "size", stream->list_size) == NULL);
+        }else if (stream->file_size > 0){
+            __xcheck(xl_add_uint(&frame, "size", stream->file_size) == XEOF);
+            __xcheck(xlio_gen_list(stream, &frame) != 0);
         }else {
             __xcheck(xl_list_end(&frame, xl_list_begin(&frame, "list")) == XEOF);
         }
@@ -671,9 +709,6 @@ int xlio_start_uploader(xlio_t *io, xframe_t *req, int response)
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_UPLOAD);
     __xcheck(ios == NULL);
 
-    ios->scanner = __xapi->fs_scanner_open(ios->uri);
-    __xcheck(ios->scanner == NULL);
-
     ios->channel = __xmsg_get_channel(req);
     xchannel_set_ctx(ios->channel, ios);
 
@@ -696,24 +731,24 @@ XClean:
 
 xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
 {
-    xlio_stream_t* ios = (xlio_stream_t*)malloc(sizeof(xlio_stream_t));
+    xlio_stream_t* ios = (xlio_stream_t*)calloc(1, sizeof(xlio_stream_t));
     __xcheck(ios == NULL);
     mclear(ios, sizeof(xlio_stream_t));
     ios->flag = stream_type;
 
-    if (__xapi->fs_file_exist(uri)){
-        ios->is_dir = 0;
-        if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
-            ios->is_resend = 1;
-        }
-    }else if (__xapi->fs_dir_exist(uri)){
-        ios->is_dir = 1;
-        if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
-            ios->is_resend = 1;
-        }
-    }else {
-        __xcheck((ios->flag == IOSTREAM_TYPE_UPLOAD));
-    }
+    // if (__xapi->fs_file_exist(uri)){
+    //     ios->is_dir = 0;
+    //     if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
+    //         ios->is_resend = 1;
+    //     }
+    // }else if (__xapi->fs_dir_exist(uri)){
+    //     ios->is_dir = 1;
+    //     if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
+    //         ios->is_resend = 1;
+    //     }
+    // }else {
+    //     __xcheck((ios->flag == IOSTREAM_TYPE_UPLOAD));
+    // }
 
     ios->uri_len = slength(uri);
     while (uri[ios->uri_len-1] == '/'){
@@ -727,6 +762,15 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
     }
     ios->src_name_pos = ios->uri_len - ios->src_name_len;
 
+    if (ios->flag == IOSTREAM_TYPE_UPLOAD){
+        if (__xapi->fs_dir_exist(uri)){
+            ios->scanner = __xapi->fs_scanner_open(ios->uri);
+            __xcheck(ios->scanner == NULL);
+        }else {
+            ios->file_size = __xapi->fs_file_size(ios->uri);
+        }
+    }
+
     ios->buf.range = MSGBUF_RANGE;
     ios->buf.wpos = ios->buf.range;
     ios->buf.rpos = ios->buf.spos = 0;
@@ -736,10 +780,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
         __xmsg_set_ctx(ios->buf.buf[i], ios);
     }
 
-    ios->list_pos = 0;
     ios->fd = -1;
-    ios->file_pos = 0;
-    ios->file_size = 0;
     ios->io = io;
     ios->next = &io->streamlist;
     ios->prev = io->streamlist.prev;

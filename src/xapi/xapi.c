@@ -269,7 +269,7 @@ __xfs_item_ptr traverser_next(__xfs_scanner_ptr traverser) {
             traverser->item.path_len = traverser->current_path->path_len;
             traverser->item.type = __XAPI_FS_ITEM_TYPE_DIR;
             traverser->item.size = 0;
-            __xlogd("open dir = %s size = %lu\n", traverser->item.path, traverser->item.path_len);
+            // __xlogd("open dir = %s size = %lu\n", traverser->item.path, traverser->item.path_len);
             return &traverser->item; // 返回当前路径
         }
 
