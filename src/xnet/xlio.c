@@ -624,7 +624,6 @@ static int xlio_post_close(xltp_t *tp, xframe_t *msg, void *ctx)
 {
     __xlogd("xlio_post_close enter\n");
     xlio_stream_t *ios = (xlio_stream_t *)ctx;
-    xmsger_flush(ios->io->msger, ios->channel);
     __xlogd("xlio_post_close 1\n");
     xlio_stream_free(ios);
     __xlogd("xlio_post_close 2\n");
@@ -769,6 +768,12 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
         }else {
             ios->file_size = __xapi->fs_file_size(ios->uri);
         }
+    }else {
+        char path[ios->uri_len - ios->src_name_len];
+        mclear(path, sizeof(path));
+        mcopy(path, uri, ios->uri_len - ios->src_name_len);
+        __xlogd("check path = %s\n", path);
+        // __xapi->fs_path_maker(path);
     }
 
     ios->buf.range = MSGBUF_RANGE;
@@ -797,6 +802,10 @@ void xlio_stream_free(xlio_stream_t *ios)
 {
     __xlogd("xlio_stream_free enter\n");
     if (ios){
+        if (ios->channel != NULL){
+            xchannel_set_ctx(ios->channel, NULL);
+            xmsger_flush(ios->io->msger, ios->channel);
+        }
         if (ios->fd > 0){
             __xlogd("xlio_stream_free 1\n");
             __xapi->fs_file_close(ios->fd);
