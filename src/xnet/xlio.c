@@ -772,11 +772,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
             ios->file_size = __xapi->fs_file_size(ios->uri);
         }
     }else {
-        char path[ios->uri_len - ios->src_name_len];
-        mclear(path, ios->uri_len - ios->src_name_len);
-        mcopy(path, ios->uri, ios->uri_len - ios->src_name_len);
-        __xlogd("check path = %s len = %lu\n", path, sizeof(path));
-        __xcheck(__xapi->fs_path_maker(path) != 0);
+        __xcheck(__xapi->fs_path_maker(ios->uri) != 0);
     }
 
     ios->buf.range = MSGBUF_RANGE;
