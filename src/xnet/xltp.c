@@ -300,9 +300,10 @@ static inline int xltp_recv(xltp_t *xltp, xframe_t *msg)
         }
         xlio_stream_t *ios = xchannel_get_ctx(__xmsg_get_channel(msg));
         if (ios != NULL){
-            xlio_stream_free(ios);
-        }        
-        xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+            xlio_stream_close(ios);
+        }else {
+            xmsger_flush(xltp->msger, __xmsg_get_channel(msg));
+        }
         xl_free(&msg);
         __xlogd("xltp_recv ---------------- res exit\n");
     }else if (msg->type == XPACK_TYPE_MSG){

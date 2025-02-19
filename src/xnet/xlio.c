@@ -332,9 +332,7 @@ XClean:
 
 static inline int xlio_gen_list(xlio_stream_t *ios, xframe_t **frame)
 {
-    uint64_t file_size;
-    char md5[64] = {0};
-    ios->list_size = ios->file_size;
+    char md5[64] = {0};;
     uint64_t list_pos = xl_list_begin(frame, "list");
     __xcheck(list_pos == XEOF);
 
@@ -348,6 +346,8 @@ static inline int xlio_gen_list(xlio_stream_t *ios, xframe_t **frame)
 
     xl_obj_end(frame, obj_pos);
     xl_list_end(frame, list_pos);
+
+    ios->file_size = 0;
 
     xl_printf(&(*frame)->line);
 
