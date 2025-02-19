@@ -771,9 +771,9 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
         }
     }else {
         char path[ios->uri_len - ios->src_name_len];
-        mclear(path, sizeof(path));
+        mclear(path, ios->uri_len - ios->src_name_len);
         mcopy(path, ios->uri, ios->uri_len - ios->src_name_len);
-        __xlogd("check path = %s\n", path);
+        __xlogd("check path = %s len = %lu\n", path, sizeof(path));
         __xcheck(__xapi->fs_path_maker(path) != 0);
     }
 
