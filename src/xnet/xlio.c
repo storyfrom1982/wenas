@@ -798,13 +798,16 @@ void xlio_stream_free(xlio_stream_t *ios)
     __xlogd("xlio_stream_free enter\n");
     if (ios){
         if (ios->fd > 0){
+            __xlogd("xlio_stream_free 1\n");
             __xapi->fs_file_close(ios->fd);
         }
         if (ios->scanner != NULL){
+            __xlogd("xlio_stream_free 2\n");
             __xapi->fs_scanner_close(ios->scanner);
             ios->scanner = NULL;
         }
         if (ios->upload_list != NULL){
+            __xlogd("xlio_stream_free 3\n");
             xl_free(&ios->upload_list);
         }
         if (ios->prev != NULL && ios->next != NULL){
@@ -817,6 +820,7 @@ void xlio_stream_free(xlio_stream_t *ios)
                 xl_free(&ios->buf.buf[i]);
             }
         }
+        __xlogd("xlio_stream_free 4\n");
         free(ios);
     }
     __xlogd("xlio_stream_free exit\n");
