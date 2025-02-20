@@ -335,9 +335,9 @@ static inline int xlio_gen_list(xlio_stream_t *ios, xframe_t **frame)
     char md5[64] = {0};;
     uint64_t list_pos = xl_list_begin(frame, "list");
     __xcheck(list_pos == XEOF);
-
     uint64_t obj_pos = xl_obj_begin(frame, NULL);
     __xcheck(obj_pos == XEOF);
+    
     __xlogd("file name = %s::%s\n", ios->uri, ios->uri + ios->src_name_pos);
     __xcheck(xl_add_word(frame, "path", ios->uri + ios->src_name_pos) == XEOF);
     __xcheck(xl_add_int(frame, "type", 1) == XEOF);
@@ -524,6 +524,12 @@ static void xlio_loop(void *ptr)
                         stream = NULL;
                     }
                 }
+
+            }else if (msg->type == XPACK_TYPE_RES){
+
+                __xlogd("recv disconnect from peer ..... \n");
+                xlio_stream_free(stream);
+                stream = NULL;
             }
 
             xl_free(&msg);
@@ -547,6 +553,12 @@ static void xlio_loop(void *ptr)
                     xlio_stream_free(stream);
                     stream = NULL;
                 }
+            }
+
+            if (msg->type == XPACK_TYPE_RES){
+                __xlogd("send disconnect to peer ..... \n");
+                xlio_stream_free(stream);
+                stream = NULL;
             }
 
         }else if (msg->flag == XMSG_FLAG_POST){
@@ -673,8 +685,7 @@ int xlio_start_downloader(xlio_t *io, xframe_t *req, int response)
 {
     char *uri;
     xframe_t parser = xl_parser(&req->line);
-    xl_find_word(&parser, "path", &uri);
-    __xcheck(uri == NULL);
+    __xcheck(xl_find_word(&parser, "path", &uri) == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_DOWNLOAD);
     __xcheck(ios == NULL);
@@ -703,8 +714,7 @@ int xlio_start_uploader(xlio_t *io, xframe_t *req, int response)
 {
     char *uri;
     xframe_t parser = xl_parser(&req->line);
-    xl_find_word(&parser, "uri", &uri);
-    __xcheck(uri == NULL);
+    __xcheck(xl_find_word(&parser, "uri", &uri) == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_UPLOAD);
     __xcheck(ios == NULL);
@@ -843,12 +853,10 @@ XClean:
     return -1;
 }
 
-int xlio_stream_read(xlio_stream_t *ios, xframe_t *frame)
+int xlio_stream_resave(xlio_stream_t *ios, xframe_t *frame)
 {
-    __xlogd("xlio_stream_read enter\n");
     frame->flag = XMSG_FLAG_BACK;
     __xcheck(xpipe_write(ios->io->pipe, &frame, __sizeof_ptr) != __sizeof_ptr);
-    __xlogd("xlio_stream_read exit\n");
     return 0;
 XClean:
     return -1;

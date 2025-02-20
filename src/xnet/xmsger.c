@@ -445,7 +445,6 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
 {
     // 更新时间戳
     channel->recv_ts = __xapi->clock();
-    __xlogd("xchannel_recv_msg >>>>------------------------> recv ts = %lu\n", channel->recv_ts);
 
     if (__serialbuf_readable(channel->recvbuf) > 0){
         // 索引已接收的包
