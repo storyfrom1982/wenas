@@ -104,6 +104,7 @@ struct xchannel {
 
     xframe_t *msg;
     xframe_t *req;
+    xframe_t frame;
     xmsger_ptr msger;
     struct xhead ack;
     xmsgbuf_ptr msgbuf;
@@ -894,7 +895,8 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                             channel->timedout = true;
                             __xlogd("SEND TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u) DELAY(%lu)\n", 
                                     __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid, (current_ts - spack->ts) / 1000000UL);
-                            msger->cb->on_message_timedout(msger->cb, channel, spack->msg);
+                            __xmsg_set_channel(&channel->frame, channel);
+                            msger->cb->on_message_timedout(msger->cb, channel, &channel->frame);
                         }
                         break;
 
@@ -941,14 +943,18 @@ static inline int xmsger_send_all(xmsger_ptr msger)
                         // __set_true(channel->disconnecting);
                         __xlogd("RECV TIMEOUT >>>>-------------> IP(%s) PORT(%u) CID(%u)\n", 
                                 __xapi->udp_addr_ip(channel->addr), __xapi->udp_addr_port(channel->addr), channel->cid);
-                        if (channel->req != NULL){
-                            // 连接已经建立，需要回收资源
-                            msger->cb->on_message_timedout(msger->cb, channel, channel->req);
-                            // channel->req = NULL;
-                        }else {
-                            // 连接尚未建立，直接释放即可
-                            xchannel_free(channel);
-                        }
+                        __xmsg_set_channel(&channel->frame, channel);
+                        msger->cb->on_message_timedout(msger->cb, channel, &channel->frame);
+                        // if (channel->req != NULL){
+                        //     // 连接已经建立，需要回收资源
+                        //     msger->cb->on_message_timedout(msger->cb, channel, channel->req);
+                        //     // channel->req = NULL;
+                        // }else {
+                        //     __xmsg_set_channel(&channel->frame, channel);
+                        //     msger->cb->on_message_timedout(msger->cb, channel, &channel->frame);
+                        //     // // 连接尚未建立，直接释放即可
+                        //     // xchannel_free(channel);
+                        // }
                     }
                 }
             }
