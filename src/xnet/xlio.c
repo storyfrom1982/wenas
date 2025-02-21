@@ -748,20 +748,6 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
 
     __xlogd("uri === %s\n", uri);
 
-    // if (__xapi->fs_file_exist(uri)){
-    //     ios->is_dir = 0;
-    //     if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
-    //         ios->is_resend = 1;
-    //     }
-    // }else if (__xapi->fs_dir_exist(uri)){
-    //     ios->is_dir = 1;
-    //     if (ios->flag == IOSTREAM_TYPE_DOWNLOAD){
-    //         ios->is_resend = 1;
-    //     }
-    // }else {
-    //     __xcheck((ios->flag == IOSTREAM_TYPE_UPLOAD));
-    // }
-
     ios->uri_len = slength(uri);
     while (uri[ios->uri_len-1] == '/'){
         ios->uri_len--;
@@ -779,6 +765,7 @@ xlio_stream_t* xlio_stream_maker(xlio_t *io, const char *uri, int stream_type)
             ios->scanner = __xapi->fs_scanner_open(ios->uri);
             __xcheck(ios->scanner == NULL);
         }else {
+            __xcheck(!__xapi->fs_file_exist(uri));
             ios->file_size = __xapi->fs_file_size(ios->uri);
         }
     }else {
