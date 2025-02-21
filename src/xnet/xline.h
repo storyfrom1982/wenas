@@ -116,23 +116,23 @@ static inline double __xl_b2float(xline_t *l)
 #define __xl_sizeof_line(l)         (__xl_typeis_num(l) ? XLINE_SIZE : __xl_b2u((l)) + XLINE_SIZE)
 
 
-// #define XLINE_MAKER_SIZE            (1024 * 16)
+// #define XLINE_MAKER_SIZE            (1024 * 64)
 #define XLINE_MAKER_SIZE            (16)
 
 
 typedef struct xframe {
     __atom_size ref;
-    uint64_t id;
-    uint8_t type;
     uint8_t flag;
+    uint16_t type;
+    uint32_t id;
+    uint64_t spos, range;
+    uint64_t rpos, wpos, size;
+    uint8_t *key;
+    xline_t *val;
+    uint8_t *ptr;
     void *args[4];
     struct avl_node node;
     struct xframe *prev, *next;
-    uint64_t spos, range;
-    uint64_t wpos, rpos, size;
-    uint8_t *key;
-    uint8_t *ptr;
-    xline_t *val;
     xline_t line;
 }xframe_t;
 
@@ -548,12 +548,12 @@ static inline xline_t* xl_set_value(xframe_t *frame, const char *key, uint64_t n
     return val;
 }
 
-static xframe_t xl_parser(xline_t *xd)
+static xframe_t xl_parser(xline_t *xl)
 {
     xframe_t parser = {0};
     parser.rpos = 0;
-    parser.wpos = __xl_sizeof_body(xd);
-    parser.ptr = __xl_b2o(xd);
+    parser.wpos = __xl_sizeof_body(xl);
+    parser.ptr = __xl_b2o(xl);
     return parser;
 }
 
