@@ -116,8 +116,7 @@ static inline double __xl_b2float(xline_t *l)
 #define __xl_sizeof_line(l)         (__xl_typeis_num(l) ? XLINE_SIZE : __xl_b2u((l)) + XLINE_SIZE)
 
 
-// #define XLINE_MAKER_SIZE            (1024 * 64)
-#define XLINE_MAKER_SIZE            (16)
+#define XLINE_MAKER_SIZE            (1024 * 64)
 
 
 typedef struct xframe {
