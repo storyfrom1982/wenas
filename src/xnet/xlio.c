@@ -29,7 +29,7 @@ typedef struct xlio_stream {
     // int is_resend;
     xline_t *obj;
     xframe_t *upload_list, *recv_frame;
-    xframe_t upload_parser;
+    xparser_t upload_parser;
     uint64_t file_pos, file_size;
     uint64_t list_pos, list_size;
     char uri[2048];
@@ -70,7 +70,7 @@ static inline xframe_t* xlio_take_frame(xlio_stream_t *stream)
 
 static inline void xlio_resave_frame(xlio_stream_t *stream, xframe_t *frame)
 {
-    xl_clear(frame);
+    xl_clear(&frame);
     stream->buf.buf[frame->id] = frame;
     stream->buf.wpos++;
 }
@@ -80,7 +80,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
     char *name;
     int64_t isfile;
     xline_t *name_val;
-    xframe_t parser;
+    xparser_t parser;
 
     __xcheck(xl_add_int(frame, "api", XLIO_STREAM_UPLOAD_LIST) == XEOF);
     __xcheck(xl_add_int(frame, "id", (*frame)->id) == XEOF);
@@ -93,7 +93,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
 
             xl_printf(stream->obj);
 
-            if (xl_usable(*frame, "pos") <= __xl_sizeof_line(stream->obj)){
+            if (xl_usable(frame, "pos") <= __xl_sizeof_line(stream->obj)){
                 break;
             }
             
@@ -129,7 +129,7 @@ static inline int xlio_send_file(xlio_stream_t *stream, xframe_t **frame)
                 }
 
                 if (stream->file_size > 0){
-                    uint64_t len = xl_usable(*frame, "data");
+                    uint64_t len = xl_usable(frame, "data");
                     if (stream->file_size - stream->file_pos < len){
                         len = stream->file_size - stream->file_pos;
                     }
@@ -178,7 +178,7 @@ static inline int xlio_recv_file(xlio_stream_t *stream, xframe_t *msg)
     int64_t isfile;
     uint64_t pos;
     xline_t *obj_val, *name_val;
-    xframe_t list_parser, obj_parser;
+    xparser_t list_parser, obj_parser;
     xframe_t *frame = NULL;
 
     __xlogd("upload frame size=%lu\n", msg->wpos);
@@ -233,7 +233,7 @@ static inline int xlio_recv_file(xlio_stream_t *stream, xframe_t *msg)
             if (bin != NULL){
                 uint64_t data_len = __xl_sizeof_body(bin);
                 if (data_len > 0){
-                    __xcheck(__xapi->fs_file_write(stream->fd, __xl_b2o(bin), data_len) != data_len);
+                    __xcheck(__xapi->fs_file_write(stream->fd, __xl_l2b(bin), data_len) != data_len);
                     stream->file_pos += data_len;
                     stream->list_pos += data_len;
                     __xlogd("list size = %lu pos = %lu\n", stream->list_size, stream->list_pos);
@@ -290,7 +290,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t 
     uint64_t size;
     char md5[64] = {0};
     xline_t *obj, *name_val, *md5_val;
-    xframe_t obj_parser, list_parser = xl_parser(inlist);
+    xparser_t obj_parser, list_parser = xl_parser(inlist);
 
     uint64_t pos = xl_list_begin(outframe, "list");
     __xcheck(pos == XEOF);
@@ -310,7 +310,7 @@ static inline int xlio_check_list(xlio_stream_t *ios, xline_t *inlist, xframe_t 
                 ios->list_size += size;
             }else {
                 // TODO 对比 md5
-                if(mcompare(md5, __xl_b2o(md5_val), 64) != 0){
+                if(mcompare(md5, __xl_l2b(md5_val), 64) != 0){
                     __xcheck(xl_list_append(outframe, obj) == XEOF);
                     ios->list_size += size;
                     __xlogd("xlio_check_list >>>>---------------> mcompare md5\n");
@@ -381,7 +381,7 @@ static inline int xlio_scan_dir(xlio_stream_t *ios, xframe_t **frame)
 
             __xcheck(xl_list_append(frame, &obj->line) == XEOF);
             ios->list_size += ios->item->size;
-            xl_clear(obj);
+            xl_clear(&obj);
         }
 
         ios->item = __xapi->fs_scanner_read(ios->scanner);
@@ -407,7 +407,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
     char *name;
     xframe_t *frame = NULL;
     xlio_stream_t *stream = (xlio_stream_t*)ctx;
-    xframe_t parser = xl_parser(&msg->line);
+    xparser_t parser = xl_parser(&msg->line);
     __xcheck(xl_find_int(&parser, "api", &stream->api) == NULL);
 
     if (stream->api == XLIO_STREAM_REQ_LIST){
@@ -466,7 +466,7 @@ static inline int xlio_recv_frame(xltp_t *xltp, xframe_t *msg, void *ctx)
         xline_t *list = xl_find(&parser, "list");
         __xcheck(list == NULL);
         if (__xl_sizeof_body(list) > 0){
-            xl_hold(msg);
+            xl_hold(&msg);
             stream->upload_parser = xl_parser(list);
             while (stream->list_pos < stream->list_size && __serialbuf_readable(&stream->buf)){
                 frame = xlio_take_frame(stream);
@@ -515,7 +515,7 @@ static void xlio_loop(void *ptr)
 
                 if (__serialbuf_readable(&stream->buf) == 0){
                     __xlogd("xliokabuf le\n");
-                    xl_hold(msg);
+                    xl_hold(&msg);
                     stream->recv_frame = msg;
                     __xmsg_set_cb(stream->recv_frame, xlio_recv_frame);
                 }else {
@@ -684,7 +684,7 @@ XClean:
 int xlio_start_downloader(xlio_t *io, xframe_t *req, int response)
 {
     char *uri;
-    xframe_t parser = xl_parser(&req->line);
+    xparser_t parser = xl_parser(&req->line);
     __xcheck(xl_find_word(&parser, "path", &uri) == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_DOWNLOAD);
@@ -713,7 +713,7 @@ XClean:
 int xlio_start_uploader(xlio_t *io, xframe_t *req, int response)
 {
     char *uri;
-    xframe_t parser = xl_parser(&req->line);
+    xparser_t parser = xl_parser(&req->line);
     __xcheck(xl_find_word(&parser, "uri", &uri) == NULL);
 
     xlio_stream_t *ios = xlio_stream_maker(io, uri, IOSTREAM_TYPE_UPLOAD);

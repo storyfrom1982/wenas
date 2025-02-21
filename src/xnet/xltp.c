@@ -14,7 +14,7 @@ struct xltp {
     __atom_bool runnig;
     xtree api;
     xlio_t *io;
-    xframe_t parser;
+    xparser_t parser;
     xmsger_ptr msger;
     xpipe_ptr msgpipe;
     __xthread_ptr msg_tid;
@@ -241,7 +241,7 @@ static int api_echo(xltp_t *xltp, xframe_t *msg, void *ctx)
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
     xl_printf(&msg->line);
-    xl_clear(msg);
+    xl_clear(&msg);
     // xl_add_uint(&msg, "rid", msg->id);
     const char *ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
     uint16_t port = __xapi->udp_addr_port(__xmsg_get_ipaddr(msg));
@@ -271,7 +271,7 @@ static int req_echo(xltp_t *xltp, xframe_t *msg, void *ctx)
 {
     // msg = xltp_make_req(xltp, msg, "echo", res_echo);
     // __xcheck(msg == NULL);
-    xl_clear(msg);
+    xl_clear(&msg);
     xl_add_word(&msg, "api", "echo");
     __xmsg_set_cb(msg, res_echo);
     xframe_t *test = xl_test(10);
@@ -309,7 +309,7 @@ static int api_boot(xltp_t *xltp, xframe_t *msg, void *ctx)
     // __xcheck(msg == NULL);
     // __xcheck(ctx == NULL);
     xl_printf(&msg->line);
-    xl_clear(msg);
+    xl_clear(&msg);
     __xmsg_set_ctx(msg, NULL);
     // __xcheck(xl_add_uint(&msg, "rid", msg->id) == XEOF);
     const char *ip = __xapi->udp_addr_ip(__xmsg_get_ipaddr(msg));
@@ -342,7 +342,7 @@ static int req_boot(xltp_t *xltp, xframe_t *msg, void *ctx)
 {
     // msg = xltp_make_req(xltp, msg, "boot", res_boot);
     // __xcheck(msg == NULL);
-    xl_clear(msg);
+    xl_clear(&msg);
     xl_add_word(&msg, "api", "boot");
     __xmsg_set_cb(msg, res_boot);
     __xipaddr_ptr addr = __xapi->udp_host_to_addr("xltp.net", 9256);
@@ -381,7 +381,7 @@ static int api_put(xltp_t *xltp, xframe_t *req, void *ctx)
     __xcheck(xlio_start_downloader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
-    xl_clear(req);
+    xl_clear(&req);
     xl_add_uint(&req, "code", 400);
     xltp_send_res(xltp, req);
     return -1;
@@ -467,7 +467,7 @@ static int api_get(xltp_t *xltp, xframe_t *req, void *ctx)
     __xcheck(xlio_start_uploader(xltp->io, req, 1) != 0);
     return 0;
 XClean:
-    xl_clear(req);
+    xl_clear(&req);
     xl_add_uint(&req, "code", 400);
     xltp_send_res(xltp, req);
     return -1;

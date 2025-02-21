@@ -469,7 +469,7 @@ static inline int xchannel_recv_msg(xchannel_ptr channel)
             // 收到了一个完整的消息
             if (--channel->msg->range == 0 /*|| channel->msg->size - channel->msg->wpos < XBODY_SIZE*/){
                 // 更新消息长度
-                xl_fixed(channel->msg);
+                xl_fixed(&channel->msg);
                 // 通知用户已收到一个完整的消息
                 // __xmsg_set_ctx(channel->msg, channel->ctx);
                 __xmsg_set_ipaddr(channel->msg, channel->addr);
@@ -778,7 +778,7 @@ static inline int xmsger_local_recv(xmsger_ptr msger, xhead_ptr head)
 
         // channel->rid = msg->id;
         // channel->ctx = __xmsg_get_ctx(msg);
-        xl_hold(msg);
+        xl_hold(&msg);
         channel->req = msg;
         channel->addr = __xmsg_get_ipaddr(msg);
 
@@ -1122,8 +1122,6 @@ int xmsger_send(xmsger_ptr msger, xchannel_ptr channel, xframe_t *msg)
     __xcheck(channel == NULL);
     __xcheck(msg == NULL);
     if (__serialbuf_writable(channel->msgbuf) > 0){
-        // msg->type = XPACK_TYPE_BIN;
-        // xl_hold(msg);
         __xcheck(xmsg_fixed(msg) != 0);
         __atom_add(msger->len, msg->wpos);
         __atom_add(channel->wpos, msg->wpos);

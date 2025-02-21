@@ -99,7 +99,7 @@ static inline double __xl_b2float(xline_t *l)
 #define __xl_b2i(l)                 (__xl_b2n(l, int64_t))
 #define __xl_b2u(l)                 (__xl_b2n(l, uint64_t))
 #define __xl_b2f(l)                 (__xl_b2float(l))
-#define __xl_b2o(l)                 ((void*)&(l)->b[XLINE_SIZE])
+#define __xl_l2b(l)                 ((void*)&(l)->b[XLINE_SIZE])
 
 #define __xl_typeis_int(l)          ((l)->b[0] == XLINE_TYPE_INT)
 #define __xl_typeis_uint(l)         ((l)->b[0] == XLINE_TYPE_UINT)
@@ -157,30 +157,6 @@ static inline xframe_t* xl_maker()
     return xl_creator(XLINE_MAKER_SIZE);
 }
 
-static inline void xl_hold(xframe_t *frame)
-{
-    __atom_add(frame->ref, 1);
-}
-
-static inline void xl_fixed(xframe_t *frame)
-{
-    frame->line = __xl_n2b(frame->wpos, XLINE_TYPE_OBJ);
-}
-
-static inline void xl_clear(xframe_t *frame)
-{
-    frame->wpos = frame->rpos = 0;
-}
-
-static inline uint64_t xl_usable(xframe_t *frame, const char *key)
-{
-    int headlen = slength(key) + 2 + XLINE_SIZE;
-    if ((frame->size - frame->wpos) > headlen){
-        return (frame->size - frame->wpos) - headlen;
-    }
-    return 0;
-}
-
 static inline void xl_free(xframe_t **pptr)
 {
     if (pptr && *pptr){
@@ -189,6 +165,30 @@ static inline void xl_free(xframe_t **pptr)
             *pptr = NULL;
         }
     }
+}
+
+static inline void xl_hold(xframe_t **pptr)
+{
+    __atom_add((*pptr)->ref, 1);
+}
+
+static inline void xl_fixed(xframe_t **pptr)
+{
+    (*pptr)->line = __xl_n2b((*pptr)->wpos, XLINE_TYPE_OBJ);
+}
+
+static inline void xl_clear(xframe_t **pptr)
+{
+    (*pptr)->wpos = (*pptr)->rpos = 0;
+}
+
+static inline uint64_t xl_usable(xframe_t **pptr, const char *key)
+{
+    int headlen = slength(key) + 2 + XLINE_SIZE;
+    if (((*pptr)->size - (*pptr)->wpos) > headlen){
+        return ((*pptr)->size - (*pptr)->wpos) - headlen;
+    }
+    return 0;
 }
 
 #define __xl_fill_key(xf, key, klen) \
@@ -437,129 +437,134 @@ XClean:
     return XEOF;
 }
 
-static inline xline_t* xl_list_next(xframe_t *frame)
+
+typedef struct xparser {
+    uint64_t rpos, wpos, size;
+    uint8_t *key;
+    xline_t *val;
+    uint8_t *ptr;
+}xparser_t;
+
+
+static xparser_t xl_parser(xline_t *xl)
 {
-    if (frame->rpos < frame->wpos){
-        xline_t *ptr = (xline_t*)(frame->ptr + frame->rpos);
-        frame->rpos += __xl_sizeof_line(ptr);
+    xparser_t parser = {0};
+    parser.rpos = 0;
+    parser.wpos = __xl_sizeof_body(xl);
+    parser.ptr = __xl_l2b(xl);
+    return parser;
+}
+
+static inline xline_t* xl_list_next(xparser_t *parser)
+{
+    if (parser->rpos < parser->wpos){
+        xline_t *ptr = (xline_t*)(parser->ptr + parser->rpos);
+        parser->rpos += __xl_sizeof_line(ptr);
         return ptr;
     }
     return NULL;
 }
 
-static inline xline_t* xl_next(xframe_t *frame)
+static inline xline_t* xl_next(xparser_t *parser)
 {
-    if (frame->rpos < frame->wpos){
-        frame->key = frame->ptr + frame->rpos;
-        frame->rpos += (frame->key[0] + 1);
-        frame->key++;
-        xline_t *val = (xline_t*)(frame->ptr + frame->rpos);
-        frame->rpos += __xl_sizeof_line(val);
+    if (parser->rpos < parser->wpos){
+        parser->key = parser->ptr + parser->rpos;
+        parser->rpos += (parser->key[0] + 1);
+        parser->key++;
+        xline_t *val = (xline_t*)(parser->ptr + parser->rpos);
+        parser->rpos += __xl_sizeof_line(val);
         return val;
     }
     return NULL;
 }
 
-static inline xline_t* xl_find(xframe_t *frame, const char *key)
+static inline xline_t* xl_find(xparser_t *parser, const char *key)
 {
-    // xbyte_t *val = NULL;
-    uint64_t rpos = frame->rpos;
+    uint64_t rpos = parser->rpos;
 
-    while (frame->rpos < frame->wpos) {
-        frame->key = frame->ptr + frame->rpos;
-        frame->rpos += (frame->key[0] + 1);
-        frame->val = (xline_t*)(frame->ptr + frame->rpos);
-        frame->rpos += __xl_sizeof_line(frame->val);
-        if (slength(key) + 1 == frame->key[0]
-            && mcompare(key, frame->key + 1, frame->key[0]) == 0){
-            frame->key++;
-            return frame->val;
+    while (parser->rpos < parser->wpos) {
+        parser->key = parser->ptr + parser->rpos;
+        parser->rpos += (parser->key[0] + 1);
+        parser->val = (xline_t*)(parser->ptr + parser->rpos);
+        parser->rpos += __xl_sizeof_line(parser->val);
+        if (slength(key) + 1 == parser->key[0]
+            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
+            parser->key++;
+            return parser->val;
         }
     }
 
-    frame->rpos = 0;
+    parser->rpos = 0;
 
-    while (frame->rpos < rpos) {
-        frame->key = frame->ptr + frame->rpos;
-        frame->rpos += (frame->key[0] + 1);
-        frame->val = (xline_t*)(frame->ptr + frame->rpos);
-        frame->rpos += __xl_sizeof_line(frame->val);
-        if (slength(key) + 1 == frame->key[0]
-            && mcompare(key, frame->key + 1, frame->key[0]) == 0){
-            frame->key++;
-            return frame->val;
+    while (parser->rpos < rpos) {
+        parser->key = parser->ptr + parser->rpos;
+        parser->rpos += (parser->key[0] + 1);
+        parser->val = (xline_t*)(parser->ptr + parser->rpos);
+        parser->rpos += __xl_sizeof_line(parser->val);
+        if (slength(key) + 1 == parser->key[0]
+            && mcompare(key, parser->key + 1, parser->key[0]) == 0){
+            parser->key++;
+            return parser->val;
         }
     }
 
-    return NULL;
+    parser->val = NULL;
+
+    return parser->val;
 }
 
-static inline xline_t* xl_find_int(xframe_t *frame, const char *key, int64_t *ptr)
+static inline xline_t* xl_find_int(xparser_t *parser, const char *key, int64_t *ptr)
 {
-    xline_t *val = xl_find(frame, key);
-    if (val && ptr){
-        *ptr = __xl_b2i(val);
+    if (xl_find(parser, key) && ptr){
+        *ptr = __xl_b2i(parser->val);
     }
-    return val;
+    return parser->val;
 }
 
-static inline xline_t* xl_find_uint(xframe_t *frame, const char *key, uint64_t *ptr)
+static inline xline_t* xl_find_uint(xparser_t *parser, const char *key, uint64_t *ptr)
 {
-    xline_t *val = xl_find(frame, key);
-    if (val && ptr){
-        *ptr = __xl_b2u(val);
+    if (xl_find(parser, key) && ptr){
+        *ptr = __xl_b2u(parser->val);
     }
-    return val;
+    return parser->val;
 }
 
-static inline xline_t* xl_find_float(xframe_t *frame, const char *key, double *ptr)
+static inline xline_t* xl_find_float(xparser_t *parser, const char *key, double *ptr)
 {
-    xline_t *val = xl_find(frame, key);
-    if (val && ptr){
-        *ptr = __xl_b2f(val);
+    if (xl_find(parser, key) && ptr){
+        *ptr = __xl_b2f(parser->val);
     }
-    return val;
+    return parser->val;
 }
 
-static inline xline_t* xl_find_word(xframe_t *frame, const char *key, char **pptr)
+static inline xline_t* xl_find_word(xparser_t *parser, const char *key, char **pptr)
 {
-    xline_t *val = xl_find(frame, key);
-    if (val && pptr){
-        *pptr = (char*)__xl_b2o(val);
+    if (xl_find(parser, key) && pptr){
+        *pptr = (char*)__xl_l2b(parser->val);
     }
-    return val;
+    return parser->val;
 }
 
-static inline xline_t* xl_find_ptr(xframe_t *frame, const char *key, void **pptr)
+static inline xline_t* xl_find_ptr(xparser_t *parser, const char *key, void **pptr)
 {
-    xline_t *val = xl_find(frame, key);
-    if (val && pptr){
-        *pptr = (void*)(__xl_b2u(val));
+    if (xl_find(parser, key) && pptr){
+        *pptr = (void*)(__xl_b2u(parser->val));
     }
-    return val;
+    return parser->val;
 }
 
-static inline xline_t* xl_set_value(xframe_t *frame, const char *key, uint64_t nb)
+static inline xline_t* xl_set_value(xparser_t *parser, const char *key, uint64_t nb)
 {
-    xline_t *val = xl_find(frame, key);
+    xline_t *val = xl_find(parser, key);
     if (val){
         *val = __xl_u2b(nb);
     }
     return val;
 }
 
-static xframe_t xl_parser(xline_t *xl)
-{
-    xframe_t parser = {0};
-    parser.rpos = 0;
-    parser.wpos = __xl_sizeof_body(xl);
-    parser.ptr = __xl_b2o(xl);
-    return parser;
-}
-
 static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64_t *pos, uint64_t size)
 {
-    xframe_t parser = xl_parser(xl);
+    xparser_t parser = xl_parser(xl);
 
     int len = slength(key);
 
@@ -584,7 +589,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
             }else if (__xl_typeis_real(xl)){
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %lf,\n", (depth + 1) * 4, parser.key, __xl_b2f(xl));
             }else if (__xl_typeis_str(xl)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_b2o(xl));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: %s,\n", (depth + 1) * 4, parser.key, __xl_l2b(xl));
             }else if (__xl_typeis_bin(xl)){
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: size[%lu],\n", (depth + 1) * 4, parser.key, __xl_sizeof_body(xl));
             }else if (__xl_typeis_obj(xl)){
@@ -592,7 +597,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
             }else if (__xl_typeis_list(xl)){
 
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: [\n", (depth + 1) * 4, parser.key);
-                xframe_t xllist = xl_parser(xl);
+                xparser_t xllist = xl_parser(xl);
 
                 while ((xl = xl_list_next(&xllist)) != NULL){
                     if (__xl_typeis_int(xl)){
@@ -602,7 +607,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
                     }else if (__xl_typeis_real(xl)){
                         *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", (depth + 1) * 4, __xl_b2f(xl));
                     }else if (__xl_typeis_str(xl)){
-                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_b2o(xl));
+                        *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_l2b(xl));
                     }else if (__xl_typeis_bin(xl)){
                         *pos += __xapi->snprintf(buf + *pos, size - *pos, "    bin,\n");
                     }else if (__xl_typeis_obj(xl)){
@@ -617,7 +622,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
     }else if (__xl_typeis_list(xl)){
 
         *pos += __xapi->snprintf(buf + *pos, size - *pos, "%*s: [\n", (depth + 1) * 4, parser.key);
-        xframe_t xllist = xl_parser(xl);
+        xparser_t xllist = xl_parser(xl);
 
         while ((xl = xl_list_next(&xllist)) != NULL){
             if (__xl_typeis_int(xl)){
@@ -627,7 +632,7 @@ static void xl_format(xline_t *xl, const char *key, int depth, char *buf, uint64
             }else if (__xl_typeis_real(xl)){
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*lf,\n", (depth + 1) * 4, __xl_b2f(xl));
             }else if (__xl_typeis_str(xl)){
-                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_b2o(xl));
+                *pos += __xapi->snprintf(buf + *pos, size - *pos, "    %*s,\n", (depth + 1) * 4, __xl_l2b(xl));
             }else if (__xl_typeis_bin(xl)){
                 *pos += __xapi->snprintf(buf + *pos, size - *pos, "    bin,\n");
             }else if (__xl_typeis_obj(xl)){
