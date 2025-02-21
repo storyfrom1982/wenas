@@ -108,29 +108,29 @@ XClean:
     return -1;
 }
 
-static inline int xltp_recv_res(xltp_t *xltp, xframe_t *msg)
+static inline int xltp_recv_msg(xltp_t *xltp, xframe_t *msg)
 {
-    static xframe_t *req;
-    static xmsgcb_ptr cb;
-    __xcheck((req = xchannel_get_req(__xmsg_get_channel(msg))) == NULL);
-    __xcheck((cb = __xmsg_get_cb(req)) == NULL);
+    xframe_t *req = xchannel_get_req(__xmsg_get_channel(msg));
+    __xcheck(req == NULL);
+    xmsgcb_ptr cb = __xmsg_get_cb(req);
+    __xcheck(cb == NULL);
     __xcheck(cb(xltp, msg, NULL) != 0);
     return 0;
 XClean:
     return -1;
 }
 
-static inline int xltp_recv_msg(xltp_t *xltp, xframe_t *msg)
+static inline int xltp_recv_res(xltp_t *xltp, xframe_t *msg)
 {
-    xlio_stream_t *ios = (xlio_stream_t*)xchannel_get_ctx(__xmsg_get_channel(msg));
-    if (ios != NULL){
-        __xcheck(xlio_stream_write(ios, msg) != 0);
-    }else {
-        xframe_t *req = xchannel_get_req(__xmsg_get_channel(msg));
-        __xcheck(req == NULL);
-        xmsgcb_ptr cb = __xmsg_get_cb(req);
-        __xcheck(cb == NULL);
-        __xcheck(cb(xltp, msg, NULL) != 0);
+    xchannel_ptr channel = __xmsg_get_channel(msg);
+    if (msg->wpos > 0){
+        if (xltp_recv_msg(xltp, msg) == 0){
+            msg = NULL;
+        }
+    }
+    __xcheck(xmsger_flush(xltp->msger, channel) != 0);
+    if (msg != NULL){
+        xl_free(&msg);
     }
     return 0;
 XClean:
@@ -139,26 +139,16 @@ XClean:
 
 static inline int xltp_recv(xltp_t *xltp, xframe_t *msg)
 {
-    if (msg->type == XPACK_TYPE_REQ){
-        __xcheck(xltp_recv_req(xltp, msg) != 0);
-    }else if (msg->type == XPACK_TYPE_MSG){
-        __xcheck(xltp_recv_msg(xltp, msg) != 0);
-    }else if (msg->type == XPACK_TYPE_RES){
-        xlio_stream_t *ios = xchannel_get_ctx(__xmsg_get_channel(msg));
-        if (ios != NULL){
-            __xcheck(xlio_stream_write(ios, msg) != 0);
-        }else {
-            xchannel_ptr channel = __xmsg_get_channel(msg);
-            if (msg->wpos > 0){
-                if (xltp_recv_res(xltp, msg) != 0){
-                    xl_free(&msg);
-                }else {
-                    msg = NULL;
-                }
-            }else {
-                xl_free(&msg);
-            }
-            __xcheck(xmsger_flush(xltp->msger, channel) != 0);
+    xlio_stream_t *ios = xchannel_get_ctx(__xmsg_get_channel(msg));
+    if (ios != NULL){
+        __xcheck(xlio_stream_write(ios, msg) != 0);
+    }else {
+        if (msg->type == XPACK_TYPE_REQ){
+            __xcheck(xltp_recv_req(xltp, msg) != 0);
+        }else if (msg->type == XPACK_TYPE_MSG){
+            __xcheck(xltp_recv_msg(xltp, msg) != 0);
+        }else if (msg->type == XPACK_TYPE_RES){
+            __xcheck(xltp_recv_res(xltp, msg) != 0);
         }
     }
     return 0;
@@ -212,25 +202,26 @@ static void xltp_loop(void *ptr)
 
     while (xltp->runnig)
     {
-        __xcheck(xpipe_read(xltp->msgpipe, &msg, __sizeof_ptr) != __sizeof_ptr);
+        if (xpipe_read(xltp->msgpipe, &msg, __sizeof_ptr) == __sizeof_ptr){
 
-        if (msg->flag == XMSG_FLAG_RECV){
+            if (msg->flag == XMSG_FLAG_RECV){
 
-            xltp_recv(xltp, msg);
+                xltp_recv(xltp, msg);
 
-        }else if(msg->flag == XMSG_FLAG_BACK){
+            }else if(msg->flag == XMSG_FLAG_BACK){
 
-            xltp_back(xltp, msg);
+                xltp_back(xltp, msg);
 
-        }else if(msg->flag == XMSG_FLAG_POST){
+            }else if(msg->flag == XMSG_FLAG_TIMEDOUT){
 
-            cb = __xmsg_get_cb(msg);
-            __xcheck(cb == NULL);
-            __xcheck(cb(xltp, msg, NULL) != 0);
+                xltp_timedout(xltp, msg);
 
-        }else if(msg->flag == XMSG_FLAG_TIMEDOUT){
+            }else if(msg->flag == XMSG_FLAG_POST){
 
-            xltp_timedout(xltp, msg);
+                __xcheck((cb = __xmsg_get_cb(msg)) == NULL);
+                __xcheck(cb(xltp, msg, NULL) != 0);
+
+            }
         }
     }
 
@@ -611,6 +602,8 @@ void xltp_free(xltp_t **pptr)
 
         xltp_t *xltp = *pptr;
         *pptr = NULL;
+
+        __set_false(xltp->runnig);
 
         if (xltp->msger){
             xmsger_free(&xltp->msger);
