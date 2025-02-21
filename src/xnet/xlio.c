@@ -2,7 +2,7 @@
 
 #include "xpipe.h"
 
-#define MSGBUF_RANGE    2
+#define MSGBUF_RANGE    4
 #define MSGBUF_SIZE     1280 * 1024 //1.25MB
 // #define MSGBUF_SIZE     1280 * 16
 

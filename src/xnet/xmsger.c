@@ -13,6 +13,7 @@
 #define XPACK_PSF_DEFAULT       100000UL // 100微妙
 #define XPACK_PSF_SAMPLING      10000000UL // 10 毫秒
 
+#define XMSG_BUF_RANGE              8
 #define XMSG_PACK_RANGE             8192 // 1K*8K=8M 0.25K*8K=2M 8M+2M=10M 一个消息最大长度是 10M
 #define XMSG_MAX_LENGTH             ( XBODY_SIZE * XMSG_PACK_RANGE )
 
@@ -218,9 +219,9 @@ static inline xchannel_ptr xchannel_create(xmsger_ptr msger, uint16_t serial_ran
     channel->sendbuf->range = channel->serial_range;
     channel->sendbuf->rpos = channel->sendbuf->spos = channel->sendbuf->wpos = 0;
 
-    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xframe_t*) * 4);
+    channel->msgbuf = (xmsgbuf_ptr) calloc(1, sizeof(struct xmsgbuf) + sizeof(xframe_t*) * XMSG_BUF_RANGE);
     __xcheck(channel->msgbuf == NULL);
-    channel->msgbuf->range = 4;
+    channel->msgbuf->range = XMSG_BUF_RANGE;
 
     __ring_list_put_into_head(&msger->sendlist, channel);
 
